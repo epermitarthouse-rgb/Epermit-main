@@ -20,15 +20,26 @@ export function normalizeEvidenceFileName(fileName: string | null | undefined): 
 }
 
 /**
+ * Root source document ids registered in code_analyzer_sheets for this review.
+ * These remain eligible for evidence even when a form-slot upload reused the filename.
+ */
+export function registeredDrawingSourceIdsFromSheets(
+  sheets: ReadonlyArray<Pick<CodeAnalyzerSheet, "source_document_id">>,
+): Set<string> {
+  return new Set(sheets.map((sheet) => sheet.source_document_id).filter(Boolean));
+}
+
+/**
  * Document ids that must never be used as drawing-evidence sources:
  * - code_modification_application rows
  * - rendered/page child documents derived from them
  * - active form documents for this review
- * - duplicate uploads of the same form file name (e.g. permit_drawing mis-upload)
+ * - duplicate permit_drawing uploads of a real form file name (mis-upload to Drawings)
  */
 export function buildFormExclusionDocumentIds(
   documents: FormExclusionDocumentRef[],
   formDocuments?: ReadonlyArray<Pick<ProjectDocument, "id" | "file_name">> | null,
+  registeredDrawingSourceIds?: ReadonlySet<string>,
 ): Set<string> {
   const excluded = new Set<string>();
 
@@ -46,9 +57,10 @@ export function buildFormExclusionDocumentIds(
     const formFileName = normalizeEvidenceFileName(formDocument?.file_name);
     if (formFileName) {
       for (const doc of documents) {
-        if (normalizeEvidenceFileName(doc.file_name) === formFileName) {
-          excluded.add(doc.id);
-        }
+        if (normalizeEvidenceFileName(doc.file_name) !== formFileName) continue;
+        if (doc.document_type !== "permit_drawing") continue;
+        if (registeredDrawingSourceIds?.has(doc.id)) continue;
+        excluded.add(doc.id);
       }
     }
   }
@@ -86,6 +98,24 @@ export function filterDrawingEvidenceSheets<
   T extends Pick<CodeAnalyzerSheet, "source_document_id" | "image_document_id">,
 >(sheets: T[], excludedDocumentIds: ReadonlySet<string>): T[] {
   return sheets.filter((sheet) => !sheetUsesExcludedDocument(sheet, excludedDocumentIds));
+}
+
+/** Resolve included analyzer sheets that qualify as drawing evidence for Code Mod review. */
+export function resolveCodeModDrawingEvidence<
+  T extends Pick<CodeAnalyzerSheet, "source_document_id" | "image_document_id" | "excluded">,
+>(input: {
+  sheets: T[];
+  documents: FormExclusionDocumentRef[];
+  formDocuments: ReadonlyArray<Pick<ProjectDocument, "id" | "file_name">>;
+}): T[] {
+  const included = input.sheets.filter((sheet) => !sheet.excluded);
+  const registeredDrawingSourceIds = registeredDrawingSourceIdsFromSheets(input.sheets);
+  const excludedDocumentIds = buildFormExclusionDocumentIds(
+    input.documents,
+    input.formDocuments,
+    registeredDrawingSourceIds,
+  );
+  return filterDrawingEvidenceSheets(included, excludedDocumentIds);
 }
 
 export function sheetPayloadUsesExcludedDocument(

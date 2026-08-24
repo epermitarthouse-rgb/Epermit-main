@@ -10,6 +10,7 @@ import {
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
 import type { CodeAnalyzerSheet } from "@/lib/codeAnalyzer/model";
+import type { DrawingUploadProgress } from "@/lib/codeAnalyzer/uploadBatchProgress";
 import {
   computeFormsFingerprint,
   type CodeModificationReview,
@@ -19,7 +20,8 @@ import { pagesAreSparse } from "@/lib/codeModification/extractForm";
 import { fetchModificationForms, replaceModificationReview } from "@/lib/codeModification/persistence";
 import {
   buildFormExclusionDocumentIds,
-  filterDrawingEvidenceSheets,
+  registeredDrawingSourceIdsFromSheets,
+  resolveCodeModDrawingEvidence,
 } from "@/lib/codeModification/evidenceSources";
 import { fileToBase64, requestCodeModificationReview } from "@/lib/codeModification/reviewClient";
 import { analyzerWorkflowFor } from "@/lib/codeModification/workflow";
@@ -95,14 +97,21 @@ export async function runDcCodeModificationReview(params: {
     description: string;
     parent_document_id?: string;
   }) => Promise<ProjectDocument | { id: string; file_name?: string } | null>;
-}): Promise<{ review: CodeModificationReview; forms: ProjectDocument[] }> {
+  onUploadProgress?: (progress: DrawingUploadProgress) => void;
+}): Promise<{
+  review: CodeModificationReview;
+  forms: ProjectDocument[];
+  drawingUpload?: { total: number; failed: number; failedSourceIds: string[] };
+}> {
   const workflow = analyzerWorkflowFor("dc_code_modification", params.jurisdiction);
   if (!workflow.ok) {
     throw new Error("DC Code Modification Review is only available for Washington, D.C.");
   }
 
   let sheets = params.persistedSheets;
+  let drawingUpload: { total: number; failed: number; failedSourceIds: string[] } | undefined;
   if (params.pendingDrawingFiles.length > 0) {
+    const pendingCount = params.pendingDrawingFiles.length;
     const persisted = await persistPendingAnalyzerSources({
       projectId: params.projectId,
       pendingFiles: params.pendingDrawingFiles.map((f) => ({
@@ -113,8 +122,14 @@ export async function runDcCodeModificationReview(params: {
       existingSheets: sheets,
       uploadDocument: params.persistUpload,
       renderPdfPages: pdfPagesToImageFiles,
+      onUploadProgress: params.onUploadProgress,
     });
     for (const warning of persisted.warnings) toast.warning(warning);
+    drawingUpload = {
+      total: pendingCount,
+      failed: persisted.failedSources.length,
+      failedSourceIds: persisted.failedSources.map((f) => f.id),
+    };
     sheets = [...sheets, ...persisted.sheets];
   }
 
@@ -142,8 +157,22 @@ export async function runDcCodeModificationReview(params: {
   const exclusionDocs = [...Array.from(docsById.values()), ...modificationForms].filter(
     (doc, index, arr) => arr.findIndex((other) => other.id === doc.id) === index,
   );
-  const excludedEvidenceDocumentIds = buildFormExclusionDocumentIds(exclusionDocs, formDocs);
-  const evidenceSheets = filterDrawingEvidenceSheets(included, excludedEvidenceDocumentIds);
+  const evidenceSheets = resolveCodeModDrawingEvidence({
+    sheets,
+    documents: exclusionDocs,
+    formDocuments: formDocs,
+  });
+  const excludedEvidenceDocumentIds = buildFormExclusionDocumentIds(
+    exclusionDocs,
+    formDocs,
+    registeredDrawingSourceIdsFromSheets(sheets),
+  );
+
+  if (included.length > 0 && evidenceSheets.length === 0) {
+    throw new Error(
+      "Drawing sheets are registered but none qualify for evidence review. Remove duplicate form uploads of drawing PDFs or re-upload base permit drawings in the Drawings section.",
+    );
+  }
 
   const sheetPayload = [];
   for (const sheet of evidenceSheets) {
@@ -167,6 +196,12 @@ export async function runDcCodeModificationReview(params: {
       imageBase64: await fileToBase64(imageFile),
       imageType: imageFile.type || "image/png",
     });
+  }
+
+  if (evidenceSheets.length > 0 && sheetPayload.length === 0) {
+    throw new Error(
+      "Drawing evidence sheets could not be loaded for review. Check storage access for rendered drawing pages.",
+    );
   }
 
   const formFingerprint = computeFormsFingerprint(
@@ -221,7 +256,7 @@ export async function runDcCodeModificationReview(params: {
       formDocs.map((doc) => doc.id),
     );
     await completeAnalyzerRun(run.id, "current");
-    return { review, forms: formDocs };
+    return { review, forms: formDocs, drawingUpload };
   } catch (err) {
     await completeAnalyzerRun(run.id, "failed").catch(() => undefined);
     throw err;

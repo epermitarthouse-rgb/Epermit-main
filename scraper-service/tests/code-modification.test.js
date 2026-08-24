@@ -586,6 +586,34 @@ describe("drawing evidence source exclusion", () => {
     );
     assert.equal(openai.chat.completions.create.mock.calls.length, 1);
   });
+
+  it("keeps base permit drawing sheets when only the form-slot upload is excluded", () => {
+    const filtered = filterDrawingEvidenceSheetsForReview(
+      [
+        {
+          id: "base-sheet-1",
+          documentId: "base-page-1",
+          fileName: "1513_P_St_MOCK_Permit_Drawings_Base.pdf",
+          pageNumber: 1,
+          imageBase64: "aaaa",
+        },
+        {
+          id: "base-sheet-2",
+          documentId: "base-page-2",
+          fileName: "1513_P_St_MOCK_Permit_Drawings_Base.pdf",
+          pageNumber: 2,
+          imageBase64: "bbbb",
+        },
+      ],
+      { id: "form-app", fileName: "1513 P St NW_Code-Modification-Form_10.01.24.pdf" },
+      ["form-app", "drawing-form-slot-misupload"],
+    );
+    assert.equal(filtered.length, 2);
+    assert.deepEqual(
+      filtered.map((sheet) => sheet.pageNumber),
+      [1, 2],
+    );
+  });
 });
 
 describe("splitMeasureDescription embedded include clauses", () => {
