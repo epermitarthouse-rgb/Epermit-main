@@ -19,6 +19,9 @@ const {
   isDcJurisdiction,
   PROMPT_CONSTRAINTS,
   HEURISTIC_FIELD_WARNINGS,
+  reconcileExtractionWarnings,
+  splitMeasureDescription,
+  normalizeProposedMeasures,
   emptyExtractedRequest,
 } = require("../app/services/compliance/code-modification.service.js");
 
@@ -238,6 +241,9 @@ const SCANNED_SPARSE_PAGES = [
   { pageNumber: 6, text: "" },
 ];
 
+const COMBINED_MEASURE_PARAGRAPH =
+  "Provide a two-hour fire rated enclosed stairway serving all occupied levels, provide a fully automatic sprinkler system throughout the building, provide a fully monitored fire alarm and emergency notification system, maintain an occupant load below 49 people per floor. Incorporate DOB recommendations from June 9, 2026 PDRM include a standpipe, maintain a common path of travel distance of less than 75'-0\", provide permanent signage identifying and limiting the maximum occupant load of the rooftop amenity area.";
+
 describe("mergeExtractedRequests warning reconciliation", () => {
   it("drops stale heuristic warnings when vision fills extracted fields", () => {
     const heuristic = heuristicExtractModificationRequest(SCANNED_SPARSE_PAGES);
@@ -245,10 +251,11 @@ describe("mergeExtractedRequests warning reconciliation", () => {
     const vision = {
       projectAddress: "1513 P St NW, Washington DC, 20005",
       requestedModification:
-        "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.",
+        "The code modification request is for the use of a targeted equivalency strategy for alternative life safety design implementation methods in lieu of providing a second egress stair requirement per 2017 DCMR 12A, DC Building Code with Amendments (2015 IBC) Chapter 10, Section 1006.",
       citedSections: [
         {
-          citation: "2017 DCMR 12A Chapter 10 Section 1006",
+          citation:
+            "2017 DCMR 12A, DC Building Code with Amendments (2015 IBC) Chapter 10, Section 1006",
           year: null,
           source: "applicant",
           label: "Applicant-cited code",
@@ -256,7 +263,14 @@ describe("mergeExtractedRequests warning reconciliation", () => {
       ],
       impracticalReason: "Low occupant load makes a second stair impractical.",
       compliesWithIntent: true,
-      proposedMeasures: [{ id: "measure-1", description: "Provide automatic sprinklers throughout." }],
+      proposedMeasures: [
+        {
+          id: "measure-1",
+          description: COMBINED_MEASURE_PARAGRAPH,
+          sourcePageNumber: 2,
+          sourceContext: "Proposed alternative / compensating measures",
+        },
+      ],
       floodHazardApplicable: false,
       supportingNarrative: null,
       extractionWarnings: [],
@@ -274,6 +288,9 @@ describe("mergeExtractedRequests warning reconciliation", () => {
       merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.proposedMeasures),
       false,
     );
+    assert.match(merged.requestedModification, /equivalency strategy/i);
+    assert.equal(merged.citedSections.length, 1);
+    assert.equal(merged.proposedMeasures.length >= 5, true);
   });
 
   it("keeps heuristic warnings when vision also fails to extract fields", () => {
@@ -296,8 +313,38 @@ describe("mergeExtractedRequests warning reconciliation", () => {
   });
 });
 
-describe("analyzeCodeModification scanned-form warning regression", () => {
-  it("clears stale heuristic warnings when optional LLM extract succeeds", async () => {
+describe("normalizeProposedMeasures", () => {
+  it("splits a combined compensating-measures paragraph into independent measures", () => {
+    const split = splitMeasureDescription(COMBINED_MEASURE_PARAGRAPH);
+    assert.equal(split.length >= 5, true);
+    assert.match(split.join(" | "), /two-hour fire rated enclosed stairway/i);
+    assert.match(split.join(" | "), /sprinkler system/i);
+    assert.match(split.join(" | "), /fire alarm/i);
+    assert.match(split.join(" | "), /occupant load below 49/i);
+    assert.match(split.join(" | "), /standpipe/i);
+    assert.match(split.join(" | "), /common path of travel/i);
+    assert.match(split.join(" | "), /permanent signage/i);
+
+    const normalized = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: COMBINED_MEASURE_PARAGRAPH,
+        sourcePageNumber: 2,
+        sourceContext: "Proposed alternative / compensating measures",
+      },
+    ]);
+    assert.equal(normalized.length, split.length);
+    assert.equal(normalized.every((m) => m.sourcePageNumber === 2), true);
+    assert.equal(
+      normalized.every((m) => m.sourceContext === "Proposed alternative / compensating measures"),
+      true,
+    );
+    assert.equal(normalized.every((m) => /^measure-\d+$/.test(m.id)), true);
+  });
+});
+
+describe("analyzeCodeModification scanned-form regression", () => {
+  it("clears stale warnings and splits measures when optional LLM extract succeeds", async () => {
     const openai = {
       chat: {
         completions: {
@@ -308,19 +355,26 @@ describe("analyzeCodeModification scanned-form warning regression", () => {
                   content: JSON.stringify({
                     projectAddress: "1513 P St NW, Washington DC, 20005",
                     requestedModification:
-                      "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.",
+                      "The code modification request is for the use of a targeted equivalency strategy for alternative life safety design implementation methods in lieu of providing a second egress stair requirement per 2017 DCMR 12A, DC Building Code with Amendments (2015 IBC) Chapter 10, Section 1006.",
                     citedSections: [
                       {
-                        citation: "2017 DCMR 12A Chapter 10 Section 1006",
+                        citation:
+                          "2017 DCMR 12A, DC Building Code with Amendments (2015 IBC) Chapter 10, Section 1006",
                         year: null,
                         source: "applicant",
                         label: "Applicant-cited code",
                       },
                     ],
-                    proposedMeasures: [
-                      { id: "measure-1", description: "Provide automatic sprinklers throughout." },
-                    ],
+                    impracticalReason:
+                      "Due to the limited floor area and low occupant load (48 for the whole building), adding a second egress stair would significantly reduce usable space.",
                     compliesWithIntent: true,
+                    proposedMeasures: [
+                      {
+                        id: "measure-1",
+                        description: COMBINED_MEASURE_PARAGRAPH,
+                        sourcePageNumber: 2,
+                      },
+                    ],
                     floodHazardApplicable: false,
                     extractionWarnings: [],
                   }),
@@ -339,6 +393,7 @@ describe("analyzeCodeModification scanned-form warning regression", () => {
       formDocument: { id: "form-1513" },
     });
 
+    assert.equal(outcome.ok, true);
     assert.equal(
       outcome.result.extraction_warnings.some(
         (w) => w === HEURISTIC_FIELD_WARNINGS.requestedModification,
@@ -356,6 +411,15 @@ describe("analyzeCodeModification scanned-form warning regression", () => {
         (w) => w === HEURISTIC_FIELD_WARNINGS.proposedMeasures,
       ),
       false,
+    );
+    assert.equal(outcome.result.extracted_request.proposedMeasures.length >= 5, true);
+    assert.equal(outcome.result.evidence.length >= 5, true);
+    assert.equal(outcome.result.overall_status, "material_evidence_missing");
+    assert.equal(
+      outcome.result.extraction_warnings.some((w) =>
+        /No drawing sheets were provided for evidence review/.test(w),
+      ),
+      true,
     );
   });
 });

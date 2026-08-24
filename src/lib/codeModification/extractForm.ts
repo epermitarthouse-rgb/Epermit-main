@@ -40,6 +40,9 @@ export const HEURISTIC_FIELD_WARNINGS = {
   proposedMeasures: "No proposed alternative measures were found.",
 } as const;
 
+const MEASURE_ACTION_VERBS =
+  "Provide|Maintain|Incorporate|Install|Ensure|Limit|Keep|Add|Include|Equip|Supply|Furnish|Construct|Upgrade|Replace|Extend|Reduce|Restrict|Monitor|Signal|Mark|Label|Post";
+
 export function classifyPageRole(page: Pick<FormPage, "text">): FormPageRole {
   const text = page.text ?? "";
   const hasReviewer = REVIEWER_MARKERS.some((re) => re.test(text));
@@ -173,81 +176,97 @@ function extractNarrative(text: string): string | null {
   return usableFieldValue(match?.[1] ?? null);
 }
 
-function extractProposedMeasures(text: string): ProposedMeasure[] {
-  const section = text.match(
-    /proposed alternative[\s\S]*?(?:flood hazard|supporting narrative|for official use|$)/i,
-  );
-  const block = section?.[0] ?? text;
-  const measures: ProposedMeasure[] = [];
-
-  const pushMeasure = (raw: string | null | undefined) => {
-    const description = usableFieldValue(raw);
-    if (!description) return;
-    if (/proposed alternative|compensating measures|flood hazard/i.test(description)) {
-      return;
-    }
-    measures.push({
-      id: `measure-${measures.length + 1}`,
-      description,
-    });
-  };
-
-  for (const line of block.split(/\n+/)) {
-    const item = line.match(/^\s*(?:\d+\s*[.)]|[-*•])\s+(.+)$/);
-    pushMeasure(item?.[1]);
+function normalizeMeasureClause(clause: string): string {
+  let value = clause.replace(/^[,.\s]+/, "").replace(/\s+/g, " ").trim();
+  if (value && /^[a-z]/.test(value)) {
+    value = value.charAt(0).toUpperCase() + value.slice(1);
   }
-  if (measures.length > 0) return measures;
-
-  // pdf.js extraction joins text items with spaces, so numbered lists often
-  // appear on one line: "1. Sprinkler ... 2. Stair ... 3. Alarm ..."
-  // Digits and punctuation may be split: "1 . Sprinkler ... 2 . Stair ..."
-  for (const match of block.matchAll(
-    /\b(\d+)\s*[.)]\s+(.+?)(?=\s\d+\s*[.)]\s|\sFlood Hazard|\sSupporting narrative|\sFOR OFFICIAL USE|$)/gi,
-  )) {
-    pushMeasure(match[2]);
-  }
-
-  return measures;
+  return value.replace(/[.,;]+$/, "").trim();
 }
 
-export function heuristicExtractModificationRequest(
-  pages: FormPage[],
-): ExtractedModificationRequest {
-  const applicantPages = applicantPagesFrom(pages);
-  const text = applicantPages.map((p) => p.text).join("\n\n");
-  const warnings: string[] = [];
+export function splitMeasureDescription(description: string): string[] {
+  const text = description.replace(/\s+/g, " ").trim();
+  if (!text) return [];
 
-  if (applicantPages.length === 0) {
-    warnings.push("No applicant pages found; official-use sections were ignored.");
-    return emptyExtractedRequest(warnings);
+  const numbered = [...text.matchAll(/\b(\d+)\s*[.)]\s+(.+?)(?=\s\d+\s*[.)]\s|$)/gi)];
+  if (numbered.length >= 2) {
+    return numbered.map((match) => normalizeMeasureClause(match[2])).filter(Boolean);
   }
 
-  const citedSections = extractCitedSections(text);
-  const proposedMeasures = extractProposedMeasures(text);
-  const requestedModification = extractRequestedModification(text);
-  const extracted = {
-    projectAddress: extractAddress(text),
-    requestedModification,
-    citedSections,
-    impracticalReason: extractImpracticalReason(text),
-    compliesWithIntent: extractCompliesWithIntent(text),
-    proposedMeasures,
-    floodHazardApplicable: extractFloodHazard(text),
-    supportingNarrative: extractNarrative(text),
-    extractionWarnings: warnings,
-  } satisfies ExtractedModificationRequest;
+  const splitOnActionVerbs = (input: string): string[] => {
+    const boundary = new RegExp(
+      `(?:[.;]\\s+|,\\s*)(?=(?:${MEASURE_ACTION_VERBS})\\s+)`,
+      "gi",
+    );
+    const segments = input
+      .split(boundary)
+      .map((part) => normalizeMeasureClause(part))
+      .filter((part) => part.length >= 10);
+    return segments.length >= 2 ? segments : [input.trim()];
+  };
 
-  if (!requestedModification) {
-    warnings.push(HEURISTIC_FIELD_WARNINGS.requestedModification);
+  const parts = splitOnActionVerbs(text);
+  const expanded: string[] = [];
+  for (const part of parts) {
+    const nested = splitOnActionVerbs(part);
+    expanded.push(...(nested.length >= 2 ? nested : [part]));
   }
-  if (citedSections.length === 0) {
-    warnings.push(HEURISTIC_FIELD_WARNINGS.citedSections);
+
+  const final: string[] = [];
+  for (const part of expanded) {
+    const subParts = part
+      .split(/,\s*(?=(?:include|maintain|provide|install|ensure|limit)\s+)/i)
+      .map((segment) => normalizeMeasureClause(segment))
+      .filter((segment) => segment.length >= 10);
+    if (subParts.length >= 2) {
+      final.push(...subParts);
+      continue;
+    }
+    final.push(normalizeMeasureClause(part));
   }
-  if (proposedMeasures.length === 0) {
-    warnings.push(HEURISTIC_FIELD_WARNINGS.proposedMeasures);
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const part of final) {
+    const key = part.toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(part);
   }
-  extracted.extractionWarnings = warnings;
-  return extracted;
+  return unique.length >= 2 ? unique : [text];
+}
+
+export function normalizeProposedMeasures(measures: ProposedMeasure[]): ProposedMeasure[] {
+  const expanded: ProposedMeasure[] = [];
+  for (const measure of measures ?? []) {
+    const description = measure.description.trim();
+    if (!description) continue;
+    const parts = splitMeasureDescription(description);
+    const sourceContext =
+      measure.sourceContext ?? (parts.length > 1 ? description.slice(0, 160) : null);
+    if (parts.length <= 1) {
+      expanded.push({
+        ...measure,
+        description,
+        sourcePageNumber: measure.sourcePageNumber ?? null,
+        sourceContext,
+      });
+      continue;
+    }
+    for (const part of parts) {
+      expanded.push({
+        id: `measure-${expanded.length + 1}`,
+        description: part,
+        category: measure.category ?? null,
+        sourcePageNumber: measure.sourcePageNumber ?? null,
+        sourceContext,
+      });
+    }
+  }
+  return expanded.map((measure, index) => ({
+    ...measure,
+    id: `measure-${index + 1}`,
+  }));
 }
 
 export function reconcileExtractionWarnings(
@@ -276,6 +295,99 @@ export function reconcileExtractionWarnings(
   });
 }
 
+function extractProposedMeasures(text: string, sourcePageNumber: number | null = null): ProposedMeasure[] {
+  const section = text.match(
+    /proposed alternative[\s\S]*?(?:flood hazard|supporting narrative|for official use|$)/i,
+  );
+  const block = section?.[0] ?? text;
+  const sectionLabel = section ? "Proposed alternative / compensating measures" : null;
+  const measures: ProposedMeasure[] = [];
+
+  const pushMeasure = (raw: string | null | undefined) => {
+    const description = usableFieldValue(raw);
+    if (!description) return;
+    if (/proposed alternative|compensating measures|flood hazard/i.test(description)) {
+      return;
+    }
+    measures.push({
+      id: `measure-${measures.length + 1}`,
+      description,
+      sourcePageNumber,
+      sourceContext: sectionLabel,
+    });
+  };
+
+  for (const line of block.split(/\n+/)) {
+    const item = line.match(/^\s*(?:\d+\s*[.)]|[-*•])\s+(.+)$/);
+    pushMeasure(item?.[1]);
+  }
+  if (measures.length > 0) return normalizeProposedMeasures(measures);
+
+  // pdf.js extraction joins text items with spaces, so numbered lists often
+  // appear on one line: "1. Sprinkler ... 2. Stair ... 3. Alarm ..."
+  // Digits and punctuation may be split: "1 . Sprinkler ... 2 . Stair ..."
+  for (const match of block.matchAll(
+    /\b(\d+)\s*[.)]\s+(.+?)(?=\s\d+\s*[.)]\s|\sFlood Hazard|\sSupporting narrative|\sFOR OFFICIAL USE|$)/gi,
+  )) {
+    pushMeasure(match[2]);
+  }
+  if (measures.length > 0) return normalizeProposedMeasures(measures);
+
+  if (!section) return normalizeProposedMeasures(measures);
+
+  const paragraph = usableFieldValue(block.replace(/proposed alternative[^:]*:/i, ""));
+  if (paragraph && !/proposed alternative|compensating measures|flood hazard/i.test(paragraph)) {
+    pushMeasure(paragraph);
+  }
+
+  return normalizeProposedMeasures(measures);
+}
+
+export function heuristicExtractModificationRequest(
+  pages: FormPage[],
+): ExtractedModificationRequest {
+  const applicantPages = applicantPagesFrom(pages);
+  const text = applicantPages.map((p) => p.text).join("\n\n");
+  const warnings: string[] = [];
+
+  if (applicantPages.length === 0) {
+    warnings.push("No applicant pages found; official-use sections were ignored.");
+    return emptyExtractedRequest(warnings);
+  }
+
+  const citedSections = extractCitedSections(text);
+  const proposedMeasures = normalizeProposedMeasures(
+    applicantPages.flatMap((page) => {
+      if (!/proposed alternative|compensating measures/i.test(page.text)) return [];
+      return extractProposedMeasures(page.text, page.pageNumber);
+    }),
+  );
+  const requestedModification = extractRequestedModification(text);
+  const extracted = {
+    projectAddress: extractAddress(text),
+    requestedModification,
+    citedSections,
+    impracticalReason: extractImpracticalReason(text),
+    compliesWithIntent: extractCompliesWithIntent(text),
+    proposedMeasures,
+    floodHazardApplicable: extractFloodHazard(text),
+    supportingNarrative: extractNarrative(text),
+    extractionWarnings: warnings,
+  } satisfies ExtractedModificationRequest;
+
+  if (!requestedModification) {
+    warnings.push(HEURISTIC_FIELD_WARNINGS.requestedModification);
+  }
+  if (citedSections.length === 0) {
+    warnings.push(HEURISTIC_FIELD_WARNINGS.citedSections);
+  }
+  if (proposedMeasures.length === 0) {
+    warnings.push(HEURISTIC_FIELD_WARNINGS.proposedMeasures);
+  }
+  extracted.extractionWarnings = warnings;
+  return extracted;
+}
+
 export function mergeExtractedRequests(
   primary: ExtractedModificationRequest,
   secondary: ExtractedModificationRequest,
@@ -286,9 +398,9 @@ export function mergeExtractedRequests(
     if (left && right) return left.length >= right.length ? left : right;
     return left ?? right ?? null;
   };
-  const measures = [...primary.proposedMeasures];
+  const measures = normalizeProposedMeasures([...primary.proposedMeasures]);
   const seen = new Set(measures.map((m) => m.description.toLowerCase()));
-  for (const measure of secondary.proposedMeasures) {
+  for (const measure of normalizeProposedMeasures(secondary.proposedMeasures)) {
     const key = measure.description.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -314,7 +426,7 @@ export function mergeExtractedRequests(
     ]),
     impracticalReason: pick(primary.impracticalReason, secondary.impracticalReason),
     compliesWithIntent: complies,
-    proposedMeasures: measures,
+    proposedMeasures: normalizeProposedMeasures(measures),
     floodHazardApplicable: flood,
     supportingNarrative: pick(primary.supportingNarrative, secondary.supportingNarrative),
     extractionWarnings: warnings,

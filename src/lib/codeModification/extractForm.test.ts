@@ -5,8 +5,10 @@ import {
   classifyPageRole,
   heuristicExtractModificationRequest,
   mergeExtractedRequests,
+  normalizeProposedMeasures,
   pagesAreSparse,
   reconcileExtractionWarnings,
+  splitMeasureDescription,
   stripReviewerSections,
   HEURISTIC_FIELD_WARNINGS,
 } from "./extractForm.ts";
@@ -140,6 +142,8 @@ describe("mergeExtractedRequests / pagesAreSparse", () => {
       { pageNumber: 3, text: "Michelle Davis" },
     ];
     const heuristic = heuristicExtractModificationRequest(scannedPages);
+    const combinedParagraph =
+      "Provide a two-hour fire rated enclosed stairway serving all occupied levels, provide a fully automatic sprinkler system throughout the building, provide a fully monitored fire alarm and emergency notification system, maintain an occupant load below 49 people per floor. Incorporate DOB recommendations from June 9, 2026 PDRM include a standpipe, maintain a common path of travel distance of less than 75'-0\", provide permanent signage identifying and limiting the maximum occupant load of the rooftop amenity area.";
     const vision = emptyExtractedRequest();
     vision.requestedModification =
       "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.";
@@ -152,7 +156,12 @@ describe("mergeExtractedRequests / pagesAreSparse", () => {
       },
     ];
     vision.proposedMeasures = [
-      { id: "measure-1", description: "Provide automatic sprinklers throughout." },
+      {
+        id: "measure-1",
+        description: combinedParagraph,
+        sourcePageNumber: 2,
+        sourceContext: "Proposed alternative / compensating measures",
+      },
     ];
     const merged = mergeExtractedRequests(heuristic, vision);
     assert.equal(
@@ -167,6 +176,24 @@ describe("mergeExtractedRequests / pagesAreSparse", () => {
       merged.extractionWarnings.includes(HEURISTIC_FIELD_WARNINGS.proposedMeasures),
       false,
     );
+    assert.equal(merged.proposedMeasures.length >= 5, true);
     assert.equal(reconcileExtractionWarnings(merged).length, 0);
+  });
+
+  it("splits combined compensating-measure paragraphs into separate rows", () => {
+    const combinedParagraph =
+      "Provide a two-hour fire rated enclosed stairway serving all occupied levels, provide a fully automatic sprinkler system throughout the building, provide a fully monitored fire alarm and emergency notification system, maintain an occupant load below 49 people per floor. Incorporate DOB recommendations from June 9, 2026 PDRM include a standpipe, maintain a common path of travel distance of less than 75'-0\", provide permanent signage identifying and limiting the maximum occupant load of the rooftop amenity area.";
+    const split = splitMeasureDescription(combinedParagraph);
+    assert.equal(split.length >= 5, true);
+    const normalized = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: combinedParagraph,
+        sourcePageNumber: 2,
+        sourceContext: "Proposed alternative / compensating measures",
+      },
+    ]);
+    assert.equal(normalized.length, split.length);
+    assert.equal(normalized.every((m) => m.sourcePageNumber === 2), true);
   });
 });
