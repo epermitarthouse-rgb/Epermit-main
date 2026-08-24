@@ -8,6 +8,7 @@ import {
   ANALYSIS_TYPE_STANDARD,
   computeSheetFingerprint,
   fingerprintsMatch,
+  instructionsFingerprint,
   shouldMarkAnalysisStale,
   type CodeAnalyzerRunStatus,
   type CodeAnalyzerSheetInput,
@@ -182,8 +183,11 @@ export function formDocumentIdsMatch(
 export function computeModificationSourceFingerprint(
   formFingerprint: string,
   sheetFingerprint: string,
+  instructions?: string | null,
 ): string {
-  return `form:${formFingerprint}||sheets:${sheetFingerprint}`;
+  const base = `form:${formFingerprint}||sheets:${sheetFingerprint}`;
+  const instrFp = instructionsFingerprint(instructions);
+  return instrFp ? `${base}||${instrFp}` : base;
 }
 
 export function modificationSheetFingerprint(sheets: CodeAnalyzerSheetInput[]): string {

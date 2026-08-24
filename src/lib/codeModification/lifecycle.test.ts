@@ -133,6 +133,20 @@ describe("code modification review lifecycle", () => {
     assert.equal(formDocumentIdsMatch(undefined, []), true);
   });
 
+  it("marks the review stale when staff guidance changes", () => {
+    const after = computeModificationSourceFingerprint(formFp, sheetsAfterFirst, "new focus");
+    const before = computeModificationSourceFingerprint(formFp, sheetsAfterFirst, "old focus");
+    assert.notEqual(before, after);
+    assert.equal(
+      shouldMarkModificationReviewStale({
+        runStatus: "current",
+        runFingerprint: before,
+        currentFingerprint: after,
+      }),
+      true,
+    );
+  });
+
   it("Update Review creates a new current modification run without touching standard", () => {
     const previous = run({
       id: "mod-old",

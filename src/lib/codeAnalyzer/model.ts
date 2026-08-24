@@ -32,6 +32,8 @@ export interface CodeAnalyzerRun {
   analysis_mode: string | null;
   analysis_type?: string | null;
   form_document_id?: string | null;
+  /** Staff guidance captured at run time; historical runs retain the text used. */
+  analysis_instructions?: string | null;
   source_fingerprint: string;
   created_at: string;
   updated_at: string;
@@ -124,6 +126,28 @@ export function computeSheetFingerprint(sheets: CodeAnalyzerSheetInput[]): strin
     .filter(Boolean)
     .sort()
     .join("|");
+}
+
+/** Trim and normalize run-scoped staff guidance for fingerprinting. */
+export function normalizeAnalysisInstructions(value: string | null | undefined): string {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\r\n/g, "\n");
+}
+
+export function instructionsFingerprint(instructions: string | null | undefined): string {
+  const normalized = normalizeAnalysisInstructions(instructions);
+  if (!normalized) return "";
+  return `instr:${normalized}`;
+}
+
+/** Sheet fingerprint plus optional staff guidance (standard compliance runs). */
+export function computeStandardRunFingerprint(
+  sheets: CodeAnalyzerSheetInput[],
+  instructions?: string | null,
+): string {
+  const sheetFp = computeSheetFingerprint(sheets);
+  const instrFp = instructionsFingerprint(instructions);
+  return instrFp ? `${sheetFp}||${instrFp}` : sheetFp;
 }
 
 export function fingerprintsMatch(a: string | null | undefined, b: string | null | undefined): boolean {

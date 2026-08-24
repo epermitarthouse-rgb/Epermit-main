@@ -5,8 +5,10 @@ import {
   ANALYSIS_TYPE_STANDARD,
   allocateIncludedSheetKeys,
   computeSheetFingerprint,
+  computeStandardRunFingerprint,
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
+  normalizeAnalysisInstructions,
   pickCurrentRun,
   pickDisplayRun,
   planPdfPageNumbers,
@@ -77,6 +79,21 @@ describe("computeSheetFingerprint", () => {
   });
 });
 
+describe("computeStandardRunFingerprint", () => {
+  it("includes staff guidance in the fingerprint", () => {
+    const sheets = [{ source_document_id: "a", page_number: 1 }];
+    const without = computeStandardRunFingerprint(sheets, "");
+    const withInstr = computeStandardRunFingerprint(sheets, "Focus on egress");
+    assert.equal(without, "a:1");
+    assert.notEqual(without, withInstr);
+    assert.match(withInstr, /instr:Focus on egress/);
+  });
+
+  it("normalizes instruction whitespace", () => {
+    assert.equal(normalizeAnalysisInstructions("  a\r\nb  "), "a\nb");
+  });
+});
+
 describe("shouldMarkAnalysisStale", () => {
   it("marks stale when a new drawing is pending after a current run", () => {
     assert.equal(
@@ -111,6 +128,19 @@ describe("shouldMarkAnalysisStale", () => {
         pendingSourceCount: 0,
       }),
       false,
+    );
+  });
+
+  it("marks stale when staff guidance changes", () => {
+    const sheets = "a:1";
+    assert.equal(
+      shouldMarkAnalysisStale({
+        runStatus: "current",
+        runFingerprint: `${sheets}||instr:old focus`,
+        currentFingerprint: `${sheets}||instr:new focus`,
+        pendingSourceCount: 0,
+      }),
+      true,
     );
   });
 });

@@ -14,6 +14,7 @@ const {
   computeOverallStatus,
   buildFormExtractPrompt,
   buildSheetReviewPrompt,
+  formatStaffGuidanceBlock,
   analyzeCodeModification,
   extractPdfPageTexts,
   isDcJurisdiction,
@@ -141,6 +142,22 @@ describe("code-modification.service prompts", () => {
       assert.match(prompt, /cited code/i);
       assert.match(prompt, /JSON/i);
     }
+  });
+
+  it("injects staff guidance as non-evidence focus in sheet and form prompts", () => {
+    const guidance = "Check sprinkler coverage only.";
+    const form = buildFormExtractPrompt("page text", guidance);
+    const sheet = buildSheetReviewPrompt(
+      { requestedModification: "IBC 1021.2" },
+      { pageNumber: 1, fileName: "A-101" },
+      guidance,
+    );
+    for (const prompt of [form.systemPrompt, sheet.systemPrompt]) {
+      assert.match(prompt, /STAFF GUIDANCE \/ REVIEW FOCUS \(NOT EVIDENCE\)/i);
+      assert.match(prompt, /Check sprinkler coverage only/);
+      assert.match(prompt, /NOT submitted evidence/i);
+    }
+    assert.equal(formatStaffGuidanceBlock(""), "");
   });
 });
 

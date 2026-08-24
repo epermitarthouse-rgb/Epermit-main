@@ -106,6 +106,7 @@ import {
   ANALYSIS_TYPE_DC_MODIFICATION,
   ANALYSIS_TYPE_STANDARD,
   computeSheetFingerprint,
+  computeStandardRunFingerprint,
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
   shouldMarkAnalysisStale,
@@ -355,6 +356,7 @@ export function AIComplianceAnalyzer() {
 
   // Dual code analysis options
   const [analysisMode, setAnalysisMode] = useState<"both" | "ibc" | "local">("both");
+  const [analysisInstructions, setAnalysisInstructions] = useState("");
   const [activeResultTab, setActiveResultTab] = useState<"ibc" | "local">("ibc");
 
   const hasLocalAmendments = JURISDICTIONS_WITH_AMENDMENTS.includes(jurisdiction);
@@ -376,11 +378,28 @@ export function AIComplianceAnalyzer() {
     setUploadingFormNames([]);
   }, [selectedProjectId]);
 
+  // Restore run-scoped staff guidance when switching projects or analysis kind.
+  useEffect(() => {
+    const activeRun = isModificationMode ? modificationDisplayRun : displayRun;
+    setAnalysisInstructions(activeRun?.analysis_instructions ?? "");
+  }, [
+    selectedProjectId,
+    isModificationMode,
+    displayRun?.id,
+    displayRun?.analysis_instructions,
+    modificationDisplayRun?.id,
+    modificationDisplayRun?.analysis_instructions,
+  ]);
+
   const pendingDrawingCount = files.filter((f) => f.status === "pending").length;
+  const standardCurrentFingerprint = computeStandardRunFingerprint(
+    persistedSheets,
+    analysisInstructions,
+  );
   const analysisStale = shouldMarkAnalysisStale({
     runStatus: displayRun?.status ?? currentRun?.status,
     runFingerprint: displayRun?.source_fingerprint ?? currentRun?.source_fingerprint,
-    currentFingerprint: computeSheetFingerprint(persistedSheets),
+    currentFingerprint: standardCurrentFingerprint,
     pendingSourceCount: pendingDrawingCount,
   });
   const modificationFormsFingerprint = computeFormsFingerprint(
@@ -403,6 +422,7 @@ export function AIComplianceAnalyzer() {
     currentFingerprint: computeModificationSourceFingerprint(
       modificationFormsFingerprint,
       computeSheetFingerprint(persistedSheets),
+      analysisInstructions,
     ),
     formChanged: modificationFormsChanged || uploadingFormNames.length > 0,
     pendingSourceCount: pendingDrawingCount,
@@ -1355,6 +1375,7 @@ export function AIComplianceAnalyzer() {
           codeYear,
           codeType: opts.codeType,
           disciplines: opts.disciplines,
+          analysisInstructions: analysisInstructions.trim() || undefined,
         }),
       });
 
@@ -1375,7 +1396,7 @@ export function AIComplianceAnalyzer() {
 
       return data;
     },
-    [jurisdiction, projectType, codeYear],
+    [jurisdiction, projectType, codeYear, analysisInstructions],
   );
 
   const runBatchAnalysis = useCallback(
@@ -1552,7 +1573,8 @@ export function AIComplianceAnalyzer() {
             projectType,
             codeYear,
             analysisMode,
-            sourceFingerprint: computeSheetFingerprint(sheets),
+            sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
+            analysisInstructions,
           });
           analysisRunIdRef.current = run.id;
           setDisplayRun(run);
@@ -1612,6 +1634,7 @@ export function AIComplianceAnalyzer() {
     },
     [
       analysisMode,
+      analysisInstructions,
       codeYear,
       displayRun?.id,
       documentsWithAnalysis,
@@ -1676,6 +1699,7 @@ export function AIComplianceAnalyzer() {
           .map((f) => ({ id: f.id, file: f.file, discipline: f.discipline })),
         sheetDocuments,
         modificationForms,
+        analysisInstructions,
         getDownloadUrl,
         persistUpload,
       });
@@ -1697,6 +1721,7 @@ export function AIComplianceAnalyzer() {
     getDownloadUrl,
     jurisdiction,
     modificationForms,
+    analysisInstructions,
     persistedSheets,
     projectType,
     reloadAnalyzerDataset,
@@ -2764,6 +2789,22 @@ export function AIComplianceAnalyzer() {
               </CardContent>
             </Card>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="analysis-instructions">Analysis instructions (optional)</Label>
+            <Textarea
+              id="analysis-instructions"
+              data-testid="analysis-instructions-input"
+              placeholder="Staff guidance for this review — focus areas, occupancy assumptions, etc. Not treated as evidence."
+              value={analysisInstructions}
+              onChange={(e) => setAnalysisInstructions(e.target.value)}
+              rows={3}
+              className="resize-y min-h-[72px]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Saved with each run. Changing instructions marks the current analysis stale until you re-run.
+            </p>
+          </div>
 
           {/* Upload Area */}
           <div

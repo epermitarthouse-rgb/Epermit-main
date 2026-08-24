@@ -13,6 +13,7 @@ import type { CodeAnalyzerSheet } from "@/lib/codeAnalyzer/model";
 import {
   computeFormsFingerprint,
   type CodeModificationReview,
+  computeModificationSourceFingerprint,
 } from "@/lib/codeModification/model";
 import { pagesAreSparse } from "@/lib/codeModification/extractForm";
 import { fetchModificationForms, replaceModificationReview } from "@/lib/codeModification/persistence";
@@ -86,6 +87,7 @@ export async function runDcCodeModificationReview(params: {
   pendingDrawingFiles: Array<{ id: string; file: File; discipline?: "general" }>;
   sheetDocuments: ProjectDocument[];
   modificationForms: ProjectDocument[];
+  analysisInstructions?: string | null;
   getDownloadUrl: (doc: ProjectDocument) => Promise<string | null>;
   persistUpload: (opts: {
     file: File;
@@ -173,7 +175,11 @@ export async function runDcCodeModificationReview(params: {
       updatedAt: doc.updated_at,
     })),
   );
-  const sourceFingerprint = `form:${formFingerprint}||sheets:${computeSheetFingerprint(sheets)}`;
+  const sourceFingerprint = computeModificationSourceFingerprint(
+    formFingerprint,
+    computeSheetFingerprint(sheets),
+    params.analysisInstructions,
+  );
 
   const run = await createAnalyzerRun({
     projectId: params.projectId,
@@ -185,6 +191,7 @@ export async function runDcCodeModificationReview(params: {
     analysisType: ANALYSIS_TYPE_DC_MODIFICATION,
     formDocumentId: primaryFormDoc.id,
     sourceFingerprint,
+    analysisInstructions: params.analysisInstructions,
   });
 
   try {
@@ -198,6 +205,7 @@ export async function runDcCodeModificationReview(params: {
       formDocument: { id: primaryFormDoc.id, fileName: primaryFormDoc.file_name },
       formDocuments: formDocs.map((doc) => ({ id: doc.id, fileName: doc.file_name })),
       excludedEvidenceDocumentIds: Array.from(excludedEvidenceDocumentIds),
+      analysisInstructions: params.analysisInstructions,
     });
     const review = await replaceModificationReview(
       {
