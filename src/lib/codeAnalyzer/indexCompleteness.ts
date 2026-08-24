@@ -108,18 +108,36 @@ export function isLikelyIndexSheet(input: {
   return false;
 }
 
-const SHEET_NUMBER_PATTERN = /\b([A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)\b/gi;
+/** Discipline prefix + number (A101) or numeric-only index rows (001, G000). */
+const SHEET_NUMBER_PATTERN =
+  /\b((?:[A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)|(?:G[-.]?\d{2,4})|(?:\d{2,4}))\b/gi;
+
+function pickBestSheetNumberToken(label: string): string | null {
+  const matches = [...label.matchAll(SHEET_NUMBER_PATTERN)];
+  if (matches.length === 0) return null;
+  // Prefer tokens at the start of the label (e.g. "001-COVER SHEET" → 001).
+  const leading = matches.find((m) => (m.index ?? 0) <= 2);
+  const token = (leading ?? matches[0])?.[1];
+  if (!token) return null;
+  const normalized = normalizeSheetNumber(token);
+  return normalized || null;
+}
 
 /** Pull the first plausible sheet number token from a filename or label. */
 export function inferSheetNumberFromLabel(label: string | null | undefined): string | null {
   if (typeof label !== "string" || !label.trim()) return null;
   const base = label.replace(/\.[^.]+$/, "").replace(/-page\d+\.png$/i, "");
-  const matches = [...base.matchAll(SHEET_NUMBER_PATTERN)];
-  if (matches.length === 0) return null;
-  const token = matches[0]?.[1];
-  if (!token) return null;
-  const normalized = normalizeSheetNumber(token);
-  return normalized || null;
+  return pickBestSheetNumberToken(base);
+}
+
+/** True when a token is a sheet number (A101, G000, 001), not a title fragment. */
+function looksLikeSheetNumberToken(token: string | null | undefined): boolean {
+  if (typeof token !== "string" || !token.trim()) return false;
+  const trimmed = token.trim();
+  if (/^(?:[A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?|G[-.]?\d{2,4}|\d{2,4})$/i.test(trimmed)) {
+    return true;
+  }
+  return Boolean(inferSheetNumberFromLabel(trimmed));
 }
 
 /** Parse index table rows from plain text (deterministic). */
@@ -132,20 +150,31 @@ export function parseIndexEntriesFromText(text: string | null | undefined): Inde
     const line = rawLine.trim();
     if (!line || INDEX_TITLE_PATTERN.test(line)) continue;
 
+    const sheetTokenPattern = String.raw`((?:[A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)|(?:G[-.]?\d{2,4})|(?:\d{2,4}))`;
     const rowMatch =
-      line.match(/^([A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)\s*[-–—:\t|]\s*(.+)$/i) ||
-      line.match(/^([A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)\s{2,}(.+)$/i) ||
-      line.match(/^(.+?)\s{2,}([A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)\s*$/i);
+      line.match(new RegExp(`^${sheetTokenPattern}\\s*[-–—:\\t|]\\s*(.+)$`, "i")) ||
+      line.match(new RegExp(`^${sheetTokenPattern}\\s{2,}(.+)$`, "i")) ||
+      line.match(new RegExp(`^(.+?)\\s{2,}${sheetTokenPattern}\\s*$`, "i"));
 
     let sheetToken: string | null = null;
     let title: string | null = null;
     if (rowMatch) {
-      if (/^[A-Z]/i.test(rowMatch[1])) {
-        sheetToken = rowMatch[1];
-        title = rowMatch[2]?.trim() ?? null;
+      const first = rowMatch[1]?.trim() ?? "";
+      const second = rowMatch[2]?.trim() ?? "";
+      if (looksLikeSheetNumberToken(first) && !looksLikeSheetNumberToken(second)) {
+        sheetToken = first;
+        title = second || null;
+      } else if (looksLikeSheetNumberToken(second) && !looksLikeSheetNumberToken(first)) {
+        title = first || null;
+        sheetToken = second;
+      } else if (/^[A-Z]/i.test(first)) {
+        sheetToken = first;
+        title = second || null;
       } else {
-        title = rowMatch[1]?.trim() ?? null;
-        sheetToken = rowMatch[2];
+        sheetToken = inferSheetNumberFromLabel(line);
+        if (sheetToken) {
+          title = line.replace(new RegExp(sheetToken, "i"), "").replace(/^[\s\-–—:|]+/, "").trim() || null;
+        }
       }
     } else {
       sheetToken = inferSheetNumberFromLabel(line);
@@ -234,7 +263,12 @@ export function compareIndexCompleteness(
     };
   }
 
-  const actualComparable = actual.filter((a) => a.sheetId !== opts?.indexSheetId);
+  const indexSheetId = opts?.indexSheetId ?? null;
+  const indexSheetRow =
+    indexSheetId != null ? actual.find((a) => a.sheetId === indexSheetId) : undefined;
+  const indexSheetNumber = indexSheetRow?.sheetNumber ?? null;
+
+  const actualComparable = actual.filter((a) => a.sheetId !== indexSheetId);
   const expectedMap = new Map(expected.map((e) => [e.sheetNumber, e]));
   const actualByNumber = new Map<string, ActualSheetLabel[]>();
 
@@ -246,9 +280,10 @@ export function compareIndexCompleteness(
 
   const missing: IndexSheetEntry[] = [];
   for (const entry of expected) {
-    if (!actualByNumber.has(entry.sheetNumber)) {
-      missing.push(entry);
-    }
+    if (actualByNumber.has(entry.sheetNumber)) continue;
+    // Index sheet row satisfies its own expected entry (e.g. G000 on drawing index).
+    if (indexSheetNumber && entry.sheetNumber === indexSheetNumber) continue;
+    missing.push(entry);
   }
 
   const extra: IndexSheetEntry[] = [];

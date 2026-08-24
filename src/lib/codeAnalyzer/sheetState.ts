@@ -119,9 +119,26 @@ export function formatAnalyzerDatasetSummary(metrics: AnalyzerDatasetMetrics): s
   return `Documents: ${metrics.sourceDocumentCount} ${docLabel} · Sheets: ${metrics.includedSheetCount} ${sheetLabel}`;
 }
 
-export function formatAnalysisProgressSummary(metrics: AnalyzerDatasetMetrics): string {
+export function formatAnalysisProgressSummary(
+  metrics: AnalyzerDatasetMetrics,
+  opts?: { inProgress?: boolean; pendingCount?: number; currentSheetName?: string | null },
+): string {
   const { analyzedCompletedCount, analyzedFailedCount, analysisTotalCount } = metrics;
   if (analysisTotalCount === 0) return "Analysis: no sheets";
+  if (opts?.inProgress) {
+    const pending =
+      opts.pendingCount ??
+      Math.max(0, analysisTotalCount - analyzedCompletedCount - analyzedFailedCount);
+    const parts = [
+      "Analysis in progress",
+      `${analyzedCompletedCount} completed`,
+      analyzedFailedCount > 0 ? `${analyzedFailedCount} failed` : null,
+      `${pending} pending`,
+      `${analysisTotalCount} total`,
+    ].filter(Boolean);
+    const line = parts.join(" · ");
+    return opts.currentSheetName ? `${line} — ${opts.currentSheetName}` : line;
+  }
   if (analyzedFailedCount === 0) {
     return `Analysis: ${analyzedCompletedCount} completed, ${analysisTotalCount} total`;
   }

@@ -94,6 +94,11 @@ import {
   shouldShowComplianceKpiStrip,
 } from "@/lib/complianceAnalysisHydrate";
 import {
+  buildComplianceResultGroups,
+  isPendingSessionUpload,
+  shouldIsolateCurrentRunResults,
+} from "@/lib/complianceRunResults";
+import {
   buildAggregatedComplianceExport,
   buildComplianceExportJsonReport,
   complianceIssueResponseKey,
@@ -118,6 +123,7 @@ import {
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
   resolveHydrateRun,
+  sheetFingerprintKey,
   shouldMarkAnalysisStale,
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
@@ -127,11 +133,16 @@ import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   analyzerSheetFingerprint,
   indexPrescreenEffectKey,
-  serializeIndexCompleteness,
   sheetDocumentIdsKey,
   shouldRunIndexPrescreen,
 } from "@/lib/codeAnalyzer/analyzerUiStability";
-import { computeAnalyzerDatasetMetrics, formatAnalysisProgressSummary } from "@/lib/codeAnalyzer/sheetState";
+import {
+  computeAnalyzerDatasetMetrics,
+  formatAnalysisProgressSummary,
+  newSincePreviousRun,
+  removedSincePreviousRun,
+  sheetKeysFromRunFingerprint,
+} from "@/lib/codeAnalyzer/sheetState";
 import {
   completeAnalyzerRun,
   createAnalyzerRun,
@@ -352,7 +363,7 @@ export function AIComplianceAnalyzer() {
     [files],
   );
   const uploadQueueFiles = useMemo(
-    () => files.filter((f) => f.status === "pending"),
+    () => files.filter(isPendingSessionUpload),
     [files],
   );
 
@@ -409,6 +420,12 @@ export function AIComplianceAnalyzer() {
   /** Run id whose compliance annotations are shown (display or historical fallback). */
   const [hydrateRunId, setHydrateRunId] = useState<string | null>(null);
   const [resultsFromHistoricalRun, setResultsFromHistoricalRun] = useState(false);
+  /** Run id for an in-flight batch — isolates findings from prior hydrate. */
+  const [activeBatchRunId, setActiveBatchRunId] = useState<string | null>(null);
+  /** When set, results panel shows a superseded run via Analysis history. */
+  const [viewingHistoricalRunId, setViewingHistoricalRunId] = useState<string | null>(null);
+  const [analyzerRuns, setAnalyzerRuns] = useState<CodeAnalyzerRun[]>([]);
+  const [indexPrescreenError, setIndexPrescreenError] = useState<string | null>(null);
   const docsFetchGuardRef = useRef(createGenerationGuard());
   const hydrateGuardRef = useRef(createGenerationGuard());
   const selectedProjectIdRef = useRef(selectedProjectId);
@@ -439,29 +456,13 @@ export function AIComplianceAnalyzer() {
     () => sheetDocumentIdsKey(sheetDocuments.map((d) => d.id)),
     [sheetDocuments],
   );
-  const activePrescreenRunId = isModificationMode ? modificationDisplayRun?.id : displayRun?.id;
-  const activePrescreenIndexCompletenessJson = useMemo(
-    () =>
-      serializeIndexCompleteness(
-        isModificationMode
-          ? modificationDisplayRun?.index_completeness
-          : displayRun?.index_completeness,
-      ),
-    [
-      isModificationMode,
-      displayRun?.id,
-      displayRun?.index_completeness,
-      modificationDisplayRun?.id,
-      modificationDisplayRun?.index_completeness,
-    ],
-  );
   const indexPrescreenKeyRef = useRef("");
 
   // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
   useEffect(() => {
-    const activeRun = isModificationMode ? modificationDisplayRun : displayRun;
     if (persistedSheets.filter((s) => !s.excluded).length === 0) {
       setIndexCompleteness(null);
+      setIndexPrescreenError(null);
       indexPrescreenKeyRef.current = "";
       return;
     }
@@ -470,8 +471,6 @@ export function AIComplianceAnalyzer() {
       sheetFingerprint,
       sheetDocIdsKey,
       isModificationMode,
-      activeRunId: activePrescreenRunId,
-      activeRunIndexCompletenessJson: activePrescreenIndexCompletenessJson,
     });
     if (!shouldRunIndexPrescreen(indexPrescreenKeyRef.current, prescreenKey)) {
       return;
@@ -480,6 +479,7 @@ export function AIComplianceAnalyzer() {
 
     let cancelled = false;
     setIndexPrescreenLoading(true);
+    setIndexPrescreenError(null);
     void (async () => {
       try {
         const result = await runDrawingIndexPrescreen({
@@ -491,11 +491,14 @@ export function AIComplianceAnalyzer() {
             return fetched[0] ? getDownloadUrl(fetched[0]) : null;
           },
         });
-        if (!cancelled) setIndexCompleteness(result);
+        if (!cancelled) {
+          setIndexCompleteness(result);
+          setIndexPrescreenError(null);
+        }
       } catch (err) {
         console.error("Index prescreen failed:", err);
-        if (!cancelled && activeRun?.index_completeness) {
-          setIndexCompleteness(activeRun.index_completeness);
+        if (!cancelled) {
+          setIndexPrescreenError(err instanceof Error ? err.message : "Prescreen failed");
         }
       } finally {
         if (!cancelled) setIndexPrescreenLoading(false);
@@ -510,13 +513,11 @@ export function AIComplianceAnalyzer() {
     sheetDocIdsKey,
     getDownloadUrl,
     isModificationMode,
-    activePrescreenRunId,
-    activePrescreenIndexCompletenessJson,
     persistedSheets,
     sheetDocuments,
   ]);
 
-  const pendingDrawingCount = files.filter((f) => f.status === "pending").length;
+  const pendingDrawingCount = files.filter(isPendingSessionUpload).length;
   const standardCurrentFingerprint = computeStandardRunFingerprint(
     persistedSheets,
     analysisInstructions,
@@ -562,6 +563,7 @@ export function AIComplianceAnalyzer() {
     const modificationCurrent = currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
     const hasStandardRuns = runs.some(isStandardComplianceRun);
     setHasAnalyzerRuns(hasStandardRuns);
+    setAnalyzerRuns(runs.filter(isStandardComplianceRun));
     setDisplayRun(display);
     setCurrentRun(current);
     setModificationDisplayRun(modificationDisplay);
@@ -802,7 +804,7 @@ export function AIComplianceAnalyzer() {
         if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
         if (selectedProjectIdRef.current !== projectId) return false;
 
-        const displayRunId = hydrateRunId;
+        const displayRunId = viewingHistoricalRunId ?? hydrateRunId;
         const filtered = filterAnnotationsForActiveAnalysis(
           (annotations || []).map((ann) => ({
             id: ann.id,
@@ -886,7 +888,7 @@ export function AIComplianceAnalyzer() {
         }
       }
     },
-    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations, hydrateRunId, hasAnalyzerRuns],
+    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations, hydrateRunId, viewingHistoricalRunId, hasAnalyzerRuns],
   );
 
   // When landing on / switching to All, hydrate every saved analysis for the project.
@@ -923,6 +925,10 @@ export function AIComplianceAnalyzer() {
     setHydrateLoadFailed(false);
     setHydrateRunId(null);
     setResultsFromHistoricalRun(false);
+    setActiveBatchRunId(null);
+    setViewingHistoricalRunId(null);
+    setAnalyzerRuns([]);
+    setIndexPrescreenError(null);
     lastAllHydrateKeyRef.current = "";
     setActiveResultFileId(null);
   }, [selectedProjectId]);
@@ -1568,6 +1574,10 @@ export function AIComplianceAnalyzer() {
         setActiveResultFileId(null);
         setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
         setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+        setLoadedExistingResults([]);
+        setViewingHistoricalRunId(null);
+        setResultsFromHistoricalRun(false);
+        lastAllHydrateKeyRef.current = "";
       }
 
       try {
@@ -1762,10 +1772,14 @@ export function AIComplianceAnalyzer() {
             indexCompleteness: indexCompleteness ?? undefined,
           });
           analysisRunIdRef.current = run.id;
+          setActiveBatchRunId(run.id);
+          setHydrateRunId(run.id);
           setDisplayRun(run);
           setCurrentRun(null);
         } else if (onlyFailed && !analysisRunIdRef.current && displayRun?.id) {
           analysisRunIdRef.current = displayRun.id;
+          setActiveBatchRunId(displayRun.id);
+          setHydrateRunId(displayRun.id);
         }
 
         setBatchProgress({ total: batchFiles.length, completed: 0, currentIndex: 1 });
@@ -1818,9 +1832,13 @@ export function AIComplianceAnalyzer() {
         }
 
         setFiles((prev) => prev.filter((f) => f.status === "failed"));
+        setActiveBatchRunId(null);
+        analysisRunIdRef.current = null;
         setAnalysisSavedAt(Date.now());
         if (selectedProjectId) {
           await reloadAnalyzerDataset(selectedProjectId);
+          lastAllHydrateKeyRef.current = "";
+          void hydrateExistingAnalyses();
         }
 
         const completionToast = formatAnalysisCompletionToast({
@@ -1835,8 +1853,11 @@ export function AIComplianceAnalyzer() {
         console.error("Batch analysis error:", err);
         toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
         setDrawingUploadProgress(null);
-        if (analysisRunIdRef.current && selectedProjectId) {
-          await completeAnalyzerRun(analysisRunIdRef.current, "failed").catch(() => undefined);
+        const failedRunId = analysisRunIdRef.current;
+        setActiveBatchRunId(null);
+        analysisRunIdRef.current = null;
+        if (failedRunId && selectedProjectId) {
+          await completeAnalyzerRun(failedRunId, "failed").catch(() => undefined);
         }
       } finally {
         setAnalyzing(false);
@@ -1860,6 +1881,7 @@ export function AIComplianceAnalyzer() {
       reloadAnalyzerDataset,
       requestDrawingAnalysis,
       saveAnalysisToDb,
+      hydrateExistingAnalyses,
       selectedProjectId,
       sheetDocuments,
       uploadDocument,
@@ -2074,49 +2096,45 @@ export function AIComplianceAnalyzer() {
     }
   };
 
+  const isolateCurrentRun = shouldIsolateCurrentRunResults({
+    analyzing,
+    activeBatchRunId,
+    viewingHistoricalRunId,
+  });
+
   const resultGroups = useMemo(() => {
-    const groups: Array<{
-      id: string;
-      documentId: string | null;
-      fileName: string;
-      ibcResult: AnalysisResult | null;
-      localResult: AnalysisResult | null;
-      failed: boolean;
-      error?: string;
-    }> = [
-      ...completedBatchFiles.map((f) => ({
-        id: f.id,
-        documentId: f.documentId ?? null,
-        fileName: batchFileDisplayName(f),
-        ibcResult: f.ibcResult ?? null,
-        localResult: f.localResult ?? null,
-        failed: false as boolean,
-      })),
-      ...failedBatchFiles.map((f) => ({
-        id: f.id,
-        documentId: f.documentId ?? null,
-        fileName: batchFileDisplayName(f),
-        ibcResult: f.ibcResult ?? null,
-        localResult: f.localResult ?? null,
-        failed: true as boolean,
-        error: f.error,
-      })),
-    ];
-    for (const loaded of loadedExistingResults) {
-      const alreadyPresent = groups.some((g) => g.documentId === loaded.documentId);
-      if (!alreadyPresent) {
-        groups.push({
-          id: loaded.documentId,
-          documentId: loaded.documentId,
-          fileName: loaded.fileName,
-          ibcResult: loaded.ibcResult,
-          localResult: loaded.localResult,
-          failed: false,
-        });
-      }
-    }
-    return groups;
-  }, [completedBatchFiles, failedBatchFiles, loadedExistingResults]);
+    const batchCompleted = completedBatchFiles.map((f) => ({
+      id: f.id,
+      documentId: f.documentId ?? null,
+      fileName: batchFileDisplayName(f),
+      ibcResult: f.ibcResult ?? null,
+      localResult: f.localResult ?? null,
+      failed: false as boolean,
+    }));
+    const batchFailed = failedBatchFiles.map((f) => ({
+      id: f.id,
+      documentId: f.documentId ?? null,
+      fileName: batchFileDisplayName(f),
+      ibcResult: f.ibcResult ?? null,
+      localResult: f.localResult ?? null,
+      failed: true as boolean,
+      error: f.error,
+    }));
+    const hydrated = loadedExistingResults.map((loaded) => ({
+      id: loaded.documentId,
+      documentId: loaded.documentId,
+      fileName: loaded.fileName,
+      ibcResult: loaded.ibcResult,
+      localResult: loaded.localResult,
+      failed: false as boolean,
+    }));
+    return buildComplianceResultGroups({
+      batchCompleted,
+      batchFailed,
+      hydrated,
+      isolateCurrentRun,
+    });
+  }, [completedBatchFiles, failedBatchFiles, loadedExistingResults, isolateCurrentRun]);
 
   const filterMatchFileName = useMemo(() => {
     if (resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL) return null;
@@ -2170,12 +2188,15 @@ export function AIComplianceAnalyzer() {
             created_at: d.created_at,
           }));
     const failedIds = new Set(failedBatchFiles.map((f) => f.id));
+    const completedIds = new Set(completedBatchFiles.map((f) => f.id));
     const base = computeAnalyzerDatasetMetrics({
       includedSheets,
       failedSheetIds: failedIds,
+      completedSheetIds: completedIds,
     });
-    const analyzedCompletedCount =
-      completedBatchFiles.length > 0
+    const analyzedCompletedCount = isolateCurrentRun
+      ? completedBatchFiles.length
+      : completedBatchFiles.length > 0
         ? completedBatchFiles.length
         : failedIds.size > 0
           ? Math.max(0, base.includedSheetCount - failedIds.size)
@@ -2188,10 +2209,80 @@ export function AIComplianceAnalyzer() {
   }, [
     persistedSheets,
     documentsWithAnalysis,
-    completedBatchFiles.length,
+    completedBatchFiles,
     failedBatchFiles,
     loadedExistingResults.length,
+    isolateCurrentRun,
   ]);
+
+  const completedSheetIdsForDrawingSet = useMemo(
+    () => new Set(completedBatchFiles.map((f) => f.id)),
+    [completedBatchFiles],
+  );
+
+  const previousRunFingerprint =
+    displayRun?.source_fingerprint ?? currentRun?.source_fingerprint ?? null;
+  const includedPersistedSheets = useMemo(
+    () => persistedSheets.filter((s) => !s.excluded),
+    [persistedSheets],
+  );
+  const newSinceLastAnalysis = useMemo(
+    () => newSincePreviousRun(includedPersistedSheets, previousRunFingerprint),
+    [includedPersistedSheets, previousRunFingerprint],
+  );
+  const changedStaleSheets = useMemo(() => {
+    if (!analysisStale || !previousRunFingerprint) return [];
+    const prevKeys = sheetKeysFromRunFingerprint(previousRunFingerprint);
+    const newKeys = new Set(newSinceLastAnalysis.map(sheetFingerprintKey));
+    return includedPersistedSheets.filter(
+      (s) => prevKeys.has(sheetFingerprintKey(s)) && !newKeys.has(sheetFingerprintKey(s)),
+    );
+  }, [analysisStale, previousRunFingerprint, includedPersistedSheets, newSinceLastAnalysis]);
+  const removedSinceLastAnalysis = useMemo(
+    () => removedSincePreviousRun(includedPersistedSheets, previousRunFingerprint),
+    [includedPersistedSheets, previousRunFingerprint],
+  );
+
+  const historicalAnalysisRuns = useMemo(
+    () =>
+      analyzerRuns.filter(
+        (run) => run.status === "superseded" && Boolean(run.completed_at),
+      ),
+    [analyzerRuns],
+  );
+
+  const handleAnalysisHistoryChange = useCallback(
+    async (value: string) => {
+      if (value === "current") {
+        setViewingHistoricalRunId(null);
+        setResultsFromHistoricalRun(false);
+        const currentId =
+          displayRun?.status === "current"
+            ? displayRun.id
+            : currentRun?.id ?? displayRun?.id ?? null;
+        setHydrateRunId(currentId);
+        lastAllHydrateKeyRef.current = "";
+        if (documentsWithAnalysis.length > 0) {
+          await hydrateExistingAnalyses();
+        } else {
+          setLoadedExistingResults([]);
+        }
+        return;
+      }
+      setViewingHistoricalRunId(value);
+      setResultsFromHistoricalRun(true);
+      setHydrateRunId(value);
+      lastAllHydrateKeyRef.current = "";
+      await hydrateExistingAnalyses();
+    },
+    [
+      displayRun?.id,
+      displayRun?.status,
+      currentRun?.id,
+      documentsWithAnalysis.length,
+      hydrateExistingAnalyses,
+    ],
+  );
 
   const documentFilterOptions = useMemo(() => {
     const opts: { id: string; label: string }[] = [];
@@ -2515,7 +2606,7 @@ export function AIComplianceAnalyzer() {
   const complianceHydrateSource = resolveComplianceHydrateSource(
     hasAnalyzerRuns,
     displayRun?.status,
-    resultsFromHistoricalRun,
+    resultsFromHistoricalRun || Boolean(viewingHistoricalRunId),
   );
   const showComplianceKpiStrip = shouldShowComplianceKpiStrip({
     loading: loadingExisting || loadingDocsWithAnalysis || awaitingAllHydrate,
@@ -3109,7 +3200,11 @@ export function AIComplianceAnalyzer() {
           </div>
 
           {(persistedSheets.length > 0 || indexCompleteness) && (
-            <IndexCompletenessPanel result={indexCompleteness} loading={indexPrescreenLoading} />
+            <IndexCompletenessPanel
+              result={indexCompleteness}
+              loading={indexPrescreenLoading}
+              recheckError={indexPrescreenError}
+            />
           )}
 
           {/* Upload Area */}
@@ -3165,6 +3260,16 @@ export function AIComplianceAnalyzer() {
                   status: f.status,
                   error: f.error,
                 }))}
+                newSinceLastAnalysis={newSinceLastAnalysis}
+                changedStaleSheets={changedStaleSheets}
+                removedSinceLastAnalysis={removedSinceLastAnalysis}
+                completedSheetIds={completedSheetIdsForDrawingSet}
+                analysisPendingCount={
+                  batchProgress
+                    ? Math.max(0, batchProgress.total - batchProgress.completed)
+                    : undefined
+                }
+                currentAnalyzingSheetName={batchProgress?.currentFileName ?? null}
                 displayRun={isModificationMode ? modificationDisplayRun : displayRun}
                 analysisStale={isModificationMode ? modificationStale : analysisStale}
                 staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
@@ -3325,10 +3430,40 @@ export function AIComplianceAnalyzer() {
                 label="Sheets analyzed"
                 value={analyzerMetrics.analyzedCompletedCount}
                 icon={FileText}
-                detail={formatAnalysisProgressSummary(analyzerMetrics)}
+                detail={formatAnalysisProgressSummary(analyzerMetrics, {
+                  inProgress: analyzing,
+                  pendingCount: batchProgress
+                    ? Math.max(0, batchProgress.total - batchProgress.completed)
+                    : undefined,
+                  currentSheetName: batchProgress?.currentFileName ?? null,
+                })}
               />
             </div>
             ) : null}
+
+            {historicalAnalysisRuns.length > 0 && !analyzing && (
+              <div className="flex flex-wrap items-center gap-2" data-testid="analysis-history-control">
+                <Label className="text-sm text-muted-foreground">Analysis history</Label>
+                <Select
+                  value={viewingHistoricalRunId ?? "current"}
+                  onValueChange={(value) => void handleAnalysisHistoryChange(value)}
+                >
+                  <SelectTrigger className="w-[280px]">
+                    <SelectValue placeholder="Current analysis" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="current">Current analysis</SelectItem>
+                    {historicalAnalysisRuns.map((run) => (
+                      <SelectItem key={run.id} value={run.id}>
+                        {run.completed_at
+                          ? `Previous · ${new Date(run.completed_at).toLocaleString()}`
+                          : `Previous · ${run.id.slice(0, 8)}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {complianceHydrateSource === "historical" && displayedResultGroups.length > 0 && (
               <Alert data-testid="compliance-historical-results-banner">

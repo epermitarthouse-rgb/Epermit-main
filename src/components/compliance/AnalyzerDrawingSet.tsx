@@ -31,14 +31,23 @@ export interface AnalyzerPendingFile {
 
 interface AnalyzerDrawingSetProps {
   sheets: CodeAnalyzerSheet[];
-  /** Source documents queued for the next upload (status pending only). */
+  /** User-added source documents not yet persisted (pending session uploads only). */
   uploadQueueFiles: AnalyzerPendingFile[];
   /** Sheets that failed analysis and need retry (status failed only). */
   failedSheetFiles: AnalyzerPendingFile[];
+  /** Included sheets added since the last completed run (labels only — also on Current drawings). */
+  newSinceLastAnalysis?: CodeAnalyzerSheet[];
+  /** Included sheets from the prior run that are stale after dataset changes. */
+  changedStaleSheets?: CodeAnalyzerSheet[];
+  /** Sheet fingerprint keys removed since the last completed run. */
+  removedSinceLastAnalysis?: string[];
   displayRun: CodeAnalyzerRun | null;
   analysisStale: boolean;
   staleActionLabel?: string;
   analyzing: boolean;
+  completedSheetIds?: Set<string>;
+  analysisPendingCount?: number;
+  currentAnalyzingSheetName?: string | null;
   isLegacy: boolean;
   onAddClick: () => void;
   onRemovePending: (id: string) => void;
@@ -111,14 +120,36 @@ function renderSessionFileCard(
   );
 }
 
+function renderCompactSheetList(sheets: CodeAnalyzerSheet[], sourceIsPdfById: Map<string, boolean>) {
+  return (
+    <ul className="list-disc pl-5 space-y-0.5 text-xs text-muted-foreground">
+      {sheets.map((sheet) => {
+        const isPdf = sourceIsPdfById.get(sheet.source_document_id) ?? false;
+        const label = sheetDisplayName({
+          file_name: sheet.file_name,
+          page_number: sheet.page_number,
+          sourceIsPdf: isPdf,
+        });
+        return <li key={sheet.id}>{label}</li>;
+      })}
+    </ul>
+  );
+}
+
 export function AnalyzerDrawingSet({
   sheets,
   uploadQueueFiles,
   failedSheetFiles,
+  newSinceLastAnalysis = [],
+  changedStaleSheets = [],
+  removedSinceLastAnalysis = [],
   displayRun,
   analysisStale,
   staleActionLabel = "Update Analysis",
   analyzing,
+  completedSheetIds,
+  analysisPendingCount,
+  currentAnalyzingSheetName,
   isLegacy,
   onAddClick,
   onRemovePending,
@@ -136,15 +167,22 @@ export function AnalyzerDrawingSet({
     const isPdf = pages.length > 1 || (first?.file_name ?? "").toLowerCase().endsWith(".pdf");
     return { sourceId, pages, isPdf, fileName: first?.file_name ?? "Drawing" };
   });
+  const sourceIsPdfById = new Map(grouped.map((g) => [g.sourceId, g.isPdf]));
 
   const failedSheetIds = new Set(failedSheetFiles.map((f) => f.id));
+  const completedIds =
+    completedSheetIds ??
+    new Set(included.filter((s) => !failedSheetIds.has(s.id)).map((s) => s.id));
   const datasetMetrics = computeAnalyzerDatasetMetrics({
     includedSheets: sheets,
     failedSheetIds,
-    completedSheetIds: new Set(
-      included.filter((s) => displayRun && !failedSheetIds.has(s.id)).map((s) => s.id),
-    ),
+    completedSheetIds: completedIds,
   });
+  const analyzedCompletedCount = completedIds.size;
+  const analyzedFailedCount = failedSheetIds.size;
+  const pendingCount =
+    analysisPendingCount ??
+    Math.max(0, datasetMetrics.analysisTotalCount - analyzedCompletedCount - analyzedFailedCount);
 
   return (
     <div className="space-y-4 text-left">
@@ -156,7 +194,7 @@ export function AnalyzerDrawingSet({
           </AlertDescription>
         </Alert>
       )}
-      {displayRun?.status === "current" && !analysisStale && included.length > 0 && (
+      {displayRun?.status === "current" && !analysisStale && included.length > 0 && !analyzing && (
         <p className="text-xs text-muted-foreground">
           Analysis is current for {included.length} included sheet{included.length === 1 ? "" : "s"}.
         </p>
@@ -164,16 +202,22 @@ export function AnalyzerDrawingSet({
       <p className="text-xs text-muted-foreground" data-testid="analyzer-dataset-summary">
         {formatAnalyzerDatasetSummary(datasetMetrics)}
       </p>
-      {(displayRun || failedSheetFiles.length > 0) && included.length > 0 && (
+      {(analyzing || displayRun || failedSheetFiles.length > 0) && included.length > 0 && (
         <p className="text-xs text-muted-foreground" data-testid="analyzer-analysis-summary">
-          {formatAnalysisProgressSummary({
-            ...datasetMetrics,
-            analyzedCompletedCount: Math.max(
-              0,
-              datasetMetrics.analysisTotalCount - failedSheetFiles.length,
-            ),
-            analyzedFailedCount: failedSheetFiles.length,
-          })}
+          {formatAnalysisProgressSummary(
+            {
+              ...datasetMetrics,
+              analyzedCompletedCount,
+              analyzedFailedCount,
+            },
+            analyzing
+              ? {
+                  inProgress: true,
+                  pendingCount,
+                  currentSheetName: currentAnalyzingSheetName,
+                }
+              : undefined,
+          )}
         </p>
       )}
       <p
@@ -274,9 +318,16 @@ export function AnalyzerDrawingSet({
         </div>
       )}
 
+      {newSinceLastAnalysis.length > 0 && (
+        <div className="space-y-2" data-testid="analyzer-new-since-last">
+          <p className="text-sm font-medium text-foreground">New since last analysis</p>
+          {renderCompactSheetList(newSinceLastAnalysis, sourceIsPdfById)}
+        </div>
+      )}
+
       {uploadQueueFiles.length > 0 && (
         <div className="space-y-2" data-testid="analyzer-new-uploads">
-          <p className="text-sm font-medium text-foreground">New since last analysis</p>
+          <p className="text-sm font-medium text-foreground">New uploads (not yet analyzed)</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {uploadQueueFiles.map((f) =>
               renderSessionFileCard(
@@ -287,6 +338,24 @@ export function AnalyzerDrawingSet({
               ),
             )}
           </div>
+        </div>
+      )}
+
+      {changedStaleSheets.length > 0 && (
+        <div className="space-y-2" data-testid="analyzer-changed-stale">
+          <p className="text-sm font-medium text-foreground">Changed / stale sheets</p>
+          {renderCompactSheetList(changedStaleSheets, sourceIsPdfById)}
+        </div>
+      )}
+
+      {removedSinceLastAnalysis.length > 0 && (
+        <div className="space-y-2" data-testid="analyzer-removed-since-last">
+          <p className="text-sm font-medium text-foreground">Removed since last analysis</p>
+          <ul className="list-disc pl-5 space-y-0.5 text-xs text-muted-foreground">
+            {removedSinceLastAnalysis.map((key) => (
+              <li key={key}>{key}</li>
+            ))}
+          </ul>
         </div>
       )}
 

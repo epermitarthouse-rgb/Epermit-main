@@ -1,12 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, AlertTriangle, Info } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Info, Loader2 } from "lucide-react";
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
 
 interface IndexCompletenessPanelProps {
   result: IndexCompletenessResult | null;
   loading?: boolean;
+  /** Non-fatal recheck error while preserving the last good result. */
+  recheckError?: string | null;
 }
 
 function statusBadge(result: IndexCompletenessResult) {
@@ -27,8 +29,8 @@ function statusBadge(result: IndexCompletenessResult) {
   );
 }
 
-export function IndexCompletenessPanel({ result, loading }: IndexCompletenessPanelProps) {
-  if (loading) {
+export function IndexCompletenessPanel({ result, loading, recheckError }: IndexCompletenessPanelProps) {
+  if (!result && loading) {
     return (
       <Card className="border-border">
         <CardHeader className="pb-2">
@@ -46,13 +48,30 @@ export function IndexCompletenessPanel({ result, loading }: IndexCompletenessPan
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-base">Pre-Screening · Drawing Set Completeness</CardTitle>
-          {statusBadge(result)}
+          <div className="flex items-center gap-2">
+            {loading ? (
+              <Badge variant="outline" className="gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Rechecking…
+              </Badge>
+            ) : null}
+            {statusBadge(result)}
+          </div>
         </div>
         <CardDescription>
           Deterministic comparison of the drawing index (when present) against included sheets.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
+        {recheckError ? (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Recheck failed — showing the last result. {recheckError}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {result.status === "no_index" ? (
           <Alert>
             <Info className="h-4 w-4" />

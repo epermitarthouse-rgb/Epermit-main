@@ -7,6 +7,7 @@ import {
   normalizeSheetNumber,
   parseIndexEntriesFromText,
   runIndexCompletenessPrescreen,
+  inferSheetNumberFromLabel,
   type ActualSheetLabel,
   type IndexSheetEntry,
 } from "./indexCompleteness.ts";
@@ -144,6 +145,58 @@ A-102  Second Floor`;
     assert.equal(result.hasIndex, true);
     assert.equal(result.indexSheetId, "idx");
     assert.equal(result.expectedCount, 3);
+  });
+});
+
+describe("inferSheetNumberFromLabel", () => {
+  it("extracts numeric-only sheet numbers from labels", () => {
+    assert.equal(inferSheetNumberFromLabel("001-COVER SHEET"), "001");
+    assert.equal(inferSheetNumberFromLabel("G000"), "G000");
+    assert.equal(inferSheetNumberFromLabel("A-101 First Floor"), "A101");
+  });
+});
+
+describe("compareIndexCompleteness — Riverside UAT mock", () => {
+  it("matches G000/001/002/003 uploads; missing only A009 and S003", () => {
+    const indexText = `DRAWING INDEX
+G000  Cover
+001  Cover Sheet
+002  Site Plan
+003  Code Summary
+A001  Floor Plan L1
+A002  Floor Plan L2
+A003  Floor Plan L3
+A004  Floor Plan L4
+A005  Floor Plan L5
+A006  Floor Plan L6
+A007  Floor Plan L7
+A008  Floor Plan L8
+A009  Floor Plan L9
+S001  Sections
+S002  Sections
+S003  Sections`;
+
+    const expected = parseIndexEntriesFromText(indexText);
+    const actual: ActualSheetLabel[] = [
+      { sheetId: "idx", sheetNumber: "G000", rawLabel: "G000", sourceDocumentId: "d0", pageNumber: 1 },
+      { sheetId: "s001", sheetNumber: "001", rawLabel: "001-COVER SHEET", sourceDocumentId: "d1", pageNumber: 1 },
+      { sheetId: "s002", sheetNumber: "002", rawLabel: "002-SITE PLAN", sourceDocumentId: "d2", pageNumber: 1 },
+      { sheetId: "s003", sheetNumber: "003", rawLabel: "003-CODE SUMMARY", sourceDocumentId: "d3", pageNumber: 1 },
+      ...["A001", "A002", "A003", "A004", "A005", "A006", "A007", "A008"].map((n, i) => ({
+        sheetId: `a${i}`,
+        sheetNumber: n,
+        rawLabel: n,
+        sourceDocumentId: `da${i}`,
+        pageNumber: 1,
+      })),
+      { sheetId: "s1", sheetNumber: "S001", rawLabel: "S001", sourceDocumentId: "ds1", pageNumber: 1 },
+      { sheetId: "s2", sheetNumber: "S002", rawLabel: "S002", sourceDocumentId: "ds2", pageNumber: 1 },
+    ];
+
+    const result = compareIndexCompleteness(expected, actual, { indexSheetId: "idx" });
+    const missingNumbers = result.missing.map((m) => m.sheetNumber).sort();
+    assert.deepEqual(missingNumbers, ["A009", "S003"]);
+    assert.ok(result.extra.length >= 0);
   });
 });
 

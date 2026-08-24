@@ -26,15 +26,11 @@ export function indexPrescreenEffectKey(input: {
   sheetFingerprint: string;
   sheetDocIdsKey: string;
   isModificationMode: boolean;
-  activeRunId: string | null | undefined;
-  activeRunIndexCompletenessJson: string;
 }): string {
   return [
     input.sheetFingerprint,
     input.sheetDocIdsKey,
     input.isModificationMode ? "mod" : "std",
-    input.activeRunId ?? "",
-    input.activeRunIndexCompletenessJson,
   ].join("\0");
 }
 
