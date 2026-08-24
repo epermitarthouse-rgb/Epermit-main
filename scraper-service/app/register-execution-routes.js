@@ -1041,7 +1041,7 @@ app.post("/api/extract-drawing-index", async (req, res) => {
 });
 
 // ─── Analyze Code Modification (DC evidence review) ────────────────────────
-const { analyzeCodeModification, isDcJurisdiction } = require("./services/compliance/code-modification.service.js");
+const { analyzeCodeModification, extractModificationForm, reviewModificationEvidenceSheet, mergeModificationReviewResults, isDcJurisdiction } = require("./services/compliance/code-modification.service.js");
 
 app.post("/api/analyze-code-modification", async (req, res) => {
   try {
@@ -1117,6 +1117,103 @@ app.post("/api/analyze-code-modification", async (req, res) => {
       ? "Analysis service error. Please try again."
       : (err.message || "Code modification review failed");
     res.status(500).json({ error: safeMessage });
+  }
+});
+
+async function authenticateCodeModRequest(req, res) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+  const token = authHeader.split(" ")[1];
+  if (supabase) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      res.status(401).json({ error: "Invalid or expired authentication token" });
+      return null;
+    }
+  }
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) {
+    res.status(500).json({ error: "OpenAI API key not configured. Add OPENAI_API_KEY to your environment secrets." });
+    return null;
+  }
+  const OpenAI = require("openai").default || require("openai");
+  return new OpenAI({ apiKey: OPENAI_API_KEY });
+}
+
+app.post("/api/analyze-code-modification/extract-form", async (req, res) => {
+  try {
+    const openai = await authenticateCodeModRequest(req, res);
+    if (!openai) return;
+    const { formPages, formPdfBase64, formImages, formDocument, analysisInstructions } = req.body || {};
+    const outcome = await extractModificationForm({
+      openai,
+      formPages,
+      formPdfBase64,
+      formImages,
+      formDocument,
+      analysisInstructions,
+      logInfo: console.log,
+      logError: console.error,
+    });
+    res.status(200).json(outcome);
+  } catch (err) {
+    console.error("[analyze-code-modification/extract-form] Error:", err.message);
+    res.status(500).json({ error: err.message || "Form extraction failed" });
+  }
+});
+
+app.post("/api/analyze-code-modification/review-sheet", async (req, res) => {
+  try {
+    const openai = await authenticateCodeModRequest(req, res);
+    if (!openai) return;
+    const { extracted_request, sheet, analysisInstructions } = req.body || {};
+    if (!extracted_request || !sheet) {
+      return res.status(400).json({ error: "extracted_request and sheet are required" });
+    }
+    const outcome = await reviewModificationEvidenceSheet({
+      openai,
+      extracted: extracted_request,
+      sheet,
+      analysisInstructions,
+      logError: console.error,
+    });
+    res.status(200).json(outcome);
+  } catch (err) {
+    console.error("[analyze-code-modification/review-sheet] Error:", err.message);
+    res.status(500).json({ error: err.message || "Sheet review failed" });
+  }
+});
+
+app.post("/api/analyze-code-modification/merge", async (req, res) => {
+  try {
+    const authOk = await authenticateCodeModRequest(req, res);
+    if (!authOk) return;
+    const {
+      extracted_request,
+      sheetFindingsList,
+      evidenceSheets,
+      excludedFormSheetCount,
+      sheets,
+      sheetWarnings,
+    } = req.body || {};
+    if (!extracted_request) {
+      return res.status(400).json({ error: "extracted_request is required" });
+    }
+    const merged = mergeModificationReviewResults({
+      extracted: extracted_request,
+      sheetFindingsList: sheetFindingsList || [],
+      evidenceSheets: evidenceSheets || [],
+      excludedFormSheetCount: excludedFormSheetCount || 0,
+      sheets: sheets || [],
+      sheetWarnings: sheetWarnings || [],
+    });
+    res.status(200).json(merged);
+  } catch (err) {
+    console.error("[analyze-code-modification/merge] Error:", err.message);
+    res.status(500).json({ error: err.message || "Merge failed" });
   }
 });
 

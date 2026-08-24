@@ -1042,6 +1042,99 @@ async function analyzeCodeModification(params) {
     logError = console.error,
   } = params;
 
+  const extractOutcome = await extractModificationForm({
+    openai,
+    formPages,
+    formPdfBase64,
+    formImages,
+    formDocument,
+    analysisInstructions,
+    logInfo,
+    logError,
+  });
+
+  const evidenceSheets = filterDrawingEvidenceSheetsForReview(
+    sheets,
+    formDocument,
+    excludedEvidenceDocumentIds,
+  );
+  const excludedFormSheetCount = (sheets || []).length - evidenceSheets.length;
+
+  const sheetFindingsList = [];
+  const sheetWarnings = [];
+  const reviewable = evidenceSheets.filter((sheet) => sheet.imageBase64 || sheet.text);
+  if (openai && reviewable.length > 0) {
+    for (const sheet of reviewable) {
+      try {
+        const sheetOutcome = await reviewModificationEvidenceSheet({
+          openai,
+          extracted: extractOutcome.extracted_request,
+          sheet,
+          analysisInstructions,
+          logError,
+        });
+        sheetFindingsList.push(sheetOutcome.findings);
+        sheetWarnings.push(...(sheetOutcome.sheet_warnings || []));
+      } catch (err) {
+        const label = sheet.fileName || sheet.sheetLabel || `page ${sheet.pageNumber ?? "?"}`;
+        const message = err instanceof Error ? err.message : String(err);
+        logError(`[analyze-code-modification] Sheet review failed (${label}):`, message);
+        sheetWarnings.push(`Sheet ${label} could not be reviewed: ${message}`);
+      }
+    }
+  } else if (reviewable.length === 0) {
+    if (excludedFormSheetCount > 0 && (sheets || []).length > 0) {
+      sheetWarnings.push(
+        "Code Modification application pages were excluded from drawing evidence review.",
+      );
+    }
+    sheetWarnings.push("No drawing sheets were provided for evidence review.");
+  }
+
+  const merged = mergeModificationReviewResults({
+    extracted: extractOutcome.extracted_request,
+    sheetFindingsList,
+    evidenceSheets,
+    excludedFormSheetCount,
+    sheets,
+    formDocument,
+    pages: extractOutcome.form_pages,
+    sheetWarnings,
+  });
+
+  logInfo(
+    `[analyze-code-modification] Review complete: ${merged.evidence.length} findings, status=${merged.overall_status}`,
+  );
+
+  return {
+    ok: true,
+    status: 200,
+    result: {
+      extracted_request: merged.extracted_request,
+      evidence: merged.evidence,
+      overall_status: merged.overall_status,
+      extraction_warnings: merged.extraction_warnings,
+      form_fingerprint: extractOutcome.form_fingerprint,
+      sheet_warnings: merged.sheet_warnings,
+    },
+  };
+}
+
+/**
+ * Form extraction only (async V2 — no evidence sheets).
+ */
+async function extractModificationForm(params) {
+  const {
+    openai = null,
+    formPages,
+    formPdfBase64,
+    formImages = [],
+    formDocument,
+    analysisInstructions = null,
+    logInfo = console.log,
+    logError = console.error,
+  } = params;
+
   let pages = Array.isArray(formPages) ? formPages.slice() : [];
   if (pages.length === 0 && formPdfBase64) {
     try {
@@ -1065,69 +1158,64 @@ async function analyzeCodeModification(params) {
     }
   }
 
-  const evidenceSheets = filterDrawingEvidenceSheetsForReview(
-    sheets,
-    formDocument,
-    excludedEvidenceDocumentIds,
-  );
-  const excludedFormSheetCount = (sheets || []).length - evidenceSheets.length;
+  return {
+    extracted_request: extracted,
+    extraction_warnings: extracted.extractionWarnings || [],
+    form_pages: pages,
+    form_fingerprint: formDocument?.id
+      ? [formDocument.id, formDocument.updatedAt || "", String(pages.length)].join("|")
+      : "",
+  };
+}
+
+/**
+ * Single evidence sheet review (async V2).
+ */
+async function reviewModificationEvidenceSheet(params) {
+  const { openai, extracted, sheet, analysisInstructions = null, logError = console.error } = params;
+  if (!openai) {
+    throw new Error("OpenAI client required for evidence sheet review");
+  }
+  const findings = await reviewSheetWithVision(openai, extracted, sheet, logError, analysisInstructions);
+  return {
+    findings,
+    sheet_warnings: [],
+  };
+}
+
+/**
+ * Merge form extraction + per-sheet findings into final review payload.
+ */
+function mergeModificationReviewResults(params) {
+  const {
+    extracted,
+    sheetFindingsList = [],
+    evidenceSheets = [],
+    excludedFormSheetCount = 0,
+    sheets = [],
+    sheetWarnings = [],
+  } = params;
 
   const allowed = allowedRefsFromSheets(evidenceSheets);
   let findings = findingsFromExtracted(extracted);
-  const sheetWarnings = [];
-
-  const reviewable = evidenceSheets.filter((sheet) => sheet.imageBase64 || sheet.text);
-  if (openai && reviewable.length > 0) {
-    for (const sheet of reviewable) {
-      try {
-        const sheetFindings = await reviewSheetWithVision(
-          openai,
-          extracted,
-          sheet,
-          logError,
-          analysisInstructions,
-        );
-        findings = mergeFindings(findings, sheetFindings);
-      } catch (err) {
-        const label = sheet.fileName || sheet.sheetLabel || `page ${sheet.pageNumber ?? "?"}`;
-        const message = err instanceof Error ? err.message : String(err);
-        logError(`[analyze-code-modification] Sheet review failed (${label}):`, message);
-        sheetWarnings.push(`Sheet ${label} could not be reviewed: ${message}`);
-      }
-    }
-  } else if (reviewable.length === 0) {
-    if (excludedFormSheetCount > 0 && (sheets || []).length > 0) {
-      sheetWarnings.push(
-        "Code Modification application pages were excluded from drawing evidence review.",
-      );
-    }
-    sheetWarnings.push("No drawing sheets were provided for evidence review.");
+  for (const incoming of sheetFindingsList) {
+    findings = mergeFindings(findings, incoming || []);
   }
 
   const grounded = validateAndGroundFindings(findings, allowed);
   const overall_status = normalizeOverallStatus(computeOverallStatus(grounded));
-  const extraction_warnings = [
-    ...(extracted.extractionWarnings || []),
-    ...sheetWarnings,
-  ];
+  const extraction_warnings = [...(extracted.extractionWarnings || []), ...sheetWarnings];
 
-  logInfo(
-    `[analyze-code-modification] Review complete: ${grounded.length} findings, status=${overall_status}`,
-  );
+  if (excludedFormSheetCount > 0 && (sheets || []).length > 0 && sheetFindingsList.length === 0) {
+    /* warnings already in sheetWarnings */
+  }
 
   return {
-    ok: true,
-    status: 200,
-    result: {
-      extracted_request: extracted,
-      evidence: grounded,
-      overall_status,
-      extraction_warnings,
-      form_fingerprint: formDocument?.id
-        ? [formDocument.id, formDocument.updatedAt || "", String(pages.length)].join("|")
-        : "",
-      sheet_warnings: sheetWarnings,
-    },
+    extracted_request: extracted,
+    evidence: grounded,
+    overall_status,
+    extraction_warnings,
+    sheet_warnings: sheetWarnings,
   };
 }
 
@@ -1148,6 +1236,9 @@ module.exports = {
   formatStaffGuidanceBlock,
   extractPdfPageTexts,
   analyzeCodeModification,
+  extractModificationForm,
+  reviewModificationEvidenceSheet,
+  mergeModificationReviewResults,
   isDcJurisdiction,
   emptyExtractedRequest,
   PROMPT_CONSTRAINTS,

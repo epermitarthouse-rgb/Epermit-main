@@ -12,15 +12,27 @@ import {
 import { fetchDocumentIngestionJobs, fetchProjectDocumentsWithAnalyzerMeta } from "@/lib/codeAnalyzer/classification";
 import { cancelAsyncRun, fetchSheetJobsForRun, retryFailedSheetJobs } from "@/lib/codeAnalyzer/asyncRun";
 import type { CodeAnalyzerRun } from "@/lib/codeAnalyzer/model";
+import {
+  fetchCodeModJobsForRun,
+  retryFailedCodeModJobs,
+  type CodeModJobSummary,
+} from "@/lib/codeModification/runReviewAsyncV2";
 
 interface Props {
   projectId: string;
   userId: string;
   activeRun?: CodeAnalyzerRun | null;
+  isModificationMode?: boolean;
   onRefresh?: () => void;
 }
 
-export function CodeAnalyzerV2StatusPanel({ projectId, userId, activeRun, onRefresh }: Props) {
+export function CodeAnalyzerV2StatusPanel({
+  projectId,
+  userId,
+  activeRun,
+  isModificationMode = false,
+  onRefresh,
+}: Props) {
   const [jobs, setJobs] = useState<CodeAnalyzerIngestionJob[]>([]);
   const [documents, setDocuments] = useState<
     Array<{
@@ -31,8 +43,9 @@ export function CodeAnalyzerV2StatusPanel({ projectId, userId, activeRun, onRefr
     }>
   >([]);
   const [sheetJobs, setSheetJobs] = useState<
-    Array<{ id: string; status: string; last_error: string | null }>
+    Array<{ id: string; status: string; last_error: string | null; job_type?: string }>
   >([]);
+  const [codeModJobs, setCodeModJobs] = useState<CodeModJobSummary[]>([]);
 
   const enabled = isCodeAnalyzerAsyncV2Enabled();
 
@@ -50,18 +63,31 @@ export function CodeAnalyzerV2StatusPanel({ projectId, userId, activeRun, onRefr
 
   useEffect(() => {
     if (!enabled || !activeRun?.id) return;
-    void fetchSheetJobsForRun(activeRun.id).then(setSheetJobs);
-    const timer = setInterval(() => {
-      void fetchSheetJobsForRun(activeRun.id).then(setSheetJobs);
-    }, 5000);
+
+    const refreshJobs = () => {
+      if (isModificationMode) {
+        void fetchCodeModJobsForRun(activeRun.id).then(setCodeModJobs);
+      } else {
+        void fetchSheetJobsForRun(activeRun.id).then(setSheetJobs);
+      }
+    };
+
+    refreshJobs();
+    const timer = setInterval(refreshJobs, 5000);
     return () => clearInterval(timer);
-  }, [enabled, activeRun?.id]);
+  }, [enabled, activeRun?.id, isModificationMode]);
 
   if (!enabled) return null;
 
-  const failedSheetCount = sheetJobs.filter((j) => j.status === "failed").length;
-  const completedSheetCount = sheetJobs.filter((j) => j.status === "completed").length;
-  const totalSheetJobs = sheetJobs.length;
+  const activeJobs = isModificationMode ? codeModJobs : sheetJobs;
+  const failedCount = activeJobs.filter((j) => j.status === "failed").length;
+  const completedCount = activeJobs.filter((j) => j.status === "completed").length;
+  const totalJobs = activeJobs.length;
+  const runLabel = isModificationMode ? "Code modification review" : "Sheet analysis";
+
+  const formJob = codeModJobs.find((j) => j.job_type === "form_extraction");
+  const evidenceJobs = codeModJobs.filter((j) => j.job_type === "evidence_sheet");
+  const mergeJob = codeModJobs.find((j) => j.job_type === "merge_findings");
 
   return (
     <Card className="border-dashed">
@@ -105,19 +131,44 @@ export function CodeAnalyzerV2StatusPanel({ projectId, userId, activeRun, onRefr
           );
         })}
 
-        {activeRun && totalSheetJobs > 0 && (
+        {activeRun && totalJobs > 0 && (
           <div className="rounded-md border p-3 space-y-2">
-            <div className="font-medium">Sheet analysis</div>
-            <div>
-              {completedSheetCount} of {totalSheetJobs} complete
-              {failedSheetCount > 0 && ` · ${failedSheetCount} failed`}
-            </div>
+            <div className="font-medium">{runLabel}</div>
+            {isModificationMode ? (
+              <div className="space-y-1 text-muted-foreground">
+                {formJob && (
+                  <div>
+                    Form extraction: <span className="capitalize">{formJob.status}</span>
+                    {formJob.last_error && ` — ${formJob.last_error}`}
+                  </div>
+                )}
+                <div>
+                  Evidence sheets: {evidenceJobs.filter((j) => j.status === "completed").length} of{" "}
+                  {evidenceJobs.length} complete
+                </div>
+                {mergeJob && (
+                  <div>
+                    Merge findings: <span className="capitalize">{mergeJob.status}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                {completedCount} of {totalJobs} complete
+                {failedCount > 0 && ` · ${failedCount} failed`}
+              </div>
+            )}
             <Badge variant="outline">Run: {activeRun.status}</Badge>
-            {failedSheetCount > 0 && (
+            {failedCount > 0 && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void retryFailedSheetJobs(activeRun.id, userId).then(onRefresh)}
+                onClick={() =>
+                  void (isModificationMode
+                    ? retryFailedCodeModJobs(activeRun.id, userId)
+                    : retryFailedSheetJobs(activeRun.id, userId)
+                  ).then(onRefresh)
+                }
               >
                 Retry failed
               </Button>
