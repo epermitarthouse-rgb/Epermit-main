@@ -9,7 +9,9 @@ import {
 } from "../codeAnalyzer/model.ts";
 import {
   computeFormFingerprint,
+  computeFormsFingerprint,
   computeModificationSourceFingerprint,
+  formDocumentIdsMatch,
   modificationSheetFingerprint,
   shouldMarkModificationReviewStale,
 } from "./model.ts";
@@ -103,6 +105,32 @@ describe("code modification review lifecycle", () => {
     assert.match(firstFp, /a:1/);
     assert.equal(firstFp.includes("form:"), true);
     assert.equal(firstFp.includes("sheets:"), true);
+  });
+
+  it("marks the review stale when a second CM document is added", () => {
+    const singleFormFp = computeFormsFingerprint([
+      { formDocumentId: "form-1", updatedAt: "t1", pageCount: 3 },
+    ]);
+    const multiFormFp = computeFormsFingerprint([
+      { formDocumentId: "form-1", updatedAt: "t1", pageCount: 3 },
+      { formDocumentId: "form-2", updatedAt: "t2", pageCount: 2 },
+    ]);
+    assert.notEqual(singleFormFp, multiFormFp);
+    assert.equal(
+      shouldMarkModificationReviewStale({
+        runStatus: "current",
+        runFingerprint: computeModificationSourceFingerprint(singleFormFp, sheetsAfterFirst),
+        currentFingerprint: computeModificationSourceFingerprint(multiFormFp, sheetsAfterFirst),
+        formChanged: true,
+      }),
+      true,
+    );
+  });
+
+  it("matches legacy single-form document ids for hydration", () => {
+    assert.equal(formDocumentIdsMatch(["form-1"], ["form-1"]), true);
+    assert.equal(formDocumentIdsMatch(["form-1"], ["form-1", "form-2"]), false);
+    assert.equal(formDocumentIdsMatch(undefined, []), true);
   });
 
   it("Update Review creates a new current modification run without touching standard", () => {

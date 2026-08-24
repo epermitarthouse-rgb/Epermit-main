@@ -7,13 +7,11 @@ import {
   completeAnalyzerRun,
   createAnalyzerRun,
   fetchDocumentsByIds,
-  markCurrentRunStale,
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
 import type { CodeAnalyzerSheet } from "@/lib/codeAnalyzer/model";
 import {
-  computeFormFingerprint,
-  computeModificationSourceFingerprint,
+  computeFormsFingerprint,
   type CodeModificationReview,
 } from "@/lib/codeModification/model";
 import { pagesAreSparse } from "@/lib/codeModification/extractForm";
@@ -28,6 +26,56 @@ import { pdfPagesToImageFiles } from "@/lib/pdfToImage";
 import { extractPdfTextAllPages } from "@/utils/extractDocumentText";
 import type { ProjectDocument } from "@/types/document";
 
+async function loadFormFile(
+  doc: ProjectDocument,
+  getDownloadUrl: (doc: ProjectDocument) => Promise<string | null>,
+): Promise<File> {
+  const url = await getDownloadUrl(doc);
+  if (!url) throw new Error(`Could not download ${doc.file_name}`);
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new File([blob], doc.file_name, {
+    type: doc.file_type || blob.type || "application/pdf",
+  });
+}
+
+async function extractMergedFormContent(
+  formDocs: ProjectDocument[],
+  getDownloadUrl: (doc: ProjectDocument) => Promise<string | null>,
+): Promise<{
+  formPages: { pageNumber: number; text: string }[];
+  formImages: { pageNumber: number; imageBase64: string; imageType?: string }[];
+}> {
+  const formPages: { pageNumber: number; text: string }[] = [];
+  const formImages: { pageNumber: number; imageBase64: string; imageType?: string }[] = [];
+  let pageOffset = 0;
+
+  for (const doc of formDocs) {
+    const formFile = await loadFormFile(doc, getDownloadUrl);
+    const extractedPages = await extractPdfTextAllPages(formFile);
+    const docPages = extractedPages.pages.map((page) => ({
+      pageNumber: pageOffset + page.pageNumber,
+      text: page.text,
+    }));
+    formPages.push(...docPages);
+
+    if (pagesAreSparse(docPages) || extractedPages.sparsePageNumbers.length > 0) {
+      const rendered = await pdfPagesToImageFiles(formFile);
+      for (const page of rendered.pages) {
+        formImages.push({
+          pageNumber: pageOffset + page.pageNumber,
+          imageBase64: await fileToBase64(page.file),
+          imageType: page.file.type || "image/png",
+        });
+      }
+    }
+
+    pageOffset += extractedPages.pages.length;
+  }
+
+  return { formPages, formImages };
+}
+
 export async function runDcCodeModificationReview(params: {
   projectId: string;
   userId: string;
@@ -37,8 +85,7 @@ export async function runDcCodeModificationReview(params: {
   persistedSheets: CodeAnalyzerSheet[];
   pendingDrawingFiles: Array<{ id: string; file: File; discipline?: "general" }>;
   sheetDocuments: ProjectDocument[];
-  modificationForm: ProjectDocument | null;
-  pendingFormFile: File | null;
+  modificationForms: ProjectDocument[];
   getDownloadUrl: (doc: ProjectDocument) => Promise<string | null>;
   persistUpload: (opts: {
     file: File;
@@ -46,7 +93,7 @@ export async function runDcCodeModificationReview(params: {
     description: string;
     parent_document_id?: string;
   }) => Promise<ProjectDocument | { id: string; file_name?: string } | null>;
-}): Promise<{ review: CodeModificationReview; form: ProjectDocument }> {
+}): Promise<{ review: CodeModificationReview; forms: ProjectDocument[] }> {
   const workflow = analyzerWorkflowFor("dc_code_modification", params.jurisdiction);
   if (!workflow.ok) {
     throw new Error("DC Code Modification Review is only available for Washington, D.C.");
@@ -69,45 +116,15 @@ export async function runDcCodeModificationReview(params: {
     sheets = [...sheets, ...persisted.sheets];
   }
 
-  let formDoc = params.modificationForm;
-  if (params.pendingFormFile) {
-    if (formDoc) {
-      await markCurrentRunStale(params.projectId, ANALYSIS_TYPE_DC_MODIFICATION);
-    }
-    const uploaded = await params.persistUpload({
-      file: params.pendingFormFile,
-      document_type: "code_modification_application",
-      description: "DC Code Modification application",
-    });
-    if (!uploaded) throw new Error("Failed to upload the Code Modification application");
-    formDoc = uploaded as ProjectDocument;
-  }
-  if (!formDoc) throw new Error("Upload a DC Code Modification application first");
-
-  let formFile = params.pendingFormFile;
-  if (!formFile) {
-    const url = await params.getDownloadUrl(formDoc);
-    if (!url) throw new Error("Could not download the Code Modification application");
-    const response = await fetch(url);
-    const blob = await response.blob();
-    formFile = new File([blob], formDoc.file_name, {
-      type: formDoc.file_type || blob.type || "application/pdf",
-    });
+  const formDocs = [...params.modificationForms].sort((a, b) =>
+    a.created_at.localeCompare(b.created_at),
+  );
+  if (formDocs.length === 0) {
+    throw new Error("Upload at least one DC Code Modification document first");
   }
 
-  const extractedPages = await extractPdfTextAllPages(formFile);
-  const formPages = extractedPages.pages.map((p) => ({ pageNumber: p.pageNumber, text: p.text }));
-  const formImages: { pageNumber: number; imageBase64: string; imageType?: string }[] = [];
-  if (pagesAreSparse(formPages) || extractedPages.sparsePageNumbers.length > 0) {
-    const rendered = await pdfPagesToImageFiles(formFile);
-    for (const page of rendered.pages) {
-      formImages.push({
-        pageNumber: page.pageNumber,
-        imageBase64: await fileToBase64(page.file),
-        imageType: page.file.type || "image/png",
-      });
-    }
-  }
+  const { formPages, formImages } = await extractMergedFormContent(formDocs, params.getDownloadUrl);
+  const primaryFormDoc = formDocs[0]!;
 
   const included = sheets.filter((s) => !s.excluded);
   const docsById = new Map(params.sheetDocuments.map((d) => [d.id, d]));
@@ -120,14 +137,10 @@ export async function runDcCodeModificationReview(params: {
   }
 
   const modificationForms = await fetchModificationForms(params.projectId);
-  const exclusionDocs = [
-    ...Array.from(docsById.values()),
-    ...modificationForms,
-    formDoc,
-  ].filter(
+  const exclusionDocs = [...Array.from(docsById.values()), ...modificationForms].filter(
     (doc, index, arr) => arr.findIndex((other) => other.id === doc.id) === index,
   );
-  const excludedEvidenceDocumentIds = buildFormExclusionDocumentIds(exclusionDocs, formDoc);
+  const excludedEvidenceDocumentIds = buildFormExclusionDocumentIds(exclusionDocs, formDocs);
   const evidenceSheets = filterDrawingEvidenceSheets(included, excludedEvidenceDocumentIds);
 
   const sheetPayload = [];
@@ -154,14 +167,13 @@ export async function runDcCodeModificationReview(params: {
     });
   }
 
-  const formFingerprint = computeFormFingerprint({
-    formDocumentId: formDoc.id,
-    updatedAt: formDoc.updated_at,
-  });
-  const sourceFingerprint = computeModificationSourceFingerprint(
-    formFingerprint,
-    computeSheetFingerprint(sheets),
+  const formFingerprint = computeFormsFingerprint(
+    formDocs.map((doc) => ({
+      formDocumentId: doc.id,
+      updatedAt: doc.updated_at,
+    })),
   );
+  const sourceFingerprint = `form:${formFingerprint}||sheets:${computeSheetFingerprint(sheets)}`;
 
   const run = await createAnalyzerRun({
     projectId: params.projectId,
@@ -171,7 +183,7 @@ export async function runDcCodeModificationReview(params: {
     codeYear: params.codeYear,
     analysisMode: "dc_code_modification",
     analysisType: ANALYSIS_TYPE_DC_MODIFICATION,
-    formDocumentId: formDoc.id,
+    formDocumentId: primaryFormDoc.id,
     sourceFingerprint,
   });
 
@@ -183,33 +195,25 @@ export async function runDcCodeModificationReview(params: {
       formPages,
       formImages: formImages.length ? formImages : undefined,
       sheets: sheetPayload,
-      formDocument: { id: formDoc.id, fileName: formDoc.file_name },
+      formDocument: { id: primaryFormDoc.id, fileName: primaryFormDoc.file_name },
+      formDocuments: formDocs.map((doc) => ({ id: doc.id, fileName: doc.file_name })),
       excludedEvidenceDocumentIds: Array.from(excludedEvidenceDocumentIds),
     });
-    await replaceModificationReview({
-      run_id: run.id,
-      project_id: params.projectId,
-      form_document_id: formDoc.id,
-      form_fingerprint: formFingerprint,
-      extracted_request: result.extracted_request,
-      evidence: result.evidence,
-      overall_status: result.overall_status,
-      extraction_warnings: result.extraction_warnings ?? [],
-    });
-    await completeAnalyzerRun(run.id, "current");
-    return {
-      review: {
+    const review = await replaceModificationReview(
+      {
         run_id: run.id,
         project_id: params.projectId,
-        form_document_id: formDoc.id,
+        form_document_id: primaryFormDoc.id,
         form_fingerprint: formFingerprint,
         extracted_request: result.extracted_request,
         evidence: result.evidence,
         overall_status: result.overall_status,
         extraction_warnings: result.extraction_warnings ?? [],
       },
-      form: formDoc,
-    };
+      formDocs.map((doc) => doc.id),
+    );
+    await completeAnalyzerRun(run.id, "current");
+    return { review, forms: formDocs };
   } catch (err) {
     await completeAnalyzerRun(run.id, "failed").catch(() => undefined);
     throw err;

@@ -14,9 +14,19 @@ export async function fetchModificationForms(projectId: string): Promise<Project
     .eq("project_id", projectId)
     .eq("document_type", "code_modification_application")
     .is("parent_document_id", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: true });
   if (error) throw error;
   return (data as ProjectDocument[]) ?? [];
+}
+
+export async function fetchModificationReviewDocumentIds(reviewId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("code_modification_review_documents")
+    .select("document_id, sort_order")
+    .eq("review_id", reviewId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => row.document_id as string);
 }
 
 export async function fetchModificationReviewForRun(
@@ -28,11 +38,20 @@ export async function fetchModificationReviewForRun(
     .eq("run_id", runId)
     .maybeSingle();
   if (error) throw error;
-  return (data as CodeModificationReview | null) ?? null;
+  const review = (data as CodeModificationReview | null) ?? null;
+  if (!review?.id) return review;
+
+  const documentIds = await fetchModificationReviewDocumentIds(review.id);
+  return {
+    ...review,
+    form_document_ids:
+      documentIds.length > 0 ? documentIds : review.form_document_id ? [review.form_document_id] : [],
+  };
 }
 
 export async function replaceModificationReview(
   review: Omit<CodeModificationReview, "id" | "created_at" | "updated_at">,
+  documentIds: string[],
 ): Promise<CodeModificationReview> {
   const { error: deleteError } = await supabase
     .from("code_modification_reviews")
@@ -55,5 +74,22 @@ export async function replaceModificationReview(
     .select("*")
     .single();
   if (error) throw error;
-  return data as CodeModificationReview;
+
+  const saved = data as CodeModificationReview;
+  const uniqueDocumentIds = [...new Set(documentIds.filter(Boolean))];
+  if (uniqueDocumentIds.length > 0) {
+    const { error: linkError } = await supabase.from("code_modification_review_documents").insert(
+      uniqueDocumentIds.map((documentId, index) => ({
+        review_id: saved.id,
+        document_id: documentId,
+        sort_order: index,
+      })),
+    );
+    if (linkError) throw linkError;
+  }
+
+  return {
+    ...saved,
+    form_document_ids: uniqueDocumentIds.length > 0 ? uniqueDocumentIds : [review.form_document_id],
+  };
 }
