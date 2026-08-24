@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   actualLabelsFromSheets,
   compareIndexCompleteness,
+  isLikelyIndexSheet,
   normalizeSheetNumber,
   parseIndexEntriesFromText,
   runIndexCompletenessPrescreen,
@@ -121,5 +122,39 @@ A-102  Second Floor`;
     assert.equal(result.hasIndex, true);
     assert.equal(result.status, "complete");
     assert.equal(result.expectedCount, 2);
+  });
+
+  it("E: detects Riverside mock index filename with G000 label (underscores in filename)", () => {
+    const sheets = [
+      sheet({
+        id: "idx",
+        file_name: "Riverside_MOCK_Drawing_Index_UAT-page1.png",
+        sheet_label: "G000",
+      }),
+      sheet({ id: "s1", file_name: "A-101.pdf", sheet_label: "A-101" }),
+      sheet({ id: "s2", file_name: "A-102.pdf", sheet_label: "A-102" }),
+    ];
+    const indexText = `DRAWING INDEX
+G000  Cover
+A-101  First Floor
+A-102  Second Floor`;
+    const result = runIndexCompletenessPrescreen(sheets, {
+      pageTextBySheetId: { idx: indexText },
+    });
+    assert.equal(result.hasIndex, true);
+    assert.equal(result.indexSheetId, "idx");
+    assert.equal(result.expectedCount, 3);
+  });
+});
+
+describe("isLikelyIndexSheet", () => {
+  it("matches Drawing_Index with underscores in filename", () => {
+    assert.equal(
+      isLikelyIndexSheet({
+        fileName: "Riverside_MOCK_Drawing_Index_UAT-page1.png",
+        sheetLabel: "G000",
+      }),
+      true,
+    );
   });
 });

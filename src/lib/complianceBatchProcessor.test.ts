@@ -7,10 +7,12 @@ import {
 import {
   batchProgressPercent,
   canRemoveBatchFile,
+  categorizeAnalysisError,
   computeComplianceOverallScore,
   countCompletedBatchFiles,
   countFailedBatchFiles,
   formatAnalysisCompletionToast,
+  formatAnalysisErrorMessage,
   formatBatchProgressLabel,
   normalizeComplianceAnalysisResult,
   processComplianceBatch,

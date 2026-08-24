@@ -64,6 +64,33 @@ describe("indexPrescreenEffectKey / shouldRunIndexPrescreen", () => {
   it("sheetDocumentIdsKey is order-independent", () => {
     assert.equal(sheetDocumentIdsKey(["b", "a"]), sheetDocumentIdsKey(["a", "b"]));
   });
+
+  it("E: prescreen reruns when index sheet is added to an unchanged run", () => {
+    const beforeFp = analyzerSheetFingerprint([
+      { source_document_id: "src-a", page_number: 1, excluded: false },
+    ] as never);
+    const afterFp = analyzerSheetFingerprint([
+      { source_document_id: "src-a", page_number: 1, excluded: false },
+      { source_document_id: "src-index", page_number: 1, excluded: false },
+    ] as never);
+    const noIndexJson = serializeIndexCompleteness({ status: "no_index", hasIndex: false });
+    const prev = indexPrescreenEffectKey({
+      ...base,
+      sheetFingerprint: beforeFp,
+      activeRunIndexCompletenessJson: noIndexJson,
+    });
+    const next = indexPrescreenEffectKey({
+      ...base,
+      sheetFingerprint: afterFp,
+      activeRunIndexCompletenessJson: noIndexJson,
+    });
+    assert.equal(shouldRunIndexPrescreen(prev, next), true);
+  });
+
+  it("F: prescreen idle when dataset unchanged (no loop)", () => {
+    const key = indexPrescreenEffectKey(base);
+    assert.equal(shouldRunIndexPrescreen(key, key), false);
+  });
 });
 
 describe("analyzerDocsDiscoveryScope", () => {

@@ -57,6 +57,31 @@ export function normalizeSheetNumber(label: string | null | undefined): string {
 const INDEX_TITLE_PATTERN =
   /\b(drawing\s+index|sheet\s+index|index\s+of\s+drawings|drawings?\s+index|sheet\s+list)\b/i;
 
+/** Cover / general index sheet numbers (G000, G-000, G001, etc.). */
+const INDEX_COVER_SHEET_PATTERN = /^G[-.]?0{2,3}\d?$/i;
+
+function normalizeIndexText(value: string): string {
+  return value
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]page\d+$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function textLooksLikeIndexTitle(value: string): boolean {
+  const normalized = normalizeIndexText(value);
+  if (!normalized) return false;
+  if (/^index$/i.test(normalized)) return true;
+  return INDEX_TITLE_PATTERN.test(normalized);
+}
+
+function sheetLabelLooksLikeIndexCover(label: string | null | undefined): boolean {
+  if (typeof label !== "string" || !label.trim()) return false;
+  const normalized = normalizeSheetNumber(label);
+  return INDEX_COVER_SHEET_PATTERN.test(normalized);
+}
+
 /** Detect whether a sheet is likely the drawing index. */
 export function isLikelyIndexSheet(input: {
   sheetLabel?: string | null;
@@ -65,10 +90,21 @@ export function isLikelyIndexSheet(input: {
 }): boolean {
   const parts = [input.sheetLabel, input.fileName, input.pageText].filter(Boolean) as string[];
   for (const part of parts) {
-    const base = part.replace(/\.[^.]+$/, "").trim();
-    if (/^index$/i.test(base)) return true;
-    if (INDEX_TITLE_PATTERN.test(part)) return true;
+    if (textLooksLikeIndexTitle(part)) return true;
   }
+
+  const fileName = input.fileName ?? "";
+  const label = input.sheetLabel ?? "";
+  const pageText = input.pageText ?? "";
+  const filenameHintsIndex =
+    /drawing[\s_-]*index|sheet[\s_-]*index|index[\s_-]*of[\s_-]*drawings?/i.test(fileName);
+  if (filenameHintsIndex && (sheetLabelLooksLikeIndexCover(label) || INDEX_TITLE_PATTERN.test(pageText))) {
+    return true;
+  }
+  if (sheetLabelLooksLikeIndexCover(label) && filenameHintsIndex) {
+    return true;
+  }
+
   return false;
 }
 

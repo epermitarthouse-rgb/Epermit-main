@@ -292,7 +292,7 @@ export async function processComplianceBatch(
       let localResult: ComplianceBatchAnalysisResult | null = null;
 
       if (options.analysisMode === "both" && options.hasLocalAmendments) {
-        const data = await options.requestAnalysis({
+        const data = await requestAnalysisWithRetry(options.requestAnalysis, {
           imageBase64: base64,
           imageType,
           jurisdiction: options.jurisdiction === "general" ? null : options.jurisdiction,
@@ -306,7 +306,7 @@ export async function processComplianceBatch(
         localResult = normalizeComplianceAnalysisResult(payload.local, "local");
       } else if (options.analysisMode === "local" && options.hasLocalAmendments) {
         localResult = normalizeComplianceAnalysisResult(
-          await options.requestAnalysis({
+          await requestAnalysisWithRetry(options.requestAnalysis, {
             imageBase64: base64,
             imageType,
             jurisdiction: options.jurisdiction === "general" ? null : options.jurisdiction,
@@ -319,7 +319,7 @@ export async function processComplianceBatch(
         );
       } else {
         ibcResult = normalizeComplianceAnalysisResult(
-          await options.requestAnalysis({
+          await requestAnalysisWithRetry(options.requestAnalysis, {
             imageBase64: base64,
             imageType,
             jurisdiction: options.jurisdiction === "general" ? null : options.jurisdiction,
@@ -359,7 +359,8 @@ export async function processComplianceBatch(
       });
       succeeded += 1;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to analyze drawing";
+      const rawMessage = err instanceof Error ? err.message : "Failed to analyze drawing";
+      const message = formatAnalysisErrorMessage(rawMessage);
       options.onFileUpdate(working.id, {
         status: "failed",
         error: message,
@@ -396,6 +397,105 @@ export function countFailedBatchFiles(files: ComplianceBatchFile[]): number {
 
 export function countCompletedBatchFiles(files: ComplianceBatchFile[]): number {
   return files.filter((f) => f.status === "completed").length;
+}
+
+export type AnalysisFailureCategory =
+  | "unsupported_image"
+  | "transient"
+  | "timeout"
+  | "parse"
+  | "rate_limit"
+  | "unknown";
+
+const TRANSIENT_ANALYSIS_MAX_RETRIES = 2;
+const TRANSIENT_RETRY_BASE_MS = 800;
+
+/** Map raw API/processor errors to a user-facing category. */
+export function categorizeAnalysisError(message: string): AnalysisFailureCategory {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("unsupported") ||
+    lower.includes("invalid image") ||
+    lower.includes("image format") ||
+    lower.includes("corrupt")
+  ) {
+    return "unsupported_image";
+  }
+  if (lower.includes("rate limit") || lower.includes("429") || lower.includes("too many requests")) {
+    return "rate_limit";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("deadline")) {
+    return "timeout";
+  }
+  if (
+    lower.includes("invalid response") ||
+    lower.includes("parse") ||
+    lower.includes("json") ||
+    lower.includes("unexpected token")
+  ) {
+    return "parse";
+  }
+  if (
+    lower.includes("network") ||
+    lower.includes("fetch failed") ||
+    lower.includes("econnreset") ||
+    lower.includes("502") ||
+    lower.includes("503") ||
+    lower.includes("504") ||
+    lower.includes("service unavailable") ||
+    lower.includes("internal server error")
+  ) {
+    return "transient";
+  }
+  return "unknown";
+}
+
+/** User-facing message reflecting the failure category. */
+export function formatAnalysisErrorMessage(message: string): string {
+  const category = categorizeAnalysisError(message);
+  switch (category) {
+    case "unsupported_image":
+      return "Unsupported or unreadable image — check the sheet export format.";
+    case "rate_limit":
+      return "Analysis rate limit reached — wait a moment and retry.";
+    case "timeout":
+      return "Analysis timed out — retry this sheet.";
+    case "parse":
+      return "Analysis returned an invalid response — retry this sheet.";
+    case "transient":
+      return "Temporary analysis service error — retry this sheet.";
+    default:
+      return message || "Failed to analyze drawing";
+  }
+}
+
+function isRetriableAnalysisCategory(category: AnalysisFailureCategory): boolean {
+  return category === "transient" || category === "rate_limit" || category === "timeout";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestAnalysisWithRetry(
+  requestAnalysis: RequestAnalysisFn,
+  opts: Parameters<RequestAnalysisFn>[0],
+): Promise<unknown> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= TRANSIENT_ANALYSIS_MAX_RETRIES; attempt += 1) {
+    try {
+      return await requestAnalysis(opts);
+    } catch (err) {
+      lastError = err;
+      const message = err instanceof Error ? err.message : String(err);
+      const category = categorizeAnalysisError(message);
+      if (!isRetriableAnalysisCategory(category) || attempt >= TRANSIENT_ANALYSIS_MAX_RETRIES) {
+        throw err;
+      }
+      await sleep(TRANSIENT_RETRY_BASE_MS * (attempt + 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Analysis failed");
 }
 
 export function batchProgressPercent(progress: ComplianceBatchProgress): number {
