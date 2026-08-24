@@ -8,11 +8,14 @@ import type { IndexCompletenessResult } from "./indexCompleteness";
 export type IndexCompletenessSnapshot = IndexCompletenessResult;
 
 export const CODE_ANALYZER_RUN_STATUSES = [
+  "queued",
   "running",
+  "partial",
   "current",
   "stale",
   "superseded",
   "failed",
+  "cancelled",
 ] as const;
 
 export type CodeAnalyzerRunStatus = (typeof CODE_ANALYZER_RUN_STATUSES)[number];
