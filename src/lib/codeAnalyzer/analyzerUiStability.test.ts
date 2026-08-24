@@ -5,7 +5,10 @@ import {
   analyzerSheetFingerprint,
   indexPrescreenEffectKey,
   sheetDocumentIdsKey,
+  shouldClearPrescreenOnDatasetReload,
   shouldRunIndexPrescreen,
+  shouldShowIndexCompletenessPanel,
+  shouldWipePrescreenResultInEffect,
 } from "./analyzerUiStability.ts";
 
 describe("indexPrescreenEffectKey / shouldRunIndexPrescreen", () => {
@@ -79,5 +82,86 @@ describe("indexPrescreenEffectKey / shouldRunIndexPrescreen", () => {
 describe("analyzerDocsDiscoveryScope", () => {
   it("fetchDocsWithAnalysis does not reload the full analyzer dataset", () => {
     assert.equal(analyzerDocsDiscoveryScope(), "annotations_and_docs");
+  });
+});
+
+describe("shouldShowIndexCompletenessPanel", () => {
+  const sampleResult = { status: "complete", expectedCount: 1, actualCount: 1 };
+
+  it("stays visible after hydration when a valid prescreen result exists", () => {
+    assert.equal(
+      shouldShowIndexCompletenessPanel({
+        persistedSheetCount: 33,
+        result: sampleResult,
+        loading: false,
+      }),
+      true,
+    );
+  });
+
+  it("stays visible when sheets exist but hydration cleared transient state", () => {
+    assert.equal(
+      shouldShowIndexCompletenessPanel({
+        persistedSheetCount: 33,
+        result: sampleResult,
+        loading: false,
+        recheckError: null,
+      }),
+      true,
+    );
+  });
+
+  it("shows loading shell before first result arrives", () => {
+    assert.equal(
+      shouldShowIndexCompletenessPanel({
+        persistedSheetCount: 5,
+        result: null,
+        loading: true,
+      }),
+      true,
+    );
+  });
+
+  it("hides when dataset is empty and no preserved result", () => {
+    assert.equal(
+      shouldShowIndexCompletenessPanel({
+        persistedSheetCount: 0,
+        result: null,
+        loading: false,
+      }),
+      false,
+    );
+  });
+
+  it("keeps panel mounted during recheck failure with last result", () => {
+    assert.equal(
+      shouldShowIndexCompletenessPanel({
+        persistedSheetCount: 10,
+        result: sampleResult,
+        loading: false,
+        recheckError: "Vision extract failed",
+      }),
+      true,
+    );
+  });
+});
+
+describe("prescreen clear semantics", () => {
+  it("does not wipe prescreen result in effect when included count is transiently zero", () => {
+    assert.equal(shouldWipePrescreenResultInEffect(0), false);
+  });
+
+  it("clears prescreen only on confirmed-empty dataset reload", () => {
+    assert.equal(shouldClearPrescreenOnDatasetReload(0), true);
+    assert.equal(shouldClearPrescreenOnDatasetReload(1), false);
+  });
+
+  it("historical-to-current hydration does not change prescreen effect key", () => {
+    const key = indexPrescreenEffectKey({
+      sheetFingerprint: "src-a:1|src-b:2",
+      sheetDocIdsKey: "d1,d2",
+      isModificationMode: false,
+    });
+    assert.equal(shouldRunIndexPrescreen(key, key), false);
   });
 });

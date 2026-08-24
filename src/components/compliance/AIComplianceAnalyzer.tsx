@@ -133,7 +133,10 @@ import {
   analyzerSheetFingerprint,
   indexPrescreenEffectKey,
   sheetDocumentIdsKey,
+  shouldClearPrescreenOnDatasetReload,
   shouldRunIndexPrescreen,
+  shouldShowIndexCompletenessPanel,
+  shouldWipePrescreenResultInEffect,
 } from "@/lib/codeAnalyzer/analyzerUiStability";
 import {
   computeRunAnalysisMetrics,
@@ -459,10 +462,14 @@ export function AIComplianceAnalyzer() {
 
   // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
   useEffect(() => {
-    if (persistedSheets.filter((s) => !s.excluded).length === 0) {
-      setIndexCompleteness(null);
-      setIndexPrescreenError(null);
+    const includedCount = persistedSheets.filter((s) => !s.excluded).length;
+    if (includedCount === 0) {
       indexPrescreenKeyRef.current = "";
+      setIndexPrescreenLoading(false);
+      if (shouldWipePrescreenResultInEffect(includedCount)) {
+        setIndexCompleteness(null);
+        setIndexPrescreenError(null);
+      }
       return;
     }
 
@@ -569,6 +576,14 @@ export function AIComplianceAnalyzer() {
     setModificationDisplayRun(modificationDisplay);
     setModificationCurrentRun(modificationCurrent);
     setPersistedSheets(sheets);
+    const includedCount = sheets.filter((s) => !s.excluded).length;
+    if (shouldClearPrescreenOnDatasetReload(includedCount)) {
+      setIndexCompleteness(null);
+      setIndexPrescreenError(null);
+      indexPrescreenKeyRef.current = "";
+    } else if (display?.index_completeness) {
+      setIndexCompleteness((prev) => prev ?? display.index_completeness ?? null);
+    }
     const ids = [
       ...new Set(
         sheets.flatMap((s) => [s.source_document_id, s.image_document_id].filter(Boolean) as string[]),
@@ -928,7 +943,9 @@ export function AIComplianceAnalyzer() {
     setActiveBatchRunId(null);
     setViewingHistoricalRunId(null);
     setAnalyzerRuns([]);
+    setIndexCompleteness(null);
     setIndexPrescreenError(null);
+    indexPrescreenKeyRef.current = "";
     lastAllHydrateKeyRef.current = "";
     setActiveResultFileId(null);
   }, [selectedProjectId]);
@@ -3212,7 +3229,12 @@ export function AIComplianceAnalyzer() {
             </p>
           </div>
 
-          {(persistedSheets.length > 0 || indexCompleteness) && (
+          {shouldShowIndexCompletenessPanel({
+            persistedSheetCount: persistedSheets.length,
+            result: indexCompleteness,
+            loading: indexPrescreenLoading,
+            recheckError: indexPrescreenError,
+          }) && (
             <IndexCompletenessPanel
               result={indexCompleteness}
               loading={indexPrescreenLoading}

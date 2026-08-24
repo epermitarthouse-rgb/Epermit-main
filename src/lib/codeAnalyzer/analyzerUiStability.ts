@@ -39,6 +39,35 @@ export function shouldRunIndexPrescreen(prevKey: string, nextKey: string): boole
   return prevKey !== nextKey;
 }
 
+/** JSX guard for IndexCompletenessPanel — keep visible while loading/rechecking or when a result exists. */
+export function shouldShowIndexCompletenessPanel(input: {
+  persistedSheetCount: number;
+  result: unknown;
+  loading?: boolean;
+  recheckError?: string | null;
+}): boolean {
+  if (input.result != null) return true;
+  if (input.loading) return true;
+  if (input.recheckError) return true;
+  return input.persistedSheetCount > 0;
+}
+
+/**
+ * Clear prescreen only when a dataset reload confirms zero included sheets.
+ * Transient empty persistedSheets during project/hydration transitions must not wipe UI state.
+ */
+export function shouldClearPrescreenOnDatasetReload(includedSheetCount: number): boolean {
+  return includedSheetCount === 0;
+}
+
+/**
+ * Prescreen effect must not clear a valid result when included count hits zero mid-transition.
+ * Explicit project switch and confirmed-empty reload handle clearing instead.
+ */
+export function shouldWipePrescreenResultInEffect(_includedSheetCount: number): boolean {
+  return false;
+}
+
 /** Document discovery after save must not reset sheets/runs — only annotations + doc rows. */
 export type AnalyzerDocsDiscoveryScope = "annotations_and_docs" | "full_dataset";
 
