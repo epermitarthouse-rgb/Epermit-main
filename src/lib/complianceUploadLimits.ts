@@ -1,11 +1,14 @@
 /** Per-file size limit is enforced separately via MAX_FILE_SIZE_BYTES. */
 
 /**
- * Maximum drawings per AI Compliance batch run.
- * Eight files keeps sequential runs under typical session timeouts while matching
- * the prior multi-PDF workflow; each file still gets one analyze-drawing request.
+ * Maximum source files accepted in one upload drop.
+ *
+ * Kept below the 40-sheet included cap so a single batch cannot attach dozens of
+ * multipage PDFs (each expands to up to COMPLIANCE_MAX_PAGES_PER_PDF sheets).
+ * Sixteen single-page files fit one drop; additional drops can fill included sheets
+ * until COMPLIANCE_MAX_INCLUDED_SHEETS.
  */
-export const COMPLIANCE_MAX_BATCH_FILES = 8;
+export const COMPLIANCE_MAX_BATCH_FILES = 16;
 
 /** @deprecated Use COMPLIANCE_MAX_BATCH_FILES */
 export const COMPLIANCE_MAX_DRAWING_FILES = COMPLIANCE_MAX_BATCH_FILES;

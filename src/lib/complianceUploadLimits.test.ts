@@ -6,8 +6,8 @@ import {
 } from "./complianceUploadLimits.ts";
 
 describe("complianceUploadLimits", () => {
-  it("allows eight drawings per batch", () => {
-    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 8);
+  it("allows sixteen source files per upload drop", () => {
+    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 16);
   });
 
   it("appends up to the remaining batch capacity", () => {
@@ -23,7 +23,7 @@ describe("complianceUploadLimits", () => {
       { name: "b.pdf" } as File,
       { name: "c.pdf" } as File,
     ];
-    const { accepted, rejectedCount } = mergeComplianceFiles(7, files);
+    const { accepted, rejectedCount } = mergeComplianceFiles(15, files);
     assert.equal(accepted.length, 1);
     assert.equal(accepted[0].name, "a.pdf");
     assert.equal(rejectedCount, 2);

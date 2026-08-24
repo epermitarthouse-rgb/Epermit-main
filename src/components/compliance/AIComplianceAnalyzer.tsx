@@ -106,6 +106,7 @@ import {
   ANALYSIS_TYPE_DC_MODIFICATION,
   ANALYSIS_TYPE_STANDARD,
   computeSheetFingerprint,
+  COMPLIANCE_MAX_INCLUDED_SHEETS,
   computeStandardRunFingerprint,
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
@@ -1297,7 +1298,7 @@ export function AIComplianceAnalyzer() {
 
       if (rejectedCount > 0) {
         toast.error(
-          `Batch limit is ${COMPLIANCE_MAX_BATCH_FILES} files. ${rejectedCount} file(s) were not added.`,
+          `Upload limit is ${COMPLIANCE_MAX_BATCH_FILES} source files per drop. ${rejectedCount} file(s) were not added.`,
         );
       }
 
@@ -2935,7 +2936,7 @@ export function AIComplianceAnalyzer() {
                   </div>
                   <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
                   <p className="text-sm text-muted-foreground">
-                    Up to {COMPLIANCE_MAX_BATCH_FILES} drawings per upload. Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
+                    Up to {COMPLIANCE_MAX_INCLUDED_SHEETS} included sheets per analysis ({COMPLIANCE_MAX_BATCH_FILES} source files per upload). Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
                     Multi-page PDFs are expanded into individual sheets.
                   </p>
                 </div>

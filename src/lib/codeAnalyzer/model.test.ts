@@ -225,7 +225,7 @@ describe("filterAnnotationsForActiveAnalysis", () => {
 
 describe("allocateIncludedSheetKeys", () => {
   it("keeps existing included sheets and excludes overflow new pages", () => {
-    const existing = Array.from({ length: 23 }, (_, i) => ({
+    const existing = Array.from({ length: 39 }, (_, i) => ({
       source_document_id: "old",
       page_number: i + 1,
     }));
@@ -233,10 +233,30 @@ describe("allocateIncludedSheetKeys", () => {
       { source_document_id: "new", page_number: 1 },
       { source_document_id: "new", page_number: 2 },
     ];
-    const result = allocateIncludedSheetKeys(existing, incoming, 24);
-    assert.equal(result.includedKeys.size, 24);
+    const result = allocateIncludedSheetKeys(existing, incoming, 40);
+    assert.equal(result.includedKeys.size, 40);
     assert.equal(result.includedKeys.has("new:1"), true);
     assert.equal(result.includedKeys.has("new:2"), false);
+    assert.equal(result.excludedNewCount, 1);
+  });
+
+  it("includes up to forty single-page sheets", () => {
+    const incoming = Array.from({ length: 40 }, (_, i) => ({
+      source_document_id: `doc-${i}`,
+      page_number: 1,
+    }));
+    const result = allocateIncludedSheetKeys([], incoming, 40);
+    assert.equal(result.includedKeys.size, 40);
+    assert.equal(result.excludedNewCount, 0);
+  });
+
+  it("excludes sheets beyond the forty-sheet cap", () => {
+    const incoming = Array.from({ length: 41 }, (_, i) => ({
+      source_document_id: `doc-${i}`,
+      page_number: 1,
+    }));
+    const result = allocateIncludedSheetKeys([], incoming, 40);
+    assert.equal(result.includedKeys.size, 40);
     assert.equal(result.excludedNewCount, 1);
   });
 });

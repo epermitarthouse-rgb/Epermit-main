@@ -79,7 +79,7 @@ export interface CodeAnalyzerSheetInput {
 export const COMPLIANCE_MAX_PAGES_PER_PDF = 20;
 
 /** Max included (not excluded) sheets analyzed in one run. */
-export const COMPLIANCE_MAX_INCLUDED_SHEETS = 24;
+export const COMPLIANCE_MAX_INCLUDED_SHEETS = 40;
 
 export function isPdfFile(file: { type?: string; name?: string }): boolean {
   const type = (file.type ?? "").toLowerCase();

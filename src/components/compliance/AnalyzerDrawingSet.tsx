@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Loader2, Trash2, X } from "lucide-react";
 import {
+  COMPLIANCE_MAX_INCLUDED_SHEETS,
   sheetDisplayName,
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
@@ -88,6 +89,16 @@ export function AnalyzerDrawingSet({
           Analysis is current for {included.length} included sheet{included.length === 1 ? "" : "s"}.
         </p>
       )}
+      <p
+        className="text-xs text-muted-foreground"
+        data-testid="analyzer-included-sheet-capacity"
+      >
+        {included.length} of {COMPLIANCE_MAX_INCLUDED_SHEETS} included sheet
+        {COMPLIANCE_MAX_INCLUDED_SHEETS === 1 ? "" : "s"}
+        {excluded.length > 0
+          ? ` (${excluded.length} excluded — over the ${COMPLIANCE_MAX_INCLUDED_SHEETS}-sheet analysis cap)`
+          : ""}
+      </p>
       {isLegacy && sheets.length === 0 && (
         <p className="text-xs text-muted-foreground">
           These drawings were analyzed before sheet-level tracking. Add or remove files, then update
@@ -216,8 +227,9 @@ export function AnalyzerDrawingSet({
 
       {canAddMore && (
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2 border-t">
-          <p className="text-sm text-muted-foreground">
-            {pendingFiles.length} of {COMPLIANCE_MAX_BATCH_FILES} new file{pendingFiles.length === 1 ? "" : "s"} selected
+          <p className="text-sm text-muted-foreground" data-testid="analyzer-pending-file-capacity">
+            {pendingFiles.length} of {COMPLIANCE_MAX_BATCH_FILES} new file
+            {pendingFiles.length === 1 ? "" : "s"} in this upload
           </p>
           <Button variant="outlineGold" size="sm" onClick={onAddClick} disabled={analyzing}>
             Add More Drawings

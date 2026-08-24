@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { persistPendingAnalyzerSources } from "./persistPending.ts";
+import { COMPLIANCE_MAX_INCLUDED_SHEETS } from "./model.ts";
 import type { CodeAnalyzerSheet } from "./model.ts";
 
 describe("persistPendingAnalyzerSources", () => {
@@ -105,5 +106,32 @@ describe("persistPendingAnalyzerSources", () => {
     assert.equal(sheets[0].page_number, 1);
     assert.equal(sheets[0].source_document_id, "img-src");
     assert.equal(sheets[0].image_document_id, "img-src");
+  });
+
+  it("marks overflow sheets excluded when adding beyond the included-sheet cap", async () => {
+    const pendingFiles = Array.from({ length: COMPLIANCE_MAX_INCLUDED_SHEETS + 1 }, (_, i) => ({
+      id: `p${i}`,
+      file: { name: `A-${100 + i}.png`, type: "image/png", size: 10 } as File,
+      discipline: "general" as const,
+    }));
+    const { sheets, warnings } = await persistPendingAnalyzerSources({
+      projectId: "proj",
+      existingSheets: [],
+      pendingFiles,
+      uploadDocument: async ({ file }) => ({ id: `doc-${file.name}`, file_name: file.name }),
+      renderPdfPages: async () => {
+        throw new Error("png only");
+      },
+      insertSheet: async (row) =>
+        ({
+          id: `sheet-${row.source_document_id}`,
+          created_at: "2026-08-21T00:00:00Z",
+          ...row,
+        }) as CodeAnalyzerSheet,
+    });
+    assert.equal(sheets.length, COMPLIANCE_MAX_INCLUDED_SHEETS + 1);
+    assert.equal(sheets.filter((s) => !s.excluded).length, COMPLIANCE_MAX_INCLUDED_SHEETS);
+    assert.equal(sheets.filter((s) => s.excluded).length, 1);
+    assert.equal(warnings.some((w) => /included-sheet cap/i.test(w)), true);
   });
 });
