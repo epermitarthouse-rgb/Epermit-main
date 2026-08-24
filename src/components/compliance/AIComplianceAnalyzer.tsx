@@ -68,6 +68,7 @@ import {
   createComplianceBatchFileId,
   batchFileDisplayName,
   formatBatchProgressLabel,
+  formatAnalysisCompletionToast,
   processComplianceBatch,
   type ComplianceBatchAnalysisResult,
   type ComplianceBatchFile,
@@ -130,6 +131,7 @@ import {
   sheetDocumentIdsKey,
   shouldRunIndexPrescreen,
 } from "@/lib/codeAnalyzer/analyzerUiStability";
+import { computeAnalyzerDatasetMetrics, formatAnalysisProgressSummary } from "@/lib/codeAnalyzer/sheetState";
 import {
   completeAnalyzerRun,
   createAnalyzerRun,
@@ -347,6 +349,10 @@ export function AIComplianceAnalyzer() {
   );
   const failedBatchFiles = useMemo(
     () => files.filter((f) => f.status === "failed"),
+    [files],
+  );
+  const uploadQueueFiles = useMemo(
+    () => files.filter((f) => f.status === "pending"),
     [files],
   );
 
@@ -1382,7 +1388,7 @@ export function AIComplianceAnalyzer() {
 
       if (rejectedCount > 0) {
         toast.error(
-          `Upload limit is ${COMPLIANCE_MAX_BATCH_FILES} source files per drop. ${rejectedCount} file(s) were not added.`,
+          `Upload limit is ${COMPLIANCE_MAX_BATCH_FILES} source documents per drop. ${rejectedCount} document(s) were not added.`,
         );
       }
 
@@ -1543,7 +1549,7 @@ export function AIComplianceAnalyzer() {
       const pendingFiles = files.filter((f) => f.status === "pending");
       const failedFiles = files.filter((f) => f.status === "failed");
       if (onlyFailed && failedFiles.length === 0) {
-        toast.info("No failed files to retry");
+        toast.info("No failed sheets to retry");
         return;
       }
       if (
@@ -1552,7 +1558,7 @@ export function AIComplianceAnalyzer() {
         persistedSheets.filter((s) => !s.excluded).length === 0 &&
         documentsWithAnalysis.length === 0
       ) {
-        toast.info("No files ready to analyze");
+        toast.info("No sheets ready to analyze");
         return;
       }
 
@@ -1817,13 +1823,14 @@ export function AIComplianceAnalyzer() {
           await reloadAnalyzerDataset(selectedProjectId);
         }
 
-        if (failed === 0) {
-          toast.success(`Analysis complete: ${succeeded} sheet(s)`);
-        } else if (succeeded > 0) {
-          toast.warning(`Analysis finished: ${succeeded} succeeded, ${failed} failed`);
-        } else {
-          toast.error(`Analysis failed: all ${failed} sheet(s) failed`);
-        }
+        const completionToast = formatAnalysisCompletionToast({
+          total: batchFiles.length,
+          succeeded,
+          failed,
+        });
+        if (completionToast.type === "success") toast.success(completionToast.message);
+        else if (completionToast.type === "warning") toast.warning(completionToast.message);
+        else toast.error(completionToast.message);
       } catch (err) {
         console.error("Batch analysis error:", err);
         toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
@@ -2127,25 +2134,64 @@ export function AIComplianceAnalyzer() {
     return filterComplianceGroupsByScore(byDocument, complianceScoreFilter);
   }, [resultGroups, resultsDocumentFilter, filterMatchFileName, complianceScoreFilter]);
 
-  /** Aggregate KPI strip across displayed analyzed files' real results — never seeded. */
+  /** Aggregate KPI strip across displayed analyzed sheets' real results — never seeded. */
   const aggregateFindingStats = useMemo(() => {
     let critical = 0;
     let warnings = 0;
     let advisory = 0;
-    let filesWithResults = 0;
+    let sheetsWithResults = 0;
     for (const group of displayedResultGroups) {
+      if (group.failed) continue;
       const groupResults = [group.ibcResult, group.localResult].filter(
         (r): r is AnalysisResult => Boolean(r),
       );
-      if (groupResults.length > 0) filesWithResults += 1;
+      if (groupResults.length > 0) sheetsWithResults += 1;
       for (const result of groupResults) {
         critical += result.summary.critical ?? 0;
         warnings += result.summary.warnings ?? 0;
         advisory += result.summary.advisory ?? 0;
       }
     }
-    return { critical, warnings, advisory, filesWithResults };
+    return { critical, warnings, advisory, sheetsWithResults };
   }, [displayedResultGroups]);
+
+  const analyzerMetrics = useMemo(() => {
+    const includedSheets =
+      persistedSheets.length > 0
+        ? persistedSheets.filter((s) => !s.excluded)
+        : documentsWithAnalysis.map((d) => ({
+            id: d.id,
+            project_id: d.project_id,
+            source_document_id: d.id,
+            image_document_id: d.id,
+            page_number: 1,
+            file_name: d.file_name,
+            excluded: false,
+            created_at: d.created_at,
+          }));
+    const failedIds = new Set(failedBatchFiles.map((f) => f.id));
+    const base = computeAnalyzerDatasetMetrics({
+      includedSheets,
+      failedSheetIds: failedIds,
+    });
+    const analyzedCompletedCount =
+      completedBatchFiles.length > 0
+        ? completedBatchFiles.length
+        : failedIds.size > 0
+          ? Math.max(0, base.includedSheetCount - failedIds.size)
+          : loadedExistingResults.length;
+    return {
+      ...base,
+      analyzedCompletedCount,
+      analyzedFailedCount: failedIds.size,
+    };
+  }, [
+    persistedSheets,
+    documentsWithAnalysis,
+    completedBatchFiles.length,
+    failedBatchFiles,
+    loadedExistingResults.length,
+  ]);
 
   const documentFilterOptions = useMemo(() => {
     const opts: { id: string; label: string }[] = [];
@@ -3101,7 +3147,16 @@ export function AIComplianceAnalyzer() {
                         created_at: d.created_at,
                       }))
                 }
-                pendingFiles={files.map((f) => ({
+                uploadQueueFiles={uploadQueueFiles.map((f) => ({
+                  id: f.id,
+                  name: batchFileDisplayName(f),
+                  sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
+                  preview: f.preview,
+                  discipline: f.discipline,
+                  status: f.status,
+                  error: f.error,
+                }))}
+                failedSheetFiles={failedBatchFiles.map((f) => ({
                   id: f.id,
                   name: batchFileDisplayName(f),
                   sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
@@ -3129,7 +3184,7 @@ export function AIComplianceAnalyzer() {
                     label,
                   })
                 }
-                canAddMore={files.filter((f) => f.status === "pending" || f.status === "failed").length < COMPLIANCE_MAX_BATCH_FILES}
+                canAddMore={uploadQueueFiles.length < COMPLIANCE_MAX_BATCH_FILES}
               />
             ) : (
               <label htmlFor="drawing-upload" className="cursor-pointer">
@@ -3140,7 +3195,7 @@ export function AIComplianceAnalyzer() {
                   </div>
                   <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
                   <p className="text-sm text-muted-foreground">
-                    Up to {COMPLIANCE_MAX_INCLUDED_SHEETS} included sheets per analysis ({COMPLIANCE_MAX_BATCH_FILES} source files per upload). Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
+                    Up to {COMPLIANCE_MAX_INCLUDED_SHEETS} included sheets per analysis ({COMPLIANCE_MAX_BATCH_FILES} source documents per upload). Supports PNG, JPEG, WebP, or PDF (max {MAX_FILE_SIZE_MB}MB each).
                     Multi-page PDFs are expanded into individual sheets.
                   </p>
                 </div>
@@ -3172,7 +3227,7 @@ export function AIComplianceAnalyzer() {
                   {isModificationMode
                     ? "Running review..."
                     : showDrawingUploadProgress
-                      ? drawingUploadProgressLabel || "Uploading drawings..."
+                      ? drawingUploadProgressLabel || "Uploading documents..."
                       : batchProgressLabel || "Analyzing..."}
                 </>
               ) : (
@@ -3267,10 +3322,10 @@ export function AIComplianceAnalyzer() {
                 detail="Informational, non-blocking notes"
               />
               <MetricCard
-                label="Files analyzed"
-                value={aggregateFindingStats.filesWithResults}
+                label="Sheets analyzed"
+                value={analyzerMetrics.analyzedCompletedCount}
                 icon={FileText}
-                detail={`${completedBatchFiles.length} in this batch session`}
+                detail={formatAnalysisProgressSummary(analyzerMetrics)}
               />
             </div>
             ) : null}

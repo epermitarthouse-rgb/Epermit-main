@@ -9,6 +9,11 @@ import {
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
 } from "@/lib/codeAnalyzer/model";
+import {
+  computeAnalyzerDatasetMetrics,
+  formatAnalysisProgressSummary,
+  formatAnalyzerDatasetSummary,
+} from "@/lib/codeAnalyzer/sheetState";
 import { COMPLIANCE_MAX_BATCH_FILES } from "@/lib/complianceUploadLimits";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
 import { DISCIPLINE_OPTIONS, type DocumentDiscipline } from "@/types/document";
@@ -26,7 +31,10 @@ export interface AnalyzerPendingFile {
 
 interface AnalyzerDrawingSetProps {
   sheets: CodeAnalyzerSheet[];
-  pendingFiles: AnalyzerPendingFile[];
+  /** Source documents queued for the next upload (status pending only). */
+  uploadQueueFiles: AnalyzerPendingFile[];
+  /** Sheets that failed analysis and need retry (status failed only). */
+  failedSheetFiles: AnalyzerPendingFile[];
   displayRun: CodeAnalyzerRun | null;
   analysisStale: boolean;
   staleActionLabel?: string;
@@ -49,9 +57,64 @@ const statusLabel: Record<ComplianceBatchFileStatus, string> = {
   failed: "Failed",
 };
 
+function renderSessionFileCard(
+  f: AnalyzerPendingFile,
+  onRemove: (id: string) => void,
+  onDisciplineChange: (id: string, discipline: DocumentDiscipline) => void,
+  borderClass: string,
+) {
+  return (
+    <div key={f.id} className={cn("relative rounded-lg border bg-card p-3", borderClass)}>
+      {(f.status === "pending" || f.status === "failed") && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground"
+          onClick={() => onRemove(f.id)}
+          aria-label={`Remove ${f.name}`}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
+      {f.preview ? (
+        <img src={f.preview} alt={f.name} className="h-20 w-full object-cover rounded mb-2" />
+      ) : (
+        <div className="h-20 flex items-center justify-center bg-muted rounded mb-2">
+          <FileText className="h-8 w-8 text-muted-foreground" />
+        </div>
+      )}
+      <p className="text-xs font-medium truncate">{f.name}</p>
+      <p className="text-xs text-muted-foreground">{f.sizeLabel}</p>
+      <Badge className="mt-2 text-[10px]">
+        {f.status === "analyzing" && <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />}
+        {statusLabel[f.status]}
+      </Badge>
+      {f.error && <p className="text-[10px] text-destructive mt-1">{f.error}</p>}
+      {f.status === "pending" && (
+        <Select
+          value={f.discipline}
+          onValueChange={(value) => onDisciplineChange(f.id, value as DocumentDiscipline)}
+        >
+          <SelectTrigger className="h-7 mt-2 text-xs">
+            <SelectValue placeholder="Discipline" />
+          </SelectTrigger>
+          <SelectContent>
+            {DISCIPLINE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value} className="text-xs">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
 export function AnalyzerDrawingSet({
   sheets,
-  pendingFiles,
+  uploadQueueFiles,
+  failedSheetFiles,
   displayRun,
   analysisStale,
   staleActionLabel = "Update Analysis",
@@ -74,6 +137,15 @@ export function AnalyzerDrawingSet({
     return { sourceId, pages, isPdf, fileName: first?.file_name ?? "Drawing" };
   });
 
+  const failedSheetIds = new Set(failedSheetFiles.map((f) => f.id));
+  const datasetMetrics = computeAnalyzerDatasetMetrics({
+    includedSheets: sheets,
+    failedSheetIds,
+    completedSheetIds: new Set(
+      included.filter((s) => displayRun && !failedSheetIds.has(s.id)).map((s) => s.id),
+    ),
+  });
+
   return (
     <div className="space-y-4 text-left">
       {analysisStale && (
@@ -87,6 +159,21 @@ export function AnalyzerDrawingSet({
       {displayRun?.status === "current" && !analysisStale && included.length > 0 && (
         <p className="text-xs text-muted-foreground">
           Analysis is current for {included.length} included sheet{included.length === 1 ? "" : "s"}.
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground" data-testid="analyzer-dataset-summary">
+        {formatAnalyzerDatasetSummary(datasetMetrics)}
+      </p>
+      {(displayRun || failedSheetFiles.length > 0) && included.length > 0 && (
+        <p className="text-xs text-muted-foreground" data-testid="analyzer-analysis-summary">
+          {formatAnalysisProgressSummary({
+            ...datasetMetrics,
+            analyzedCompletedCount: Math.max(
+              0,
+              datasetMetrics.analysisTotalCount - failedSheetFiles.length,
+            ),
+            analyzedFailedCount: failedSheetFiles.length,
+          })}
         </p>
       )}
       <p
@@ -137,16 +224,19 @@ export function AnalyzerDrawingSet({
                     page_number: sheet.page_number,
                     sourceIsPdf: group.isPdf,
                   });
+                  const sheetFailed = failedSheetIds.has(sheet.id);
                   return (
                     <div
                       key={sheet.id}
                       className={cn(
                         "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
                         sheet.excluded ? "opacity-60" : "border-border bg-muted/40",
+                        sheetFailed && "border-destructive/50 bg-destructive/5",
                       )}
                     >
                       <FileText className="h-3 w-3" />
                       <span>{group.isPdf ? `p.${sheet.page_number}` : label}</span>
+                      {sheetFailed && <Badge variant="destructive">Failed</Badge>}
                       {sheet.excluded && <Badge variant="outline">Excluded</Badge>}
                       {group.isPdf && (
                         <button
@@ -168,55 +258,34 @@ export function AnalyzerDrawingSet({
         </div>
       )}
 
-      {pendingFiles.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">New drawings (not in last analysis)</p>
+      {failedSheetFiles.length > 0 && (
+        <div className="space-y-2" data-testid="analyzer-failed-sheets">
+          <p className="text-sm font-medium text-foreground">Failed sheets (needs retry)</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pendingFiles.map((f) => (
-              <div key={f.id} className="relative rounded-lg border border-dashed border-teal/50 bg-card p-3">
-                {(f.status === "pending" || f.status === "failed") && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-destructive text-destructive-foreground"
-                    onClick={() => onRemovePending(f.id)}
-                    aria-label={`Remove ${f.name}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-                {f.preview ? (
-                  <img src={f.preview} alt={f.name} className="h-20 w-full object-cover rounded mb-2" />
-                ) : (
-                  <div className="h-20 flex items-center justify-center bg-muted rounded mb-2">
-                    <FileText className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-                <p className="text-xs font-medium truncate">{f.name}</p>
-                <p className="text-xs text-muted-foreground">{f.sizeLabel}</p>
-                <Badge className="mt-2 text-[10px]">
-                  {f.status === "analyzing" && <Loader2 className="h-3 w-3 mr-1 animate-spin inline" />}
-                  {statusLabel[f.status]}
-                </Badge>
-                {f.error && <p className="text-[10px] text-destructive mt-1">{f.error}</p>}
-                <Select
-                  value={f.discipline}
-                  onValueChange={(value) => onPendingDisciplineChange(f.id, value as DocumentDiscipline)}
-                  disabled={f.status !== "pending"}
-                >
-                  <SelectTrigger className="h-7 mt-2 text-xs">
-                    <SelectValue placeholder="Discipline" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DISCIPLINE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value} className="text-xs">
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
+            {failedSheetFiles.map((f) =>
+              renderSessionFileCard(
+                f,
+                onRemovePending,
+                onPendingDisciplineChange,
+                "border-destructive/40 border-dashed",
+              ),
+            )}
+          </div>
+        </div>
+      )}
+
+      {uploadQueueFiles.length > 0 && (
+        <div className="space-y-2" data-testid="analyzer-new-uploads">
+          <p className="text-sm font-medium text-foreground">New since last analysis</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {uploadQueueFiles.map((f) =>
+              renderSessionFileCard(
+                f,
+                onRemovePending,
+                onPendingDisciplineChange,
+                "border-dashed border-teal/50",
+              ),
+            )}
           </div>
         </div>
       )}
@@ -228,8 +297,8 @@ export function AnalyzerDrawingSet({
       {canAddMore && (
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2 border-t">
           <p className="text-sm text-muted-foreground" data-testid="analyzer-pending-file-capacity">
-            {pendingFiles.length} of {COMPLIANCE_MAX_BATCH_FILES} new file
-            {pendingFiles.length === 1 ? "" : "s"} in this upload
+            {uploadQueueFiles.length} of {COMPLIANCE_MAX_BATCH_FILES} source document
+            {uploadQueueFiles.length === 1 ? "" : "s"} in this upload
           </p>
           <Button variant="outlineGold" size="sm" onClick={onAddClick} disabled={analyzing}>
             Add More Drawings

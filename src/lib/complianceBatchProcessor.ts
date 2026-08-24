@@ -62,11 +62,14 @@ export type FetchComplianceSheetImageFn = (
 ) => Promise<FetchComplianceSheetImageResult>;
 
 export interface ComplianceBatchProgress {
+  /** Total analyzable sheets in this batch. */
   total: number;
   completed: number;
-  /** 1-based index of the file currently processing. */
+  /** 1-based index of the sheet currently processing. */
   currentIndex: number;
   currentFileName?: string;
+  /** Sheets that failed analysis (included in `completed` once finished). */
+  failed?: number;
 }
 
 export interface UploadDocumentFn {
@@ -224,6 +227,7 @@ export async function processComplianceBatch(
       completed,
       currentIndex,
       currentFileName: batchFileDisplayName(item),
+      failed,
     });
 
     let working: ComplianceBatchFile = { ...item };
@@ -374,10 +378,11 @@ export async function processComplianceBatch(
       completed,
       currentIndex,
       currentFileName: batchFileDisplayName(item),
+      failed,
     });
   }
 
-  options.onProgress({ total, completed: total, currentIndex: total });
+  options.onProgress({ total, completed: total, currentIndex: total, failed });
   return { succeeded, failed };
 }
 
@@ -400,8 +405,39 @@ export function batchProgressPercent(progress: ComplianceBatchProgress): number 
 
 export function formatBatchProgressLabel(progress: ComplianceBatchProgress): string {
   if (progress.total === 0) return "";
+  const unit = progress.total === 1 ? "sheet" : "sheets";
   if (progress.completed >= progress.total) {
-    return `Completed ${progress.completed} of ${progress.total}`;
+    const failed = progress.failed ?? 0;
+    if (failed > 0) {
+      const succeeded = progress.total - failed;
+      return `${succeeded} completed, ${failed} failed — ${progress.total} total ${unit}`;
+    }
+    return `${progress.completed} of ${progress.total} ${unit} analyzed`;
   }
-  return `Analyzing ${progress.currentIndex} of ${progress.total}`;
+  return `Analyzing ${progress.currentIndex} of ${progress.total} ${unit}`;
+}
+
+export function formatAnalysisCompletionToast(params: {
+  total: number;
+  succeeded: number;
+  failed: number;
+}): { type: "success" | "warning" | "error"; message: string } {
+  const { total, succeeded, failed } = params;
+  const unit = total === 1 ? "sheet" : "sheets";
+  if (failed === 0) {
+    return {
+      type: "success",
+      message: `${total} of ${total} ${unit} analyzed`,
+    };
+  }
+  if (succeeded === 0) {
+    return {
+      type: "error",
+      message: `Analysis failed: all ${failed} ${unit} failed (${total} total)`,
+    };
+  }
+  return {
+    type: "warning",
+    message: `${succeeded} completed, ${failed} failed — ${total} total ${unit}`,
+  };
 }

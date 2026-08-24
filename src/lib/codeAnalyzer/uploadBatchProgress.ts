@@ -22,14 +22,15 @@ export function uploadProgressPercent(progress: DrawingUploadProgress): number {
 
 export function formatUploadProgressLabel(progress: DrawingUploadProgress): string {
   if (progress.total === 0) return "";
+  const unit = progress.total === 1 ? "document" : "documents";
   const countLabel =
     progress.completed >= progress.total
-      ? `${progress.completed} of ${progress.total} uploaded`
-      : `${progress.currentIndex} of ${progress.total}`;
+      ? `${progress.completed} of ${progress.total} ${unit} uploaded`
+      : `${progress.currentIndex} of ${progress.total} ${unit}`;
   if (progress.currentFileName && progress.phase === "uploading") {
     return `Uploading ${progress.currentFileName} — ${countLabel}`;
   }
-  return `Uploading drawings — ${countLabel}`;
+  return `Uploading documents — ${countLabel}`;
 }
 
 export function formatPdfProcessingDetail(progress: DrawingUploadProgress): string | null {
@@ -59,21 +60,21 @@ export function formatUploadCompletionToast(params: {
       type: "success",
       message:
         total === 1
-          ? "1 drawing uploaded successfully"
-          : `All ${total} drawings uploaded successfully`,
+          ? "1 document uploaded successfully"
+          : `All ${total} documents uploaded successfully`,
     };
   }
 
   if (succeeded === 0) {
     return {
       type: "error",
-      message: `Upload failed: none of ${total} drawing${total === 1 ? "" : "s"} uploaded`,
+      message: `Upload failed: none of ${total} document${total === 1 ? "" : "s"} uploaded`,
     };
   }
 
   return {
     type: "warning",
-    message: `${succeeded} of ${total} uploaded — ${failed} failed`,
+    message: `${succeeded} of ${total} documents uploaded — ${failed} failed`,
   };
 }
 

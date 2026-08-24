@@ -10,7 +10,7 @@ import {
 } from "./uploadBatchProgress.ts";
 
 describe("uploadBatchProgress helpers", () => {
-  it("formats single-file upload progress", () => {
+  it("formats single-document upload progress", () => {
     const progress: DrawingUploadProgress = {
       total: 1,
       completed: 0,
@@ -20,12 +20,12 @@ describe("uploadBatchProgress helpers", () => {
     };
     assert.equal(
       formatUploadProgressLabel(progress),
-      "Uploading A001-SITE PLAN.pdf — 1 of 1",
+      "Uploading A001-SITE PLAN.pdf — 1 of 1 document",
     );
     assert.equal(uploadProgressPercent(progress), 0);
   });
 
-  it("formats multi-file upload progress with count", () => {
+  it("formats multi-document upload progress without sheet counts", () => {
     const progress: DrawingUploadProgress = {
       total: 16,
       completed: 6,
@@ -35,24 +35,44 @@ describe("uploadBatchProgress helpers", () => {
     };
     assert.equal(
       formatUploadProgressLabel(progress),
-      "Uploading A006-WATERPROOFING DETAILS.pdf — 7 of 16",
+      "Uploading A006-WATERPROOFING DETAILS.pdf — 7 of 16 documents",
     );
     assert.equal(uploadProgressPercent(progress), 38);
+    assert.doesNotMatch(formatUploadProgressLabel(progress), /sheet/i);
   });
 
-  it("shows completed count when all source files finish", () => {
+  it("shows completed document count when all source files finish", () => {
     const progress: DrawingUploadProgress = {
       total: 16,
       completed: 16,
       currentIndex: 16,
       phase: "complete",
     };
-    assert.equal(formatUploadProgressLabel(progress), "Uploading drawings — 16 of 16 uploaded");
+    assert.equal(
+      formatUploadProgressLabel(progress),
+      "Uploading documents — 16 of 16 documents uploaded",
+    );
     assert.equal(uploadProgressPercent(progress), 100);
     assert.equal(shouldClearUploadProgress(progress), true);
   });
 
-  it("returns single-file success completion message", () => {
+  it("16 source documents stay document-scoped even when PDFs expand to many sheets elsewhere", () => {
+    const sourceDocumentCount = 16;
+    const expandedSheetCount = 33;
+    const uploadProgress: DrawingUploadProgress = {
+      total: sourceDocumentCount,
+      completed: sourceDocumentCount,
+      currentIndex: sourceDocumentCount,
+      phase: "complete",
+    };
+    assert.equal(expandedSheetCount, 33);
+    assert.ok(expandedSheetCount > sourceDocumentCount);
+    assert.match(formatUploadProgressLabel(uploadProgress), /16 of 16 documents uploaded/);
+    assert.doesNotMatch(formatUploadProgressLabel(uploadProgress), /33/);
+    assert.doesNotMatch(formatUploadProgressLabel(uploadProgress), /sheet/i);
+  });
+
+  it("returns single-document success completion message", () => {
     const toast = formatUploadCompletionToast({
       total: 1,
       succeeded: 1,
@@ -65,7 +85,7 @@ describe("uploadBatchProgress helpers", () => {
     });
   });
 
-  it("returns multi-file success completion message", () => {
+  it("returns multi-document success completion message", () => {
     const toast = formatUploadCompletionToast({
       total: 16,
       succeeded: 16,
@@ -73,11 +93,11 @@ describe("uploadBatchProgress helpers", () => {
     });
     assert.deepEqual(toast, {
       type: "success",
-      message: "All 16 drawings uploaded successfully",
+      message: "All 16 documents uploaded successfully",
     });
   });
 
-  it("returns mixed success/failure completion message", () => {
+  it("returns mixed success/failure completion message with document units", () => {
     const toast = formatUploadCompletionToast({
       total: 16,
       succeeded: 15,
@@ -85,8 +105,9 @@ describe("uploadBatchProgress helpers", () => {
     });
     assert.deepEqual(toast, {
       type: "warning",
-      message: "15 of 16 uploaded — 1 failed",
+      message: "15 of 16 documents uploaded — 1 failed",
     });
+    assert.doesNotMatch(toast!.message, /sheet/i);
   });
 
   it("returns error when every upload fails", () => {
@@ -97,11 +118,11 @@ describe("uploadBatchProgress helpers", () => {
     });
     assert.deepEqual(toast, {
       type: "error",
-      message: "Upload failed: none of 3 drawings uploaded",
+      message: "Upload failed: none of 3 documents uploaded",
     });
   });
 
-  it("formats multi-page PDF secondary processing detail", () => {
+  it("formats multi-page PDF secondary processing detail without inflating document count", () => {
     const detail = formatPdfProcessingDetail({
       total: 2,
       completed: 0,

@@ -10,6 +10,7 @@ import {
   computeComplianceOverallScore,
   countCompletedBatchFiles,
   countFailedBatchFiles,
+  formatAnalysisCompletionToast,
   formatBatchProgressLabel,
   normalizeComplianceAnalysisResult,
   processComplianceBatch,
@@ -257,8 +258,38 @@ describe("complianceBatchProcessor", () => {
 
     assert.equal(progressSnapshots.at(-1)?.completed, 2);
     assert.equal(progressSnapshots.at(-1)?.total, 2);
-    assert.equal(formatBatchProgressLabel({ total: 2, completed: 1, currentIndex: 2 }), "Analyzing 2 of 2");
+    assert.equal(
+      formatBatchProgressLabel({ total: 2, completed: 1, currentIndex: 2 }),
+      "Analyzing 2 of 2 sheets",
+    );
     assert.equal(batchProgressPercent({ total: 2, completed: 1, currentIndex: 2 }), 50);
+  });
+
+  it("uses sheet terminology for analysis progress labels", () => {
+    assert.equal(
+      formatBatchProgressLabel({ total: 33, completed: 30, currentIndex: 31 }),
+      "Analyzing 31 of 33 sheets",
+    );
+    assert.equal(
+      formatBatchProgressLabel({ total: 33, completed: 33, currentIndex: 33 }),
+      "33 of 33 sheets analyzed",
+    );
+    assert.doesNotMatch(formatBatchProgressLabel({ total: 33, completed: 30, currentIndex: 31 }), /document/i);
+  });
+
+  it("shows failed sheet counts separately when analysis completes with failures", () => {
+    assert.equal(
+      formatBatchProgressLabel({ total: 33, completed: 33, currentIndex: 33, failed: 3 }),
+      "30 completed, 3 failed — 33 total sheets",
+    );
+    assert.deepEqual(formatAnalysisCompletionToast({ total: 33, succeeded: 30, failed: 3 }), {
+      type: "warning",
+      message: "30 completed, 3 failed — 33 total sheets",
+    });
+    assert.doesNotMatch(
+      formatBatchProgressLabel({ total: 33, completed: 33, currentIndex: 33, failed: 3 }),
+      /document/i,
+    );
   });
 
   it("refuses to silently analyze only page 1 of an unexpanded PDF", async () => {
@@ -488,5 +519,52 @@ describe("complianceBatchProcessor", () => {
     assert.equal(normalized.summary.totalIssues, 1);
     assert.equal(normalized.summary.warnings, 1);
     assert.equal(normalized.summary.overallScore, 92);
+  });
+
+  it("categorizes analysis errors for user-facing messages", () => {
+    assert.equal(categorizeAnalysisError("HTTP 429 rate limit exceeded"), "rate_limit");
+    assert.equal(categorizeAnalysisError("Request timed out after 120s"), "timeout");
+    assert.equal(categorizeAnalysisError("Invalid image format"), "unsupported_image");
+    assert.equal(
+      formatAnalysisErrorMessage("503 Service Unavailable"),
+      "Temporary analysis service error — retry this sheet.",
+    );
+  });
+
+  it("auto-retries transient analysis failures with bounded attempts", async () => {
+    const files = [makeBatchFile("retry.png")];
+    let analyzeCalls = 0;
+
+    await processComplianceBatch({
+      files,
+      analysisMode: "ibc",
+      hasLocalAmendments: false,
+      jurisdiction: "general",
+      projectType: "commercial",
+      codeYear: "2021",
+      projectId: null,
+      canPersist: false,
+      uploadDocument: async () => null,
+      pdfFirstPageToImageFile: async (file) => file,
+      requestAnalysis: async () => {
+        analyzeCalls += 1;
+        if (analyzeCalls < 3) throw new Error("503 Service Unavailable");
+        return {
+          issues: [],
+          summary: { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 },
+          jurisdictionNotes: "",
+        };
+      },
+      readFileAsBase64: mockBase64(),
+      saveAnalysisToDb: async () => {},
+      onFileUpdate: (id, patch) => {
+        const file = files.find((f) => f.id === id);
+        if (file) Object.assign(file, patch);
+      },
+      onProgress: () => {},
+    });
+
+    assert.equal(analyzeCalls, 3);
+    assert.equal(files[0].status, "completed");
   });
 });
