@@ -447,6 +447,13 @@ export function categorizeAnalysisError(message: string): AnalysisFailureCategor
   ) {
     return "transient";
   }
+  if (
+    lower.includes("ai model could not analyze") ||
+    lower.includes("could not analyze this drawing") ||
+    lower.includes("returned an empty response")
+  ) {
+    return "parse";
+  }
   return "unknown";
 }
 
@@ -461,6 +468,9 @@ export function formatAnalysisErrorMessage(message: string): string {
     case "timeout":
       return "Analysis timed out — retry this sheet.";
     case "parse":
+      if (/could not analyze|empty response/i.test(message)) {
+        return "The AI model could not analyze this sheet — try a clearer export or retry.";
+      }
       return "Analysis returned an invalid response — retry this sheet.";
     case "transient":
       return "Temporary analysis service error — retry this sheet.";
@@ -503,9 +513,13 @@ export function batchProgressPercent(progress: ComplianceBatchProgress): number 
   return Math.round((progress.completed / progress.total) * 100);
 }
 
-export function formatBatchProgressLabel(progress: ComplianceBatchProgress): string {
+export function formatBatchProgressLabel(
+  progress: ComplianceBatchProgress,
+  opts?: { retrying?: boolean },
+): string {
   if (progress.total === 0) return "";
   const unit = progress.total === 1 ? "sheet" : "sheets";
+  const verb = opts?.retrying ? "Retrying" : "Analyzing";
   if (progress.completed >= progress.total) {
     const failed = progress.failed ?? 0;
     if (failed > 0) {
@@ -514,7 +528,7 @@ export function formatBatchProgressLabel(progress: ComplianceBatchProgress): str
     }
     return `${progress.completed} of ${progress.total} ${unit} analyzed`;
   }
-  return `Analyzing ${progress.currentIndex} of ${progress.total} ${unit}`;
+  return `${verb} ${progress.currentIndex} of ${progress.total} ${unit}`;
 }
 
 export function formatAnalysisCompletionToast(params: {

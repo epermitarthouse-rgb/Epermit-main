@@ -113,6 +113,64 @@ export function computeAnalyzerDatasetMetrics(input: {
   };
 }
 
+/** Distinct source documents in the drawing set (included + excluded sheets). */
+export function countSourceDocuments(sheets: CodeAnalyzerSheet[]): number {
+  return new Set(sheets.map((s) => s.source_document_id).filter(Boolean)).size;
+}
+
+export interface RunAnalysisMetricsInput {
+  /** All persisted sheets (included and excluded). */
+  sheets: CodeAnalyzerSheet[];
+  failedSheetIds: Set<string>;
+  /** Active batch session completed sheet ids. */
+  sessionCompletedSheetIds?: Set<string>;
+  /** Image document ids with hydrated analysis for the current run. */
+  hydratedImageDocumentIds?: Set<string>;
+}
+
+export interface RunAnalysisMetrics extends AnalyzerDatasetMetrics {
+  completedSheetIds: Set<string>;
+}
+
+/**
+ * Canonical run analysis counts — one source for KPI strip and drawing-set summary.
+ * Prefers session completed ids, then hydrate match, then included-minus-failed inference.
+ */
+export function computeRunAnalysisMetrics(input: RunAnalysisMetricsInput): RunAnalysisMetrics {
+  const included = input.sheets.filter((s) => !s.excluded);
+  const failedSheetIds = input.failedSheetIds;
+  const analysisTotalCount = included.length;
+
+  let completedSheetIds: Set<string>;
+  if (input.sessionCompletedSheetIds && input.sessionCompletedSheetIds.size > 0) {
+    completedSheetIds = new Set(input.sessionCompletedSheetIds);
+  } else if (input.hydratedImageDocumentIds && input.hydratedImageDocumentIds.size > 0) {
+    completedSheetIds = new Set<string>();
+    for (const sheet of included) {
+      if (failedSheetIds.has(sheet.id)) continue;
+      const imageDocId = sheet.image_document_id ?? sheet.source_document_id;
+      if (imageDocId && input.hydratedImageDocumentIds.has(imageDocId)) {
+        completedSheetIds.add(sheet.id);
+      }
+    }
+  } else if (failedSheetIds.size > 0 && analysisTotalCount > 0) {
+    completedSheetIds = new Set(
+      included.filter((s) => !failedSheetIds.has(s.id)).map((s) => s.id),
+    );
+  } else {
+    completedSheetIds = new Set<string>();
+  }
+
+  return {
+    sourceDocumentCount: countSourceDocuments(input.sheets),
+    includedSheetCount: analysisTotalCount,
+    analyzedCompletedCount: completedSheetIds.size,
+    analyzedFailedCount: failedSheetIds.size,
+    analysisTotalCount,
+    completedSheetIds,
+  };
+}
+
 export function formatAnalyzerDatasetSummary(metrics: AnalyzerDatasetMetrics): string {
   const docLabel = metrics.sourceDocumentCount === 1 ? "source document" : "source documents";
   const sheetLabel = metrics.includedSheetCount === 1 ? "included sheet" : "included sheets";

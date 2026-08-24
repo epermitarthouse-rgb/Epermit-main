@@ -2,6 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeAnalyzerDatasetMetrics,
+  computeRunAnalysisMetrics,
+  countSourceDocuments,
   existingFailed,
   formatAnalysisProgressSummary,
   formatAnalyzerDatasetSummary,
@@ -114,5 +116,79 @@ describe("computeAnalyzerDatasetMetrics", () => {
       formatAnalysisProgressSummary(metrics),
       "Analysis: 32 completed, 2 failed, 34 total",
     );
+  });
+});
+
+describe("computeRunAnalysisMetrics", () => {
+  it("A: counter agreement — 21 completed, 13 failed, 34 total after partial run", () => {
+    const sheets: CodeAnalyzerSheet[] = [];
+    for (let d = 0; d < 15; d += 1) {
+      const pages = d === 0 ? 20 : 1;
+      for (let p = 1; p <= pages; p += 1) {
+        sheets.push(
+          sheet({
+            id: `s-${d}-${p}`,
+            source_document_id: `doc-${d}`,
+            page_number: p,
+            image_document_id: `img-${d}-${p}`,
+          }),
+        );
+      }
+    }
+    sheets.push(
+      sheet({
+        id: "s-index",
+        source_document_id: "doc-index",
+        page_number: 1,
+        image_document_id: "img-index",
+        excluded: true,
+      }),
+    );
+    assert.equal(sheets.filter((s) => !s.excluded).length, 34);
+    const failedIds = new Set(sheets.slice(0, 13).map((s) => s.id));
+    const hydratedIds = new Set(
+      sheets
+        .slice(13)
+        .map((s) => s.image_document_id!)
+        .filter(Boolean),
+    );
+    const metrics = computeRunAnalysisMetrics({
+      sheets,
+      failedSheetIds: failedIds,
+      hydratedImageDocumentIds: hydratedIds,
+    });
+    assert.equal(metrics.sourceDocumentCount, 16);
+    assert.equal(metrics.analyzedCompletedCount, 21);
+    assert.equal(metrics.analyzedFailedCount, 13);
+    assert.equal(metrics.analysisTotalCount, 34);
+    assert.equal(
+      formatAnalysisProgressSummary(metrics),
+      "Analysis: 21 completed, 13 failed, 34 total",
+    );
+  });
+
+  it("F: counts excluded-sheet source documents toward source document total", () => {
+    const sheets = [
+      sheet({ id: "s1", source_document_id: "doc-index", page_number: 1, excluded: true }),
+      sheet({ id: "s2", source_document_id: "doc-a", page_number: 1 }),
+    ];
+    assert.equal(countSourceDocuments(sheets), 2);
+    const metrics = computeRunAnalysisMetrics({ sheets, failedSheetIds: new Set() });
+    assert.equal(metrics.sourceDocumentCount, 2);
+    assert.equal(metrics.includedSheetCount, 1);
+  });
+
+  it("G: prefers hydrate match over empty session completed set", () => {
+    const included = [
+      sheet({ id: "s-a005", source_document_id: "src-a005", page_number: 1, image_document_id: "img-a005" }),
+      sheet({ id: "s-a009", source_document_id: "src-a009", page_number: 1, image_document_id: "img-a009" }),
+    ];
+    const metrics = computeRunAnalysisMetrics({
+      sheets: included,
+      failedSheetIds: new Set(["s-a005"]),
+      hydratedImageDocumentIds: new Set(["img-a005"]),
+    });
+    assert.equal(metrics.analyzedCompletedCount, 0);
+    assert.equal(metrics.analyzedFailedCount, 1);
   });
 });

@@ -284,6 +284,10 @@ describe("complianceBatchProcessor", () => {
       formatBatchProgressLabel({ total: 33, completed: 33, currentIndex: 33, failed: 3 }),
       "30 completed, 3 failed — 33 total sheets",
     );
+    assert.equal(
+      formatBatchProgressLabel({ total: 13, completed: 2, currentIndex: 3 }, { retrying: true }),
+      "Retrying 3 of 13 sheets",
+    );
     assert.deepEqual(formatAnalysisCompletionToast({ total: 33, succeeded: 30, failed: 3 }), {
       type: "warning",
       message: "30 completed, 3 failed — 33 total sheets",
@@ -528,9 +532,79 @@ describe("complianceBatchProcessor", () => {
     assert.equal(categorizeAnalysisError("Request timed out after 120s"), "timeout");
     assert.equal(categorizeAnalysisError("Invalid image format"), "unsupported_image");
     assert.equal(
+      categorizeAnalysisError("The AI model could not analyze this drawing. Try a clearer plan sheet."),
+      "parse",
+    );
+    assert.equal(
       formatAnalysisErrorMessage("503 Service Unavailable"),
       "Temporary analysis service error — retry this sheet.",
     );
+    assert.equal(
+      formatAnalysisErrorMessage("The AI model could not analyze this drawing."),
+      "The AI model could not analyze this sheet — try a clearer export or retry.",
+    );
+  });
+
+  it("retries only failed persisted sheets via fetchSheetImage (13 calls, not 21)", async () => {
+    const failedSheets = Array.from({ length: 13 }, (_, i) => ({
+      id: `sheet-fail-${i}`,
+      fileName: `fail-${i}.png`,
+      discipline: "general" as const,
+      status: "failed" as const,
+      documentId: `doc-${i}`,
+      sheetId: `sheet-fail-${i}`,
+      pageNumber: 1,
+      sourceDocumentId: `src-${i}`,
+    }));
+    const completedSheets = Array.from({ length: 21 }, (_, i) => ({
+      id: `sheet-ok-${i}`,
+      fileName: `ok-${i}.png`,
+      discipline: "general" as const,
+      status: "completed" as const,
+      documentId: `doc-ok-${i}`,
+    }));
+    const files = [...completedSheets, ...failedSheets];
+    let analyzeCalls = 0;
+    let fetchCalls = 0;
+
+    await processComplianceBatch({
+      files,
+      onlyFailed: true,
+      analysisMode: "ibc",
+      hasLocalAmendments: false,
+      jurisdiction: "general",
+      projectType: "commercial",
+      codeYear: "2021",
+      projectId: "proj-1",
+      canPersist: true,
+      uploadDocument: async () => {
+        throw new Error("should not re-upload on retry");
+      },
+      fetchSheetImage: async (item) => {
+        fetchCalls += 1;
+        const f = makeFile(item.fileName ?? "retry.png");
+        return { file: f, preparedImageFile: f };
+      },
+      requestAnalysis: async () => {
+        analyzeCalls += 1;
+        return {
+          issues: [],
+          summary: { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 },
+          jurisdictionNotes: "",
+        };
+      },
+      readFileAsBase64: mockBase64(),
+      saveAnalysisToDb: async () => {},
+      onFileUpdate: (id, patch) => {
+        const file = files.find((f) => f.id === id);
+        if (file) Object.assign(file, patch);
+      },
+      onProgress: () => {},
+    });
+
+    assert.equal(analyzeCalls, 13);
+    assert.equal(fetchCalls, 13);
+    assert.equal(files.filter((f) => f.status === "completed").length, 34);
   });
 
   it("auto-retries transient analysis failures with bounded attempts", async () => {

@@ -13,6 +13,7 @@ import {
   computeAnalyzerDatasetMetrics,
   formatAnalysisProgressSummary,
   formatAnalyzerDatasetSummary,
+  type RunAnalysisMetrics,
 } from "@/lib/codeAnalyzer/sheetState";
 import { formatPendingUploadCapacityLabel } from "@/lib/codeAnalyzer/uploadBatchProgress";
 import { COMPLIANCE_MAX_BATCH_FILES } from "@/lib/complianceUploadLimits";
@@ -42,6 +43,8 @@ interface AnalyzerDrawingSetProps {
   analysisStale: boolean;
   staleActionLabel?: string;
   analyzing: boolean;
+  /** Canonical run metrics from parent — keeps counters aligned with KPI strip. */
+  runMetrics?: RunAnalysisMetrics;
   completedSheetIds?: Set<string>;
   analysisPendingCount?: number;
   currentAnalyzingSheetName?: string | null;
@@ -126,6 +129,7 @@ export function AnalyzerDrawingSet({
   analysisStale,
   staleActionLabel = "Update Analysis",
   analyzing,
+  runMetrics,
   completedSheetIds,
   analysisPendingCount,
   currentAnalyzingSheetName,
@@ -148,16 +152,32 @@ export function AnalyzerDrawingSet({
   });
 
   const failedSheetIds = new Set(failedSheetFiles.map((f) => f.id));
-  const completedIds =
-    completedSheetIds ??
-    new Set(included.filter((s) => !failedSheetIds.has(s.id)).map((s) => s.id));
-  const datasetMetrics = computeAnalyzerDatasetMetrics({
-    includedSheets: sheets,
-    failedSheetIds,
-    completedSheetIds: completedIds,
-  });
-  const analyzedCompletedCount = completedIds.size;
-  const analyzedFailedCount = failedSheetIds.size;
+  const canonicalMetrics =
+    runMetrics ??
+    (() => {
+      const completedIds =
+        completedSheetIds && completedSheetIds.size > 0
+          ? completedSheetIds
+          : new Set(included.filter((s) => !failedSheetIds.has(s.id)).map((s) => s.id));
+      const datasetMetrics = computeAnalyzerDatasetMetrics({
+        includedSheets: sheets,
+        failedSheetIds,
+        completedSheetIds: completedIds,
+      });
+      return {
+        ...datasetMetrics,
+        completedSheetIds: completedIds,
+      };
+    })();
+  const analyzedCompletedCount = canonicalMetrics.analyzedCompletedCount;
+  const analyzedFailedCount = canonicalMetrics.analyzedFailedCount;
+  const datasetMetrics = {
+    sourceDocumentCount: canonicalMetrics.sourceDocumentCount,
+    includedSheetCount: canonicalMetrics.includedSheetCount,
+    analyzedCompletedCount,
+    analyzedFailedCount,
+    analysisTotalCount: canonicalMetrics.analysisTotalCount,
+  };
   const pendingCount =
     analysisPendingCount ??
     Math.max(0, datasetMetrics.analysisTotalCount - analyzedCompletedCount - analyzedFailedCount);
@@ -281,24 +301,6 @@ export function AnalyzerDrawingSet({
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {failedSheetFiles.length > 0 && (
-        <div className="space-y-2" data-testid="analyzer-failed-sheets">
-          <p className="text-sm font-medium text-foreground">
-            Failed sheets ({failedSheetFiles.length} need retry)
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {failedSheetFiles.map((f) =>
-              renderSessionFileCard(
-                f,
-                onRemovePending,
-                onPendingDisciplineChange,
-                "border-destructive/40 border-dashed",
-              ),
-            )}
-          </div>
         </div>
       )}
 

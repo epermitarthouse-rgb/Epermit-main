@@ -136,7 +136,7 @@ import {
   shouldRunIndexPrescreen,
 } from "@/lib/codeAnalyzer/analyzerUiStability";
 import {
-  computeAnalyzerDatasetMetrics,
+  computeRunAnalysisMetrics,
   formatAnalysisProgressSummary,
   newSincePreviousRun,
 } from "@/lib/codeAnalyzer/sheetState";
@@ -343,6 +343,7 @@ export function AIComplianceAnalyzer() {
   } | null>(null);
   const [deletingDrawing, setDeletingDrawing] = useState(false);
   const analysisRunIdRef = useRef<string | null>(null);
+  const [batchRetrying, setBatchRetrying] = useState(false);
   type LoadedExistingAnalysis = {
     documentId: string;
     fileName: string;
@@ -471,6 +472,7 @@ export function AIComplianceAnalyzer() {
       isModificationMode,
     });
     if (!shouldRunIndexPrescreen(indexPrescreenKeyRef.current, prescreenKey)) {
+      setIndexPrescreenLoading(false);
       return;
     }
     indexPrescreenKeyRef.current = prescreenKey;
@@ -1686,11 +1688,13 @@ export function AIComplianceAnalyzer() {
 
         let batchFiles: UploadedFile[] = [];
         let lazySheetDocsById: Map<string, ProjectDocument> | null = null;
-        if (onlyFailed) {
-          batchFiles = failedFiles;
-        } else if (canPersist && included.length > 0) {
+
+        const buildPersistedBatchFiles = async (
+          targetSheets: CodeAnalyzerSheet[],
+          status: ComplianceBatchFileStatus,
+        ): Promise<Map<string, ProjectDocument>> => {
           const docsById = new Map(sheetDocuments.map((d) => [d.id, d]));
-          const missingIds = included
+          const missingIds = targetSheets
             .flatMap((s) => [s.image_document_id, s.source_document_id])
             .filter((id): id is string => Boolean(id) && !docsById.has(id));
           if (missingIds.length > 0) {
@@ -1702,9 +1706,7 @@ export function AIComplianceAnalyzer() {
               return Array.from(next.values());
             });
           }
-
-          lazySheetDocsById = docsById;
-          batchFiles = included.map((sheet) => {
+          batchFiles = targetSheets.map((sheet) => {
             const imageDoc =
               (sheet.image_document_id && docsById.get(sheet.image_document_id)) ||
               (sheet.source_document_id ? docsById.get(sheet.source_document_id) : undefined);
@@ -1714,13 +1716,28 @@ export function AIComplianceAnalyzer() {
               fileName,
               preview: null,
               discipline: coerceDocumentDiscipline(sheet.discipline),
-              status: "pending" as const,
+              status,
               documentId: imageDoc?.id,
               sheetId: sheet.id,
               pageNumber: sheet.page_number,
               sourceDocumentId: sheet.source_document_id,
             };
           });
+          return docsById;
+        };
+
+        if (onlyFailed && canPersist && included.length > 0) {
+          const failedIds = new Set(failedFiles.map((f) => f.id));
+          const failedSheets = included.filter((s) => failedIds.has(s.id));
+          if (failedSheets.length === 0) {
+            toast.info("No failed sheets to retry");
+            return;
+          }
+          lazySheetDocsById = await buildPersistedBatchFiles(failedSheets, "failed");
+        } else if (onlyFailed) {
+          batchFiles = failedFiles;
+        } else if (canPersist && included.length > 0) {
+          lazySheetDocsById = await buildPersistedBatchFiles(included, "pending");
         } else {
           // No project: expand PDFs in memory so we still do not drop pages 2+.
           const expanded: UploadedFile[] = [];
@@ -1780,6 +1797,7 @@ export function AIComplianceAnalyzer() {
           setHydrateRunId(displayRun.id);
         }
 
+        setBatchRetrying(onlyFailed);
         setBatchProgress({ total: batchFiles.length, completed: 0, currentIndex: 1 });
         setFiles(batchFiles);
 
@@ -1858,6 +1876,7 @@ export function AIComplianceAnalyzer() {
           await completeAnalyzerRun(failedRunId, "failed").catch(() => undefined);
         }
       } finally {
+        setBatchRetrying(false);
         setAnalyzing(false);
         setDrawingUploadProgress(null);
       }
@@ -2172,9 +2191,9 @@ export function AIComplianceAnalyzer() {
   }, [displayedResultGroups]);
 
   const analyzerMetrics = useMemo(() => {
-    const includedSheets =
+    const sheetsForMetrics =
       persistedSheets.length > 0
-        ? persistedSheets.filter((s) => !s.excluded)
+        ? persistedSheets
         : documentsWithAnalysis.map((d) => ({
             id: d.id,
             project_id: d.project_id,
@@ -2186,40 +2205,46 @@ export function AIComplianceAnalyzer() {
             created_at: d.created_at,
           }));
     const failedIds = new Set(failedBatchFiles.map((f) => f.id));
-    const completedIds = new Set(completedBatchFiles.map((f) => f.id));
-    const base = computeAnalyzerDatasetMetrics({
-      includedSheets,
+    const sessionCompletedIds = new Set(completedBatchFiles.map((f) => f.id));
+    const hydratedImageDocumentIds = new Set(loadedExistingResults.map((r) => r.documentId));
+    return computeRunAnalysisMetrics({
+      sheets: sheetsForMetrics,
       failedSheetIds: failedIds,
-      completedSheetIds: completedIds,
+      sessionCompletedSheetIds:
+        sessionCompletedIds.size > 0 ? sessionCompletedIds : undefined,
+      hydratedImageDocumentIds:
+        sessionCompletedIds.size > 0 || isolateCurrentRun
+          ? undefined
+          : hydratedImageDocumentIds,
     });
-    const analyzedCompletedCount = isolateCurrentRun
-      ? completedBatchFiles.length
-      : completedBatchFiles.length > 0
-        ? completedBatchFiles.length
-        : failedIds.size > 0
-          ? Math.max(0, base.includedSheetCount - failedIds.size)
-          : loadedExistingResults.length;
-    return {
-      ...base,
-      analyzedCompletedCount,
-      analyzedFailedCount: failedIds.size,
-    };
   }, [
     persistedSheets,
     documentsWithAnalysis,
     completedBatchFiles,
     failedBatchFiles,
-    loadedExistingResults.length,
+    loadedExistingResults,
     isolateCurrentRun,
   ]);
 
-  const completedSheetIdsForDrawingSet = useMemo(
-    () => new Set(completedBatchFiles.map((f) => f.id)),
-    [completedBatchFiles],
-  );
+  const completedSheetIdsForDrawingSet = analyzerMetrics.completedSheetIds;
 
-  const previousRunFingerprint =
-    displayRun?.source_fingerprint ?? currentRun?.source_fingerprint ?? null;
+  const previousRunFingerprint = useMemo(() => {
+    const active =
+      displayRun?.source_fingerprint
+        ? displayRun
+        : currentRun?.source_fingerprint
+          ? currentRun
+          : null;
+    if (active?.source_fingerprint) return active.source_fingerprint;
+    const latestWithFingerprint = [...analyzerRuns]
+      .filter((run) => Boolean(run.source_fingerprint))
+      .sort((a, b) =>
+        (b.completed_at ?? b.updated_at ?? b.created_at).localeCompare(
+          a.completed_at ?? a.updated_at ?? a.created_at,
+        ),
+      )[0];
+    return latestWithFingerprint?.source_fingerprint ?? null;
+  }, [analyzerRuns, currentRun, displayRun]);
   const includedPersistedSheets = useMemo(
     () => persistedSheets.filter((s) => !s.excluded),
     [persistedSheets],
@@ -2547,7 +2572,9 @@ export function AIComplianceAnalyzer() {
 
   const failedFileCount = countFailedBatchFiles(files);
   const batchProgressValue = batchProgress ? batchProgressPercent(batchProgress) : 0;
-  const batchProgressLabel = batchProgress ? formatBatchProgressLabel(batchProgress) : "";
+  const batchProgressLabel = batchProgress
+    ? formatBatchProgressLabel(batchProgress, { retrying: batchRetrying })
+    : "";
   const drawingUploadProgressValue = drawingUploadProgress
     ? uploadProgressPercent(drawingUploadProgress)
     : 0;
@@ -3247,6 +3274,7 @@ export function AIComplianceAnalyzer() {
                   error: f.error,
                 }))}
                 newSinceLastAnalysisCount={newSinceLastAnalysis.length}
+                runMetrics={analyzerMetrics}
                 completedSheetIds={completedSheetIdsForDrawingSet}
                 analysisPendingCount={
                   batchProgress
