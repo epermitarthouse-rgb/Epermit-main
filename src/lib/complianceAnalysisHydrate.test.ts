@@ -5,7 +5,9 @@ import {
   complianceResultsEmptyMessage,
   createGenerationGuard,
   mergeLoadedExistingAnalyses,
+  resolveComplianceHydrateSource,
   resolveComplianceResultsEmptyKind,
+  shouldShowComplianceKpiStrip,
 } from "./complianceAnalysisHydrate.ts";
 
 describe("complianceDocsHydrateKey", () => {
@@ -32,25 +34,18 @@ describe("createGenerationGuard", () => {
 
   it("simulates project-change race: older All hydrate must not win", () => {
     const guard = createGenerationGuard();
-    // Land on project A, start All hydrate
     const hydrateA = guard.next();
-    // Switch to Riverside before A completes
     guard.invalidate();
     const hydrateRiverside = guard.next();
-    // Stale A completion arrives
     assert.equal(guard.isCurrent(hydrateA), false);
-    // Riverside completion is accepted
     assert.equal(guard.isCurrent(hydrateRiverside), true);
   });
 
   it("simulates mount-with-All: empty list then docs arrive starts a new generation", () => {
     const guard = createGenerationGuard();
-    // Initial empty hydrate skipped — no token
     assert.equal(complianceDocsHydrateKey([]), "");
-    // Docs arrive → All hydrate
     const token = guard.next();
     assert.equal(guard.isCurrent(token), true);
-    // Same key success keeps token current; a retry gets a new token
     const retry = guard.next();
     assert.equal(guard.isCurrent(token), false);
     assert.equal(guard.isCurrent(retry), true);
@@ -117,6 +112,10 @@ describe("resolveComplianceResultsEmptyKind / messages", () => {
     assert.match(msg ?? "", /Found 17 previously analyzed/);
   });
 
+  it("does not report load_failed when no analyzed docs exist (sheet inventory only)", () => {
+    assert.equal(resolveComplianceResultsEmptyKind(base), "no_analyzed_docs");
+  });
+
   it("surfaces not-100 filter empties separately from load failure", () => {
     assert.equal(
       resolveComplianceResultsEmptyKind({
@@ -136,5 +135,76 @@ describe("resolveComplianceResultsEmptyKind / messages", () => {
       complianceResultsEmptyMessage("no_analyzed_docs") ?? "",
       /No previously analyzed/,
     );
+  });
+});
+
+describe("complianceResultsEmptyMessage", () => {
+  it("avoids misleading analyzed-doc count in generic load failure copy", () => {
+    const message = complianceResultsEmptyMessage("load_failed", 0);
+    assert.match(message ?? "", /Failed to load previous analyses/);
+    assert.doesNotMatch(message ?? "", /Found \d+ previously analyzed/);
+  });
+});
+
+describe("shouldShowComplianceKpiStrip", () => {
+  it("hides KPIs while loading or after hydrate failure", () => {
+    assert.equal(
+      shouldShowComplianceKpiStrip({
+        loading: true,
+        loadFailed: false,
+        displayedGroupCount: 0,
+        analyzedDocCount: 5,
+        hydratedGroupCount: 0,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldShowComplianceKpiStrip({
+        loading: false,
+        loadFailed: true,
+        displayedGroupCount: 0,
+        analyzedDocCount: 5,
+        hydratedGroupCount: 0,
+      }),
+      false,
+    );
+  });
+
+  it("hides zero KPIs when analyzed docs exist but hydration produced no groups", () => {
+    assert.equal(
+      shouldShowComplianceKpiStrip({
+        loading: false,
+        loadFailed: false,
+        displayedGroupCount: 0,
+        analyzedDocCount: 47,
+        hydratedGroupCount: 0,
+      }),
+      false,
+    );
+  });
+
+  it("shows KPIs when displayed results exist", () => {
+    assert.equal(
+      shouldShowComplianceKpiStrip({
+        loading: false,
+        loadFailed: false,
+        displayedGroupCount: 2,
+        analyzedDocCount: 2,
+        hydratedGroupCount: 2,
+      }),
+      true,
+    );
+  });
+});
+
+describe("resolveComplianceHydrateSource", () => {
+  it("marks legacy projects without analyzer runs", () => {
+    assert.equal(resolveComplianceHydrateSource(false, null, false), "legacy");
+  });
+
+  it("marks historical fallback separately from stale display runs", () => {
+    assert.equal(resolveComplianceHydrateSource(true, null, true), "historical");
+    assert.equal(resolveComplianceHydrateSource(true, "stale", false), "stale");
+    assert.equal(resolveComplianceHydrateSource(true, "current", false), "current");
   });
 });

@@ -6,6 +6,8 @@ import {
   allocateIncludedSheetKeys,
   computeSheetFingerprint,
   computeStandardRunFingerprint,
+  collectRunIdsWithComplianceFindings,
+  complianceDocumentIdsFromAnnotations,
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
   normalizeAnalysisInstructions,
@@ -13,6 +15,7 @@ import {
   pickDisplayRun,
   planPdfPageNumbers,
   planSourceFilePages,
+  resolveHydrateRun,
   runAnalysisType,
   shouldMarkAnalysisStale,
   sheetDisplayName,
@@ -220,6 +223,100 @@ describe("filterAnnotationsForActiveAnalysis", () => {
       hasAnalyzerRuns: true,
     });
     assert.equal(active.length, 0);
+  });
+
+  it("loads a superseded run when explicitly selected as hydrate run", () => {
+    const active = filterAnnotationsForActiveAnalysis(rows, {
+      currentRunId: "run-a",
+      hasAnalyzerRuns: true,
+    });
+    assert.deepEqual(active.map((r) => r.id), ["run-a"]);
+  });
+});
+
+describe("resolveHydrateRun / historical fallback", () => {
+  it("prefers current over historical superseded runs with findings", () => {
+    const runs = [
+      run({ id: "hist", status: "superseded", completed_at: "2026-08-05T00:00:00Z" }),
+      run({ id: "cur", status: "current", completed_at: "2026-08-06T00:00:00Z" }),
+    ];
+    const resolution = resolveHydrateRun(runs, ANALYSIS_TYPE_STANDARD, new Set(["hist", "cur"]));
+    assert.equal(resolution.runId, "cur");
+    assert.equal(resolution.isHistorical, false);
+  });
+
+  it("falls back to latest superseded completed run with findings", () => {
+    const runs = [
+      run({ id: "old", status: "superseded", completed_at: "2026-08-01T00:00:00Z" }),
+      run({ id: "new", status: "superseded", completed_at: "2026-08-04T00:00:00Z" }),
+      run({ id: "failed", status: "failed", completed_at: "2026-08-05T00:00:00Z" }),
+    ];
+    const resolution = resolveHydrateRun(runs, ANALYSIS_TYPE_STANDARD, new Set(["old", "new"]));
+    assert.equal(resolution.runId, "new");
+    assert.equal(resolution.isHistorical, true);
+  });
+
+  it("does not treat failed or running runs as valid historical results", () => {
+    const runs = [
+      run({ id: "running", status: "running", completed_at: null }),
+      run({ id: "failed", status: "failed", completed_at: "2026-08-05T00:00:00Z" }),
+    ];
+    const resolution = resolveHydrateRun(
+      runs,
+      ANALYSIS_TYPE_STANDARD,
+      new Set(["running", "failed"]),
+    );
+    assert.equal(resolution.runId, null);
+    assert.equal(resolution.isHistorical, false);
+  });
+
+  it("prefers stale display run over historical superseded", () => {
+    const runs = [
+      run({ id: "hist", status: "superseded", completed_at: "2026-08-05T00:00:00Z" }),
+      run({ id: "stale", status: "stale", completed_at: "2026-08-03T00:00:00Z" }),
+    ];
+    const resolution = resolveHydrateRun(runs, ANALYSIS_TYPE_STANDARD, new Set(["hist", "stale"]));
+    assert.equal(resolution.runId, "stale");
+    assert.equal(resolution.isHistorical, false);
+  });
+});
+
+describe("complianceDocumentIdsFromAnnotations", () => {
+  it("does not count documents from uploaded sheets without compliance findings", () => {
+    const annotations = [
+      {
+        document_id: "doc-with-finding",
+        analysis_run_id: "run-a",
+        data: { compliance_issue: true, analysis_run_id: "run-a" },
+      },
+    ];
+    const ids = complianceDocumentIdsFromAnnotations(annotations, {
+      hydrateRunId: "run-a",
+      hasAnalyzerRuns: true,
+    });
+    assert.deepEqual(Array.from(ids), ["doc-with-finding"]);
+  });
+
+  it("hydrates legacy annotations when the project has no analyzer runs", () => {
+    const annotations = [
+      { document_id: "legacy-doc", data: { compliance_issue: true } },
+    ];
+    const ids = complianceDocumentIdsFromAnnotations(annotations, {
+      hydrateRunId: null,
+      hasAnalyzerRuns: false,
+    });
+    assert.deepEqual(Array.from(ids), ["legacy-doc"]);
+  });
+});
+
+describe("collectRunIdsWithComplianceFindings", () => {
+  it("collects run ids from compliance annotations only", () => {
+    const ids = collectRunIdsWithComplianceFindings([
+      { analysis_run_id: "a", data: { compliance_issue: true } },
+      { analysis_run_id: "b", data: { note: "nope" } },
+      { data: { compliance_metadata: true, analysis_run_id: "c" } },
+    ]);
+    assert.deepEqual(Array.from(ids).sort(), ["a", "c"]);
   });
 });
 

@@ -40,6 +40,8 @@ export type ComplianceResultsEmptyKind =
   | "filter_document"
   | "none";
 
+export type ComplianceHydrateSource = "none" | "current" | "stale" | "historical" | "legacy";
+
 export interface ComplianceResultsEmptyInput {
   loading: boolean;
   loadFailed: boolean;
@@ -94,6 +96,37 @@ export function complianceResultsEmptyMessage(
     default:
       return null;
   }
+}
+
+export function resolveComplianceHydrateSource(
+  hasAnalyzerRuns: boolean,
+  displayRunStatus: string | null | undefined,
+  isHistorical: boolean,
+): ComplianceHydrateSource {
+  if (!hasAnalyzerRuns) return "legacy";
+  if (isHistorical) return "historical";
+  if (displayRunStatus === "current") return "current";
+  if (displayRunStatus === "stale") return "stale";
+  return "none";
+}
+
+export function complianceHistoricalResultsMessage(): string {
+  return "Showing results from a previous completed analysis run. Re-run Analyze to refresh against the current drawing set.";
+}
+
+/** Hide KPI strip when hydration failed or results are not yet meaningful. */
+export function shouldShowComplianceKpiStrip(input: {
+  loading: boolean;
+  loadFailed: boolean;
+  displayedGroupCount: number;
+  analyzedDocCount: number;
+  hydratedGroupCount: number;
+}): boolean {
+  if (input.loading) return false;
+  if (input.loadFailed) return false;
+  if (input.displayedGroupCount > 0) return true;
+  if (input.analyzedDocCount > 0 && input.hydratedGroupCount === 0) return false;
+  return false;
 }
 
 /**
