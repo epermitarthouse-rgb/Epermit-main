@@ -3,7 +3,7 @@
  * not in the browser batch queue.
  */
 import { supabase } from "@/lib/supabase";
-import type { ProjectDocument } from "@/types/document";
+import type { DocumentDiscipline, ProjectDocument } from "@/types/document";
 import {
   ANALYSIS_TYPE_STANDARD,
   computeSheetFingerprint,
@@ -46,6 +46,7 @@ export async function insertAnalyzerSheet(row: {
   image_document_id: string | null;
   page_number: number;
   file_name: string | null;
+  discipline?: DocumentDiscipline;
   excluded: boolean;
 }): Promise<CodeAnalyzerSheet> {
   const { data, error } = await supabase

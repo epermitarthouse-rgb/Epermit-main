@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Loader2, Trash2, X } from "lucide-react";
 import {
   sheetDisplayName,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/codeAnalyzer/model";
 import { COMPLIANCE_MAX_BATCH_FILES } from "@/lib/complianceUploadLimits";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
+import { DISCIPLINE_OPTIONS, type DocumentDiscipline } from "@/types/document";
 import { cn } from "@/lib/utils";
 
 export interface AnalyzerPendingFile {
@@ -16,6 +18,7 @@ export interface AnalyzerPendingFile {
   name: string;
   sizeLabel: string;
   preview: string | null;
+  discipline: DocumentDiscipline;
   status: ComplianceBatchFileStatus;
   error?: string;
 }
@@ -30,6 +33,7 @@ interface AnalyzerDrawingSetProps {
   isLegacy: boolean;
   onAddClick: () => void;
   onRemovePending: (id: string) => void;
+  onPendingDisciplineChange: (id: string, discipline: DocumentDiscipline) => void;
   onRequestRemoveSource: (sourceDocumentId: string, label: string) => void;
   onRequestRemoveSheet: (sheet: CodeAnalyzerSheet, label: string) => void;
   canAddMore: boolean;
@@ -54,6 +58,7 @@ export function AnalyzerDrawingSet({
   isLegacy,
   onAddClick,
   onRemovePending,
+  onPendingDisciplineChange,
   onRequestRemoveSource,
   onRequestRemoveSheet,
   canAddMore,
@@ -183,6 +188,22 @@ export function AnalyzerDrawingSet({
                   {statusLabel[f.status]}
                 </Badge>
                 {f.error && <p className="text-[10px] text-destructive mt-1">{f.error}</p>}
+                <Select
+                  value={f.discipline}
+                  onValueChange={(value) => onPendingDisciplineChange(f.id, value as DocumentDiscipline)}
+                  disabled={f.status !== "pending"}
+                >
+                  <SelectTrigger className="h-7 mt-2 text-xs">
+                    <SelectValue placeholder="Discipline" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DISCIPLINE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="text-xs">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             ))}
           </div>

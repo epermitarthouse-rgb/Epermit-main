@@ -51,6 +51,7 @@ export async function persistPendingAnalyzerSources(params: {
   const staged: Array<{
     sourceId: string;
     fileName: string;
+    discipline: DocumentDiscipline;
     pages: Array<{ pageNumber: number; imageFile: File; imageDocId?: string }>;
   }> = [];
 
@@ -90,6 +91,7 @@ export async function persistPendingAnalyzerSources(params: {
     staged.push({
       sourceId: sourceDoc.id,
       fileName: pending.file.name,
+      discipline: pending.discipline,
       pages: pages.map((p) => ({ pageNumber: p.pageNumber, imageFile: p.imageFile })),
     });
   }
@@ -133,6 +135,7 @@ export async function persistPendingAnalyzerSources(params: {
         image_document_id: imageDocumentId,
         page_number: page.pageNumber,
         file_name: source.fileName,
+        discipline: source.discipline,
         excluded,
       });
       created.push(sheet);

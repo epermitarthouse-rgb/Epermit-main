@@ -100,7 +100,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useProjectDocuments } from "@/hooks/useProjectDocuments";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import { useAuth } from "@/hooks/useAuth";
-import { DocumentDiscipline, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from "@/types/document";
+import { DocumentDiscipline, coerceDocumentDiscipline, MAX_FILE_SIZE_MB, MAX_FILE_SIZE_BYTES } from "@/types/document";
 import type { ProjectDocument } from "@/types/document";
 import {
   ANALYSIS_TYPE_DC_MODIFICATION,
@@ -1289,6 +1289,10 @@ export function AIComplianceAnalyzer() {
     });
   };
 
+  const updateFileDiscipline = useCallback((id: string, discipline: DocumentDiscipline) => {
+    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, discipline } : f)));
+  }, []);
+
   /** Save AI analysis results to document_annotations for the active run (replace, don't append). */
   const saveAnalysisToDb = useCallback(
     async (
@@ -1419,6 +1423,7 @@ export function AIComplianceAnalyzer() {
                 image_document_id: doc.id,
                 page_number: 1,
                 file_name: doc.file_name,
+                discipline: "general",
                 excluded: false,
               });
             }
@@ -1494,7 +1499,7 @@ export function AIComplianceAnalyzer() {
               id: sheet.id,
               file: imageFile,
               preview: null,
-              discipline: "general",
+              discipline: coerceDocumentDiscipline(sheet.discipline),
               status: "pending",
               documentId: imageDoc.id,
               preparedImageFile: imageFile,
@@ -1668,7 +1673,7 @@ export function AIComplianceAnalyzer() {
         persistedSheets,
         pendingDrawingFiles: files
           .filter((f) => f.status === "pending")
-          .map((f) => ({ id: f.id, file: f.file, discipline: "general" as const })),
+          .map((f) => ({ id: f.id, file: f.file, discipline: f.discipline })),
         sheetDocuments,
         modificationForms,
         getDownloadUrl,
@@ -2800,6 +2805,7 @@ export function AIComplianceAnalyzer() {
                   name: f.file.name,
                   sizeLabel: formatFileSize(f.file.size),
                   preview: f.preview,
+                  discipline: f.discipline,
                   status: f.status,
                   error: f.error,
                 }))}
@@ -2810,6 +2816,7 @@ export function AIComplianceAnalyzer() {
                 isLegacy={hasAnalyzerRuns === false && persistedSheets.length === 0 && documentsWithAnalysis.length > 0}
                 onAddClick={() => document.getElementById("drawing-upload")?.click()}
                 onRemovePending={removeFile}
+                onPendingDisciplineChange={updateFileDiscipline}
                 onRequestRemoveSource={(sourceDocumentId, label) =>
                   setDeleteTarget({ kind: "source", sourceDocumentId, label })
                 }
