@@ -194,10 +194,13 @@ import {
   fetchModificationReviewForRun,
 } from "@/lib/codeModification/persistence";
 import {
-  runDcCodeModificationReview,
   CodeModificationReviewError,
   type CodeModificationDrawingUploadOutcome,
 } from "@/lib/codeModification/runReview";
+import {
+  runDcCodeModificationReviewWithMode,
+  isTerminalCodeModRunStatus,
+} from "@/lib/codeModification/runReviewAsyncV2";
 import { existingAnalyzerSourceRefs } from "@/lib/codeAnalyzer/sourceIdentity";
 import { isDcJurisdiction } from "@/lib/codeModification/workflow";
 
@@ -597,6 +600,56 @@ export function AIComplianceAnalyzer() {
     formChanged: modificationFormsChanged || uploadingFormNames.length > 0,
     pendingSourceCount: pendingDrawingCount,
   });
+
+  // Poll async V2 runs until terminal, then hydrate persisted results.
+  useEffect(() => {
+    if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled()) return;
+
+    const standardRun = displayRun;
+    const modRun = modificationDisplayRun;
+    const needsStandardPoll =
+      standardRun && ["running", "queued", "partial"].includes(standardRun.status);
+    const needsModPoll =
+      modRun && !isTerminalCodeModRunStatus(modRun.status);
+
+    if (!needsStandardPoll && !needsModPoll) return;
+
+    const poll = async () => {
+      const runs = await fetchAnalyzerRuns(selectedProjectId);
+      if (needsStandardPoll) {
+        const next = displayRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+        setDisplayRun(next);
+        setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+      }
+      if (needsModPoll) {
+        const nextMod = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+        setModificationDisplayRun(nextMod);
+        setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        if (nextMod && isTerminalCodeModRunStatus(nextMod.status)) {
+          try {
+            const review = await fetchModificationReviewForRun(nextMod.id);
+            setModificationReview(review);
+            if (nextMod.status === "current") {
+              toast.success("Code Modification Review complete");
+            } else if (nextMod.status === "partial") {
+              toast.warning("Code Modification Review completed with some failed jobs");
+            }
+          } catch (err) {
+            console.error("Error loading code modification review after async run:", err);
+          }
+        }
+      }
+    };
+
+    const timer = setInterval(() => void poll(), 5000);
+    return () => clearInterval(timer);
+  }, [
+    selectedProjectId,
+    displayRun?.id,
+    displayRun?.status,
+    modificationDisplayRun?.id,
+    modificationDisplayRun?.status,
+  ]);
 
   const reloadAnalyzerDataset = useCallback(async (projectId: string) => {
     const runs = await fetchAnalyzerRuns(projectId);
@@ -2122,7 +2175,7 @@ export function AIComplianceAnalyzer() {
         });
       }
 
-      const { review, forms, drawingUpload } = await runDcCodeModificationReview({
+      const result = await runDcCodeModificationReviewWithMode({
         projectId: selectedProjectId,
         userId: user.id,
         jurisdiction,
@@ -2138,9 +2191,28 @@ export function AIComplianceAnalyzer() {
         onUploadProgress: setDrawingUploadProgress,
       });
 
-      await finalizeCodeModDrawingUpload(drawingUpload, pendingDrawingFiles, selectedProjectId);
-      setModificationReview(review);
-      setModificationForms(forms);
+      if (result.async) {
+        const runs = await fetchAnalyzerRuns(selectedProjectId);
+        setModificationDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        setModificationReview(null);
+        if (result.forms) setModificationForms(result.forms);
+        setFiles((prev) => prev.filter((f) => f.status === "failed"));
+        await reloadAnalyzerDataset(selectedProjectId);
+        toast.success(
+          `Code Modification Review queued (${result.jobsCreated} job${result.jobsCreated === 1 ? "" : "s"}). You can close this tab.`,
+        );
+        return;
+      }
+
+      await finalizeCodeModDrawingUpload(
+        result.drawingUpload,
+        pendingDrawingFiles,
+        selectedProjectId,
+      );
+      setModificationReview(result.review!);
+      setModificationForms(result.forms ?? modificationForms);
+      setFiles((prev) => prev.filter((f) => f.status === "failed"));
       await reloadAnalyzerDataset(selectedProjectId);
       toast.success("Code Modification Review complete");
     } catch (err) {
@@ -3442,13 +3514,10 @@ export function AIComplianceAnalyzer() {
             <CodeAnalyzerV2StatusPanel
               projectId={selectedProjectId}
               userId={user.id}
-              activeRun={displayRun}
+              activeRun={isModificationMode ? modificationDisplayRun : displayRun}
+              isModificationMode={isModificationMode}
               onRefresh={() => {
-                void fetchAnalyzerRuns(selectedProjectId).then((runs) => {
-                  setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
-                  setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
-                });
-                void fetchAnalyzerSheets(selectedProjectId).then(setPersistedSheets);
+                void reloadAnalyzerDataset(selectedProjectId);
               }}
             />
           )}

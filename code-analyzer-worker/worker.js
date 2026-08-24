@@ -78,20 +78,22 @@ async function runSheetJob(job) {
 
 async function runCodeModJob(job) {
   const supabase = getSupabaseAdmin();
+  const { completeCodeModJob } = require("./lib/codeModClaim");
   try {
     await processCodeModJob({ supabase, job, workerId: WORKER_ID });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[code-analyzer-worker] code mod ${job.id} failed:`, message);
-    await supabase
-      .from("code_analyzer_code_mod_jobs")
-      .update({
-        status: job.attempt_count >= job.max_attempts ? "failed" : "queued",
-        last_error: message,
-        lease_owner: null,
-        lease_expires_at: null,
-      })
-      .eq("id", job.id);
+    await completeCodeModJob(supabase, {
+      jobId: job.id,
+      workerId: WORKER_ID,
+      status: job.attempt_count >= job.max_attempts ? "failed" : "queued",
+      lastError: message,
+      availableAt:
+        job.attempt_count >= job.max_attempts
+          ? null
+          : new Date(Date.now() + Math.min(60000, 5000 * 2 ** job.attempt_count)).toISOString(),
+    });
   }
 }
 
