@@ -354,6 +354,71 @@ describe("complianceBatchProcessor", () => {
     assert.equal(files[1].sourceDocumentId, "pdf-1");
   });
 
+  it("fetches sheet images lazily one at a time via fetchSheetImage", async () => {
+    let concurrentFetches = 0;
+    let maxConcurrent = 0;
+    const fetchOrder: string[] = [];
+
+    const files: ComplianceBatchFile[] = [
+      {
+        id: "s1",
+        fileName: "a.png",
+        discipline: "general",
+        status: "pending",
+        documentId: "doc-1",
+      },
+      {
+        id: "s2",
+        fileName: "b.png",
+        discipline: "general",
+        status: "pending",
+        documentId: "doc-2",
+      },
+    ];
+
+    await processComplianceBatch({
+      files,
+      analysisMode: "ibc",
+      hasLocalAmendments: false,
+      jurisdiction: "general",
+      projectType: "commercial",
+      codeYear: "2021",
+      projectId: "proj-1",
+      canPersist: true,
+      uploadDocument: async () => {
+        throw new Error("persisted sheets should not re-upload");
+      },
+      fetchSheetImage: async (item) => {
+        concurrentFetches += 1;
+        maxConcurrent = Math.max(maxConcurrent, concurrentFetches);
+        fetchOrder.push(item.fileName!);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        concurrentFetches -= 1;
+        const f = makeFile(item.fileName!);
+        return { file: f, preparedImageFile: f };
+      },
+      requestAnalysis: async () => ({
+        issues: [],
+        summary: { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 },
+        jurisdictionNotes: "",
+      }),
+      readFileAsBase64: mockBase64(),
+      saveAnalysisToDb: async () => {},
+      onFileUpdate: (id, patch) => {
+        const file = files.find((f) => f.id === id);
+        if (file) Object.assign(file, patch);
+      },
+      onProgress: () => {},
+    });
+
+    assert.equal(maxConcurrent, 1);
+    assert.deepEqual(fetchOrder, ["a.png", "b.png"]);
+    assert.equal(files[0].status, "completed");
+    assert.equal(files[0].file, undefined);
+    assert.equal(files[0].preparedImageFile, undefined);
+    assert.equal(files[0].fileName, "a.png");
+  });
+
   it("tracks completed and failed counts", () => {
     const files = [
       makeBatchFile("a.png", { status: "completed" }),

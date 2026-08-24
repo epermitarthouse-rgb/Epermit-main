@@ -7,6 +7,7 @@ import {
   type IndexSheetEntry,
 } from "./indexCompleteness";
 import { requestDrawingIndexExtract } from "./indexExtractClient";
+import { blobToBase64 } from "./blobToBase64";
 
 async function loadSheetImageBase64(
   sheet: CodeAnalyzerSheet,
@@ -17,14 +18,8 @@ async function loadSheetImageBase64(
   if (!url) return null;
   const response = await fetch(url);
   const blob = await response.blob();
-  const buffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
-  }
   return {
-    imageBase64: btoa(binary),
+    imageBase64: await blobToBase64(blob),
     imageType: blob.type || "image/png",
   };
 }

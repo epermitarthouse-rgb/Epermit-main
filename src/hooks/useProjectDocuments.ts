@@ -392,7 +392,7 @@ export function useProjectDocuments(projectId: string | null) {
     }
   };
 
-  const getDownloadUrl = async (document: ProjectDocument): Promise<string | null> => {
+  const getDownloadUrl = useCallback(async (document: ProjectDocument): Promise<string | null> => {
     try {
       const { data, error } = await supabase.storage
         .from('project-documents')
@@ -405,7 +405,7 @@ export function useProjectDocuments(projectId: string | null) {
       toast.error('Failed to get download link');
       return null;
     }
-  };
+  }, []);
 
   const downloadDocument = async (document: ProjectDocument) => {
     const url = await getDownloadUrl(document);

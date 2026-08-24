@@ -36,7 +36,10 @@ export interface ComplianceBatchAnalysisResult {
 
 export interface ComplianceBatchFile {
   id: string;
-  file: File;
+  /** Omitted when using lazy `fetchSheetImage` until the sheet is loaded. */
+  file?: File;
+  /** Display name when `file` is not loaded yet (lazy fetch path). */
+  fileName?: string;
   discipline: DocumentDiscipline;
   status: ComplianceBatchFileStatus;
   error?: string;
@@ -48,6 +51,15 @@ export interface ComplianceBatchFile {
   pageNumber?: number;
   sourceDocumentId?: string;
 }
+
+export interface FetchComplianceSheetImageResult {
+  file: File;
+  preparedImageFile: File;
+}
+
+export type FetchComplianceSheetImageFn = (
+  item: ComplianceBatchFile,
+) => Promise<FetchComplianceSheetImageResult>;
 
 export interface ComplianceBatchProgress {
   total: number;
@@ -92,6 +104,8 @@ export interface ProcessComplianceBatchOptions {
   /** @deprecated PDFs must be expanded to page images before analysis. */
   pdfFirstPageToImageFile?: (file: File) => Promise<File>;
   requestAnalysis: RequestAnalysisFn;
+  /** When set, each sheet image is fetched on demand instead of requiring pre-loaded Files. */
+  fetchSheetImage?: FetchComplianceSheetImageFn;
   readFileAsBase64?: (file: File) => Promise<string>;
   saveAnalysisToDb: (
     result: ComplianceBatchAnalysisResult,
@@ -101,6 +115,10 @@ export interface ProcessComplianceBatchOptions {
   ) => Promise<void>;
   onFileUpdate: (id: string, patch: Partial<ComplianceBatchFile>) => void;
   onProgress: (progress: ComplianceBatchProgress) => void;
+}
+
+export function batchFileDisplayName(item: ComplianceBatchFile): string {
+  return item.file?.name ?? item.fileName ?? item.id;
 }
 
 export function createComplianceBatchFileId(): string {
@@ -205,27 +223,46 @@ export async function processComplianceBatch(
       total,
       completed,
       currentIndex,
-      currentFileName: item.file.name,
+      currentFileName: batchFileDisplayName(item),
     });
 
     let working: ComplianceBatchFile = { ...item };
+    const lazyFetch = Boolean(options.fetchSheetImage);
 
     try {
       if (!working.preparedImageFile) {
         options.onFileUpdate(working.id, { status: "preparing", error: undefined });
-        const isPdf =
-          working.file.type === "application/pdf" ||
-          working.file.name.toLowerCase().endsWith(".pdf");
-        if (isPdf) {
-          throw new Error(
-            "PDF must be expanded into individual page images before analysis. Page 1 is not used as a stand-in for the full drawing set.",
-          );
+        if (options.fetchSheetImage) {
+          const fetched = await options.fetchSheetImage(working);
+          working = {
+            ...working,
+            file: fetched.file,
+            preparedImageFile: fetched.preparedImageFile,
+            fileName: fetched.file.name,
+          };
+          options.onFileUpdate(working.id, {
+            file: fetched.file,
+            preparedImageFile: fetched.preparedImageFile,
+            fileName: fetched.file.name,
+            status: "preparing",
+          });
+        } else if (!working.file) {
+          throw new Error("Missing drawing file for analysis");
+        } else {
+          const isPdf =
+            working.file.type === "application/pdf" ||
+            working.file.name.toLowerCase().endsWith(".pdf");
+          if (isPdf) {
+            throw new Error(
+              "PDF must be expanded into individual page images before analysis. Page 1 is not used as a stand-in for the full drawing set.",
+            );
+          }
+          working = { ...working, preparedImageFile: working.file };
+          options.onFileUpdate(working.id, {
+            preparedImageFile: working.file,
+            status: "preparing",
+          });
         }
-        working = { ...working, preparedImageFile: working.file };
-        options.onFileUpdate(working.id, {
-          preparedImageFile: working.file,
-          status: "preparing",
-        });
       }
 
       if (!working.documentId && options.canPersist && options.projectId) {
@@ -310,8 +347,11 @@ export async function processComplianceBatch(
         error: undefined,
         ibcResult,
         localResult,
-        preparedImageFile: working.preparedImageFile,
+        fileName: batchFileDisplayName(working),
         documentId: working.documentId,
+        ...(lazyFetch
+          ? { file: undefined, preparedImageFile: undefined }
+          : { preparedImageFile: working.preparedImageFile }),
       });
       succeeded += 1;
     } catch (err) {
@@ -319,8 +359,11 @@ export async function processComplianceBatch(
       options.onFileUpdate(working.id, {
         status: "failed",
         error: message,
-        preparedImageFile: working.preparedImageFile,
+        fileName: batchFileDisplayName(working),
         documentId: working.documentId,
+        ...(lazyFetch
+          ? { file: undefined, preparedImageFile: undefined }
+          : { preparedImageFile: working.preparedImageFile }),
       });
       failed += 1;
     }
@@ -330,7 +373,7 @@ export async function processComplianceBatch(
       total,
       completed,
       currentIndex,
-      currentFileName: item.file.name,
+      currentFileName: batchFileDisplayName(item),
     });
   }
 

@@ -66,6 +66,7 @@ import {
   countFailedBatchFiles,
   canRemoveBatchFile,
   createComplianceBatchFileId,
+  batchFileDisplayName,
   formatBatchProgressLabel,
   processComplianceBatch,
   type ComplianceBatchAnalysisResult,
@@ -1611,6 +1612,7 @@ export function AIComplianceAnalyzer() {
         const canPersist = Boolean(selectedProjectId && user);
 
         let batchFiles: UploadedFile[] = [];
+        let lazySheetDocsById: Map<string, ProjectDocument> | null = null;
         if (onlyFailed) {
           batchFiles = failedFiles;
         } else if (canPersist && included.length > 0) {
@@ -1628,34 +1630,24 @@ export function AIComplianceAnalyzer() {
             });
           }
 
-          batchFiles = [];
-          for (const sheet of included) {
+          lazySheetDocsById = docsById;
+          batchFiles = included.map((sheet) => {
             const imageDoc =
               (sheet.image_document_id && docsById.get(sheet.image_document_id)) ||
-              docsById.get(sheet.source_document_id);
-            if (!imageDoc) {
-              throw new Error(`Missing image for ${sheet.file_name ?? "drawing"} p.${sheet.page_number}`);
-            }
-            const url = await getDownloadUrl(imageDoc);
-            if (!url) throw new Error(`Could not download ${imageDoc.file_name}`);
-            const response = await fetch(url);
-            const blob = await response.blob();
-            const imageFile = new File([blob], imageDoc.file_name, {
-              type: imageDoc.file_type || blob.type || "image/png",
-            });
-            batchFiles.push({
+              (sheet.source_document_id ? docsById.get(sheet.source_document_id) : undefined);
+            const fileName = sheet.file_name ?? imageDoc?.file_name ?? `Sheet p.${sheet.page_number}`;
+            return {
               id: sheet.id,
-              file: imageFile,
+              fileName,
               preview: null,
               discipline: coerceDocumentDiscipline(sheet.discipline),
-              status: "pending",
-              documentId: imageDoc.id,
-              preparedImageFile: imageFile,
+              status: "pending" as const,
+              documentId: imageDoc?.id,
               sheetId: sheet.id,
               pageNumber: sheet.page_number,
               sourceDocumentId: sheet.source_document_id,
-            });
-          }
+            };
+          });
         } else {
           // No project: expand PDFs in memory so we still do not drop pages 2+.
           const expanded: UploadedFile[] = [];
@@ -1714,9 +1706,32 @@ export function AIComplianceAnalyzer() {
         setBatchProgress({ total: batchFiles.length, completed: 0, currentIndex: 1 });
         setFiles(batchFiles);
 
+        const fetchSheetImage =
+          lazySheetDocsById && canPersist
+            ? async (item: ComplianceBatchFile) => {
+                const imageDoc =
+                  (item.documentId && lazySheetDocsById!.get(item.documentId)) ||
+                  (item.sourceDocumentId ? lazySheetDocsById!.get(item.sourceDocumentId) : undefined);
+                if (!imageDoc) {
+                  throw new Error(
+                    `Missing image for ${item.fileName ?? "drawing"}${item.pageNumber ? ` p.${item.pageNumber}` : ""}`,
+                  );
+                }
+                const url = await getDownloadUrl(imageDoc);
+                if (!url) throw new Error(`Could not download ${imageDoc.file_name}`);
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const imageFile = new File([blob], imageDoc.file_name, {
+                  type: imageDoc.file_type || blob.type || "image/png",
+                });
+                return { file: imageFile, preparedImageFile: imageFile };
+              }
+            : undefined;
+
         const { succeeded, failed } = await processComplianceBatch({
           files: batchFiles,
-          onlyFailed: false,
+          onlyFailed,
+          fetchSheetImage,
           analysisMode,
           hasLocalAmendments,
           jurisdiction,
@@ -2006,7 +2021,7 @@ export function AIComplianceAnalyzer() {
       ...completedBatchFiles.map((f) => ({
         id: f.id,
         documentId: f.documentId ?? null,
-        fileName: f.file.name,
+        fileName: batchFileDisplayName(f),
         ibcResult: f.ibcResult ?? null,
         localResult: f.localResult ?? null,
         failed: false as boolean,
@@ -2014,7 +2029,7 @@ export function AIComplianceAnalyzer() {
       ...failedBatchFiles.map((f) => ({
         id: f.id,
         documentId: f.documentId ?? null,
-        fileName: f.file.name,
+        fileName: batchFileDisplayName(f),
         ibcResult: f.ibcResult ?? null,
         localResult: f.localResult ?? null,
         failed: true as boolean,
@@ -2083,13 +2098,18 @@ export function AIComplianceAnalyzer() {
     for (const f of completedBatchFiles) {
       const key = f.documentId ?? f.id;
       if (seen.has(key)) continue;
-      opts.push({ id: key, label: f.file.name });
+      opts.push({ id: key, label: batchFileDisplayName(f) });
       seen.add(key);
     }
     return opts;
   }, [documentsWithAnalysis, completedBatchFiles]);
 
   const [fileResultTabs, setFileResultTabs] = useState<Record<string, "ibc" | "local">>({});
+  const [expandedResultGroups, setExpandedResultGroups] = useState<Record<string, boolean>>({});
+
+  const toggleResultGroupExpanded = (groupId: string) => {
+    setExpandedResultGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
 
   const renderFileResultGroup = (group: {
     id: string;
@@ -2120,9 +2140,30 @@ export function AIComplianceAnalyzer() {
 
     const groupIssues = groupResult.issues ?? [];
     const resolvedInGroup = groupIssues.filter((issue) => responses[issueResponseKey(group.id, issue.id)]).length;
+    const isExpanded = expandedResultGroups[group.id] ?? false;
 
     return (
-      <div key={group.id} className="space-y-6">
+      <div key={group.id} className="space-y-4">
+        <button
+          type="button"
+          onClick={() => toggleResultGroupExpanded(group.id)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <FileIcon className="h-4 w-4 shrink-0 text-teal" />
+            <span className="truncate text-sm font-medium text-foreground">{group.fileName}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+            <span>{groupResult.summary.totalIssues ?? 0} issues</span>
+            <span className={`font-semibold ${getScoreColor(groupResult.summary.overallScore ?? 0)}`}>
+              {groupResult.summary.overallScore ?? 0}%
+            </span>
+            <span>{isExpanded ? "Hide" : "Show"}</span>
+          </div>
+        </button>
+
+        {isExpanded ? (
+          <div className="space-y-6">
         {group.ibcResult && group.localResult && (
           <Tabs
             value={tab}
@@ -2209,6 +2250,8 @@ export function AIComplianceAnalyzer() {
         )}
 
         {renderIssuesList(group.id, groupResult, group.fileName)}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -2287,8 +2330,9 @@ export function AIComplianceAnalyzer() {
         projectName:
           selectedProjectName ||
           singleFileName ||
-          activeResultFile?.file.name?.replace(/\.[^/.]+$/, "") ||
-          activeLoadedExisting?.fileName?.replace(/\.[^/.]+$/, "") ||
+          (activeResultFile
+            ? batchFileDisplayName(activeResultFile).replace(/\.[^/.]+$/, "")
+            : activeLoadedExisting?.fileName?.replace(/\.[^/.]+$/, "")) ||
           "Compliance Analysis",
         filesAnalyzed: exportAggregated.filesAnalyzed,
         fileSections: exportAggregated.files.map((file) => ({
@@ -3000,8 +3044,8 @@ export function AIComplianceAnalyzer() {
                 }
                 pendingFiles={files.map((f) => ({
                   id: f.id,
-                  name: f.file.name,
-                  sizeLabel: formatFileSize(f.file.size),
+                  name: batchFileDisplayName(f),
+                  sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
                   preview: f.preview,
                   discipline: f.discipline,
                   status: f.status,

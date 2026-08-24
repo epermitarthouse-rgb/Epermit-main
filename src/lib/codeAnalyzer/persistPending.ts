@@ -79,7 +79,7 @@ export async function persistPendingAnalyzerSources(params: {
     sourceId: string;
     fileName: string;
     discipline: DocumentDiscipline;
-    pages: Array<{ pageNumber: number; imageFile: File; imageDocId?: string }>;
+    pages: Array<{ pageNumber: number; imageFile: File | null; imageDocId?: string }>;
   }> = [];
 
   if (totalSources > 0) {
@@ -185,7 +185,7 @@ export async function persistPendingAnalyzerSources(params: {
         const pageIsDistinctImage = isPdfFile({ name: source.fileName }) || page.pageNumber > 1;
         if (pageIsDistinctImage && isPdfFile({ name: source.fileName })) {
           const imageDoc = await params.uploadDocument({
-            file: page.imageFile,
+            file: page.imageFile!,
             document_type: "permit_drawing",
             description: `AI Code Analyzer page ${page.pageNumber}`,
             parent_document_id: source.sourceId,
@@ -194,6 +194,7 @@ export async function persistPendingAnalyzerSources(params: {
             throw new Error(`Failed to upload page ${page.pageNumber} of ${source.fileName}`);
           }
           imageDocumentId = imageDoc.id;
+          page.imageFile = null;
         }
 
         const sheet = await insertSheet({
