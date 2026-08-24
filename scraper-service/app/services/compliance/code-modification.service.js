@@ -681,11 +681,22 @@ const PROMPT_CONSTRAINTS = `CRITICAL RULES:
 - Separate applicant claims from verified drawing evidence.
 - Return schema JSON only.`;
 
-function buildFormExtractPrompt(pageTexts) {
+function formatStaffGuidanceBlock(analysisInstructions) {
+  const text = typeof analysisInstructions === "string" ? analysisInstructions.trim() : "";
+  if (!text) return "";
+  return `
+
+STAFF GUIDANCE / REVIEW FOCUS (NOT EVIDENCE):
+The following notes were provided by staff to guide this review. They are NOT submitted evidence and must NOT be treated as proof of compliance or as facts about the drawing set. Use them only to prioritize or focus your review:
+${text}`;
+}
+
+function buildFormExtractPrompt(pageTexts, analysisInstructions = null) {
   return {
     systemPrompt: `You extract fields from a DC Department of Buildings Application for Modification of Construction Code Requirements.
 
 ${PROMPT_CONSTRAINTS}
+${formatStaffGuidanceBlock(analysisInstructions)}
 
 Ignore FOR OFFICIAL USE ONLY / DOB / DOEE reviewer sections and blank reviewer fields. Those are not applicant answers.
 Return each distinct compensating measure as its own proposedMeasures entry. Preserve sourcePageNumber when visible.
@@ -706,11 +717,12 @@ Respond with JSON:
   };
 }
 
-function buildSheetReviewPrompt(extracted, sheet) {
+function buildSheetReviewPrompt(extracted, sheet, analysisInstructions = null) {
   return {
     systemPrompt: `You review a DC Construction Code Modification request against ONE submitted drawing sheet.
 
 ${PROMPT_CONSTRAINTS}
+${formatStaffGuidanceBlock(analysisInstructions)}
 
 This is an evidence review, not a DOB approval. Do not invent missing systems.
 The Code Modification application states applicant claims only. Never treat the application or its pages as drawing evidence.
@@ -832,12 +844,15 @@ function normalizeExtracted(raw) {
   return normalized;
 }
 
-async function optionalLlmExtract(openai, pages, formImages, logError) {
+async function optionalLlmExtract(openai, pages, formImages, logError, analysisInstructions = null) {
   if (!openai) return null;
   const applicant = applicantPagesFrom(pages);
   const pageTexts = applicant.map((p) => `--- page ${p.pageNumber} ---\n${p.text}`).join("\n\n");
   if (!pageTexts && !(formImages && formImages.length)) return null;
-  const { systemPrompt, userPrompt } = buildFormExtractPrompt(pageTexts || "(scanned form images attached)");
+  const { systemPrompt, userPrompt } = buildFormExtractPrompt(
+    pageTexts || "(scanned form images attached)",
+    analysisInstructions,
+  );
   const content = [{ type: "text", text: userPrompt }];
   for (const image of formImages || []) {
     if (!image.imageBase64) continue;
@@ -952,8 +967,8 @@ function mergeFindings(existing, incoming) {
   return Array.from(byMeasure.values());
 }
 
-async function reviewSheetWithVision(openai, extracted, sheet, logError) {
-  const { systemPrompt, userPrompt } = buildSheetReviewPrompt(extracted, sheet);
+async function reviewSheetWithVision(openai, extracted, sheet, logError, analysisInstructions = null) {
+  const { systemPrompt, userPrompt } = buildSheetReviewPrompt(extracted, sheet, analysisInstructions);
   const content = [{ type: "text", text: userPrompt }];
   if (sheet.imageBase64) {
     content.push({
@@ -1022,6 +1037,7 @@ async function analyzeCodeModification(params) {
     sheets = [],
     formDocument,
     excludedEvidenceDocumentIds = [],
+    analysisInstructions = null,
     logInfo = console.log,
     logError = console.error,
   } = params;
@@ -1043,7 +1059,7 @@ async function analyzeCodeModification(params) {
   const sparse = pagesAreSparse(pages) || !extracted.requestedModification;
   if (sparse && openai) {
     logInfo("[analyze-code-modification] Heuristic extract sparse; trying optional LLM extract");
-    const llmExtracted = await optionalLlmExtract(openai, pages, formImages, logError);
+    const llmExtracted = await optionalLlmExtract(openai, pages, formImages, logError, analysisInstructions);
     if (llmExtracted) {
       extracted = mergeExtractedRequests(extracted, llmExtracted);
     }
@@ -1064,7 +1080,13 @@ async function analyzeCodeModification(params) {
   if (openai && reviewable.length > 0) {
     for (const sheet of reviewable) {
       try {
-        const sheetFindings = await reviewSheetWithVision(openai, extracted, sheet, logError);
+        const sheetFindings = await reviewSheetWithVision(
+          openai,
+          extracted,
+          sheet,
+          logError,
+          analysisInstructions,
+        );
         findings = mergeFindings(findings, sheetFindings);
       } catch (err) {
         const label = sheet.fileName || sheet.sheetLabel || `page ${sheet.pageNumber ?? "?"}`;
@@ -1123,6 +1145,7 @@ module.exports = {
   computeOverallStatus,
   buildFormExtractPrompt,
   buildSheetReviewPrompt,
+  formatStaffGuidanceBlock,
   extractPdfPageTexts,
   analyzeCodeModification,
   isDcJurisdiction,

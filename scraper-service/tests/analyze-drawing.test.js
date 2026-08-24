@@ -6,6 +6,7 @@ const {
   REFUSAL_USER_MESSAGE,
   EMPTY_USER_MESSAGE,
   buildPrompts,
+  formatStaffGuidanceBlock,
   extractChoiceMeta,
   isEmptyResponse,
   formatSingleResult,
@@ -106,6 +107,24 @@ describe("analyze-drawing.service", () => {
     assert.match(ibc.systemPrompt, /"overallScore": 100/);
     assert.doesNotMatch(ibc.systemPrompt, /"overallScore": 85/);
     assert.match(ibc.systemPrompt, /overallScore MUST be 100/i);
+  });
+
+  it("buildPrompts injects staff guidance as non-evidence focus", () => {
+    const withGuidance = buildPrompts({
+      codeType: "ibc",
+      codeYear: "2021",
+      analysisInstructions: "Prioritize stair egress.",
+    });
+    assert.match(withGuidance.systemPrompt, /STAFF GUIDANCE \/ REVIEW FOCUS \(NOT EVIDENCE\)/i);
+    assert.match(withGuidance.systemPrompt, /Prioritize stair egress/);
+    assert.match(withGuidance.systemPrompt, /NOT submitted evidence/i);
+    const without = buildPrompts({ codeType: "ibc", codeYear: "2021" });
+    assert.doesNotMatch(without.systemPrompt, /STAFF GUIDANCE/i);
+  });
+
+  it("formatStaffGuidanceBlock returns empty for blank input", () => {
+    assert.equal(formatStaffGuidanceBlock(""), "");
+    assert.equal(formatStaffGuidanceBlock("   "), "");
   });
 
   it("returns success for normal content response", async () => {

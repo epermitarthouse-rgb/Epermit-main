@@ -108,6 +108,7 @@ export async function createAnalyzerRun(params: {
   sourceFingerprint: string;
   analysisType?: string;
   formDocumentId?: string | null;
+  analysisInstructions?: string | null;
 }): Promise<CodeAnalyzerRun> {
   const analysisType = params.analysisType || ANALYSIS_TYPE_STANDARD;
   await supersedeOpenRuns(params.projectId, analysisType);
@@ -124,6 +125,10 @@ export async function createAnalyzerRun(params: {
   };
   if (params.formDocumentId) {
     insert.form_document_id = params.formDocumentId;
+  }
+  const instructions = params.analysisInstructions?.trim();
+  if (instructions) {
+    insert.analysis_instructions = instructions;
   }
   const { data, error } = await supabase
     .from("code_analyzer_runs")

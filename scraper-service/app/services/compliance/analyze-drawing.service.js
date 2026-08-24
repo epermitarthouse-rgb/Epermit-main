@@ -125,12 +125,23 @@ function getJurisdictionCitation(jurisdictionKey) {
   return "IBC";
 }
 
+function formatStaffGuidanceBlock(analysisInstructions) {
+  const text = typeof analysisInstructions === "string" ? analysisInstructions.trim() : "";
+  if (!text) return "";
+  return `
+
+STAFF GUIDANCE / REVIEW FOCUS (NOT EVIDENCE):
+The following notes were provided by staff to guide this review. They are NOT submitted evidence and must NOT be treated as proof of compliance or as facts about the drawing set. Use them only to prioritize or focus your review:
+${text}`;
+}
+
 /**
  * @param {{
  *   jurisdiction?: string | null;
  *   projectType?: string;
  *   codeYear?: string;
  *   codeType?: string;
+ *   analysisInstructions?: string | null;
  * }} params
  */
 function buildPrompts(params) {
@@ -139,6 +150,7 @@ function buildPrompts(params) {
     projectType = "Commercial",
     codeYear = "2021",
     codeType = "ibc",
+    analysisInstructions = null,
   } = params;
   const jurisdictionKey = normalizeJurisdictionKey(jurisdiction);
   const jurisdictionContext = JURISDICTION_AMENDMENTS[jurisdictionKey] || "";
@@ -208,6 +220,7 @@ Consider jurisdiction: ${jurisdiction || "General IBC"} and project type: ${proj
 Use code year: ${codeYear}.
 Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
 Scoring: overallScore is 0-100. If issues is an empty array, overallScore MUST be 100. Do not invent a partial score when there are no findings.
+${formatStaffGuidanceBlock(analysisInstructions)}
 
 You MUST respond with a valid JSON object in exactly this format:
 ${jsonFormat}`;
@@ -441,6 +454,7 @@ function formatBothResult(analysisData, codeYear) {
  *   projectType?: string;
  *   codeYear?: string;
  *   codeType?: string;
+ *   analysisInstructions?: string | null;
  *   logInfo?: (msg: string, extra?: string) => void;
  *   logError?: (msg: string, extra?: string) => void;
  *   downscaleFn?: typeof downscaleImageBase64;
@@ -455,6 +469,7 @@ async function analyzeDrawingWithOpenAI(params) {
     projectType,
     codeYear = "2021",
     codeType = "ibc",
+    analysisInstructions = null,
     logInfo = console.log,
     logError = console.error,
     downscaleFn = downscaleImageBase64,
@@ -465,6 +480,7 @@ async function analyzeDrawingWithOpenAI(params) {
     projectType,
     codeYear,
     codeType,
+    analysisInstructions,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
@@ -559,6 +575,7 @@ module.exports = {
   EMPTY_USER_MESSAGE,
   normalizeJurisdictionKey,
   buildPrompts,
+  formatStaffGuidanceBlock,
   extractChoiceMeta,
   isEmptyResponse,
   downscaleImageBase64,

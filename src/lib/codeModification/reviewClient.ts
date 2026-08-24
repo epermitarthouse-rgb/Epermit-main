@@ -30,6 +30,7 @@ export interface CodeModificationReviewRequest {
   jurisdiction?: string | null;
   projectType?: string;
   codeYear?: string;
+  analysisInstructions?: string | null;
 }
 
 export interface CodeModificationReviewResult {
@@ -83,6 +84,7 @@ export async function requestCodeModificationReview(
       jurisdiction: params.jurisdiction,
       projectType: params.projectType,
       codeYear: params.codeYear,
+      analysisInstructions: params.analysisInstructions?.trim() || undefined,
     }),
   });
 
