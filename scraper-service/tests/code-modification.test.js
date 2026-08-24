@@ -22,6 +22,7 @@ const {
   reconcileExtractionWarnings,
   splitMeasureDescription,
   normalizeProposedMeasures,
+  filterDrawingEvidenceSheetsForReview,
   emptyExtractedRequest,
 } = require("../app/services/compliance/code-modification.service.js");
 
@@ -420,6 +421,173 @@ describe("analyzeCodeModification scanned-form regression", () => {
         /No drawing sheets were provided for evidence review/.test(w),
       ),
       true,
+    );
+  });
+});
+
+const FORM_1513_FILE = "1513 P St NW_Code-Modification-Form_10.01.24.pdf";
+
+describe("drawing evidence source exclusion", () => {
+  it("filters application sheets before vision review using excluded document ids", () => {
+    const filtered = filterDrawingEvidenceSheetsForReview(
+      [
+        {
+          id: "form-sheet-1",
+          documentId: "form-drawing-dup",
+          fileName: FORM_1513_FILE,
+          pageNumber: 1,
+          imageBase64: "aaaa",
+        },
+        {
+          id: "real-sheet",
+          documentId: "a101-doc",
+          fileName: "A-101.pdf",
+          pageNumber: 1,
+          imageBase64: "bbbb",
+        },
+      ],
+      { id: "form-app", fileName: FORM_1513_FILE },
+      ["form-app", "form-drawing-dup"],
+    );
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].id, "real-sheet");
+  });
+
+  it("reproduces the 1513 form-only case without verifying applicant claims from the application", async () => {
+    const measures = normalizeProposedMeasures([
+      {
+        id: "measure-1",
+        description: COMBINED_MEASURE_PARAGRAPH,
+        sourcePageNumber: 2,
+      },
+    ]);
+
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async (args) => {
+            const blob = JSON.stringify(args);
+            if (blob.includes("Review only this submitted sheet")) {
+              return {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        findings: measures.map((measure, index) => ({
+                          id: `verified-${index + 1}`,
+                          measureId: measure.id,
+                          measure: measure.description,
+                          status: "verified",
+                          source: {
+                            sheetId: "form-sheet-1",
+                            fileName: FORM_1513_FILE,
+                            pageNumber: 1,
+                            excerpt: measure.description,
+                          },
+                          note: "Applicant claim visible on application page 1.",
+                        })),
+                      }),
+                    },
+                  },
+                ],
+              };
+            }
+            return {
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      projectAddress: "1513 P St NW, Washington DC, 20005",
+                      requestedModification:
+                        "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.",
+                      citedSections: [
+                        {
+                          citation: "2017 DCMR 12A Chapter 10 Section 1006",
+                          year: null,
+                          source: "applicant",
+                          label: "Applicant-cited code",
+                        },
+                      ],
+                      proposedMeasures: measures,
+                      compliesWithIntent: true,
+                      floodHazardApplicable: false,
+                      extractionWarnings: [],
+                    }),
+                  },
+                },
+              ],
+            };
+          }),
+        },
+      },
+    };
+
+    const outcome = await analyzeCodeModification({
+      openai,
+      formPages: SCANNED_SPARSE_PAGES,
+      formDocument: { id: "form-app-id", fileName: FORM_1513_FILE },
+      excludedEvidenceDocumentIds: ["form-app-id", "form-drawing-dup-id"],
+      sheets: [
+        {
+          id: "form-sheet-1",
+          documentId: "form-drawing-dup-id",
+          fileName: FORM_1513_FILE,
+          pageNumber: 1,
+          imageBase64: "aaaa",
+        },
+        {
+          id: "form-sheet-4",
+          documentId: "form-drawing-dup-id",
+          fileName: FORM_1513_FILE,
+          pageNumber: 4,
+          imageBase64: "bbbb",
+        },
+      ],
+    });
+
+    assert.equal(outcome.result.extracted_request.proposedMeasures.length >= 5, true);
+    assert.equal(outcome.result.evidence.every((finding) => finding.status === "not_found"), true);
+    assert.equal(
+      outcome.result.evidence.some((finding) => finding.source?.fileName === FORM_1513_FILE),
+      false,
+    );
+    assert.equal(outcome.result.overall_status, "material_evidence_missing");
+    assert.equal(
+      outcome.result.extraction_warnings.some((w) =>
+        /application pages were excluded from drawing evidence review/.test(w),
+      ),
+      true,
+    );
+    assert.equal(
+      outcome.result.extraction_warnings.some((w) =>
+        /No drawing sheets were provided for evidence review/.test(w),
+      ),
+      true,
+    );
+    assert.equal(openai.chat.completions.create.mock.calls.length, 1);
+  });
+});
+
+describe("splitMeasureDescription embedded include clauses", () => {
+  it("splits standpipe from an incorporate / PDRM clause", () => {
+    const split = splitMeasureDescription(
+      "Incorporate DOB recommendations from June 9, 2026 PDRM include a standpipe",
+    );
+    assert.equal(split.length, 2);
+    assert.match(split[0], /Incorporate DOB recommendations/i);
+    assert.match(split[1], /standpipe/i);
+  });
+
+  it("keeps occupant load and standpipe as separate measures in the full 1513 paragraph", () => {
+    const split = splitMeasureDescription(COMBINED_MEASURE_PARAGRAPH);
+    const joined = split.join(" | ");
+    assert.match(joined, /occupant load below 49/i);
+    assert.match(joined, /standpipe/i);
+    assert.equal(split.some((part) => /occupant load below 49/i.test(part)), true);
+    assert.equal(split.some((part) => /standpipe/i.test(part)), true);
+    assert.equal(
+      split.some((part) => /occupant load below 49/i.test(part) && /standpipe/i.test(part)),
+      false,
     );
   });
 });

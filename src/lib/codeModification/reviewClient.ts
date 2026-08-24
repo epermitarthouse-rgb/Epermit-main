@@ -25,6 +25,7 @@ export interface CodeModificationReviewRequest {
   formImages?: { pageNumber: number; imageBase64: string; imageType?: string }[];
   sheets?: CodeModificationSheetInput[];
   formDocument?: { id: string; fileName?: string };
+  excludedEvidenceDocumentIds?: string[];
   jurisdiction?: string | null;
   projectType?: string;
   codeYear?: string;
@@ -76,6 +77,7 @@ export async function requestCodeModificationReview(
       formImages: params.formImages,
       sheets: params.sheets ?? [],
       formDocument: params.formDocument,
+      excludedEvidenceDocumentIds: params.excludedEvidenceDocumentIds ?? [],
       jurisdiction: params.jurisdiction,
       projectType: params.projectType,
       codeYear: params.codeYear,
