@@ -4,6 +4,7 @@ import {
   actualLabelsFromSheets,
   compareIndexCompleteness,
   isLikelyIndexSheet,
+  isCredibleDrawingSheetNumber,
   normalizeSheetNumber,
   parseIndexEntriesFromText,
   runIndexCompletenessPrescreen,
@@ -210,6 +211,119 @@ describe("inferSheetNumberFromLabel", () => {
   it("ignores project/spec number fragments such as #24-070", () => {
     assert.equal(inferSheetNumberFromLabel("SPEC #24-070-page18.png"), null);
     assert.equal(inferSheetNumberFromLabel("SPEC #24-070.pdf"), null);
+    assert.equal(inferSheetNumberFromLabel("Project 24-070.pdf"), null);
+    assert.equal(inferSheetNumberFromLabel("24-070.pdf"), null);
+  });
+});
+
+describe("isCredibleDrawingSheetNumber", () => {
+  it("accepts discipline and numeric drawing sheet tokens", () => {
+    assert.equal(isCredibleDrawingSheetNumber("A001"), true);
+    assert.equal(isCredibleDrawingSheetNumber("S003"), true);
+    assert.equal(isCredibleDrawingSheetNumber("G000"), true);
+    assert.equal(isCredibleDrawingSheetNumber("001"), true);
+  });
+
+  it("rejects fabricated filename identities", () => {
+    assert.equal(isCredibleDrawingSheetNumber("SPEC#24070"), false);
+    assert.equal(isCredibleDrawingSheetNumber(""), false);
+  });
+});
+
+describe("actualLabelsFromSheets — non-drawing documents", () => {
+  it("marks SPEC #24-070.pdf pages as non-comparable", () => {
+    const specPages = Array.from({ length: 20 }, (_, i) =>
+      sheet({
+        id: `spec-${i + 1}`,
+        file_name: "SPEC #24-070.pdf",
+        page_number: i + 1,
+        source_document_id: "spec-doc",
+      }),
+    );
+    const labels = actualLabelsFromSheets(specPages);
+    assert.equal(labels.length, 20);
+    assert.ok(labels.every((l) => l.comparable === false));
+    assert.ok(labels.every((l) => l.sheetNumber === ""));
+    assert.ok(labels.every((l) => l.rawLabel === "SPEC #24-070"));
+  });
+
+  it("infers credible sheet numbers from drawing filenames", () => {
+    const labels = actualLabelsFromSheets([
+      sheet({ id: "a1", file_name: "A001-SITE PLAN.pdf" }),
+      sheet({ id: "n1", file_name: "001-COVER SHEET.pdf" }),
+      sheet({ id: "g1", file_name: "G000 Drawing Index.pdf", sheet_label: "G000" }),
+    ]);
+    assert.deepEqual(
+      labels.map((l) => ({ num: l.sheetNumber, comparable: l.comparable })),
+      [
+        { num: "A001", comparable: true },
+        { num: "001", comparable: true },
+        { num: "G000", comparable: true },
+      ],
+    );
+  });
+});
+
+describe("runIndexCompletenessPrescreen — SPEC extras", () => {
+  it("does not report extras for SPEC #24-070.pdf pages", () => {
+    const indexText = `DRAWING INDEX
+G000  Cover
+001  Cover Sheet
+002  Site Plan
+003  Code Summary
+A001  Floor Plan L1
+A002  Floor Plan L2
+A003  Floor Plan L3
+A004  Floor Plan L4
+A005  Floor Plan L5
+A006  Floor Plan L6
+A007  Floor Plan L7
+A008  Floor Plan L8
+A009  Floor Plan L9
+S001  Sections
+S002  Sections
+S003  Sections`;
+
+    const specPages = Array.from({ length: 20 }, (_, i) =>
+      sheet({
+        id: `spec-${i + 1}`,
+        file_name: "SPEC #24-070.pdf",
+        page_number: i + 1,
+        source_document_id: "spec-doc",
+      }),
+    );
+
+    const sheets = [
+      sheet({
+        id: "idx",
+        file_name: "Riverside_MOCK_Drawing_Index_UAT-page1.png",
+        source_document_id: "d-index",
+      }),
+      sheet({ id: "s001", file_name: "001-COVER SHEET.pdf", sheet_label: "001", source_document_id: "d1" }),
+      sheet({ id: "s002", file_name: "002-SITE PLAN.pdf", sheet_label: "002", source_document_id: "d2" }),
+      sheet({ id: "s003", file_name: "003-CODE SUMMARY.pdf", sheet_label: "003", source_document_id: "d3" }),
+      ...["A001", "A002", "A003", "A004", "A005", "A006", "A007", "A008"].map((n, i) =>
+        sheet({
+          id: `a${i}`,
+          file_name: `${n}.pdf`,
+          sheet_label: n,
+          source_document_id: `da${i}`,
+        }),
+      ),
+      sheet({ id: "s1", file_name: "S001.pdf", sheet_label: "S001", source_document_id: "ds1" }),
+      sheet({ id: "s2", file_name: "S002.pdf", sheet_label: "S002", source_document_id: "ds2" }),
+      ...specPages,
+    ];
+
+    const result = runIndexCompletenessPrescreen(sheets, {
+      pageTextBySheetId: { idx: indexText },
+    });
+    assert.deepEqual(
+      result.missing.map((m) => m.sheetNumber).sort(),
+      ["A009", "S003"],
+    );
+    assert.equal(result.extra.length, 0);
+    assert.equal(result.duplicates.length, 0);
   });
 });
 

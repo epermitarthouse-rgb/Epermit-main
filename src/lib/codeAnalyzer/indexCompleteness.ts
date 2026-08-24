@@ -46,6 +46,8 @@ export interface ActualSheetLabel {
   title?: string | null;
   sourceDocumentId: string;
   pageNumber: number;
+  /** When false, excluded from missing/extra/duplicate comparison. */
+  comparable?: boolean;
 }
 
 /** Normalize sheet numbers so A-101, A101, and A 101 compare equal. */
@@ -94,13 +96,24 @@ function indexCoverEntryFromText(text: string | null | undefined): IndexSheetEnt
   return null;
 }
 
-/** Remove project/spec number tokens (e.g. SPEC #24-070) before sheet-number inference. */
+/** Remove project/spec number tokens (e.g. SPEC #24-070, Project 24-070) before sheet-number inference. */
 function stripProjectSpecNumberFragments(label: string): string {
   return label
     .replace(/#\d{1,4}-\d{2,4}\b/gi, " ")
     .replace(/\b(?:SPEC|PROJECT|JOB(?:\s+NO\.?)?)\s*#?\d{1,4}-\d{2,4}\b/gi, " ")
+    .replace(/\b\d{1,4}-\d{2,4}\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** True when a normalized token is a drawing sheet number, not a project/spec id fragment. */
+export function isCredibleDrawingSheetNumber(normalized: string | null | undefined): boolean {
+  if (typeof normalized !== "string" || !normalized.trim()) return false;
+  const token = normalized.trim().toUpperCase();
+  if (/^[A-Z]{1,3}\d{1,4}(?:\.\d+)?$/.test(token)) return true;
+  if (/^G\d{2,4}$/.test(token)) return true;
+  if (/^\d{2,4}$/.test(token)) return true;
+  return false;
 }
 
 /** Detect whether a sheet is likely the drawing index. */
@@ -239,26 +252,34 @@ export function actualLabelsFromSheets(
     const indexCoverEntry =
       isIndexSheet && pageText ? indexCoverEntryFromText(pageText) : null;
 
+    const inferredFromFile = inferSheetNumberFromLabel(sheet.file_name);
+    const inferredFromLabel = sheet.sheet_label?.trim()
+      ? normalizeSheetNumber(sheet.sheet_label)
+      : null;
+    const indexCoverNumber = indexCoverEntry?.sheetNumber ?? null;
+    const sheetNumberCandidate =
+      inferredFromLabel ||
+      indexCoverNumber ||
+      (inferredFromFile ? normalizeSheetNumber(inferredFromFile) : null);
+    const comparable = Boolean(
+      sheetNumberCandidate && isCredibleDrawingSheetNumber(sheetNumberCandidate),
+    );
+
     const rawLabel =
       sheet.sheet_label?.trim() ||
       indexCoverEntry?.rawLabel ||
-      inferSheetNumberFromLabel(sheet.file_name) ||
+      inferredFromFile ||
       sheet.file_name?.replace(/\.[^.]+$/, "").trim() ||
       `page-${sheet.page_number}`;
-    const sheetNumber =
-      normalizeSheetNumber(
-        sheet.sheet_label ||
-          indexCoverEntry?.sheetNumber ||
-          inferSheetNumberFromLabel(rawLabel) ||
-          rawLabel,
-      ) || `${sheet.source_document_id}:${sheet.page_number}`;
+
     return {
       sheetId: sheet.id,
-      sheetNumber,
+      sheetNumber: comparable ? sheetNumberCandidate! : "",
       rawLabel,
       title: pageText?.trim() || null,
       sourceDocumentId: sheet.source_document_id,
       pageNumber: sheet.page_number,
+      comparable,
     };
   });
 }
@@ -308,7 +329,9 @@ export function compareIndexCompleteness(
     indexSheetId != null ? actual.find((a) => a.sheetId === indexSheetId) : undefined;
   const indexSheetNumber = indexSheetRow?.sheetNumber ?? null;
 
-  const actualComparable = actual.filter((a) => a.sheetId !== indexSheetId);
+  const actualComparable = actual.filter(
+    (a) => a.sheetId !== indexSheetId && a.comparable !== false && a.sheetNumber,
+  );
   const expectedMap = new Map(expected.map((e) => [e.sheetNumber, e]));
   const actualByNumber = new Map<string, ActualSheetLabel[]>();
 
