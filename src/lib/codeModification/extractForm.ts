@@ -40,9 +40,6 @@ export const HEURISTIC_FIELD_WARNINGS = {
   proposedMeasures: "No proposed alternative measures were found.",
 } as const;
 
-const MEASURE_ACTION_VERBS =
-  "Provide|Maintain|Incorporate|Install|Ensure|Limit|Keep|Add|Include|Equip|Supply|Furnish|Construct|Upgrade|Replace|Extend|Reduce|Restrict|Monitor|Signal|Mark|Label|Post";
-
 export function classifyPageRole(page: Pick<FormPage, "text">): FormPageRole {
   const text = page.text ?? "";
   const hasReviewer = REVIEWER_MARKERS.some((re) => re.test(text));
@@ -176,6 +173,51 @@ function extractNarrative(text: string): string | null {
   return usableFieldValue(match?.[1] ?? null);
 }
 
+const MEASURE_ACTION_VERBS =
+  "Provide|Maintain|Incorporate|Incorporated|Install|Ensure|Limit|Keep|Add|Include|Equip|Supply|Furnish|Construct|Upgrade|Replace|Extend|Reduce|Restrict|Monitor|Signal|Mark|Label|Post";
+
+const MEASURE_INTRO_MARKERS =
+  /(?:in lieu of|following|proposed|compensating|alternative measures|life safety measures|shall provide|will provide)\b/i;
+
+function stripMeasureIntroBoilerplate(clause: string): string {
+  let value = clause.replace(/\s+/g, " ").trim();
+  if (!value) return value;
+
+  const actionStart = value.match(new RegExp(`\\b(${MEASURE_ACTION_VERBS})\\b`, "i"));
+  if (!actionStart || actionStart.index == null || actionStart.index === 0) {
+    return value;
+  }
+
+  const prefix = value.slice(0, actionStart.index);
+  if (MEASURE_INTRO_MARKERS.test(prefix) || /:\s*$/.test(prefix.trim())) {
+    value = value.slice(actionStart.index).trim();
+  }
+  return value;
+}
+
+function splitDetachedTrailingClause(clause: string): string[] {
+  const value = clause.replace(/\s+/g, " ").trim();
+  const match = value.match(
+    new RegExp(`^(.{10,}?)\\.\\s+((?:${MEASURE_ACTION_VERBS})\\b[\\s\\S]+)$`, "i"),
+  );
+  if (!match) return [value];
+  const head = stripMeasureIntroBoilerplate(match[1]);
+  const tail = stripMeasureIntroBoilerplate(match[2]);
+  if (head && tail && head.toLowerCase() !== tail.toLowerCase()) {
+    return [head, tail];
+  }
+  return [value];
+}
+
+function finalizeMeasureClause(clause: string): string[] {
+  const parts: string[] = [];
+  for (const segment of splitDetachedTrailingClause(clause)) {
+    const cleaned = normalizeMeasureClause(stripMeasureIntroBoilerplate(segment));
+    if (cleaned.length >= 10) parts.push(cleaned);
+  }
+  return parts;
+}
+
 function normalizeMeasureClause(clause: string): string {
   let value = clause.replace(/^[,.\s]+/, "").replace(/\s+/g, " ").trim();
   if (value && /^[a-z]/.test(value)) {
@@ -215,22 +257,24 @@ export function splitMeasureDescription(description: string): string[] {
   const final: string[] = [];
   for (const part of expanded) {
     const subParts = part
-      .split(/,\s*(?=(?:include|maintain|provide|install|ensure|limit)\s+)/i)
+      .split(/,\s*(?=(?:include|maintain|provide|install|ensure|limit|incorporate|incorporated)\s+)/i)
       .map((segment) => normalizeMeasureClause(segment))
       .filter((segment) => segment.length >= 10);
     if (subParts.length >= 2) {
-      final.push(...subParts);
+      for (const subPart of subParts) {
+        final.push(...finalizeMeasureClause(subPart));
+      }
       continue;
     }
     const embedded = part.match(
-      /^(.{25,}?\b(?:incorporate|recommendations|pdrm)\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
+      /^(.{25,}?\b(?:incorporate|incorporated|recommendations|pdrm)\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
     );
     if (embedded) {
-      final.push(normalizeMeasureClause(embedded[1]));
-      final.push(normalizeMeasureClause(`Include ${embedded[2]}`));
+      final.push(...finalizeMeasureClause(embedded[1]));
+      final.push(...finalizeMeasureClause(`Include ${embedded[2]}`));
       continue;
     }
-    final.push(normalizeMeasureClause(part));
+    final.push(...finalizeMeasureClause(part));
   }
 
   const unique: string[] = [];
