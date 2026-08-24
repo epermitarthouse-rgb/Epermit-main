@@ -82,6 +82,27 @@ function sheetLabelLooksLikeIndexCover(label: string | null | undefined): boolea
   return INDEX_COVER_SHEET_PATTERN.test(normalized);
 }
 
+function indexCoverEntryFromText(text: string | null | undefined): IndexSheetEntry | null {
+  for (const entry of parseIndexEntriesFromText(text)) {
+    if (
+      sheetLabelLooksLikeIndexCover(entry.rawLabel) ||
+      sheetLabelLooksLikeIndexCover(entry.sheetNumber)
+    ) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/** Remove project/spec number tokens (e.g. SPEC #24-070) before sheet-number inference. */
+function stripProjectSpecNumberFragments(label: string): string {
+  return label
+    .replace(/#\d{1,4}-\d{2,4}\b/gi, " ")
+    .replace(/\b(?:SPEC|PROJECT|JOB(?:\s+NO\.?)?)\s*#?\d{1,4}-\d{2,4}\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Detect whether a sheet is likely the drawing index. */
 export function isLikelyIndexSheet(input: {
   sheetLabel?: string | null;
@@ -126,8 +147,10 @@ function pickBestSheetNumberToken(label: string): string | null {
 /** Pull the first plausible sheet number token from a filename or label. */
 export function inferSheetNumberFromLabel(label: string | null | undefined): string | null {
   if (typeof label !== "string" || !label.trim()) return null;
-  const base = label.replace(/\.[^.]+$/, "").replace(/-page\d+\.png$/i, "");
-  return pickBestSheetNumberToken(base);
+  const base = label.replace(/\.[^.]+$/, "").replace(/-page\d+$/i, "");
+  const stripped = stripProjectSpecNumberFragments(base);
+  if (!stripped) return null;
+  return pickBestSheetNumberToken(stripped);
 }
 
 /** True when a token is a sheet number (A101, G000, 001), not a title fragment. */
@@ -199,19 +222,36 @@ export function parseIndexEntriesFromText(text: string | null | undefined): Inde
 
 export function actualLabelsFromSheets(
   sheets: CodeAnalyzerSheet[],
-  opts?: { pageTextBySheetId?: Record<string, string> },
+  opts?: { pageTextBySheetId?: Record<string, string>; indexSheetId?: string | null },
 ): ActualSheetLabel[] {
   const included = sheets.filter((s) => !s.excluded);
+  const indexSheetId =
+    opts?.indexSheetId ?? detectIndexSheet(sheets, opts)?.id ?? null;
   return included.map((sheet) => {
+    const pageText = opts?.pageTextBySheetId?.[sheet.id];
+    const isIndexSheet =
+      sheet.id === indexSheetId ||
+      isLikelyIndexSheet({
+        sheetLabel: sheet.sheet_label,
+        fileName: sheet.file_name,
+        pageText,
+      });
+    const indexCoverEntry =
+      isIndexSheet && pageText ? indexCoverEntryFromText(pageText) : null;
+
     const rawLabel =
       sheet.sheet_label?.trim() ||
+      indexCoverEntry?.rawLabel ||
       inferSheetNumberFromLabel(sheet.file_name) ||
       sheet.file_name?.replace(/\.[^.]+$/, "").trim() ||
       `page-${sheet.page_number}`;
     const sheetNumber =
-      normalizeSheetNumber(sheet.sheet_label || inferSheetNumberFromLabel(rawLabel) || rawLabel) ||
-      `${sheet.source_document_id}:${sheet.page_number}`;
-    const pageText = opts?.pageTextBySheetId?.[sheet.id];
+      normalizeSheetNumber(
+        sheet.sheet_label ||
+          indexCoverEntry?.sheetNumber ||
+          inferSheetNumberFromLabel(rawLabel) ||
+          rawLabel,
+      ) || `${sheet.source_document_id}:${sheet.page_number}`;
     return {
       sheetId: sheet.id,
       sheetNumber,
@@ -282,7 +322,15 @@ export function compareIndexCompleteness(
   for (const entry of expected) {
     if (actualByNumber.has(entry.sheetNumber)) continue;
     // Index sheet row satisfies its own expected entry (e.g. G000 on drawing index).
-    if (indexSheetNumber && entry.sheetNumber === indexSheetNumber) continue;
+    if (indexSheetId) {
+      if (indexSheetNumber && entry.sheetNumber === indexSheetNumber) continue;
+      if (
+        sheetLabelLooksLikeIndexCover(entry.rawLabel) ||
+        sheetLabelLooksLikeIndexCover(entry.sheetNumber)
+      ) {
+        continue;
+      }
+    }
     missing.push(entry);
   }
 
@@ -365,6 +413,9 @@ export function runIndexCompletenessPrescreen(
       ? opts.indexEntries
       : parseIndexEntriesFromText(opts?.pageTextBySheetId?.[indexSheet.id]);
 
-  const actual = actualLabelsFromSheets(sheets, opts);
+  const actual = actualLabelsFromSheets(sheets, {
+    ...opts,
+    indexSheetId: indexSheet.id,
+  });
   return compareIndexCompleteness(expected, actual, { indexSheetId: indexSheet.id });
 }

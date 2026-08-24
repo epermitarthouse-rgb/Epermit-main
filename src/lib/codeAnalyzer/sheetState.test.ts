@@ -117,6 +117,18 @@ describe("computeAnalyzerDatasetMetrics", () => {
       "Analysis: 32 completed, 2 failed, 34 total",
     );
   });
+
+  it("H: counts excluded index source document toward document total", () => {
+    const sheets = [
+      sheet({ id: "s-index", source_document_id: "doc-index", page_number: 1, excluded: true }),
+      ...Array.from({ length: 15 }, (_, i) =>
+        sheet({ id: `s-${i}`, source_document_id: `doc-${i}`, page_number: 1 }),
+      ),
+    ];
+    const metrics = computeAnalyzerDatasetMetrics({ includedSheets: sheets });
+    assert.equal(metrics.sourceDocumentCount, 16);
+    assert.equal(metrics.includedSheetCount, 15);
+  });
 });
 
 describe("computeRunAnalysisMetrics", () => {

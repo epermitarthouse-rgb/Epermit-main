@@ -146,6 +146,58 @@ A-102  Second Floor`;
     assert.equal(result.indexSheetId, "idx");
     assert.equal(result.expectedCount, 3);
   });
+
+  it("F: Riverside index self-matches G000 without sheet_label via index text", () => {
+    const indexText = `DRAWING INDEX
+G000  Cover
+001  Cover Sheet
+002  Site Plan
+003  Code Summary
+A001  Floor Plan L1
+A002  Floor Plan L2
+A003  Floor Plan L3
+A004  Floor Plan L4
+A005  Floor Plan L5
+A006  Floor Plan L6
+A007  Floor Plan L7
+A008  Floor Plan L8
+A009  Floor Plan L9
+S001  Sections
+S002  Sections
+S003  Sections`;
+
+    const sheets = [
+      sheet({
+        id: "idx",
+        file_name: "Riverside_MOCK_Drawing_Index_UAT-page1.png",
+        source_document_id: "d-index",
+      }),
+      sheet({ id: "s001", file_name: "001-COVER SHEET.pdf", sheet_label: "001", source_document_id: "d1" }),
+      sheet({ id: "s002", file_name: "002-SITE PLAN.pdf", sheet_label: "002", source_document_id: "d2" }),
+      sheet({ id: "s003", file_name: "003-CODE SUMMARY.pdf", sheet_label: "003", source_document_id: "d3" }),
+      ...["A001", "A002", "A003", "A004", "A005", "A006", "A007", "A008"].map((n, i) =>
+        sheet({
+          id: `a${i}`,
+          file_name: `${n}.pdf`,
+          sheet_label: n,
+          source_document_id: `da${i}`,
+        }),
+      ),
+      sheet({ id: "s1", file_name: "S001.pdf", sheet_label: "S001", source_document_id: "ds1" }),
+      sheet({ id: "s2", file_name: "S002.pdf", sheet_label: "S002", source_document_id: "ds2" }),
+    ];
+
+    const result = runIndexCompletenessPrescreen(sheets, {
+      pageTextBySheetId: { idx: indexText },
+    });
+    assert.equal(result.hasIndex, true);
+    assert.equal(result.expectedCount, 16);
+    assert.deepEqual(
+      result.missing.map((m) => m.sheetNumber).sort(),
+      ["A009", "S003"],
+    );
+    assert.equal(result.missing.some((m) => m.sheetNumber === "G000"), false);
+  });
 });
 
 describe("inferSheetNumberFromLabel", () => {
@@ -153,6 +205,11 @@ describe("inferSheetNumberFromLabel", () => {
     assert.equal(inferSheetNumberFromLabel("001-COVER SHEET"), "001");
     assert.equal(inferSheetNumberFromLabel("G000"), "G000");
     assert.equal(inferSheetNumberFromLabel("A-101 First Floor"), "A101");
+  });
+
+  it("ignores project/spec number fragments such as #24-070", () => {
+    assert.equal(inferSheetNumberFromLabel("SPEC #24-070-page18.png"), null);
+    assert.equal(inferSheetNumberFromLabel("SPEC #24-070.pdf"), null);
   });
 });
 

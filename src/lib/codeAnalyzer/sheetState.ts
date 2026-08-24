@@ -100,7 +100,7 @@ export function computeAnalyzerDatasetMetrics(input: {
   hydratedResultCount?: number;
 }): AnalyzerDatasetMetrics {
   const included = input.includedSheets.filter((s) => !s.excluded);
-  const sourceDocumentCount = new Set(included.map((s) => s.source_document_id)).size;
+  const sourceDocumentCount = countSourceDocuments(input.includedSheets);
   const completed = input.completedSheetIds?.size ?? input.hydratedResultCount ?? 0;
   const failed = input.failedSheetIds?.size ?? 0;
   const analysisTotalCount = included.length;
