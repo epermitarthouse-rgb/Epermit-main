@@ -130,8 +130,9 @@ import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnal
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
 import { CodeModificationReviewResults } from "@/components/compliance/CodeModificationReviewResults";
 import {
-  computeFormFingerprint,
+  computeFormsFingerprint,
   computeModificationSourceFingerprint,
+  formDocumentIdsMatch,
   shouldMarkModificationReviewStale,
   type CodeModificationReview,
 } from "@/lib/codeModification/model";
@@ -288,8 +289,8 @@ export function AIComplianceAnalyzer() {
   const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationDisplayRun, setModificationDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationCurrentRun, setModificationCurrentRun] = useState<CodeAnalyzerRun | null>(null);
-  const [modificationForm, setModificationForm] = useState<ProjectDocument | null>(null);
-  const [pendingFormFile, setPendingFormFile] = useState<File | null>(null);
+  const [modificationForms, setModificationForms] = useState<ProjectDocument[]>([]);
+  const [uploadingFormNames, setUploadingFormNames] = useState<string[]>([]);
   const [modificationReview, setModificationReview] = useState<CodeModificationReview | null>(null);
   const [hasAnalyzerRuns, setHasAnalyzerRuns] = useState(false);
   const [sheetDocuments, setSheetDocuments] = useState<ProjectDocument[]>([]);
@@ -372,7 +373,7 @@ export function AIComplianceAnalyzer() {
   selectedProjectIdRef.current = selectedProjectId;
 
   useEffect(() => {
-    setPendingFormFile(null);
+    setUploadingFormNames([]);
   }, [selectedProjectId]);
 
   const pendingDrawingCount = files.filter((f) => f.status === "pending").length;
@@ -382,21 +383,28 @@ export function AIComplianceAnalyzer() {
     currentFingerprint: computeSheetFingerprint(persistedSheets),
     pendingSourceCount: pendingDrawingCount,
   });
-  const modificationFormFingerprint = modificationForm
-    ? computeFormFingerprint({
-        formDocumentId: modificationForm.id,
-        updatedAt: modificationForm.updated_at,
-      })
-    : "";
+  const modificationFormsFingerprint = computeFormsFingerprint(
+    modificationForms.map((form) => ({
+      formDocumentId: form.id,
+      updatedAt: form.updated_at,
+    })),
+  );
+  const reviewFormDocumentIds =
+    modificationReview?.form_document_ids ??
+    (modificationReview?.form_document_id ? [modificationReview.form_document_id] : []);
+  const modificationFormsChanged = !formDocumentIdsMatch(
+    reviewFormDocumentIds,
+    modificationForms.map((form) => form.id),
+  );
   const modificationStale = shouldMarkModificationReviewStale({
     runStatus: modificationDisplayRun?.status ?? modificationCurrentRun?.status,
     runFingerprint:
       modificationDisplayRun?.source_fingerprint ?? modificationCurrentRun?.source_fingerprint,
     currentFingerprint: computeModificationSourceFingerprint(
-      modificationFormFingerprint,
+      modificationFormsFingerprint,
       computeSheetFingerprint(persistedSheets),
     ),
-    formChanged: Boolean(pendingFormFile),
+    formChanged: modificationFormsChanged || uploadingFormNames.length > 0,
     pendingSourceCount: pendingDrawingCount,
   });
 
@@ -422,10 +430,10 @@ export function AIComplianceAnalyzer() {
     setSheetDocuments(await fetchDocumentsByIds(ids));
     try {
       const forms = await fetchModificationForms(projectId);
-      setModificationForm(forms[0] ?? null);
+      setModificationForms(forms);
     } catch (err) {
       console.error("Error loading code modification forms:", err);
-      setModificationForm(null);
+      setModificationForms([]);
     }
     try {
       setModificationReview(
@@ -1628,8 +1636,8 @@ export function AIComplianceAnalyzer() {
       toast.error("DC Code Modification Review is only available for Washington, D.C.");
       return;
     }
-    if (!modificationForm && !pendingFormFile) {
-      toast.error("Upload a DC Code Modification application first");
+    if (modificationForms.length === 0) {
+      toast.error("Upload at least one DC Code Modification document first");
       return;
     }
 
@@ -1651,7 +1659,7 @@ export function AIComplianceAnalyzer() {
         return doc;
       };
 
-      const { review, form } = await runDcCodeModificationReview({
+      const { review, forms } = await runDcCodeModificationReview({
         projectId: selectedProjectId,
         userId: user.id,
         jurisdiction,
@@ -1662,14 +1670,12 @@ export function AIComplianceAnalyzer() {
           .filter((f) => f.status === "pending")
           .map((f) => ({ id: f.id, file: f.file, discipline: "general" as const })),
         sheetDocuments,
-        modificationForm,
-        pendingFormFile,
+        modificationForms,
         getDownloadUrl,
         persistUpload,
       });
       setModificationReview(review);
-      setModificationForm(form);
-      setPendingFormFile(null);
+      setModificationForms(forms);
       setFiles((prev) => prev.filter((f) => f.status === "failed"));
       await reloadAnalyzerDataset(selectedProjectId);
       toast.success("Code Modification Review complete");
@@ -1685,8 +1691,7 @@ export function AIComplianceAnalyzer() {
     files,
     getDownloadUrl,
     jurisdiction,
-    modificationForm,
-    pendingFormFile,
+    modificationForms,
     persistedSheets,
     projectType,
     reloadAnalyzerDataset,
@@ -1696,21 +1701,64 @@ export function AIComplianceAnalyzer() {
     user,
   ]);
 
+  const markModificationReviewStale = useCallback(async () => {
+    if (!selectedProjectId) return;
+    await markCurrentRunStale(selectedProjectId, ANALYSIS_TYPE_DC_MODIFICATION);
+    setModificationDisplayRun((prev) =>
+      prev && prev.status === "current" ? { ...prev, status: "stale" } : prev,
+    );
+    setModificationCurrentRun(null);
+  }, [selectedProjectId]);
+
   const handleModificationFormChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0] ?? null;
-      if (!file) return;
-      setPendingFormFile(file);
-      if (selectedProjectId && (modificationCurrentRun || modificationDisplayRun)) {
-        void markCurrentRunStale(selectedProjectId, ANALYSIS_TYPE_DC_MODIFICATION).then(() => {
-          setModificationDisplayRun((prev) =>
-            prev && prev.status === "current" ? { ...prev, status: "stale" } : prev,
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFiles = Array.from(event.target.files ?? []);
+      event.target.value = "";
+      if (!selectedFiles.length || !selectedProjectId) return;
+
+      for (const file of selectedFiles) {
+        setUploadingFormNames((prev) => [...prev, file.name]);
+        try {
+          const doc = await uploadDocument({
+            file,
+            document_type: "code_modification_application",
+            description: "DC Code Modification application",
+          });
+          if (!doc) continue;
+          setModificationForms((prev) =>
+            [...prev, doc].sort((a, b) => a.created_at.localeCompare(b.created_at)),
           );
-          setModificationCurrentRun(null);
-        });
+          if (modificationCurrentRun || modificationDisplayRun) {
+            await markModificationReviewStale();
+          }
+        } catch (err) {
+          console.error("Code modification document upload error:", err);
+          toast.error(err instanceof Error ? err.message : "Failed to upload document");
+        } finally {
+          setUploadingFormNames((prev) => prev.filter((name) => name !== file.name));
+        }
       }
+      await fetchDocuments();
     },
-    [selectedProjectId, modificationCurrentRun, modificationDisplayRun],
+    [
+      fetchDocuments,
+      markModificationReviewStale,
+      modificationCurrentRun,
+      modificationDisplayRun,
+      selectedProjectId,
+      uploadDocument,
+    ],
+  );
+
+  const handleRemoveModificationForm = useCallback(
+    async (document: ProjectDocument) => {
+      const removed = await deleteDocument(document);
+      if (!removed) return;
+      setModificationForms((prev) => prev.filter((doc) => doc.id !== document.id));
+      await markModificationReviewStale();
+      await reloadAnalyzerDataset(selectedProjectId!);
+    },
+    [deleteDocument, markModificationReviewStale, reloadAnalyzerDataset, selectedProjectId],
   );
 
   const analyzeDrawings = () => {
@@ -2513,21 +2561,60 @@ export function AIComplianceAnalyzer() {
           {isModificationMode && (
             <div className="space-y-2">
               <Label htmlFor="code-modification-form-input" className="text-foreground">
-                Code Modification application
+                Code Modification documents
               </Label>
               <Input
                 id="code-modification-form-input"
                 type="file"
                 accept="application/pdf,.pdf"
+                multiple
                 data-testid="code-modification-form-input"
-                onChange={handleModificationFormChange}
+                onChange={(event) => void handleModificationFormChange(event)}
+                disabled={uploadingFormNames.length > 0 || analyzing}
               />
-              {(pendingFormFile || modificationForm) && (
-                <p className="text-xs text-muted-foreground">
-                  {pendingFormFile
-                    ? `Selected: ${pendingFormFile.name}`
-                    : `Stored: ${modificationForm?.file_name}`}
-                </p>
+              {(modificationForms.length > 0 || uploadingFormNames.length > 0) && (
+                <ul
+                  className="space-y-1 rounded-md border border-border bg-muted/20 p-2"
+                  data-testid="code-modification-form-list"
+                >
+                  {modificationForms.map((form) => (
+                    <li
+                      key={form.id}
+                      className="flex items-center justify-between gap-2 text-xs"
+                      data-testid={`code-modification-form-item-${form.id}`}
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{form.file_name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          Stored
+                        </Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 text-destructive"
+                        disabled={analyzing || uploadingFormNames.length > 0}
+                        onClick={() => void handleRemoveModificationForm(form)}
+                        aria-label={`Remove ${form.file_name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </li>
+                  ))}
+                  {uploadingFormNames.map((name) => (
+                    <li key={`uploading-${name}`} className="flex items-center justify-between gap-2 text-xs">
+                      <div className="min-w-0 flex items-center gap-2">
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                        <span className="truncate">{name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          Uploading
+                        </Badge>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}
@@ -2762,7 +2849,7 @@ export function AIComplianceAnalyzer() {
               disabled={
                 analyzing ||
                 (isModificationMode
-                  ? !modificationForm && !pendingFormFile
+                  ? modificationForms.length === 0 || uploadingFormNames.length > 0
                   : (
                     files.filter((f) => f.status === "pending").length === 0 &&
                     persistedSheets.filter((s) => !s.excluded).length === 0 &&

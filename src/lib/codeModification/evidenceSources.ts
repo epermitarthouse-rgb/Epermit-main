@@ -23,12 +23,12 @@ export function normalizeEvidenceFileName(fileName: string | null | undefined): 
  * Document ids that must never be used as drawing-evidence sources:
  * - code_modification_application rows
  * - rendered/page child documents derived from them
- * - the active form document for this review
+ * - active form documents for this review
  * - duplicate uploads of the same form file name (e.g. permit_drawing mis-upload)
  */
 export function buildFormExclusionDocumentIds(
   documents: FormExclusionDocumentRef[],
-  formDocument?: Pick<ProjectDocument, "id" | "file_name"> | null,
+  formDocuments?: ReadonlyArray<Pick<ProjectDocument, "id" | "file_name">> | null,
 ): Set<string> {
   const excluded = new Set<string>();
 
@@ -38,15 +38,17 @@ export function buildFormExclusionDocumentIds(
     }
   }
 
-  if (formDocument?.id) {
-    excluded.add(formDocument.id);
-  }
+  for (const formDocument of formDocuments ?? []) {
+    if (formDocument?.id) {
+      excluded.add(formDocument.id);
+    }
 
-  const formFileName = normalizeEvidenceFileName(formDocument?.file_name);
-  if (formFileName) {
-    for (const doc of documents) {
-      if (normalizeEvidenceFileName(doc.file_name) === formFileName) {
-        excluded.add(doc.id);
+    const formFileName = normalizeEvidenceFileName(formDocument?.file_name);
+    if (formFileName) {
+      for (const doc of documents) {
+        if (normalizeEvidenceFileName(doc.file_name) === formFileName) {
+          excluded.add(doc.id);
+        }
       }
     }
   }

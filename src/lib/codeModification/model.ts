@@ -108,7 +108,10 @@ export interface CodeModificationReview {
   id?: string;
   run_id: string;
   project_id: string;
+  /** Primary form document (legacy single-form reviews). */
   form_document_id: string;
+  /** Full document set used for this review when available. */
+  form_document_ids?: string[];
   form_fingerprint: string;
   extracted_request: ExtractedModificationRequest;
   evidence: EvidenceFinding[];
@@ -148,6 +151,32 @@ export function computeFormFingerprint(input: {
   pageCount?: number | null;
 }): string {
   return [input.formDocumentId, input.updatedAt ?? "", String(input.pageCount ?? "")].join("|");
+}
+
+export function computeFormsFingerprint(
+  forms: Array<{
+    formDocumentId: string;
+    updatedAt?: string | null;
+    pageCount?: number | null;
+  }>,
+): string {
+  if (forms.length === 0) return "";
+  if (forms.length === 1) return computeFormFingerprint(forms[0]!);
+  return forms
+    .slice()
+    .sort((a, b) => a.formDocumentId.localeCompare(b.formDocumentId))
+    .map((form) => computeFormFingerprint(form))
+    .join("||");
+}
+
+export function formDocumentIdsMatch(
+  reviewIds: string[] | null | undefined,
+  currentIds: string[],
+): boolean {
+  const a = [...(reviewIds ?? [])].sort();
+  const b = [...currentIds].sort();
+  if (a.length !== b.length) return false;
+  return a.every((id, index) => id === b[index]);
 }
 
 export function computeModificationSourceFingerprint(

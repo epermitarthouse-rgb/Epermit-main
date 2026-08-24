@@ -41,7 +41,7 @@ describe("buildFormExclusionDocumentIds", () => {
       },
     ];
 
-    const excluded = buildFormExclusionDocumentIds(documents, documents[0]);
+    const excluded = buildFormExclusionDocumentIds(documents, [documents[0]!]);
     assert.equal(excluded.has("form-app"), true);
     assert.equal(excluded.has("form-page-1"), true);
     assert.equal(excluded.has("form-drawing-dup"), true);
@@ -54,6 +54,34 @@ describe("buildFormExclusionDocumentIds", () => {
       normalizeEvidenceFileName(" 1513  P St NW_Code-Modification-Form_10.01.24.pdf "),
       "1513 p st nw_code-modification-form_10.01.24.pdf",
     );
+  });
+
+  it("excludes every active form document in a multi-document review", () => {
+    const documents = [
+      {
+        id: "form-a",
+        document_type: "code_modification_application" as const,
+        parent_document_id: null,
+        file_name: "form-a.pdf",
+      },
+      {
+        id: "form-b",
+        document_type: "code_modification_application" as const,
+        parent_document_id: null,
+        file_name: "supporting-narrative.pdf",
+      },
+      {
+        id: "real-a101",
+        document_type: "permit_drawing" as const,
+        parent_document_id: null,
+        file_name: "A-101.pdf",
+      },
+    ];
+
+    const excluded = buildFormExclusionDocumentIds(documents, documents.slice(0, 2));
+    assert.equal(excluded.has("form-a"), true);
+    assert.equal(excluded.has("form-b"), true);
+    assert.equal(excluded.has("real-a101"), false);
   });
 });
 
