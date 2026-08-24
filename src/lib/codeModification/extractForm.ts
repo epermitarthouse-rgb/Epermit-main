@@ -33,6 +33,13 @@ const APPLICANT_MARKERS = [
 
 const BLANK_VALUE = /^(?:_{2,}|\.{3,}|[-–—]+|n\/a|tbd)?$/i;
 
+export const HEURISTIC_FIELD_WARNINGS = {
+  requestedModification:
+    "Could not extract a requested modification from applicant pages.",
+  citedSections: "No applicant-cited code sections were found.",
+  proposedMeasures: "No proposed alternative measures were found.",
+} as const;
+
 export function classifyPageRole(page: Pick<FormPage, "text">): FormPageRole {
   const text = page.text ?? "";
   const hasReviewer = REVIEWER_MARKERS.some((re) => re.test(text));
@@ -231,16 +238,42 @@ export function heuristicExtractModificationRequest(
   } satisfies ExtractedModificationRequest;
 
   if (!requestedModification) {
-    warnings.push("Could not extract a requested modification from applicant pages.");
+    warnings.push(HEURISTIC_FIELD_WARNINGS.requestedModification);
   }
   if (citedSections.length === 0) {
-    warnings.push("No applicant-cited code sections were found.");
+    warnings.push(HEURISTIC_FIELD_WARNINGS.citedSections);
   }
   if (proposedMeasures.length === 0) {
-    warnings.push("No proposed alternative measures were found.");
+    warnings.push(HEURISTIC_FIELD_WARNINGS.proposedMeasures);
   }
   extracted.extractionWarnings = warnings;
   return extracted;
+}
+
+export function reconcileExtractionWarnings(
+  extracted: ExtractedModificationRequest,
+): string[] {
+  return extracted.extractionWarnings.filter((warning) => {
+    if (
+      warning === HEURISTIC_FIELD_WARNINGS.requestedModification &&
+      usableFieldValue(extracted.requestedModification)
+    ) {
+      return false;
+    }
+    if (
+      warning === HEURISTIC_FIELD_WARNINGS.citedSections &&
+      extracted.citedSections.length > 0
+    ) {
+      return false;
+    }
+    if (
+      warning === HEURISTIC_FIELD_WARNINGS.proposedMeasures &&
+      extracted.proposedMeasures.length > 0
+    ) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export function mergeExtractedRequests(
@@ -271,7 +304,7 @@ export function mergeExtractedRequests(
   let flood = primary.floodHazardApplicable;
   if (flood == null) flood = secondary.floodHazardApplicable;
 
-  return {
+  const merged: ExtractedModificationRequest = {
     projectAddress: pick(primary.projectAddress, secondary.projectAddress),
     requestedModification:
       pick(primary.requestedModification, secondary.requestedModification) ?? "",
@@ -286,6 +319,8 @@ export function mergeExtractedRequests(
     supportingNarrative: pick(primary.supportingNarrative, secondary.supportingNarrative),
     extractionWarnings: warnings,
   };
+  merged.extractionWarnings = reconcileExtractionWarnings(merged);
+  return merged;
 }
 
 export function pagesAreSparse(pages: FormPage[]): boolean {

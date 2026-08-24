@@ -7,6 +7,7 @@ const {
   classifyPageRole,
   applicantPagesFrom,
   heuristicExtractModificationRequest,
+  mergeExtractedRequests,
   pagesAreSparse,
   validateAndGroundFindings,
   stripApprovalClaims,
@@ -17,6 +18,8 @@ const {
   extractPdfPageTexts,
   isDcJurisdiction,
   PROMPT_CONSTRAINTS,
+  HEURISTIC_FIELD_WARNINGS,
+  emptyExtractedRequest,
 } = require("../app/services/compliance/code-modification.service.js");
 
 const SAMPLE_PAGES = [
@@ -223,5 +226,136 @@ describe("isDcJurisdiction", () => {
     assert.equal(isDcJurisdiction("dc"), true);
     assert.equal(isDcJurisdiction("District of Columbia"), true);
     assert.equal(isDcJurisdiction("new-york"), false);
+  });
+});
+
+const SCANNED_SPARSE_PAGES = [
+  { pageNumber: 1, text: "" },
+  { pageNumber: 2, text: "" },
+  { pageNumber: 3, text: "Michelle Davis" },
+  { pageNumber: 4, text: "" },
+  { pageNumber: 5, text: "" },
+  { pageNumber: 6, text: "" },
+];
+
+describe("mergeExtractedRequests warning reconciliation", () => {
+  it("drops stale heuristic warnings when vision fills extracted fields", () => {
+    const heuristic = heuristicExtractModificationRequest(SCANNED_SPARSE_PAGES);
+    assert.equal(heuristic.extractionWarnings.length, 3);
+    const vision = {
+      projectAddress: "1513 P St NW, Washington DC, 20005",
+      requestedModification:
+        "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.",
+      citedSections: [
+        {
+          citation: "2017 DCMR 12A Chapter 10 Section 1006",
+          year: null,
+          source: "applicant",
+          label: "Applicant-cited code",
+        },
+      ],
+      impracticalReason: "Low occupant load makes a second stair impractical.",
+      compliesWithIntent: true,
+      proposedMeasures: [{ id: "measure-1", description: "Provide automatic sprinklers throughout." }],
+      floodHazardApplicable: false,
+      supportingNarrative: null,
+      extractionWarnings: [],
+    };
+    const merged = mergeExtractedRequests(heuristic, vision);
+    assert.equal(
+      merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.requestedModification),
+      false,
+    );
+    assert.equal(
+      merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.citedSections),
+      false,
+    );
+    assert.equal(
+      merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.proposedMeasures),
+      false,
+    );
+  });
+
+  it("keeps heuristic warnings when vision also fails to extract fields", () => {
+    const heuristic = heuristicExtractModificationRequest(SCANNED_SPARSE_PAGES);
+    const vision = emptyExtractedRequest(["Form LLM extract failed: timeout"]);
+    const merged = mergeExtractedRequests(heuristic, vision);
+    assert.equal(
+      merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.requestedModification),
+      true,
+    );
+    assert.equal(
+      merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.citedSections),
+      true,
+    );
+    assert.equal(
+      merged.extractionWarnings.some((w) => w === HEURISTIC_FIELD_WARNINGS.proposedMeasures),
+      true,
+    );
+    assert.match(merged.extractionWarnings.join(" "), /Form LLM extract failed/i);
+  });
+});
+
+describe("analyzeCodeModification scanned-form warning regression", () => {
+  it("clears stale heuristic warnings when optional LLM extract succeeds", async () => {
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async () => ({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    projectAddress: "1513 P St NW, Washington DC, 20005",
+                    requestedModification:
+                      "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.",
+                    citedSections: [
+                      {
+                        citation: "2017 DCMR 12A Chapter 10 Section 1006",
+                        year: null,
+                        source: "applicant",
+                        label: "Applicant-cited code",
+                      },
+                    ],
+                    proposedMeasures: [
+                      { id: "measure-1", description: "Provide automatic sprinklers throughout." },
+                    ],
+                    compliesWithIntent: true,
+                    floodHazardApplicable: false,
+                    extractionWarnings: [],
+                  }),
+                },
+              },
+            ],
+          })),
+        },
+      },
+    };
+
+    const outcome = await analyzeCodeModification({
+      openai,
+      formPages: SCANNED_SPARSE_PAGES,
+      formImages: [{ pageNumber: 2, imageBase64: "aaaa", imageType: "image/png" }],
+      formDocument: { id: "form-1513" },
+    });
+
+    assert.equal(
+      outcome.result.extraction_warnings.some(
+        (w) => w === HEURISTIC_FIELD_WARNINGS.requestedModification,
+      ),
+      false,
+    );
+    assert.equal(
+      outcome.result.extraction_warnings.some(
+        (w) => w === HEURISTIC_FIELD_WARNINGS.citedSections,
+      ),
+      false,
+    );
+    assert.equal(
+      outcome.result.extraction_warnings.some(
+        (w) => w === HEURISTIC_FIELD_WARNINGS.proposedMeasures,
+      ),
+      false,
+    );
   });
 });

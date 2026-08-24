@@ -6,7 +6,9 @@ import {
   heuristicExtractModificationRequest,
   mergeExtractedRequests,
   pagesAreSparse,
+  reconcileExtractionWarnings,
   stripReviewerSections,
+  HEURISTIC_FIELD_WARNINGS,
 } from "./extractForm.ts";
 import { emptyExtractedRequest } from "./model.ts";
 import { SAMPLE_DC_CODE_MODIFICATION_PAGES } from "./sampleForm.ts";
@@ -129,5 +131,42 @@ describe("mergeExtractedRequests / pagesAreSparse", () => {
   it("treats short scanned pages as sparse and the sample as not sparse", () => {
     assert.equal(pagesAreSparse([{ pageNumber: 1, text: "scan" }]), true);
     assert.equal(pagesAreSparse(SAMPLE_DC_CODE_MODIFICATION_PAGES), false);
+  });
+
+  it("drops stale heuristic warnings after vision merge on scanned sparse pages", () => {
+    const scannedPages = [
+      { pageNumber: 1, text: "" },
+      { pageNumber: 2, text: "" },
+      { pageNumber: 3, text: "Michelle Davis" },
+    ];
+    const heuristic = heuristicExtractModificationRequest(scannedPages);
+    const vision = emptyExtractedRequest();
+    vision.requestedModification =
+      "Targeted equivalency strategy in lieu of a second egress stair per 2017 DCMR 12A Chapter 10 Section 1006.";
+    vision.citedSections = [
+      {
+        citation: "2017 DCMR 12A Chapter 10 Section 1006",
+        year: null,
+        source: "applicant",
+        label: "Applicant-cited code",
+      },
+    ];
+    vision.proposedMeasures = [
+      { id: "measure-1", description: "Provide automatic sprinklers throughout." },
+    ];
+    const merged = mergeExtractedRequests(heuristic, vision);
+    assert.equal(
+      merged.extractionWarnings.includes(HEURISTIC_FIELD_WARNINGS.requestedModification),
+      false,
+    );
+    assert.equal(
+      merged.extractionWarnings.includes(HEURISTIC_FIELD_WARNINGS.citedSections),
+      false,
+    );
+    assert.equal(
+      merged.extractionWarnings.includes(HEURISTIC_FIELD_WARNINGS.proposedMeasures),
+      false,
+    );
+    assert.equal(reconcileExtractionWarnings(merged).length, 0);
   });
 });
