@@ -25,6 +25,18 @@ const PROPERTY_PATTERNS: Array<{ property: string; pattern: RegExp }> = [
   { property: "amperage", pattern: /\b(?:amp(?:ere)?s?|amperage)\b/i },
 ];
 
+/** Local assembly nouns — prevents cross-assembly hour rating false conflicts. */
+const ASSEMBLY_SCOPE_PATTERNS: Array<{ scope: string; pattern: RegExp }> = [
+  {
+    scope: "stair",
+    pattern: /\b(?:stair(?:way|well)?|stair\s*shaft|enclosed\s*stair|egress\s*stair)\b/i,
+  },
+  { scope: "corridor", pattern: /\b(?:corridor|hallway|passageway)\b/i },
+  { scope: "partition", pattern: /\b(?:partition|barrier)\b/i },
+  { scope: "door", pattern: /\b(?:door|opening)\b/i },
+  { scope: "wall", pattern: /\b(?:wall|walls)\b/i },
+];
+
 const GENERIC_NUMERIC =
   /(?<value>\d+(?:\.\d+)?)\s*(?:'|-\s*)?(?:(?<inches>\d+(?:\.\d+)?)\s*")?(?:\s*(?<unit>persons?|people|occupants?|occ\.?|hours?|hrs?|in(?:ch(?:es)?)?|ft|feet|')\b)?/gi;
 
@@ -87,6 +99,34 @@ function inferProperty(text: string, index: number): string {
   return "numeric_value";
 }
 
+function inferAssemblyScope(text: string, index: number): string {
+  const windowStart = Math.max(0, index - 40);
+  const windowEnd = Math.min(text.length, index + 40);
+  const context = text.slice(windowStart, windowEnd);
+
+  let bestScope = "general";
+  let bestDistance = Infinity;
+
+  for (const { scope, pattern } of ASSEMBLY_SCOPE_PATTERNS) {
+    const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+    for (const match of context.matchAll(re)) {
+      const matchIndex = (match.index ?? 0) + windowStart;
+      const distance = Math.abs(matchIndex - index);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestScope = scope;
+      }
+    }
+  }
+
+  return bestScope;
+}
+
+function scopedPropertyKey(text: string, index: number, property: string): string {
+  if (property !== "fire_rating_hours") return property;
+  return `${property}:${inferAssemblyScope(text, index)}`;
+}
+
 /** Extract normalized material values from observation text. */
 export function extractMaterialValues(text: string): MaterialValue[] {
   const normalized = String(text ?? "");
@@ -96,8 +136,9 @@ export function extractMaterialValues(text: string): MaterialValue[] {
   for (const match of normalized.matchAll(/(\d+)\s*'\s*-?\s*(\d+(?:\.\d+)?)\s*"/gi)) {
     const raw = match[0];
     const index = match.index ?? 0;
+    const property = inferProperty(normalized, index);
     values.push({
-      property: inferProperty(normalized, index),
+      property: scopedPropertyKey(normalized, index, property),
       numericValue: feetInchesToNumber(Number(match[1]), Number(match[2])),
       unit: "ft",
       raw,
@@ -109,8 +150,9 @@ export function extractMaterialValues(text: string): MaterialValue[] {
     const index = match.index ?? 0;
     const parsed = parseNumericToken(raw, match.groups?.unit);
     if (!parsed) continue;
+    const property = inferProperty(normalized, index);
     values.push({
-      property: inferProperty(normalized, index),
+      property: scopedPropertyKey(normalized, index, property),
       numericValue: parsed.value,
       unit: parsed.unit,
       raw,

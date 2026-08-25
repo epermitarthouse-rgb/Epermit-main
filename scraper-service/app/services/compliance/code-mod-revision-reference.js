@@ -93,6 +93,23 @@ function observationText(observation) {
   return [observation.source && observation.source.excerpt, observation.note].filter(Boolean).join(" ").trim();
 }
 
+function observationSourcesMatch(left, right) {
+  if (left === right) return true;
+  const leftKey = [
+    left.source && left.source.sheetId,
+    left.source && left.source.documentId,
+    left.source && left.source.fileName,
+    left.source && left.source.pageNumber,
+  ].join("|");
+  const rightKey = [
+    right.source && right.source.sheetId,
+    right.source && right.source.documentId,
+    right.source && right.source.fileName,
+    right.source && right.source.pageNumber,
+  ].join("|");
+  return Boolean(leftKey) && leftKey === rightKey;
+}
+
 function isSupportingStatus(status) {
   return status === "verified" || status === "partially_supported";
 }
@@ -101,37 +118,41 @@ function hasPositiveProvision(text, polarity) {
   return polarity(text) === "positive";
 }
 
-function isRevisionResolutionPair(left, right, allObservations, polarity) {
-  const leftRevision = isRevisionEvidenceSource(left.source);
-  const rightRevision = isRevisionEvidenceSource(right.source);
-  if (leftRevision === rightRevision) return false;
-
-  const base = leftRevision ? right : left;
-  const revision = leftRevision ? left : right;
-  if (!isRevisionEvidenceSource(revision.source)) return false;
-  if (!isSupportingStatus(revision.status)) return false;
+function isDeferralResolutionPair(base, candidate, allObservations, polarity) {
+  if (!isSupportingStatus(candidate.status)) return false;
+  if (observationSourcesMatch(base, candidate)) return false;
 
   const baseText = observationText(base);
-  const revisionText = observationText(revision);
+  const candidateText = observationText(candidate);
   if (!referencesRevisionDocument(baseText)) return false;
-  if (!hasPositiveProvision(revisionText, polarity)) return false;
+  if (!hasPositiveProvision(candidateText, polarity)) return false;
 
   const targets = extractReferencedTargets(baseText);
   if (targets.length > 0) {
+    const candidateMatchesTarget = targets.some((target) =>
+      targetMatchesSource(target, candidate.source),
+    );
+    if (candidateMatchesTarget) return true;
+
     const referencedPresent = allObservations.some(
       (observation) =>
-        observation !== revision &&
+        observation !== candidate &&
         isSupportingStatus(observation.status) &&
         targets.some((target) => targetMatchesSource(target, observation.source)),
     );
-    if (referencedPresent && !targetMatchesSource(targets[0], revision.source)) {
-      return false;
-    }
-    if (targets.some((target) => targetMatchesSource(target, revision.source))) {
-      return true;
-    }
+    if (referencedPresent) return false;
+
+    return false;
   }
+
   return true;
+}
+
+function isRevisionResolutionPair(left, right, allObservations, polarity) {
+  return (
+    isDeferralResolutionPair(left, right, allObservations, polarity) ||
+    isDeferralResolutionPair(right, left, allObservations, polarity)
+  );
 }
 
 function hasRevisionResolution(observations, isSubstantive, polarity) {

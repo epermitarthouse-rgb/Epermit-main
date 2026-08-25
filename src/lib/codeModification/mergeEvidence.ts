@@ -276,10 +276,8 @@ function observationsContradict(
       const rightPolarity = evidencePolarity(right);
       const leftNegative = leftPolarity === "negative";
       const rightNegative = rightPolarity === "negative";
-      const leftPositive =
-        substantive[i]?.status === "verified" || leftPolarity === "positive";
-      const rightPositive =
-        substantive[j]?.status === "verified" || rightPolarity === "positive";
+      const leftPositive = leftPolarity === "positive";
+      const rightPositive = rightPolarity === "positive";
 
       if ((leftNegative && rightPositive) || (rightNegative && leftPositive)) {
         return true;

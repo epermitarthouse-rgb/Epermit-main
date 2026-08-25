@@ -9,6 +9,17 @@ const PROPERTY_PATTERNS = [
   { property: "amperage", pattern: /\b(?:amp(?:ere)?s?|amperage)\b/i },
 ];
 
+const ASSEMBLY_SCOPE_PATTERNS = [
+  {
+    scope: "stair",
+    pattern: /\b(?:stair(?:way|well)?|stair\s*shaft|enclosed\s*stair|egress\s*stair)\b/i,
+  },
+  { scope: "corridor", pattern: /\b(?:corridor|hallway|passageway)\b/i },
+  { scope: "partition", pattern: /\b(?:partition|barrier)\b/i },
+  { scope: "door", pattern: /\b(?:door|opening)\b/i },
+  { scope: "wall", pattern: /\b(?:wall|walls)\b/i },
+];
+
 const GENERIC_NUMERIC =
   /(?<value>\d+(?:\.\d+)?)\s*(?:'|-\s*)?(?:(?<inches>\d+(?:\.\d+)?)\s*")?(?:\s*(?<unit>persons?|people|occupants?|occ\.?|hours?|hrs?|in(?:ch(?:es)?)?|ft|feet|')\b)?/gi;
 
@@ -59,14 +70,43 @@ function inferProperty(text, index) {
   return "numeric_value";
 }
 
+function inferAssemblyScope(text, index) {
+  const windowStart = Math.max(0, index - 40);
+  const windowEnd = Math.min(text.length, index + 40);
+  const context = text.slice(windowStart, windowEnd);
+
+  let bestScope = "general";
+  let bestDistance = Infinity;
+
+  for (const { scope, pattern } of ASSEMBLY_SCOPE_PATTERNS) {
+    const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+    for (const match of context.matchAll(re)) {
+      const matchIndex = (match.index ?? 0) + windowStart;
+      const distance = Math.abs(matchIndex - index);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestScope = scope;
+      }
+    }
+  }
+
+  return bestScope;
+}
+
+function scopedPropertyKey(text, index, property) {
+  if (property !== "fire_rating_hours") return property;
+  return `${property}:${inferAssemblyScope(text, index)}`;
+}
+
 function extractMaterialValues(text) {
   const normalized = String(text ?? "");
   if (!normalized.trim()) return [];
   const values = [];
 
   for (const match of normalized.matchAll(/(\d+)\s*'\s*-?\s*(\d+(?:\.\d+)?)\s*"/gi)) {
+    const property = inferProperty(normalized, match.index ?? 0);
     values.push({
-      property: inferProperty(normalized, match.index ?? 0),
+      property: scopedPropertyKey(normalized, match.index ?? 0, property),
       numericValue: feetInchesToNumber(Number(match[1]), Number(match[2])),
       unit: "ft",
       raw: match[0],
@@ -76,8 +116,9 @@ function extractMaterialValues(text) {
   for (const match of normalized.matchAll(GENERIC_NUMERIC)) {
     const parsed = parseNumericToken(match[0], match.groups?.unit);
     if (!parsed) continue;
+    const property = inferProperty(normalized, match.index ?? 0);
     values.push({
-      property: inferProperty(normalized, match.index ?? 0),
+      property: scopedPropertyKey(normalized, match.index ?? 0, property),
       numericValue: parsed.value,
       unit: parsed.unit,
       raw: match[0],

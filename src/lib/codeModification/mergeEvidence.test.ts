@@ -609,7 +609,7 @@ describe("mergeEvidence regression A–G", () => {
             fileName: "FP-101.pdf",
             sheetLabel: "FP-101",
             pageNumber: 4,
-            excerpt: "Standpipe not included on base; see FP-102 addendum.",
+            excerpt: "Standpipe is not included on this base mock set.",
           },
         }),
       ],
@@ -620,19 +620,19 @@ describe("mergeEvidence regression A–G", () => {
           measure,
           status: "verified",
           source: {
-            fileName: "Addendum_Standpipe.pdf",
-            sheetLabel: "Addendum Standpipe",
+            fileName: "Revision_Feature_Sheet.pdf",
+            sheetLabel: "Revision Feature Sheet",
             pageNumber: 1,
             excerpt: "Class I standpipe included per addendum.",
           },
         }),
+        notFoundOnSheet("measure-standpipe", measure, "A-101.pdf", 1),
       ],
     );
 
     assert.equal(merged[0]?.status, "verified");
     assert.match(merged[0]?.note ?? "", /FP-101 p\.4/i);
-    assert.match(merged[0]?.note ?? "", /Addendum Standpipe p\.1|Addendum_Standpipe\.pdf p\.1/i);
-    assert.match(merged[0]?.source?.fileName ?? "", /Addendum_Standpipe/i);
+    assert.match(merged[0]?.note ?? "", /Revision Feature Sheet p\.1|Revision_Feature_Sheet\.pdf p\.1/i);
   });
 
   it("F. duplicate identical observations → one canonical", () => {
@@ -732,6 +732,142 @@ describe("mergeEvidence helpers", () => {
       measuresAreCanonicallyEquivalent("Provide sprinkler system", "Provide fire alarm system"),
       false,
     );
+  });
+});
+
+describe("generic synthesis defect guards A–D", () => {
+  it("A. three supportive 2-hour stair observations stay VERIFIED without numeric conflict", () => {
+    const measure = "Provide a two-hour fire rated enclosed stairway serving all occupied levels";
+    const synthesized = synthesizeMeasureEvidence({
+      id: "stair",
+      measureId: "measure-stair",
+      measure,
+      status: "verified",
+      observations: [
+        {
+          status: "verified",
+          source: {
+            fileName: "General_Notes.pdf",
+            pageNumber: 1,
+            excerpt: "2-HOUR fire rating at stair enclosure.",
+          },
+        },
+        {
+          status: "verified",
+          source: {
+            fileName: "Plan_A.pdf",
+            pageNumber: 1,
+            excerpt: "1-hour corridor partitions; stair shaft 2-hour rated.",
+          },
+        },
+        {
+          status: "verified",
+          source: {
+            fileName: "Plan_B.pdf",
+            pageNumber: 2,
+            excerpt: "Egress path to enclosed 2-hour stair.",
+          },
+        },
+      ],
+    });
+
+    assert.equal(synthesized.status, "verified");
+  });
+
+  it("B. base deferral + present revision provides Feature X → VERIFIED", () => {
+    const measure = "Include feature X";
+    const merged = mergeFindingsFromSheets(
+      [
+        finding({
+          id: "base",
+          measureId: "measure-feature-x",
+          measure,
+          status: "verified",
+          source: {
+            fileName: "Base_Set.pdf",
+            pageNumber: 2,
+            excerpt: "Feature X is not included on this base drawing set.",
+          },
+        }),
+      ],
+      [
+        finding({
+          id: "revision",
+          measureId: "measure-feature-x",
+          measure,
+          status: "verified",
+          source: {
+            fileName: "Revision_R2_Detail.pdf",
+            pageNumber: 1,
+            excerpt: "Feature X is included per revision R2.",
+          },
+        }),
+      ],
+    );
+
+    assert.equal(merged[0]?.status, "verified");
+  });
+
+  it("C. base deferral to absent revision R2 does not falsely verify unrelated support", () => {
+    const measure = "Include feature X";
+    const merged = mergeFindingsFromSheets(
+      [
+        finding({
+          id: "base",
+          measureId: "measure-feature-x",
+          measure,
+          status: "verified",
+          source: {
+            fileName: "Base_Set.pdf",
+            pageNumber: 2,
+            excerpt: "Feature X not included on base; see Revision R2 addendum.",
+          },
+        }),
+      ],
+      [
+        finding({
+          id: "other",
+          measureId: "measure-feature-x",
+          measure,
+          status: "verified",
+          source: {
+            fileName: "Unrelated_Sheet.pdf",
+            pageNumber: 1,
+            excerpt: "Feature X is included on this sheet.",
+          },
+        }),
+      ],
+    );
+
+    assert.equal(merged[0]?.status, "conflicting");
+  });
+
+  it("D. one support plus unrelated empty sheets stays VERIFIED", () => {
+    const measure = "Provide a fully automatic sprinkler system throughout the building";
+    const synthesized = synthesizeMeasureEvidence({
+      id: "sprinkler",
+      measureId: "measure-sprinkler",
+      measure,
+      status: "verified",
+      observations: [
+        {
+          status: "verified",
+          source: {
+            fileName: "M-001.pdf",
+            pageNumber: 1,
+            excerpt: "Automatic sprinkler system noted.",
+          },
+        },
+        ...Array.from({ length: 5 }, (_, index) => ({
+          status: "not_found" as const,
+          source: { fileName: `Empty_Sheet_${index + 1}.pdf`, pageNumber: 1 },
+          note: "No evidence for this measure on this sheet.",
+        })),
+      ],
+    });
+
+    assert.equal(synthesized.status, "verified");
+    assert.doesNotMatch(synthesized.note ?? "", /No evidence for this measure/i);
   });
 });
 

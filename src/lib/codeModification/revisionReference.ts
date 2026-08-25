@@ -116,12 +116,69 @@ function observationText(observation: SheetEvidenceObservation): string {
   return [observation.source?.excerpt, observation.note].filter(Boolean).join(" ").trim();
 }
 
+function observationSourcesMatch(
+  left: SheetEvidenceObservation,
+  right: SheetEvidenceObservation,
+): boolean {
+  if (left === right) return true;
+  const leftKey = [
+    left.source?.sheetId,
+    left.source?.documentId,
+    left.source?.fileName,
+    left.source?.pageNumber,
+  ].join("|");
+  const rightKey = [
+    right.source?.sheetId,
+    right.source?.documentId,
+    right.source?.fileName,
+    right.source?.pageNumber,
+  ].join("|");
+  return Boolean(leftKey) && leftKey === rightKey;
+}
+
 function isSupportingStatus(status: SheetEvidenceObservation["status"]): boolean {
   return status === "verified" || status === "partially_supported";
 }
 
 export function hasPositiveProvision(text: string, polarity: (text: string) => "negative" | "positive" | "neutral"): boolean {
   return polarity(text) === "positive";
+}
+
+function isDeferralResolutionPair(
+  base: SheetEvidenceObservation,
+  candidate: SheetEvidenceObservation,
+  allObservations: SheetEvidenceObservation[],
+  polarity: (text: string) => "negative" | "positive" | "neutral",
+): boolean {
+  if (!isSupportingStatus(candidate.status)) return false;
+  if (observationSourcesMatch(base, candidate)) return false;
+
+  const baseText = observationText(base);
+  const candidateText = observationText(candidate);
+  if (!referencesRevisionDocument(baseText)) return false;
+  if (!hasPositiveProvision(candidateText, polarity)) return false;
+
+  const targets = extractReferencedTargets(baseText);
+  if (targets.length > 0) {
+    const candidateMatchesTarget = targets.some((target) =>
+      targetMatchesSource(target, candidate.source),
+    );
+    if (candidateMatchesTarget) return true;
+
+    const referencedPresent = allObservations.some(
+      (observation) =>
+        observation !== candidate &&
+        isSupportingStatus(observation.status) &&
+        targets.some((target) => targetMatchesSource(target, observation.source)),
+    );
+    if (referencedPresent) return false;
+
+    // Named target absent from the reviewed set — do not reconcile against an unrelated sheet.
+    return false;
+  }
+
+  // Generic deferral without a named target reconciles with any positive supporting candidate.
+  return true;
 }
 
 /** Priority: reference text → stable IDs → revision metadata → filename fallback. */
@@ -131,39 +188,10 @@ export function isRevisionResolutionPair(
   allObservations: SheetEvidenceObservation[],
   polarity: (text: string) => "negative" | "positive" | "neutral",
 ): boolean {
-  const leftRevision = isRevisionEvidenceSource(left.source);
-  const rightRevision = isRevisionEvidenceSource(right.source);
-  if (leftRevision === rightRevision) return false;
-
-  const base = leftRevision ? right : left;
-  const revision = leftRevision ? left : right;
-  if (!isRevisionEvidenceSource(revision.source)) return false;
-  if (!isSupportingStatus(revision.status)) return false;
-
-  const baseText = observationText(base);
-  const revisionText = observationText(revision);
-  if (!referencesRevisionDocument(baseText)) return false;
-  if (!hasPositiveProvision(revisionText, polarity)) return false;
-
-  const targets = extractReferencedTargets(baseText);
-  if (targets.length > 0) {
-    const referencedPresent = allObservations.some(
-      (observation) =>
-        observation !== revision &&
-        isSupportingStatus(observation.status) &&
-        targets.some((target) => targetMatchesSource(target, observation.source)),
-    );
-    if (referencedPresent && !targetMatchesSource(targets[0]!, revision.source)) {
-      // Explicit reference points elsewhere — do not reconcile against an unrelated revision doc.
-      return false;
-    }
-    if (targets.some((target) => targetMatchesSource(target, revision.source))) {
-      return true;
-    }
-  }
-
-  // Stable IDs / revision metadata / filename fallback when deferral language exists.
-  return true;
+  return (
+    isDeferralResolutionPair(left, right, allObservations, polarity) ||
+    isDeferralResolutionPair(right, left, allObservations, polarity)
+  );
 }
 
 export function hasRevisionResolution(

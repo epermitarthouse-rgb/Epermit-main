@@ -43,4 +43,18 @@ describe("materialValueConflict", () => {
     );
     assert.equal(conflicts.length, 0);
   });
+
+  it("A. does not conflict fire ratings on different assemblies (corridor 1h vs stair 2h)", () => {
+    assert.equal(
+      materialValuesConflict(
+        [
+          "2-HOUR fire rating at stair enclosure.",
+          "1-hour corridor partitions; stair shaft 2-hour rated.",
+          "Egress path to enclosed 2-hour stair.",
+        ],
+        "Provide a two-hour fire rated enclosed stairway serving all occupied levels",
+      ),
+      false,
+    );
+  });
 });
