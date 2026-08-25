@@ -36,6 +36,7 @@ import {
 } from "./rawObservationNormalization";
 import {
   assessComponentCoverage,
+  observationRelatesToMeasure,
   observationsShareComponent,
 } from "./measureComponentCompleteness";
 import { isIncompleteEvidenceLanguage } from "./evidencePolarity";
@@ -121,6 +122,9 @@ function isSupportingStatus(status: EvidenceStatus): boolean {
 
 function isSubstantiveObservation(observation: SheetEvidenceObservation): boolean {
   if (hasValidatedModelConflict(observation)) return true;
+  if (observation.status === "requires_professional_dob_review") {
+    return Boolean(observationText(observation));
+  }
   if (isSupportingStatus(observation.status)) return Boolean(observationText(observation));
   return false;
 }
@@ -129,9 +133,10 @@ function isGenericPerSheetNotFound(text: string): boolean {
   return /^no evidence for this measure on this sheet\.?$/i.test(text.trim());
 }
 
-/** D. classify relevance — explicit metadata first, then substantive content rules. */
+/** D. classify relevance — explicit metadata, substantive content, and measure-local lexical match. */
 export function classifyObservationRelevance(
   observation: SheetEvidenceObservation,
+  measureText: string,
 ): boolean {
   if (typeof observation.relevant === "boolean") return observation.relevant;
   if (observation.status === "not_found") {
@@ -140,7 +145,8 @@ export function classifyObservationRelevance(
     if (isGenericPerSheetNotFound(text)) return false;
     return false;
   }
-  return isSubstantiveObservation(observation);
+  if (!isSubstantiveObservation(observation)) return false;
+  return observationRelatesToMeasure(observationText(observation), measureText);
 }
 
 function dedupeObservations(observations: SheetEvidenceObservation[]): SheetEvidenceObservation[] {
@@ -157,6 +163,7 @@ function dedupeObservations(observations: SheetEvidenceObservation[]): SheetEvid
 
 function formatObservationNotes(
   observations: SheetEvidenceObservation[],
+  measureText: string,
   options?: { includeNotFound?: boolean },
 ): string | null {
   const includeNotFound = options?.includeNotFound === true;
@@ -166,7 +173,10 @@ function formatObservationNotes(
 
   for (const observation of observations) {
     if (!includeNotFound && observation.status === "not_found") continue;
-    if (!classifyObservationRelevance(observation) && observation.status === "not_found") continue;
+    if (!classifyObservationRelevance(observation, measureText) && observation.status === "not_found") {
+      continue;
+    }
+    if (!classifyObservationRelevance(observation, measureText)) continue;
 
     const citation = formatSourceCitation(observation.source);
     const text = observationText(observation);
@@ -218,7 +228,11 @@ function observationsContradict(
   observations: SheetEvidenceObservation[],
   measureText: string,
 ): boolean {
-  const substantive = observations.filter(isSubstantiveObservation);
+  const substantive = observations.filter(
+    (observation) =>
+      isSubstantiveObservation(observation) &&
+      classifyObservationRelevance(observation, measureText),
+  );
 
   for (let i = 0; i < substantive.length; i += 1) {
     for (let j = i + 1; j < substantive.length; j += 1) {
@@ -261,15 +275,22 @@ function observationsContradict(
 
 function pickPrimaryObservation(
   observations: SheetEvidenceObservation[],
+  measureText: string,
   options?: { preferRevisionPrecedence?: boolean; requireRelevant?: boolean },
-): SheetEvidenceObservation {
+): SheetEvidenceObservation | null {
   const preferRevision = options?.preferRevisionPrecedence === true;
   const requireRelevant = options?.requireRelevant !== false;
   const pool = observations.filter((observation) =>
-    requireRelevant ? classifyObservationRelevance(observation) : true,
+    requireRelevant ? classifyObservationRelevance(observation, measureText) : true,
   );
-  const candidates = pool.length > 0 ? pool : observations.filter(isSubstantiveObservation);
-  const fallback = candidates.length > 0 ? candidates : observations;
+  const candidates =
+    pool.length > 0
+      ? pool
+      : requireRelevant
+        ? []
+        : observations.filter(isSubstantiveObservation);
+  const fallback = candidates.length > 0 ? candidates : requireRelevant ? [] : observations;
+  if (fallback.length === 0) return null;
 
   const ranked = fallback.slice().sort((left, right) => {
     const statusDelta = (STATUS_RANK[right.status] ?? 0) - (STATUS_RANK[left.status] ?? 0);
@@ -287,7 +308,7 @@ function pickPrimaryObservation(
     if (revision) return revision;
   }
 
-  return ranked[0] ?? observations[0]!;
+  return ranked[0] ?? null;
 }
 
 function aggregateStatus(observations: SheetEvidenceObservation[]): EvidenceStatus {
@@ -312,12 +333,20 @@ function reconcileFinalStatus(input: {
 
   if (shouldConflict) return "conflicting";
 
-  if (observations.some((observation) => observation.status === "requires_professional_dob_review")) {
+  const isRelevant = (observation: SheetEvidenceObservation) =>
+    classifyObservationRelevance(observation, measure);
+
+  if (
+    observations.some(
+      (observation) =>
+        observation.status === "requires_professional_dob_review" && isRelevant(observation),
+    )
+  ) {
     return "requires_professional_dob_review";
   }
 
   const relevantSupporting = observations.filter(
-    (observation) => classifyObservationRelevance(observation) && isSupportingStatus(observation.status),
+    (observation) => isRelevant(observation) && isSupportingStatus(observation.status),
   );
 
   if (relevantSupporting.length === 0) return "not_found";
@@ -328,12 +357,7 @@ function reconcileFinalStatus(input: {
   if (allAbsenceOnly) return "not_found";
 
   const substantiveTexts = observations
-    .filter(
-      (observation) =>
-        classifyObservationRelevance(observation) ||
-        isSubstantiveObservation(observation) ||
-        evidencePolarity(observationText(observation)) !== "neutral",
-    )
+    .filter((observation) => isRelevant(observation))
     .map((observation) => observationText(observation))
     .filter(Boolean);
 
@@ -355,25 +379,25 @@ function renderFinalNote(input: {
   observations: SheetEvidenceObservation[];
   finding: MergeableEvidenceFinding;
   supporting: SheetEvidenceObservation[];
-  primary: SheetEvidenceObservation;
+  primary: SheetEvidenceObservation | null;
 }): string | null {
   const { status, observations, finding, supporting, primary } = input;
+  const measureText = finding.measure;
 
   if (status === "not_found") {
-    const relevant = observations.filter((observation) => classifyObservationRelevance(observation));
-    if (relevant.length === 0) return NOT_FOUND_NOTE;
-    return formatObservationNotes(relevant) || NOT_FOUND_NOTE;
+    return NOT_FOUND_NOTE;
   }
 
   if (status === "conflicting") {
     const conflictPool = observations.filter(
       (observation) =>
-        hasValidatedModelConflict(observation) ||
-        isSupportingStatus(observation.status) ||
-        evidencePolarity(observationText(observation)) !== "neutral",
+        classifyObservationRelevance(observation, measureText) &&
+        (hasValidatedModelConflict(observation) ||
+          isSupportingStatus(observation.status) ||
+          evidencePolarity(observationText(observation)) !== "neutral"),
     );
     return (
-      formatObservationNotes(conflictPool) ||
+      formatObservationNotes(conflictPool, measureText) ||
       finding.note ||
       "Conflicting evidence across submitted drawing sheets."
     );
@@ -388,17 +412,19 @@ function renderFinalNote(input: {
         return (sourceIdentity(left.source) ?? "").localeCompare(sourceIdentity(right.source) ?? "");
       })
       .slice(0, 2);
-    return formatObservationNotes(ranked) || primary.note || finding.note || null;
+    return formatObservationNotes(ranked, measureText) || primary?.note || finding.note || null;
   }
 
-  return primary.note ?? finding.note ?? null;
+  return primary?.note ?? finding.note ?? null;
 }
 
 export function validateSynthesisInvariants(finding: MergeableEvidenceFinding): string[] {
   const violations: string[] = [];
   const observations = finding.observations ?? [];
   const relevantSupporting = observations.filter(
-    (observation) => classifyObservationRelevance(observation) && isSupportingStatus(observation.status),
+    (observation) =>
+      classifyObservationRelevance(observation, finding.measure) &&
+      isSupportingStatus(observation.status),
   );
 
   if (finding.status === "not_found" && finding.source) {
@@ -460,13 +486,17 @@ export function synthesizeMeasureEvidence(
 
   const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
   const relevantSupporting = supporting.filter((observation) =>
-    classifyObservationRelevance(observation),
+    classifyObservationRelevance(observation, finding.measure),
   );
 
   // 8. detect genuine conflicts only — absence and raw model labels do not auto-conflict
   const shouldConflict =
     !revisionResolution &&
-    (observations.some((observation) => hasValidatedModelConflict(observation)) ||
+    (observations.some(
+      (observation) =>
+        hasValidatedModelConflict(observation) &&
+        classifyObservationRelevance(observation, finding.measure),
+    ) ||
       observationsContradict(observations, finding.measure));
 
   // G. aggregate status with deterministic reconciliation
@@ -478,18 +508,28 @@ export function synthesizeMeasureEvidence(
   });
 
   // H. select strongest relevant citations
-  const primary = shouldConflict
-    ? pickPrimaryObservation(
-        observations.filter(
-          (observation) =>
-            hasValidatedModelConflict(observation) || isSupportingStatus(observation.status),
-        ),
-        { requireRelevant: true },
-      )
-    : pickPrimaryObservation(relevantSupporting.length > 0 ? relevantSupporting : observations, {
-        preferRevisionPrecedence: preferRevision,
-        requireRelevant: status !== "not_found",
-      });
+  const professionalReview = observations.filter(
+    (observation) =>
+      observation.status === "requires_professional_dob_review" &&
+      classifyObservationRelevance(observation, finding.measure),
+  );
+  const primaryPool =
+    relevantSupporting.length > 0
+      ? relevantSupporting
+      : status === "requires_professional_dob_review"
+        ? professionalReview
+        : shouldConflict
+          ? observations.filter(
+              (observation) =>
+                classifyObservationRelevance(observation, finding.measure) &&
+                (hasValidatedModelConflict(observation) || isSupportingStatus(observation.status)),
+            )
+          : [];
+
+  const primary = pickPrimaryObservation(primaryPool, finding.measure, {
+    preferRevisionPrecedence: preferRevision,
+    requireRelevant: true,
+  });
 
   const note = renderFinalNote({
     status,
@@ -499,12 +539,16 @@ export function synthesizeMeasureEvidence(
     primary,
   });
 
-  if (status === "not_found" && !classifyObservationRelevance(primary)) {
+  if (
+    status === "not_found" ||
+    !primary ||
+    !classifyObservationRelevance(primary, finding.measure)
+  ) {
     return {
       id: finding.id,
       measureId: finding.measureId ?? null,
       measure: finding.measure,
-      status,
+      status: "not_found",
       source: null,
       note: NOT_FOUND_NOTE,
       observations,

@@ -5,6 +5,7 @@
 
 import { evidencePolarity, isAbsenceLanguage, isIncompleteEvidenceLanguage } from "./evidencePolarity";
 import { referencesRevisionDocument } from "./revisionReference";
+import { observationRelatesToMeasure } from "./measureComponentCompleteness";
 import { isEvidenceStatus, type EvidenceSource, type EvidenceStatus } from "./model";
 
 export interface NormalizableObservation {
@@ -41,7 +42,7 @@ export function normalizeEvidenceStatus(raw: string | null | undefined): Evidenc
   ) {
     return "requires_professional_dob_review";
   }
-  return isEvidenceStatus(value) ? value : "requires_professional_dob_review";
+  return isEvidenceStatus(value) ? value : "not_found";
 }
 
 export function observationText(observation: NormalizableObservation): string {
@@ -75,12 +76,16 @@ export function validateModelStatusAgainstEvidence(
   observation: NormalizableObservation,
   options?: { measureText?: string },
 ): EvidenceStatus {
-  void options?.measureText;
+  const measureText = options?.measureText ?? "";
   const status = normalizeEvidenceStatus(observation.status);
   const text = evidenceTextForValidation(observation);
+  const relevanceText = observationText(observation);
   const polarity = evidencePolarity(text);
+  const relatesToMeasure =
+    !measureText || observationRelatesToMeasure(relevanceText, measureText);
 
   if (status === "requires_professional_dob_review") {
+    if (!relatesToMeasure) return "not_found";
     if (polarity === "positive") return "verified";
     if (polarity === "negative" || isIncompleteEvidenceLanguage(text)) {
       return "not_found";
@@ -89,6 +94,7 @@ export function validateModelStatusAgainstEvidence(
   }
 
   if (status === "conflicting") {
+    if (!relatesToMeasure) return "not_found";
     if (!text || isGenericPerSheetNotFound(text)) return "not_found";
     if (isIncompleteEvidenceLanguage(text)) return "not_found";
     if (referencesRevisionDocument(text)) {
@@ -102,6 +108,7 @@ export function validateModelStatusAgainstEvidence(
   }
 
   if (status === "verified" || status === "partially_supported") {
+    if (!relatesToMeasure) return "not_found";
     if (!text) return "not_found";
     if (isGenericPerSheetNotFound(text)) return "not_found";
     if (isAbsenceOrIncompleteLanguage(text) && !referencesRevisionDocument(text)) return "not_found";
@@ -112,7 +119,9 @@ export function validateModelStatusAgainstEvidence(
   }
 
   if (status === "not_found") {
-    if (polarity === "positive" && text && !isGenericPerSheetNotFound(text)) return "verified";
+    if (polarity === "positive" && text && !isGenericPerSheetNotFound(text) && relatesToMeasure) {
+      return "verified";
+    }
     return "not_found";
   }
 

@@ -39,6 +39,7 @@ const TOKEN_STOP = new Set([
   "maintain",
   "include",
   "incorporate",
+  "incorporated",
   "install",
   "serving",
   "below",
@@ -46,6 +47,26 @@ const TOKEN_STOP = new Set([
   "than",
   "maximum",
   "minimum",
+  "from",
+]);
+
+/** Shared domain words — one overlap alone is not enough for measure relevance. */
+const WEAK_MATCH_TOKENS = new Set([
+  "system",
+  "building",
+  "level",
+  "floor",
+  "sheet",
+  "design",
+  "designed",
+  "installed",
+  "accordance",
+  "requirement",
+  "visible",
+  "shown",
+  "review",
+  "meeting",
+  "june",
 ]);
 
 function significantTokens(text: string): string[] {
@@ -109,9 +130,20 @@ function tokenOverlapCount(text: string, tokens: string[]): number {
 
 export function observationRelatesToComponent(text: string, component: MeasureComponent): boolean {
   if (!text.trim()) return false;
-  const overlap = tokenOverlapCount(text, component.tokens);
+  const matchingTokens = component.tokens.filter((token) => tokenMatches(text, token));
+  if (matchingTokens.length === 0) return false;
   const threshold = Math.max(1, Math.ceil(component.tokens.length * 0.2));
-  return overlap >= threshold;
+  if (matchingTokens.length >= threshold) return true;
+  return matchingTokens.some(
+    (token) => token.length >= 5 && !WEAK_MATCH_TOKENS.has(token),
+  );
+}
+
+/** True when observation text lexically relates to at least one parsed measure component. */
+export function observationRelatesToMeasure(text: string, measureText: string): boolean {
+  const components = parseMeasureComponents(measureText);
+  if (!text.trim() || components.length === 0) return false;
+  return components.some((component) => observationRelatesToComponent(text, component));
 }
 
 export function observationSupportsComponent(text: string, component: MeasureComponent): boolean {

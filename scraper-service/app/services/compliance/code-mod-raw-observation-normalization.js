@@ -6,6 +6,7 @@ const {
   isIncompleteEvidenceLanguage,
 } = require("./code-mod-evidence-polarity.js");
 const { referencesRevisionDocument } = require("./code-mod-revision-reference.js");
+const { observationRelatesToMeasure } = require("./code-mod-measure-component-completeness.js");
 
 const EVIDENCE_STATUSES = new Set([
   "verified",
@@ -42,7 +43,7 @@ function normalizeEvidenceStatus(raw) {
   ) {
     return "requires_professional_dob_review";
   }
-  return EVIDENCE_STATUSES.has(value) ? value : "requires_professional_dob_review";
+  return EVIDENCE_STATUSES.has(value) ? value : "not_found";
 }
 
 function observationText(observation) {
@@ -63,18 +64,23 @@ function hasExplicitContradictionLanguage(text) {
   return EXPLICIT_CONTRADICTION.test(text);
 }
 
-function validateModelStatusAgainstEvidence(observation) {
+function validateModelStatusAgainstEvidence(observation, options = {}) {
+  const measureText = options.measureText || "";
   const status = normalizeEvidenceStatus(observation.status);
   const text = evidenceTextForValidation(observation);
+  const relevanceText = observationText(observation);
   const polarity = evidencePolarity(text);
+  const relatesToMeasure = !measureText || observationRelatesToMeasure(relevanceText, measureText);
 
   if (status === "requires_professional_dob_review") {
+    if (!relatesToMeasure) return "not_found";
     if (polarity === "positive") return "verified";
     if (polarity === "negative" || isIncompleteEvidenceLanguage(text)) return "not_found";
     return status;
   }
 
   if (status === "conflicting") {
+    if (!relatesToMeasure) return "not_found";
     if (!text || isGenericPerSheetNotFound(text)) return "not_found";
     if (isIncompleteEvidenceLanguage(text)) return "not_found";
     if (referencesRevisionDocument(text)) {
@@ -88,6 +94,7 @@ function validateModelStatusAgainstEvidence(observation) {
   }
 
   if (status === "verified" || status === "partially_supported") {
+    if (!relatesToMeasure) return "not_found";
     if (!text) return "not_found";
     if (isGenericPerSheetNotFound(text)) return "not_found";
     if (isAbsenceOrIncompleteLanguage(text) && !referencesRevisionDocument(text)) return "not_found";
@@ -98,7 +105,9 @@ function validateModelStatusAgainstEvidence(observation) {
   }
 
   if (status === "not_found") {
-    if (polarity === "positive" && text && !isGenericPerSheetNotFound(text)) return "verified";
+    if (polarity === "positive" && text && !isGenericPerSheetNotFound(text) && relatesToMeasure) {
+      return "verified";
+    }
     return "not_found";
   }
 
@@ -106,10 +115,9 @@ function validateModelStatusAgainstEvidence(observation) {
 }
 
 function normalizeRawObservations(observations, measureText) {
-  void measureText;
   return observations.map((observation) => ({
     ...observation,
-    status: validateModelStatusAgainstEvidence(observation),
+    status: validateModelStatusAgainstEvidence(observation, { measureText }),
   }));
 }
 

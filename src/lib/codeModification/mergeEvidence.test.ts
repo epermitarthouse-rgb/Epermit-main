@@ -269,7 +269,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Base_Set.pdf",
             pageNumber: 4,
-            excerpt: "Requirement not included on base; see Supplement_01 addendum.",
+            excerpt: "Standpipe not included on base; see Supplement_01 addendum.",
           },
         }),
       ],
@@ -282,7 +282,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Supplement_01.pdf",
             pageNumber: 1,
-            excerpt: "Requirement included per addendum.",
+            excerpt: "Standpipe included per addendum.",
           },
         }),
       ],
@@ -305,7 +305,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Base_Set.pdf",
             pageNumber: 4,
-            excerpt: "Requirement not included on base; see Supplement_99 addendum.",
+            excerpt: "Standpipe not included on base; see Supplement_99 addendum.",
           },
         }),
       ],
@@ -318,7 +318,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "A-101.pdf",
             pageNumber: 1,
-            excerpt: "Requirement is included on this sheet.",
+            excerpt: "Standpipe is included on this sheet.",
           },
         }),
       ],
@@ -350,7 +350,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
         measureId: "measure-sprinkler",
         measure,
         status: "verified",
-        source: { fileName: "FP-101.pdf", pageNumber: 3, excerpt: "Riser shown." },
+        source: { fileName: "FP-101.pdf", pageNumber: 3, excerpt: "Sprinkler riser shown." },
       }),
     ];
 
@@ -382,7 +382,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Base_Set.pdf",
             pageNumber: 4,
-            excerpt: "Requirement not included on base; see Supplement_01 addendum.",
+            excerpt: "Standpipe not included on base; see Supplement_01 addendum.",
           },
         }),
       ],
@@ -395,7 +395,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Supplement_01.pdf",
             pageNumber: 1,
-            excerpt: "Requirement included per addendum.",
+            excerpt: "Standpipe included per addendum.",
           },
         }),
       ],
@@ -411,7 +411,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Drawing_A.pdf",
             pageNumber: 4,
-            excerpt: "Requirement not included on base; see Supplement_01 addendum.",
+            excerpt: "Standpipe not included on base; see Supplement_01 addendum.",
           },
         }),
       ],
@@ -424,7 +424,7 @@ describe("mergeEvidence synthesis hardening A–L", () => {
           source: {
             fileName: "Drawing_B_Addendum.pdf",
             pageNumber: 1,
-            excerpt: "Requirement included per addendum.",
+            excerpt: "Standpipe included per addendum.",
           },
         }),
       ],
@@ -1096,6 +1096,33 @@ describe("1513 regression fixture synthesis", () => {
     assert.notEqual(row.status, "verified");
     assert.equal(row.status, "not_found");
     assert.equal(row.source, null);
+    assert.equal(validateSynthesisInvariants(row).length, 0);
+  });
+
+  it("PDRM ignores mis-assigned feature-sheet evidence from another measure", () => {
+    const pdrm = measureByPattern(/PDRM/i);
+    const merged = mergeSheetFindings([
+      finding({
+        id: "pdrm-leak",
+        measureId: pdrm.id,
+        measure: pdrm.description,
+        status: "requires_professional_dob_review",
+        source: {
+          fileName: "FP-102.pdf",
+          sheetLabel: "FP-102",
+          pageNumber: 1,
+          excerpt: "Class I standpipe noted on riser diagram.",
+        },
+        note: "Standpipe shown on FP-102.",
+      }),
+    ]);
+
+    const row = merged.find((entry) => entry.measureId === pdrm.id);
+    assert.ok(row);
+    assert.equal(row.status, "not_found");
+    assert.equal(row.source, null);
+    assert.doesNotMatch(row.note ?? "", /standpipe/i);
+    assert.doesNotMatch(row.note ?? "", /FP-102/i);
     assert.equal(validateSynthesisInvariants(row).length, 0);
   });
 });

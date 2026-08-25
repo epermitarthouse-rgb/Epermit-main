@@ -29,6 +29,7 @@ const TOKEN_STOP = new Set([
   "maintain",
   "include",
   "incorporate",
+  "incorporated",
   "install",
   "serving",
   "below",
@@ -36,6 +37,25 @@ const TOKEN_STOP = new Set([
   "than",
   "maximum",
   "minimum",
+  "from",
+]);
+
+const WEAK_MATCH_TOKENS = new Set([
+  "system",
+  "building",
+  "level",
+  "floor",
+  "sheet",
+  "design",
+  "designed",
+  "installed",
+  "accordance",
+  "requirement",
+  "visible",
+  "shown",
+  "review",
+  "meeting",
+  "june",
 ]);
 
 function significantTokens(text) {
@@ -98,9 +118,19 @@ function tokenOverlapCount(text, tokens) {
 
 function observationRelatesToComponent(text, component) {
   if (!text.trim()) return false;
-  const overlap = tokenOverlapCount(text, component.tokens);
+  const matchingTokens = component.tokens.filter((token) => tokenMatches(text, token));
+  if (matchingTokens.length === 0) return false;
   const threshold = Math.max(1, Math.ceil(component.tokens.length * 0.2));
-  return overlap >= threshold;
+  if (matchingTokens.length >= threshold) return true;
+  return matchingTokens.some(
+    (token) => token.length >= 5 && !WEAK_MATCH_TOKENS.has(token),
+  );
+}
+
+function observationRelatesToMeasure(text, measureText) {
+  const components = parseMeasureComponents(measureText);
+  if (!text.trim() || components.length === 0) return false;
+  return components.some((component) => observationRelatesToComponent(text, component));
 }
 
 function observationSupportsComponent(text, component) {
@@ -148,6 +178,7 @@ function observationsShareComponent(left, right, measureText) {
 module.exports = {
   parseMeasureComponents,
   observationRelatesToComponent,
+  observationRelatesToMeasure,
   observationSupportsComponent,
   assessComponentCoverage,
   observationsShareComponent,
