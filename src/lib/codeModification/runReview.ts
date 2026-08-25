@@ -28,6 +28,35 @@ import { analyzerWorkflowFor } from "@/lib/codeModification/workflow";
 import { pdfPagesToImageFiles } from "@/lib/pdfToImage";
 import { extractPdfTextAllPages } from "@/utils/extractDocumentText";
 import type { ProjectDocument } from "@/types/document";
+import {
+  dedupeSheetsBySourcePage,
+  existingAnalyzerSourceRefs,
+} from "@/lib/codeAnalyzer/sourceIdentity";
+
+export interface CodeModificationDrawingUploadOutcome {
+  total: number;
+  failed: number;
+  failedSourceIds: string[];
+  persistedSheetCount: number;
+}
+
+export class CodeModificationReviewError extends Error {
+  readonly drawingUpload?: CodeModificationDrawingUploadOutcome;
+  readonly persistedSheets?: CodeAnalyzerSheet[];
+
+  constructor(
+    message: string,
+    partial?: {
+      drawingUpload?: CodeModificationDrawingUploadOutcome;
+      persistedSheets?: CodeAnalyzerSheet[];
+    },
+  ) {
+    super(message);
+    this.name = "CodeModificationReviewError";
+    this.drawingUpload = partial?.drawingUpload;
+    this.persistedSheets = partial?.persistedSheets;
+  }
+}
 
 async function loadFormFile(
   doc: ProjectDocument,
@@ -101,7 +130,7 @@ export async function runDcCodeModificationReview(params: {
 }): Promise<{
   review: CodeModificationReview;
   forms: ProjectDocument[];
-  drawingUpload?: { total: number; failed: number; failedSourceIds: string[] };
+  drawingUpload?: CodeModificationDrawingUploadOutcome;
 }> {
   const workflow = analyzerWorkflowFor("dc_code_modification", params.jurisdiction);
   if (!workflow.ok) {
@@ -109,9 +138,10 @@ export async function runDcCodeModificationReview(params: {
   }
 
   let sheets = params.persistedSheets;
-  let drawingUpload: { total: number; failed: number; failedSourceIds: string[] } | undefined;
+  let drawingUpload: CodeModificationDrawingUploadOutcome | undefined;
   if (params.pendingDrawingFiles.length > 0) {
     const pendingCount = params.pendingDrawingFiles.length;
+    const existingSources = existingAnalyzerSourceRefs(params.persistedSheets, params.sheetDocuments);
     const persisted = await persistPendingAnalyzerSources({
       projectId: params.projectId,
       pendingFiles: params.pendingDrawingFiles.map((f) => ({
@@ -120,6 +150,7 @@ export async function runDcCodeModificationReview(params: {
         discipline: (f.discipline ?? "general") as never,
       })),
       existingSheets: sheets,
+      existingSources,
       uploadDocument: params.persistUpload,
       renderPdfPages: pdfPagesToImageFiles,
       onUploadProgress: params.onUploadProgress,
@@ -129,6 +160,7 @@ export async function runDcCodeModificationReview(params: {
       total: pendingCount,
       failed: persisted.failedSources.length,
       failedSourceIds: persisted.failedSources.map((f) => f.id),
+      persistedSheetCount: persisted.sheets.length,
     };
     sheets = [...sheets, ...persisted.sheets];
   }
@@ -157,11 +189,13 @@ export async function runDcCodeModificationReview(params: {
   const exclusionDocs = [...Array.from(docsById.values()), ...modificationForms].filter(
     (doc, index, arr) => arr.findIndex((other) => other.id === doc.id) === index,
   );
-  const evidenceSheets = resolveCodeModDrawingEvidence({
-    sheets,
-    documents: exclusionDocs,
-    formDocuments: formDocs,
-  });
+  const evidenceSheets = dedupeSheetsBySourcePage(
+    resolveCodeModDrawingEvidence({
+      sheets,
+      documents: exclusionDocs,
+      formDocuments: formDocs,
+    }),
+  );
   const excludedEvidenceDocumentIds = buildFormExclusionDocumentIds(
     exclusionDocs,
     formDocs,
@@ -259,6 +293,7 @@ export async function runDcCodeModificationReview(params: {
     return { review, forms: formDocs, drawingUpload };
   } catch (err) {
     await completeAnalyzerRun(run.id, "failed").catch(() => undefined);
-    throw err;
+    const message = err instanceof Error ? err.message : "Code Modification Review failed";
+    throw new CodeModificationReviewError(message, { drawingUpload, persistedSheets: sheets });
   }
 }

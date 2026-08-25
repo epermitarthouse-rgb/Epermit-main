@@ -14,6 +14,14 @@ import { inferSheetNumberFromLabel } from "./indexCompleteness";
 import { insertAnalyzerSheet } from "./persistence";
 import type { PdfPageImageFile } from "@/lib/pdfToImage";
 import type { DrawingUploadProgress } from "./uploadBatchProgress";
+import {
+  buildExistingSourceIdentityIndex,
+  computeSourceFileSha256,
+  existingSheetKeys,
+  resolveExistingSourceDocumentId,
+  sheetIdentityKey,
+  type ExistingAnalyzerSourceRef,
+} from "./sourceIdentity";
 
 export interface PersistPendingFailedSource {
   id: string;
@@ -40,6 +48,8 @@ export async function persistPendingAnalyzerSources(params: {
   projectId: string;
   pendingFiles: PersistPendingSourceFile[];
   existingSheets: CodeAnalyzerSheet[];
+  /** Root source documents already on the project (for content/metadata dedupe). */
+  existingSources?: ExistingAnalyzerSourceRef[];
   uploadDocument: PersistPendingUploadDocument;
   renderPdfPages: (file: File) => Promise<{
     pages: PdfPageImageFile[];
@@ -80,7 +90,11 @@ export async function persistPendingAnalyzerSources(params: {
     fileName: string;
     discipline: DocumentDiscipline;
     pages: Array<{ pageNumber: number; imageFile: File | null; imageDocId?: string }>;
+    reusedExistingSource: boolean;
   }> = [];
+  const knownSheetKeys = existingSheetKeys(params.existingSheets);
+  const sourceIdentityIndex = buildExistingSourceIdentityIndex(params.existingSources ?? []);
+  const batchSha256ToSourceId = new Map<string, string>();
 
   if (totalSources > 0) {
     emitProgress({ currentFileName: params.pendingFiles[0]?.file.name });
@@ -95,16 +109,37 @@ export async function persistPendingAnalyzerSources(params: {
     });
 
     try {
+      const contentSha256 = await computeSourceFileSha256(pending.file);
+      const batchExistingId = batchSha256ToSourceId.get(contentSha256);
+      const existingSourceId =
+        batchExistingId ??
+        resolveExistingSourceDocumentId(sourceIdentityIndex, {
+          contentSha256,
+          fileName: pending.file.name,
+          fileSize: pending.file.size,
+        });
+
       const isPdf = isPdfFile(pending.file);
-      const sourceDoc = await params.uploadDocument({
-        file: pending.file,
-        document_type: "permit_drawing",
-        description: isPdf
-          ? `AI Code Analyzer source drawing (PDF)`
-          : `AI Code Analyzer source drawing`,
-      });
-      if (!sourceDoc) {
-        throw new Error(`Failed to upload ${pending.file.name}`);
+      let sourceDoc: { id: string; file_name?: string };
+      let reusedExistingSource = false;
+
+      if (existingSourceId) {
+        sourceDoc = { id: existingSourceId, file_name: pending.file.name };
+        reusedExistingSource = true;
+        batchSha256ToSourceId.set(contentSha256, existingSourceId);
+      } else {
+        const uploaded = await params.uploadDocument({
+          file: pending.file,
+          document_type: "permit_drawing",
+          description: isPdf
+            ? `AI Code Analyzer source drawing (PDF)`
+            : `AI Code Analyzer source drawing`,
+        });
+        if (!uploaded) {
+          throw new Error(`Failed to upload ${pending.file.name}`);
+        }
+        sourceDoc = uploaded;
+        batchSha256ToSourceId.set(contentSha256, sourceDoc.id);
       }
 
       let pages: Array<{ pageNumber: number; imageFile: File }>;
@@ -140,6 +175,7 @@ export async function persistPendingAnalyzerSources(params: {
         fileName: pending.file.name,
         discipline: pending.discipline,
         pages: pages.map((p) => ({ pageNumber: p.pageNumber, imageFile: p.imageFile })),
+        reusedExistingSource,
       });
     } catch (err) {
       failedSources.push({
@@ -176,6 +212,11 @@ export async function persistPendingAnalyzerSources(params: {
   for (const source of staged) {
     try {
       for (const page of source.pages) {
+        const sheetKey = sheetIdentityKey(source.sourceId, page.pageNumber);
+        if (knownSheetKeys.has(sheetKey)) {
+          continue;
+        }
+
         const key = sheetFingerprintKey({
           source_document_id: source.sourceId,
           page_number: page.pageNumber,
@@ -183,7 +224,7 @@ export async function persistPendingAnalyzerSources(params: {
         const excluded = !allocation.includedKeys.has(key);
         let imageDocumentId = source.sourceId;
         const pageIsDistinctImage = isPdfFile({ name: source.fileName }) || page.pageNumber > 1;
-        if (pageIsDistinctImage && isPdfFile({ name: source.fileName })) {
+        if (pageIsDistinctImage && isPdfFile({ name: source.fileName }) && !source.reusedExistingSource) {
           const imageDoc = await params.uploadDocument({
             file: page.imageFile!,
             document_type: "permit_drawing",
@@ -195,6 +236,20 @@ export async function persistPendingAnalyzerSources(params: {
           }
           imageDocumentId = imageDoc.id;
           page.imageFile = null;
+        } else if (pageIsDistinctImage && isPdfFile({ name: source.fileName }) && source.reusedExistingSource) {
+          const existingSheet = params.existingSheets.find(
+            (sheet) =>
+              sheet.source_document_id === source.sourceId &&
+              sheet.page_number === page.pageNumber,
+          );
+          if (existingSheet?.image_document_id) {
+            imageDocumentId = existingSheet.image_document_id;
+          } else {
+            warnings.push(
+              `${source.fileName} page ${page.pageNumber} is already registered but missing a rendered page image.`,
+            );
+            continue;
+          }
         }
 
         const sheet = await insertSheet({
@@ -208,6 +263,7 @@ export async function persistPendingAnalyzerSources(params: {
           excluded,
         });
         created.push(sheet);
+        knownSheetKeys.add(sheetKey);
       }
     } catch (err) {
       if (!failedSources.some((f) => f.id === source.pendingId)) {

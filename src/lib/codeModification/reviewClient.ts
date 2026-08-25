@@ -86,6 +86,13 @@ export async function requestCodeModificationReview(
       codeYear: params.codeYear,
       analysisInstructions: params.analysisInstructions?.trim() || undefined,
     }),
+  }).catch((err: unknown) => {
+    if (err instanceof TypeError) {
+      throw new Error(
+        "Network error reaching the Code Modification review service. Large drawing payloads can exceed browser or server limits (50MB). Try removing duplicate drawings and retry.",
+      );
+    }
+    throw err;
   });
 
   let data: { error?: string } & Partial<CodeModificationReviewResult>;

@@ -189,7 +189,12 @@ import {
   fetchModificationForms,
   fetchModificationReviewForRun,
 } from "@/lib/codeModification/persistence";
-import { runDcCodeModificationReview } from "@/lib/codeModification/runReview";
+import {
+  runDcCodeModificationReview,
+  CodeModificationReviewError,
+  type CodeModificationDrawingUploadOutcome,
+} from "@/lib/codeModification/runReview";
+import { existingAnalyzerSourceRefs } from "@/lib/codeAnalyzer/sourceIdentity";
 import { isDcJurisdiction } from "@/lib/codeModification/workflow";
 
 interface ComplianceIssue {
@@ -1457,6 +1462,17 @@ export function AIComplianceAnalyzer() {
           continue;
         }
 
+        const duplicatePending = files.some(
+          (existing) =>
+            isPendingSessionUpload(existing) &&
+            existing.file.name === file.name &&
+            existing.file.size === file.size,
+        );
+        if (duplicatePending) {
+          toast.info(`${file.name} is already queued for this upload`);
+          continue;
+        }
+
         if (file.type.startsWith("image/")) {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -1678,6 +1694,7 @@ export function AIComplianceAnalyzer() {
             projectId: selectedProjectId,
             pendingFiles,
             existingSheets: sheets,
+            existingSources: existingAnalyzerSourceRefs(sheets, sheetDocuments),
             uploadDocument: persistUpload,
             renderPdfPages: pdfPagesToImageFiles,
             onUploadProgress: setDrawingUploadProgress,
@@ -1955,6 +1972,55 @@ export function AIComplianceAnalyzer() {
     ],
   );
 
+  const finalizeCodeModDrawingUpload = useCallback(
+    async (
+      drawingUpload: CodeModificationDrawingUploadOutcome | undefined,
+      pendingDrawingFiles: Array<{ id: string; file: File }>,
+      projectId: string,
+    ) => {
+      if (!drawingUpload) return;
+
+      const uploadSucceeded = drawingUpload.total - drawingUpload.failed;
+      const uploadToast = formatUploadCompletionToast({
+        total: drawingUpload.total,
+        succeeded: uploadSucceeded,
+        failed: drawingUpload.failed,
+        singleFileName:
+          drawingUpload.total === 1 ? pendingDrawingFiles[0]?.file.name : undefined,
+      });
+      if (uploadToast) {
+        if (uploadToast.type === "success") toast.success(uploadToast.message);
+        else if (uploadToast.type === "warning") toast.warning(uploadToast.message);
+        else toast.error(uploadToast.message);
+      }
+
+      if (
+        shouldClearUploadProgress({
+          total: drawingUpload.total,
+          completed: drawingUpload.total,
+          currentIndex: drawingUpload.total,
+          phase: "complete",
+        })
+      ) {
+        setDrawingUploadProgress(null);
+      }
+
+      const failedIds = new Set(drawingUpload.failedSourceIds);
+      setFiles((prev) =>
+        prev
+          .map((f) =>
+            failedIds.has(f.id) ? { ...f, status: "failed" as const, error: "Upload failed" } : f,
+          )
+          .filter((f) => f.status === "failed"),
+      );
+
+      if (uploadSucceeded > 0 || drawingUpload.persistedSheetCount > 0) {
+        await reloadAnalyzerDataset(projectId);
+      }
+    },
+    [reloadAnalyzerDataset],
+  );
+
   const runModificationReview = useCallback(async () => {
     if (!selectedProjectId || !user) {
       toast.error("Select a project and log in to run Code Modification Review");
@@ -1970,8 +2036,9 @@ export function AIComplianceAnalyzer() {
     }
 
     setAnalyzing(true);
+    let pendingDrawingFiles: Array<{ id: string; file: File; discipline: DocumentDiscipline }> = [];
     try {
-      const pendingDrawingFiles = files
+      pendingDrawingFiles = files
         .filter((f) => f.status === "pending")
         .map((f) => ({ id: f.id, file: f.file, discipline: f.discipline }));
 
@@ -2018,58 +2085,34 @@ export function AIComplianceAnalyzer() {
         onUploadProgress: setDrawingUploadProgress,
       });
 
-      if (drawingUpload) {
-        const uploadSucceeded = drawingUpload.total - drawingUpload.failed;
-        const uploadToast = formatUploadCompletionToast({
-          total: drawingUpload.total,
-          succeeded: uploadSucceeded,
-          failed: drawingUpload.failed,
-          singleFileName:
-            drawingUpload.total === 1 ? pendingDrawingFiles[0]?.file.name : undefined,
-        });
-        if (uploadToast) {
-          if (uploadToast.type === "success") toast.success(uploadToast.message);
-          else if (uploadToast.type === "warning") toast.warning(uploadToast.message);
-          else toast.error(uploadToast.message);
-        }
-
-        if (
-          shouldClearUploadProgress({
-            total: drawingUpload.total,
-            completed: drawingUpload.total,
-            currentIndex: drawingUpload.total,
-            phase: "complete",
-          })
-        ) {
-          setDrawingUploadProgress(null);
-        }
-
-        if (drawingUpload.failed > 0) {
-          setFiles((prev) =>
-            prev
-              .map((f) =>
-                drawingUpload!.failedSourceIds.includes(f.id)
-                  ? { ...f, status: "failed" as const, error: "Upload failed" }
-                  : f,
-              )
-              .filter((f) => f.status === "failed"),
-          );
-        }
-      }
+      await finalizeCodeModDrawingUpload(drawingUpload, pendingDrawingFiles, selectedProjectId);
       setModificationReview(review);
       setModificationForms(forms);
-      setFiles((prev) => prev.filter((f) => f.status === "failed"));
-      await reloadAnalyzerDataset(selectedProjectId);
       toast.success("Code Modification Review complete");
     } catch (err) {
       console.error("Code modification review error:", err);
+      const partial =
+        err instanceof CodeModificationReviewError
+          ? err
+          : err instanceof Error && "drawingUpload" in err
+            ? (err as CodeModificationReviewError)
+            : null;
+      if (partial?.drawingUpload) {
+        await finalizeCodeModDrawingUpload(
+          partial.drawingUpload,
+          pendingDrawingFiles,
+          selectedProjectId,
+        );
+      } else {
+        setDrawingUploadProgress(null);
+      }
       toast.error(err instanceof Error ? err.message : "Failed to run Code Modification Review");
-      setDrawingUploadProgress(null);
     } finally {
       setAnalyzing(false);
       setUploadSession(resetUploadSession());
     }
   }, [
+    finalizeCodeModDrawingUpload,
     codeYear,
     fetchDocuments,
     files,

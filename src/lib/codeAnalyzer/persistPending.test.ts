@@ -381,4 +381,57 @@ describe("persistPendingAnalyzerSources", () => {
       message: "3 of 4 documents uploaded — 1 failed",
     });
   });
+
+  it("reuses an existing registered source instead of inserting duplicate project_documents", async () => {
+    const uploads: string[] = [];
+    const existingFile = { name: "conflict.pdf", type: "application/pdf", size: 1200 } as File;
+    const { sheets, warnings } = await persistPendingAnalyzerSources({
+      projectId: "proj",
+      existingSheets: [
+        {
+          id: "sheet-1",
+          project_id: "proj",
+          source_document_id: "existing-src",
+          image_document_id: "existing-img",
+          page_number: 1,
+          file_name: "conflict.pdf",
+          excluded: false,
+          created_at: "2026-08-21T00:00:00Z",
+        },
+      ],
+      existingSources: [
+        {
+          id: "existing-src",
+          file_name: "conflict.pdf",
+          file_size: 1200,
+        },
+      ],
+      pendingFiles: [
+        {
+          id: "p1",
+          file: existingFile,
+          discipline: "general",
+        },
+      ],
+      uploadDocument: async ({ file }) => {
+        uploads.push(file.name);
+        return { id: "should-not-be-used", file_name: file.name };
+      },
+      renderPdfPages: async () => ({
+        totalPages: 1,
+        truncated: false,
+        pages: [{ pageNumber: 1, file: { name: "conflict-page1.png", type: "image/png" } as File }],
+      }),
+      insertSheet: async (row) =>
+        ({
+          id: `sheet-${row.page_number}`,
+          created_at: "2026-08-21T00:00:00Z",
+          ...row,
+        }) as CodeAnalyzerSheet,
+    });
+
+    assert.deepEqual(uploads, []);
+    assert.equal(sheets.length, 0);
+    assert.equal(warnings.length, 0);
+  });
 });

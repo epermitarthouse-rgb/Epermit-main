@@ -118,4 +118,14 @@ describe("upload session lifecycle", () => {
     assert.equal(COMPLIANCE_MAX_BATCH_FILES, 16);
     assert.equal(shouldShowPendingUploadCapacityLabel(null, null, 0), false);
   });
+
+  it("L: extendUploadSession shrinks stale batch total when queue drops to one file", () => {
+    const stale = createUploadSession(16);
+    const next = extendUploadSession(stale, 1, 1);
+    assert.equal(next?.batchTotal, 1);
+    assert.equal(
+      formatPendingUploadCapacityLabel(1, resolveUploadSessionBatchTotal(next, 1, null)),
+      "1 of 1 source document in this upload",
+    );
+  });
 });

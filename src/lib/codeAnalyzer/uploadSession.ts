@@ -26,9 +26,10 @@ export function extendUploadSession(
   const batchTotal = Math.max(pendingQueueCount, uploadTotal ?? 0);
   if (batchTotal <= 0) return session?.active ? { ...session, batchTotal: 0 } : null;
   if (!session?.active) return createUploadSession(batchTotal);
+  // Never carry forward a stale larger batchTotal (e.g. prior 16-file session).
   return {
     active: true,
-    batchTotal: Math.max(session.batchTotal, batchTotal),
+    batchTotal,
   };
 }
 
