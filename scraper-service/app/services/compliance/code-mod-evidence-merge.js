@@ -17,6 +17,11 @@ const {
   isRevisionEvidenceSource,
   isRevisionResolutionPair,
 } = require("./code-mod-revision-reference.js");
+const { excerptsContradict, evidencePolarity } = require("./code-mod-evidence-polarity.js");
+const {
+  hasValidatedModelConflict,
+  normalizeRawObservations,
+} = require("./code-mod-raw-observation-normalization.js");
 
 const STATUS_RANK = {
   conflicting: 5,
@@ -84,60 +89,9 @@ function isSupportingStatus(status) {
 }
 
 function isSubstantiveObservation(observation) {
-  if (observation.status === "conflicting") return true;
+  if (hasValidatedModelConflict(observation)) return true;
   if (isSupportingStatus(observation.status)) return Boolean(observationText(observation));
   return false;
-}
-
-const NEGATIVE_EVIDENCE =
-  /\b(not included|not shown|not provided|not indicated|not present|not depicted|absent|omitted|excluded|without|does not include|does not show|does not indicate)\b/;
-
-const POSITIVE_EVIDENCE =
-  /\b(included|shown|provided|indicated|present|installed|depicted|noted|provided for|designed for|class i|class 1|class ii|class 2)\b/;
-
-function evidencePolarity(text) {
-  const normalized = normalizeText(text);
-  if (!normalized) return "neutral";
-  const negative = NEGATIVE_EVIDENCE.test(normalized);
-  const positive = POSITIVE_EVIDENCE.test(normalized);
-  if (negative && !positive) return "negative";
-  if (positive && !negative) return "positive";
-  if (negative && positive) {
-    const negPosPhrases = [
-      ["not included", "included"],
-      ["not shown", "shown"],
-      ["not provided", "provided"],
-      ["not indicated", "indicated"],
-      ["not present", "present"],
-      ["not depicted", "depicted"],
-    ];
-    for (const [negPhrase, posWord] of negPosPhrases) {
-      if (
-        new RegExp(`\\b${negPhrase}\\b`).test(normalized) &&
-        new RegExp(`\\b${posWord}\\b`).test(normalized)
-      ) {
-        return "negative";
-      }
-    }
-    return "neutral";
-  }
-  return "neutral";
-}
-
-function excerptsContradict(left, right) {
-  const a = normalizeText(left);
-  const b = normalizeText(right);
-  if (!a || !b || a === b) return false;
-
-  const leftPolarity = evidencePolarity(a);
-  const rightPolarity = evidencePolarity(b);
-  if (leftPolarity === "negative" && rightPolarity === "positive") return true;
-  if (leftPolarity === "positive" && rightPolarity === "negative") return true;
-
-  return (
-    (/\bnot included\b/.test(a) && /\bincluded\b/.test(b)) ||
-    (/\bincluded\b/.test(a) && /\bnot included\b/.test(b))
-  );
 }
 
 function isGenericPerSheetNotFound(text) {
@@ -282,9 +236,6 @@ function pickPrimaryObservation(observations, options = {}) {
 }
 
 function aggregateStatus(observations) {
-  if (observations.some((observation) => observation.status === "conflicting")) {
-    return "conflicting";
-  }
   if (observations.some((observation) => observation.status === "requires_professional_dob_review")) {
     return "requires_professional_dob_review";
   }
@@ -306,7 +257,7 @@ function renderFinalNote({ status, observations, finding, supporting, primary })
   if (status === "conflicting") {
     const conflictPool = observations.filter(
       (observation) =>
-        observation.status === "conflicting" ||
+        hasValidatedModelConflict(observation) ||
         isSupportingStatus(observation.status) ||
         evidencePolarity(observationText(observation)) !== "neutral",
     );
@@ -328,27 +279,51 @@ function renderFinalNote({ status, observations, finding, supporting, primary })
   return primary.note || finding.note || null;
 }
 
+function validateSynthesisInvariants(finding) {
+  const violations = [];
+  if (finding.status === "not_found" && finding.source) {
+    violations.push("not_found finding must not retain a primary citation");
+  }
+  if (
+    (finding.status === "verified" || finding.status === "partially_supported") &&
+    !finding.source
+  ) {
+    violations.push("supported finding must retain a primary citation");
+  }
+  if (finding.status === "conflicting") {
+    const observations = finding.observations || [];
+    const hasGenuine =
+      observations.some((observation) => hasValidatedModelConflict(observation)) ||
+      observationsContradict(observations, finding.measure);
+    if (!hasGenuine) {
+      violations.push("conflicting status requires validated contradiction");
+    }
+  }
+  return violations;
+}
+
 function synthesizeMeasureEvidence(finding, options = {}) {
   const collected =
     finding.observations && finding.observations.length > 0
       ? finding.observations
       : [observationFromFinding(finding)];
 
-  const observations = effectiveObservations(collected);
+  const normalized = normalizeRawObservations(collected, finding.measure);
+  const observations = effectiveObservations(normalized);
   const revisionResolution = hasRevisionResolution(
     observations,
     isSubstantiveObservation,
     evidencePolarity,
   );
-  const explicitConflict = observations.some((observation) => observation.status === "conflicting");
   const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
   const relevantSupporting = supporting.filter((observation) =>
     classifyObservationRelevance(observation),
   );
 
   const shouldConflict =
-    explicitConflict ||
-    (!revisionResolution && observationsContradict(observations, finding.measure));
+    !revisionResolution &&
+    (observations.some((observation) => hasValidatedModelConflict(observation)) ||
+      observationsContradict(observations, finding.measure));
 
   const preferRevision = revisionResolution || options.preferAddendumPrecedence === true;
   const status = shouldConflict ? "conflicting" : aggregateStatus(observations);
@@ -357,7 +332,7 @@ function synthesizeMeasureEvidence(finding, options = {}) {
     ? pickPrimaryObservation(
         observations.filter(
           (observation) =>
-            observation.status === "conflicting" || isSupportingStatus(observation.status),
+            hasValidatedModelConflict(observation) || isSupportingStatus(observation.status),
         ),
         { requireRelevant: true },
       )
@@ -463,4 +438,5 @@ module.exports = {
   isRevisionEvidenceSource,
   classifyObservationRelevance,
   validateOneRowPerMeasure,
+  validateSynthesisInvariants,
 };

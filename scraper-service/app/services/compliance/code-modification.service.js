@@ -945,7 +945,7 @@ function findingsFromExtracted(extracted) {
   }));
 }
 
-const { mergeFindingsFromSheets, mergeMeasureEvidence, synthesizeMeasureEvidence } = require("./code-mod-evidence-merge.js");
+const { mergeFindingsFromSheets, mergeMeasureEvidence, synthesizeMeasureEvidence, validateSynthesisInvariants } = require("./code-mod-evidence-merge.js");
 
 async function reviewSheetWithVision(openai, extracted, sheet, logError, analysisInstructions = null) {
   const { systemPrompt, userPrompt } = buildSheetReviewPrompt(extracted, sheet, analysisInstructions);
@@ -1076,6 +1076,14 @@ async function analyzeCodeModification(params) {
       }
     }
     findings = findings.map((finding) => synthesizeMeasureEvidence(finding));
+    for (const finding of findings) {
+      const violations = validateSynthesisInvariants(finding);
+      if (violations.length > 0) {
+        logError(
+          `[analyze-code-modification] Synthesis invariant violation (${finding.measureId || finding.id}): ${violations.join("; ")}`,
+        );
+      }
+    }
   } else if (reviewable.length === 0) {
     if (excludedFormSheetCount > 0 && (sheets || []).length > 0) {
       sheetWarnings.push(

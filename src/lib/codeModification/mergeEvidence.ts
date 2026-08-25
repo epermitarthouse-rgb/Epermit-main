@@ -27,7 +27,14 @@ import {
   isRevisionEvidenceSource,
   isRevisionResolutionPair,
 } from "./revisionReference";
+import { excerptsContradict, evidencePolarity } from "./evidencePolarity";
+import {
+  hasValidatedModelConflict,
+  normalizeRawObservations,
+} from "./rawObservationNormalization";
 import type { EvidenceFinding, EvidenceSource, EvidenceStatus } from "./model";
+
+export { excerptsContradict, evidencePolarity };
 
 export interface SheetEvidenceObservation {
   status: EvidenceStatus;
@@ -106,61 +113,9 @@ function isSupportingStatus(status: EvidenceStatus): boolean {
 }
 
 function isSubstantiveObservation(observation: SheetEvidenceObservation): boolean {
-  if (observation.status === "conflicting") return true;
+  if (hasValidatedModelConflict(observation)) return true;
   if (isSupportingStatus(observation.status)) return Boolean(observationText(observation));
   return false;
-}
-
-/** Polarity cues for inclusion / omission language in drawing excerpts (measure-agnostic). */
-const NEGATIVE_EVIDENCE =
-  /\b(not included|not shown|not provided|not indicated|not present|not depicted|absent|omitted|excluded|without|does not include|does not show|does not indicate)\b/;
-
-const POSITIVE_EVIDENCE =
-  /\b(included|shown|provided|indicated|present|installed|depicted|noted|provided for|designed for|class i|class 1|class ii|class 2)\b/;
-
-export function evidencePolarity(text: string): "negative" | "positive" | "neutral" {
-  const normalized = normalizeText(text);
-  if (!normalized) return "neutral";
-  const negative = NEGATIVE_EVIDENCE.test(normalized);
-  const positive = POSITIVE_EVIDENCE.test(normalized);
-  if (negative && !positive) return "negative";
-  if (positive && !negative) return "positive";
-  if (negative && positive) {
-    const negPosPhrases: Array<[string, string]> = [
-      ["not included", "included"],
-      ["not shown", "shown"],
-      ["not provided", "provided"],
-      ["not indicated", "indicated"],
-      ["not present", "present"],
-      ["not depicted", "depicted"],
-    ];
-    for (const [negPhrase, posWord] of negPosPhrases) {
-      if (
-        new RegExp(`\\b${negPhrase}\\b`).test(normalized) &&
-        new RegExp(`\\b${posWord}\\b`).test(normalized)
-      ) {
-        return "negative";
-      }
-    }
-    return "neutral";
-  }
-  return "neutral";
-}
-
-export function excerptsContradict(left: string, right: string): boolean {
-  const a = normalizeText(left);
-  const b = normalizeText(right);
-  if (!a || !b || a === b) return false;
-
-  const leftPolarity = evidencePolarity(a);
-  const rightPolarity = evidencePolarity(b);
-  if (leftPolarity === "negative" && rightPolarity === "positive") return true;
-  if (leftPolarity === "positive" && rightPolarity === "negative") return true;
-
-  return (
-    (/\bnot included\b/.test(a) && /\bincluded\b/.test(b)) ||
-    (/\bincluded\b/.test(a) && /\bnot included\b/.test(b))
-  );
 }
 
 function isGenericPerSheetNotFound(text: string): boolean {
@@ -321,9 +276,6 @@ function pickPrimaryObservation(
 }
 
 function aggregateStatus(observations: SheetEvidenceObservation[]): EvidenceStatus {
-  if (observations.some((observation) => observation.status === "conflicting")) {
-    return "conflicting";
-  }
   if (observations.some((observation) => observation.status === "requires_professional_dob_review")) {
     return "requires_professional_dob_review";
   }
@@ -354,7 +306,7 @@ function renderFinalNote(input: {
   if (status === "conflicting") {
     const conflictPool = observations.filter(
       (observation) =>
-        observation.status === "conflicting" ||
+        hasValidatedModelConflict(observation) ||
         isSupportingStatus(observation.status) ||
         evidencePolarity(observationText(observation)) !== "neutral",
     );
@@ -380,6 +332,29 @@ function renderFinalNote(input: {
   return primary.note ?? finding.note ?? null;
 }
 
+export function validateSynthesisInvariants(finding: MergeableEvidenceFinding): string[] {
+  const violations: string[] = [];
+  if (finding.status === "not_found" && finding.source) {
+    violations.push("not_found finding must not retain a primary citation");
+  }
+  if (
+    (finding.status === "verified" || finding.status === "partially_supported") &&
+    !finding.source
+  ) {
+    violations.push("supported finding must retain a primary citation");
+  }
+  if (finding.status === "conflicting") {
+    const observations = finding.observations ?? [];
+    const hasGenuine =
+      observations.some((observation) => hasValidatedModelConflict(observation)) ||
+      observationsContradict(observations, finding.measure);
+    if (!hasGenuine) {
+      violations.push("conflicting status requires validated contradiction");
+    }
+  }
+  return violations;
+}
+
 export function synthesizeMeasureEvidence(
   finding: MergeableEvidenceFinding,
   options?: { preferAddendumPrecedence?: boolean },
@@ -390,26 +365,29 @@ export function synthesizeMeasureEvidence(
       ? finding.observations
       : [observationFromFinding(finding)];
 
-  // C. dedupe observations
-  const observations = effectiveObservations(collected);
+  // 2. normalize raw model observations
+  const normalized = normalizeRawObservations(collected, finding.measure);
 
-  // E. resolve revision/reference relationships
+  // 3–5. dedupe observations (relevance/polarity already applied in normalization)
+  const observations = effectiveObservations(normalized);
+
+  // 7. resolve revision/reference relationships
   const revisionResolution = hasRevisionResolution(
     observations,
     isSubstantiveObservation,
     evidencePolarity,
   );
 
-  const explicitConflict = observations.some((observation) => observation.status === "conflicting");
   const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
   const relevantSupporting = supporting.filter((observation) =>
     classifyObservationRelevance(observation),
   );
 
-  // F. detect material-value / polarity conflicts
+  // 8. detect genuine conflicts only — absence and raw model labels do not auto-conflict
   const shouldConflict =
-    explicitConflict ||
-    (!revisionResolution && observationsContradict(observations, finding.measure));
+    !revisionResolution &&
+    (observations.some((observation) => hasValidatedModelConflict(observation)) ||
+      observationsContradict(observations, finding.measure));
 
   // G. aggregate status
   const preferRevision = revisionResolution || options?.preferAddendumPrecedence === true;
@@ -420,7 +398,7 @@ export function synthesizeMeasureEvidence(
     ? pickPrimaryObservation(
         observations.filter(
           (observation) =>
-            observation.status === "conflicting" || isSupportingStatus(observation.status),
+            hasValidatedModelConflict(observation) || isSupportingStatus(observation.status),
         ),
         { requireRelevant: true },
       )

@@ -7,6 +7,8 @@ import {
 import {
   excerptsContradict,
   evidencePolarity,
+} from "./evidencePolarity.ts";
+import {
   isAddendumEvidenceSource,
   isRevisionEvidenceSource,
   mergeFindingsFromSheets,
