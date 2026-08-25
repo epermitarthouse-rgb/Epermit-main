@@ -23,8 +23,6 @@ import {
   deriveUploadQueueCardStatus,
   sheetChipClassName,
 } from "@/lib/codeAnalyzer/documentCardStatus";
-import { formatPendingUploadCapacityLabel } from "@/lib/codeAnalyzer/uploadBatchProgress";
-import { COMPLIANCE_MAX_BATCH_FILES } from "@/lib/complianceUploadLimits";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
 import { DISCIPLINE_OPTIONS, type DocumentDiscipline } from "@/types/document";
 import { cn } from "@/lib/utils";
@@ -68,6 +66,8 @@ interface AnalyzerDrawingSetProps {
   onRequestRemoveSource: (sourceDocumentId: string, label: string) => void;
   onRequestRemoveSheet: (sheet: CodeAnalyzerSheet, label: string) => void;
   canAddMore: boolean;
+  /** Session-scoped upload capacity line; null when no active upload selection. */
+  pendingUploadCapacityLabel?: string | null;
 }
 
 /** Responsive grid for persisted source-document cards (Current drawings). */
@@ -159,6 +159,7 @@ export function AnalyzerDrawingSet({
   onRequestRemoveSource,
   onRequestRemoveSheet,
   canAddMore,
+  pendingUploadCapacityLabel = null,
 }: AnalyzerDrawingSetProps) {
   const included = sheets.filter((s) => !s.excluded);
   const excluded = sheets.filter((s) => s.excluded);
@@ -202,10 +203,6 @@ export function AnalyzerDrawingSet({
   const pendingCount =
     analysisPendingCount ??
     Math.max(0, datasetMetrics.analysisTotalCount - analyzedCompletedCount - analyzedFailedCount);
-  const pendingUploadCapacityLabel = formatPendingUploadCapacityLabel(
-    uploadQueueFiles.length,
-    COMPLIANCE_MAX_BATCH_FILES,
-  );
 
   return (
     <div className="space-y-4 text-left">

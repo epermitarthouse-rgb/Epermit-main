@@ -181,7 +181,15 @@ describe("uploadBatchProgress helpers", () => {
   });
 
   it("renders pending upload capacity only when files are queued", () => {
-    assert.equal(formatPendingUploadCapacityLabel(7, 16), "7 of 16 source documents in this upload");
+    assert.equal(formatPendingUploadCapacityLabel(7, 7), "7 of 7 source documents in this upload");
+    assert.equal(formatPendingUploadCapacityLabel(1, 1), "1 of 1 source document in this upload");
+  });
+
+  it("does not use max batch cap as session denominator", () => {
     assert.equal(formatPendingUploadCapacityLabel(1, 16), "1 of 16 source document in this upload");
+    assert.notEqual(
+      formatPendingUploadCapacityLabel(1, 1),
+      formatPendingUploadCapacityLabel(1, 16),
+    );
   });
 });

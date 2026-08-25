@@ -91,12 +91,8 @@ export function shouldShowUploadProgress(
   return !shouldClearUploadProgress(progress);
 }
 
-/** Pending upload queue capacity line — null when no files are queued (never "0 of N"). */
-export function formatPendingUploadCapacityLabel(
-  queuedCount: number,
-  maxBatch: number,
-): string | null {
-  if (queuedCount <= 0) return null;
-  const unit = queuedCount === 1 ? "document" : "documents";
-  return `${queuedCount} of ${maxBatch} source ${unit} in this upload`;
-}
+export {
+  formatPendingUploadCapacityLabel,
+  shouldShowPendingUploadCapacityLabel,
+  type UploadSessionState,
+} from "./uploadSession";

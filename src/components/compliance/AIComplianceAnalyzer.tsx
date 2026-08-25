@@ -165,6 +165,14 @@ import {
   uploadProgressPercent,
   type DrawingUploadProgress,
 } from "@/lib/codeAnalyzer/uploadBatchProgress";
+import {
+  formatPendingUploadCapacityLabel,
+  resetUploadSession,
+  resolveUploadSessionBatchTotal,
+  shouldShowPendingUploadCapacityLabel,
+  syncUploadSession,
+  type UploadSessionState,
+} from "@/lib/codeAnalyzer/uploadSession";
 import { replaceComplianceFindingsForSheet } from "@/lib/codeAnalyzer/findings";
 import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnalyzer/deleteDrawings";
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
@@ -328,6 +336,7 @@ export function AIComplianceAnalyzer() {
   const [drawingUploadProgress, setDrawingUploadProgress] = useState<DrawingUploadProgress | null>(
     null,
   );
+  const [uploadSession, setUploadSession] = useState<UploadSessionState | null>(null);
   const [persistedSheets, setPersistedSheets] = useState<CodeAnalyzerSheet[]>([]);
   const [displayRun, setDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
@@ -368,6 +377,25 @@ export function AIComplianceAnalyzer() {
     () => files.filter(isPendingSessionUpload),
     [files],
   );
+
+  useEffect(() => {
+    setUploadSession((prev) =>
+      syncUploadSession(prev, uploadQueueFiles.length, drawingUploadProgress),
+    );
+  }, [uploadQueueFiles.length, drawingUploadProgress]);
+
+  const pendingUploadCapacityLabel = useMemo(() => {
+    const queuedCount = uploadQueueFiles.length;
+    if (!shouldShowPendingUploadCapacityLabel(uploadSession, drawingUploadProgress, queuedCount)) {
+      return null;
+    }
+    const batchTotal = resolveUploadSessionBatchTotal(
+      uploadSession,
+      queuedCount,
+      drawingUploadProgress,
+    );
+    return formatPendingUploadCapacityLabel(queuedCount, batchTotal);
+  }, [uploadSession, drawingUploadProgress, uploadQueueFiles.length]);
 
   const activeResultFile = useMemo(() => {
     if (activeResultFileId) {
@@ -937,6 +965,7 @@ export function AIComplianceAnalyzer() {
     setCurrentRun(null);
     setHasAnalyzerRuns(false);
     setFiles([]);
+    setUploadSession(resetUploadSession());
     setHydrateLoadFailed(false);
     setHydrateRunId(null);
     setResultsFromHistoricalRun(false);
@@ -1034,6 +1063,7 @@ export function AIComplianceAnalyzer() {
     setFiles([]);
     setBatchProgress(null);
     setDrawingUploadProgress(null);
+    setUploadSession(resetUploadSession());
     setActiveResultFileId(null);
     setResponses({});
     setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
@@ -1407,7 +1437,8 @@ export function AIComplianceAnalyzer() {
     (fileList: FileList | File[]) => {
       const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp", "application/pdf"];
       const incoming = Array.from(fileList);
-      const { accepted, rejectedCount } = mergeComplianceFiles(files.length, incoming);
+      const pendingSessionCount = files.filter(isPendingSessionUpload).length;
+      const { accepted, rejectedCount } = mergeComplianceFiles(pendingSessionCount, incoming);
 
       if (rejectedCount > 0) {
         toast.error(
@@ -1437,7 +1468,7 @@ export function AIComplianceAnalyzer() {
         }
       }
     },
-    [appendBatchFile, files.length],
+    [appendBatchFile, files],
   );
 
   const handleDrop = useCallback(
@@ -1896,6 +1927,7 @@ export function AIComplianceAnalyzer() {
         setBatchRetrying(false);
         setAnalyzing(false);
         setDrawingUploadProgress(null);
+        setUploadSession(resetUploadSession());
       }
     },
     [
@@ -2035,6 +2067,7 @@ export function AIComplianceAnalyzer() {
       setDrawingUploadProgress(null);
     } finally {
       setAnalyzing(false);
+      setUploadSession(resetUploadSession());
     }
   }, [
     codeYear,
@@ -3396,6 +3429,7 @@ export function AIComplianceAnalyzer() {
                   })
                 }
                 canAddMore={uploadQueueFiles.length < COMPLIANCE_MAX_BATCH_FILES}
+                pendingUploadCapacityLabel={pendingUploadCapacityLabel}
               />
             ) : (
               <label htmlFor="drawing-upload" className="cursor-pointer">
