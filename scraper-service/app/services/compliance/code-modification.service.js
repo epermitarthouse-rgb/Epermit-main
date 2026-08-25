@@ -194,7 +194,7 @@ function extractImpracticalReason(text) {
     /reason[^:\n]*impractical[^:\n]*:\s*([^\n]+(?:\n(?!\n)[^\n]+)*)/i,
   );
   if (labeled) return usableFieldValue(labeled[1]);
-  const sentence = text.match(/([^.]*\b(?:historic stair|impractical)[^.]*\.)/i);
+  const sentence = text.match(/([^.]*\bimpractical\b[^.]*\.)/i);
   return usableFieldValue(sentence && sentence[1]);
 }
 
@@ -314,7 +314,7 @@ function splitMeasureDescription(description) {
       continue;
     }
     const embedded = part.match(
-      /^(.{25,}?\b(?:incorporate|incorporated|recommendations|pdrm)\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
+      /^((?:incorporate|incorporated)\b[\s\S]*?\brecommendations\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
     );
     if (embedded) {
       final.push(...finalizeMeasureClause(embedded[1]));
@@ -945,7 +945,7 @@ function findingsFromExtracted(extracted) {
   }));
 }
 
-const { mergeFindingsFromSheets } = require("./code-mod-evidence-merge.js");
+const { mergeFindingsFromSheets, mergeMeasureEvidence, synthesizeMeasureEvidence } = require("./code-mod-evidence-merge.js");
 
 async function reviewSheetWithVision(openai, extracted, sheet, logError, analysisInstructions = null) {
   const { systemPrompt, userPrompt } = buildSheetReviewPrompt(extracted, sheet, analysisInstructions);
@@ -1067,7 +1067,7 @@ async function analyzeCodeModification(params) {
           logError,
           analysisInstructions,
         );
-        findings = mergeFindingsFromSheets(findings, sheetFindings);
+        findings = mergeMeasureEvidence(findings, sheetFindings, { deferSynthesis: true });
       } catch (err) {
         const label = sheet.fileName || sheet.sheetLabel || `page ${sheet.pageNumber ?? "?"}`;
         const message = err instanceof Error ? err.message : String(err);
@@ -1075,6 +1075,7 @@ async function analyzeCodeModification(params) {
         sheetWarnings.push(`Sheet ${label} could not be reviewed: ${message}`);
       }
     }
+    findings = findings.map((finding) => synthesizeMeasureEvidence(finding));
   } else if (reviewable.length === 0) {
     if (excludedFormSheetCount > 0 && (sheets || []).length > 0) {
       sheetWarnings.push(
@@ -1139,4 +1140,6 @@ module.exports = {
   sheetUsesExcludedEvidenceDocument,
   buildExcludedEvidenceDocumentIds,
   mergeFindingsFromSheets,
+  mergeMeasureEvidence,
+  synthesizeMeasureEvidence,
 };

@@ -57,6 +57,14 @@ function observationText(observation: SheetEvidenceObservation): string {
   return [observation.source?.excerpt, observation.note].filter(Boolean).join(" ").trim();
 }
 
+function observationIdentity(observation: SheetEvidenceObservation): string {
+  return [
+    sourceIdentity(observation.source) ?? "no-source",
+    observation.status,
+    normalizeText(observationText(observation)),
+  ].join("|");
+}
+
 function formatSourceCitation(source: EvidenceSource | null | undefined): string | null {
   if (!source) return null;
   const label = source.sheetLabel || source.fileName;
@@ -71,9 +79,36 @@ export function isAddendumEvidenceSource(source: EvidenceSource | null | undefin
   return /(?:^|[^a-z0-9])(addendum|revision|supplement|amendment)(?:[^a-z0-9]|$)/.test(label);
 }
 
-function formatAllObservationNotes(observations: SheetEvidenceObservation[]): string | null {
+function isSupportingStatus(status: EvidenceStatus): boolean {
+  return status === "verified" || status === "partially_supported";
+}
+
+function isSubstantiveObservation(observation: SheetEvidenceObservation): boolean {
+  if (observation.status === "conflicting") return true;
+  if (isSupportingStatus(observation.status)) return Boolean(observationText(observation));
+  return false;
+}
+
+function dedupeObservations(observations: SheetEvidenceObservation[]): SheetEvidenceObservation[] {
+  const seen = new Set<string>();
+  const deduped: SheetEvidenceObservation[] = [];
+  for (const observation of observations) {
+    const key = observationIdentity(observation);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(observation);
+  }
+  return deduped;
+}
+
+function formatObservationNotes(
+  observations: SheetEvidenceObservation[],
+  options?: { includeNotFound?: boolean },
+): string | null {
+  const includeNotFound = options?.includeNotFound === true;
   const parts: string[] = [];
   for (const observation of observations) {
+    if (!includeNotFound && observation.status === "not_found") continue;
     const citation = formatSourceCitation(observation.source);
     const text = observationText(observation);
     if (citation && text) {
@@ -87,36 +122,108 @@ function formatAllObservationNotes(observations: SheetEvidenceObservation[]): st
   return parts.length ? parts.join(" ") : null;
 }
 
+/** Polarity cues for inclusion / omission language in drawing excerpts (measure-agnostic). */
+const NEGATIVE_EVIDENCE =
+  /\b(not included|not shown|not provided|not indicated|not present|not depicted|absent|omitted|excluded|without|does not include|does not show|does not indicate)\b/;
+
+const POSITIVE_EVIDENCE =
+  /\b(included|shown|provided|indicated|present|installed|depicted|noted|provided for|designed for|class i|class 1|class ii|class 2)\b/;
+
+export function evidencePolarity(text: string): "negative" | "positive" | "neutral" {
+  const normalized = normalizeText(text);
+  if (!normalized) return "neutral";
+  const negative = NEGATIVE_EVIDENCE.test(normalized);
+  const positive = POSITIVE_EVIDENCE.test(normalized);
+  if (negative && !positive) return "negative";
+  if (positive && !negative) return "positive";
+  if (negative && positive) {
+    const negPosPhrases: Array<[string, string]> = [
+      ["not included", "included"],
+      ["not shown", "shown"],
+      ["not provided", "provided"],
+      ["not indicated", "indicated"],
+      ["not present", "present"],
+      ["not depicted", "depicted"],
+    ];
+    for (const [negPhrase, posWord] of negPosPhrases) {
+      if (
+        new RegExp(`\\b${negPhrase}\\b`).test(normalized) &&
+        new RegExp(`\\b${posWord}\\b`).test(normalized)
+      ) {
+        return "negative";
+      }
+    }
+    return "neutral";
+  }
+  return "neutral";
+}
+
 export function excerptsContradict(left: string, right: string): boolean {
   const a = normalizeText(left);
   const b = normalizeText(right);
   if (!a || !b || a === b) return false;
 
-  const negative =
-    /\b(not included|not shown|not provided|not indicated|absent|no standpipe|without standpipe|does not include|does not show)\b/;
-  const positive =
-    /\b(included|shown|provided|indicated|present|with standpipe|includes standpipe|includes a standpipe)\b/;
+  const leftPolarity = evidencePolarity(a);
+  const rightPolarity = evidencePolarity(b);
+  if (leftPolarity === "negative" && rightPolarity === "positive") return true;
+  if (leftPolarity === "positive" && rightPolarity === "negative") return true;
 
   return (
-    (negative.test(a) && positive.test(b)) ||
-    (positive.test(a) && negative.test(b)) ||
     (/\bnot included\b/.test(a) && /\bincluded\b/.test(b)) ||
     (/\bincluded\b/.test(a) && /\bnot included\b/.test(b))
   );
 }
 
+/** Base-sheet deferral language pointing at a later revision document or sheet. */
+function referencesRevisionDocument(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+
+  const REVISION_NOUN = "(?:addendum|revision|supplement|amendment|attached|following|subsequent)";
+  return (
+    /\b(?:addendum|revision|supplement|amendment|attached sheet|separate sheet|subsequent sheet)\b/.test(
+      normalized,
+    ) ||
+    /\bnot included (on|in)\b/.test(normalized) ||
+    new RegExp(`\\bsee (the )?${REVISION_NOUN}\\b`).test(normalized) ||
+    new RegExp(`\\brefer(?:red)? to (the )?${REVISION_NOUN}\\b`).test(normalized) ||
+    new RegExp(`\\b(deferred|detailed|shown|provided) (on|in|to) (the )?${REVISION_NOUN}\\b`).test(
+      normalized,
+    ) ||
+    /\bsee (sheet|drawing|detail)\b/.test(normalized)
+  );
+}
+
+function hasPositiveProvision(text: string): boolean {
+  return evidencePolarity(text) === "positive";
+}
+
+function isRevisionResolutionPair(
+  left: SheetEvidenceObservation,
+  right: SheetEvidenceObservation,
+): boolean {
+  const leftAddendum = isAddendumEvidenceSource(left.source);
+  const rightAddendum = isAddendumEvidenceSource(right.source);
+  if (leftAddendum === rightAddendum) return false;
+
+  const base = leftAddendum ? right : left;
+  const addendum = leftAddendum ? left : right;
+  if (!isAddendumEvidenceSource(addendum.source)) return false;
+  if (!isSupportingStatus(addendum.status)) return false;
+
+  const baseText = observationText(base);
+  const addendumText = observationText(addendum);
+  if (!referencesRevisionDocument(baseText)) return false;
+  return hasPositiveProvision(addendumText);
+}
+
 function observationsContradict(observations: SheetEvidenceObservation[]): boolean {
-  const substantive = observations.filter((observation) => {
-    if (observation.status === "conflicting") return true;
-    if (observation.status === "verified" || observation.status === "partially_supported") {
-      return Boolean(observationText(observation));
-    }
-    if (observation.status === "not_found" && observation.note) return true;
-    return false;
-  });
+  const substantive = observations.filter(isSubstantiveObservation);
 
   for (let i = 0; i < substantive.length; i += 1) {
     for (let j = i + 1; j < substantive.length; j += 1) {
+      if (isRevisionResolutionPair(substantive[i]!, substantive[j]!)) continue;
+
       const left = observationText(substantive[i]!);
       const right = observationText(substantive[j]!);
       if (excerptsContradict(left, right)) return true;
@@ -125,16 +232,14 @@ function observationsContradict(observations: SheetEvidenceObservation[]): boole
       const rightSource = sourceIdentity(substantive[j]?.source);
       if (!leftSource || !rightSource || leftSource === rightSource) continue;
 
-      const leftNegative =
-        substantive[i]?.status === "not_found" ||
-        /\b(not included|not shown|not provided|absent)\b/i.test(left);
-      const rightPositive =
-        substantive[j]?.status === "verified" || /\b(included|shown|provided|present)\b/i.test(right);
-      const rightNegative =
-        substantive[j]?.status === "not_found" ||
-        /\b(not included|not shown|not provided|absent)\b/i.test(right);
+      const leftPolarity = evidencePolarity(left);
+      const rightPolarity = evidencePolarity(right);
+      const leftNegative = leftPolarity === "negative";
+      const rightNegative = rightPolarity === "negative";
       const leftPositive =
-        substantive[i]?.status === "verified" || /\b(included|shown|provided|present)\b/i.test(left);
+        substantive[i]?.status === "verified" || leftPolarity === "positive";
+      const rightPositive =
+        substantive[j]?.status === "verified" || rightPolarity === "positive";
 
       if ((leftNegative && rightPositive) || (rightNegative && leftPositive)) {
         return true;
@@ -143,29 +248,6 @@ function observationsContradict(observations: SheetEvidenceObservation[]): boole
   }
 
   return false;
-}
-
-function combineObservationNotes(
-  observations: SheetEvidenceObservation[],
-  primarySourceId: string | null,
-): string | null {
-  const parts: string[] = [];
-  for (const observation of observations) {
-    const citation = formatSourceCitation(observation.source);
-    const text = observationText(observation);
-    if (!citation && !text) continue;
-    if (primarySourceId && sourceIdentity(observation.source) === primarySourceId && text) {
-      continue;
-    }
-    if (citation && text) {
-      parts.push(`${citation}: ${text}`);
-    } else if (citation) {
-      parts.push(citation);
-    } else if (text) {
-      parts.push(text);
-    }
-  }
-  return parts.length ? parts.join(" ") : null;
 }
 
 function observationFromFinding(finding: EvidenceFinding): SheetEvidenceObservation {
@@ -188,14 +270,30 @@ function effectiveObservations(observations: SheetEvidenceObservation[]): SheetE
   const withoutPlaceholders = observations.filter(
     (observation) => !isPlaceholderNotFoundObservation(observation),
   );
-  return withoutPlaceholders.length > 0 ? withoutPlaceholders : observations;
+  return dedupeObservations(
+    withoutPlaceholders.length > 0 ? withoutPlaceholders : observations,
+  );
+}
+
+function hasRevisionResolution(observations: SheetEvidenceObservation[]): boolean {
+  const substantive = observations.filter(isSubstantiveObservation);
+  for (let i = 0; i < substantive.length; i += 1) {
+    for (let j = i + 1; j < substantive.length; j += 1) {
+      if (isRevisionResolutionPair(substantive[i]!, substantive[j]!)) return true;
+    }
+  }
+  return false;
 }
 
 function pickPrimaryObservation(
   observations: SheetEvidenceObservation[],
-  preferAddendum = true,
+  options?: { preferAddendumPrecedence?: boolean },
 ): SheetEvidenceObservation {
-  const ranked = observations
+  const preferAddendum = options?.preferAddendumPrecedence === true;
+  const pool = observations.filter(isSubstantiveObservation);
+  const candidates = pool.length > 0 ? pool : observations;
+
+  const ranked = candidates
     .slice()
     .sort(
       (left, right) => (STATUS_RANK[right.status] ?? 0) - (STATUS_RANK[left.status] ?? 0),
@@ -204,13 +302,27 @@ function pickPrimaryObservation(
   if (preferAddendum) {
     const addendum = ranked.find(
       (observation) =>
-        (observation.status === "verified" || observation.status === "partially_supported") &&
-        isAddendumEvidenceSource(observation.source),
+        isSupportingStatus(observation.status) && isAddendumEvidenceSource(observation.source),
     );
     if (addendum) return addendum;
   }
 
   return ranked[0] ?? observations[0]!;
+}
+
+function aggregateStatus(observations: SheetEvidenceObservation[]): EvidenceStatus {
+  if (observations.some((observation) => observation.status === "conflicting")) {
+    return "conflicting";
+  }
+  if (observations.some((observation) => observation.status === "requires_professional_dob_review")) {
+    return "requires_professional_dob_review";
+  }
+  const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
+  if (supporting.length > 0) {
+    if (supporting.some((observation) => observation.status === "verified")) return "verified";
+    return "partially_supported";
+  }
+  return "not_found";
 }
 
 export function synthesizeMeasureEvidence(
@@ -223,36 +335,28 @@ export function synthesizeMeasureEvidence(
       : [observationFromFinding(finding)],
   );
 
-  const preferAddendum = options?.preferAddendumPrecedence !== false;
+  const revisionResolution = hasRevisionResolution(observations);
   const explicitConflict = observations.some((observation) => observation.status === "conflicting");
-  const supported = observations.filter(
-    (observation) =>
-      observation.status === "verified" || observation.status === "partially_supported",
-  );
+  const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
   const uniqueSupportedSources = new Set(
-    supported.map((observation) => sourceIdentity(observation.source)).filter(Boolean),
+    supporting.map((observation) => sourceIdentity(observation.source)).filter(Boolean),
   );
 
   const shouldConflict =
     explicitConflict ||
-    (uniqueSupportedSources.size >= 2 && observationsContradict(observations)) ||
-    (observations.some((observation) => observation.status === "not_found") &&
-      supported.length > 0 &&
+    (!revisionResolution &&
+      uniqueSupportedSources.size >= 2 &&
       observationsContradict(observations));
 
   if (shouldConflict) {
     const primary = pickPrimaryObservation(
       observations.filter(
         (observation) =>
-          observation.status === "conflicting" ||
-          observation.status === "verified" ||
-          observation.status === "partially_supported" ||
-          observation.status === "not_found",
+          observation.status === "conflicting" || isSupportingStatus(observation.status),
       ),
-      false,
     );
     const combinedNote =
-      formatAllObservationNotes(observations) ||
+      formatObservationNotes(observations) ||
       finding.note ||
       "Conflicting evidence across submitted drawing sheets.";
     return {
@@ -265,33 +369,32 @@ export function synthesizeMeasureEvidence(
     };
   }
 
-  if (supported.length >= 2 && uniqueSupportedSources.size >= 2) {
-    const primary = pickPrimaryObservation(supported, preferAddendum);
-    const allNotes = formatAllObservationNotes(observations);
-    return {
-      id: finding.id,
-      measureId: finding.measureId ?? null,
-      measure: finding.measure,
-      status: primary.status,
-      source: primary.source ?? null,
-      note: allNotes || primary.note || finding.note || null,
-    };
-  }
+  const preferAddendum = revisionResolution || options?.preferAddendumPrecedence === true;
+  const status = aggregateStatus(observations);
+  const primary = pickPrimaryObservation(
+    supporting.length > 0 ? supporting : observations,
+    { preferAddendumPrecedence: preferAddendum },
+  );
 
-  const primary = pickPrimaryObservation(observations, preferAddendum);
+  const note =
+    supporting.length >= 2
+      ? formatObservationNotes(supporting) || primary.note || finding.note || null
+      : primary.note ?? finding.note ?? null;
+
   return {
     id: finding.id,
     measureId: finding.measureId ?? null,
     measure: finding.measure,
-    status: primary.status,
+    status,
     source: primary.source ?? null,
-    note: primary.note ?? finding.note ?? null,
+    note,
   };
 }
 
 export function mergeMeasureEvidence(
   existing: MergeableEvidenceFinding[],
   incoming: EvidenceFinding[],
+  options?: { deferSynthesis?: boolean },
 ): MergeableEvidenceFinding[] {
   const byMeasure = new Map<string, MergeableEvidenceFinding>();
 
@@ -326,7 +429,9 @@ export function mergeMeasureEvidence(
     });
   }
 
-  return Array.from(byMeasure.values()).map((finding) => synthesizeMeasureEvidence(finding));
+  const merged = Array.from(byMeasure.values());
+  if (options?.deferSynthesis) return merged;
+  return merged.map((finding) => synthesizeMeasureEvidence(finding));
 }
 
 export function mergeFindingsFromSheets(

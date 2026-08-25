@@ -148,9 +148,7 @@ function extractImpracticalReason(text: string): string | null {
     /reason[^:\n]*impractical[^:\n]*:\s*([^\n]+(?:\n(?!\n)[^\n]+)*)/i,
   );
   if (labeled) return usableFieldValue(labeled[1]);
-  const sentence = text.match(
-    /([^.]*\b(?:historic stair|impractical)[^.]*\.)/i,
-  );
+  const sentence = text.match(/([^.]*\bimpractical\b[^.]*\.)/i);
   return usableFieldValue(sentence?.[1] ?? null);
 }
 
@@ -267,7 +265,7 @@ export function splitMeasureDescription(description: string): string[] {
       continue;
     }
     const embedded = part.match(
-      /^(.{25,}?\b(?:incorporate|incorporated|recommendations|pdrm)\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
+      /^((?:incorporate|incorporated)\b[\s\S]*?\brecommendations\b[\s\S]*?)\s+include\s+(?:a|the)\s+(.+)$/i,
     );
     if (embedded) {
       final.push(...finalizeMeasureClause(embedded[1]));

@@ -704,7 +704,7 @@ describe("multi-sheet evidence merge", () => {
   const STANDPIPE_MEASURE = "Include a standpipe";
   const STANDPIPE_MEASURE_ID = "measure-standpipe";
 
-  it("A/B. standpipe base + addendum synthesize as conflicting with both citations", () => {
+  it("A/B. standpipe base deferral + addendum provision synthesize as verified", () => {
     const merged = mergeFindingsFromSheets(
       [
         {
@@ -715,7 +715,7 @@ describe("multi-sheet evidence merge", () => {
           source: {
             fileName: "FP-101.pdf",
             pageNumber: 4,
-            excerpt: "Standpipe not included on base fire protection plan.",
+            excerpt: "Standpipe not included on base; see FP-102 addendum.",
           },
         },
       ],
@@ -728,15 +728,16 @@ describe("multi-sheet evidence merge", () => {
           source: {
             fileName: "Addendum_Standpipe.pdf",
             pageNumber: 1,
-            excerpt: "Standpipe is included per addendum.",
+            excerpt: "Class I standpipe included per addendum.",
           },
         },
       ],
     );
     assert.equal(merged.length, 1);
-    assert.equal(merged[0].status, "conflicting");
+    assert.equal(merged[0].status, "verified");
     assert.match(merged[0].note, /FP-101(\.pdf)? p\.4/i);
     assert.match(merged[0].note, /Addendum_Standpipe\.pdf p\.1/i);
+    assert.match(merged[0].source.fileName, /Addendum_Standpipe/i);
   });
 
   it("D. occupant conflict PDF still wins over base verified finding", () => {
@@ -862,7 +863,7 @@ describe("multi-sheet evidence merge", () => {
                             source: {
                               fileName: "FP-101.pdf",
                               pageNumber: 4,
-                              excerpt: "Standpipe not included on base fire protection plan.",
+                              excerpt: "Standpipe not included on base; see addendum.",
                             },
                           },
                         ],
@@ -919,9 +920,10 @@ describe("multi-sheet evidence merge", () => {
       /standpipe/i.test(finding.measure),
     );
     assert.ok(standpipe);
-    assert.equal(standpipe.status, "conflicting");
+    assert.equal(standpipe.status, "verified");
     assert.match(standpipe.note, /FP-101(\.pdf)? p\.4/i);
     assert.match(standpipe.note, /Addendum_Standpipe\.pdf p\.1/i);
+    assert.match(standpipe.source.fileName, /Addendum_Standpipe/i);
     assert.equal(openai.chat.completions.create.mock.calls.length, 3);
   });
 });
