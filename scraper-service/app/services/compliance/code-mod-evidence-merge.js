@@ -5,6 +5,19 @@
  * JS port of src/lib/codeModification/mergeEvidence.ts — keep in sync.
  */
 
+const {
+  canonicalMeasureKey,
+  preferCanonicalMeasureId,
+  preferCanonicalMeasureLabel,
+} = require("./code-mod-canonical-measure.js");
+const { materialValuesConflict } = require("./code-mod-material-value-conflict.js");
+const {
+  hasRevisionResolution,
+  isAddendumEvidenceSource,
+  isRevisionEvidenceSource,
+  isRevisionResolutionPair,
+} = require("./code-mod-revision-reference.js");
+
 const STATUS_RANK = {
   conflicting: 5,
   requires_professional_dob_review: 4,
@@ -13,9 +26,8 @@ const STATUS_RANK = {
   not_found: 1,
 };
 
-function measureKey(finding) {
-  return (finding.measureId || finding.measure || finding.id).toLowerCase();
-}
+const NOT_FOUND_NOTE = "No relevant evidence was found in the reviewed drawing set.";
+const PLACEHOLDER_NOT_FOUND_NOTE = "No drawing evidence was reviewed for this measure.";
 
 function normalizeText(value) {
   return String(value ?? "")
@@ -67,11 +79,6 @@ function formatSourceCitation(source) {
   return label || source.documentId || source.sheetId || null;
 }
 
-function isAddendumEvidenceSource(source) {
-  const label = normalizeText(source && (source.fileName || source.sheetLabel));
-  return /(?:^|[^a-z0-9])(addendum|revision|supplement|amendment)(?:[^a-z0-9]|$)/.test(label);
-}
-
 function isSupportingStatus(status) {
   return status === "verified" || status === "partially_supported";
 }
@@ -80,52 +87,6 @@ function isSubstantiveObservation(observation) {
   if (observation.status === "conflicting") return true;
   if (isSupportingStatus(observation.status)) return Boolean(observationText(observation));
   return false;
-}
-
-function dedupeObservations(observations) {
-  const seen = new Set();
-  const deduped = [];
-  for (const observation of observations) {
-    const key = observationIdentity(observation);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(observation);
-  }
-  return deduped;
-}
-
-function formatObservationNotes(observations, options = {}) {
-  const includeNotFound = options.includeNotFound === true;
-  const parts = [];
-  for (const observation of observations) {
-    if (!includeNotFound && observation.status === "not_found") continue;
-    const citation = formatSourceCitation(observation.source);
-    const text = observationText(observation);
-    if (citation && text) {
-      parts.push(`${citation}: ${text}`);
-    } else if (citation) {
-      parts.push(citation);
-    } else if (text) {
-      parts.push(text);
-    }
-  }
-  return parts.length ? parts.join(" ") : null;
-}
-
-function excerptsContradict(left, right) {
-  const a = normalizeText(left);
-  const b = normalizeText(right);
-  if (!a || !b || a === b) return false;
-
-  const leftPolarity = evidencePolarity(a);
-  const rightPolarity = evidencePolarity(b);
-  if (leftPolarity === "negative" && rightPolarity === "positive") return true;
-  if (leftPolarity === "positive" && rightPolarity === "negative") return true;
-
-  return (
-    (/\bnot included\b/.test(a) && /\bincluded\b/.test(b)) ||
-    (/\bincluded\b/.test(a) && /\bnot included\b/.test(b))
-  );
 }
 
 const NEGATIVE_EVIDENCE =
@@ -163,76 +124,76 @@ function evidencePolarity(text) {
   return "neutral";
 }
 
-function referencesRevisionDocument(text) {
-  const normalized = normalizeText(text);
-  if (!normalized) return false;
+function excerptsContradict(left, right) {
+  const a = normalizeText(left);
+  const b = normalizeText(right);
+  if (!a || !b || a === b) return false;
 
-  const REVISION_NOUN = "(?:addendum|revision|supplement|amendment|attached|following|subsequent)";
+  const leftPolarity = evidencePolarity(a);
+  const rightPolarity = evidencePolarity(b);
+  if (leftPolarity === "negative" && rightPolarity === "positive") return true;
+  if (leftPolarity === "positive" && rightPolarity === "negative") return true;
+
   return (
-    /\b(?:addendum|revision|supplement|amendment|attached sheet|separate sheet|subsequent sheet)\b/.test(
-      normalized,
-    ) ||
-    /\bnot included (on|in)\b/.test(normalized) ||
-    new RegExp(`\\bsee (the )?${REVISION_NOUN}\\b`).test(normalized) ||
-    new RegExp(`\\brefer(?:red)? to (the )?${REVISION_NOUN}\\b`).test(normalized) ||
-    new RegExp(`\\b(deferred|detailed|shown|provided) (on|in|to) (the )?${REVISION_NOUN}\\b`).test(
-      normalized,
-    ) ||
-    /\bsee (sheet|drawing|detail)\b/.test(normalized)
+    (/\bnot included\b/.test(a) && /\bincluded\b/.test(b)) ||
+    (/\bincluded\b/.test(a) && /\bnot included\b/.test(b))
   );
 }
 
-function hasPositiveProvision(text) {
-  return evidencePolarity(text) === "positive";
+function isGenericPerSheetNotFound(text) {
+  return /^no evidence for this measure on this sheet\.?$/i.test(text.trim());
 }
 
-function isRevisionResolutionPair(left, right) {
-  const leftAddendum = isAddendumEvidenceSource(left.source);
-  const rightAddendum = isAddendumEvidenceSource(right.source);
-  if (leftAddendum === rightAddendum) return false;
-
-  const base = leftAddendum ? right : left;
-  const addendum = leftAddendum ? left : right;
-  if (!isAddendumEvidenceSource(addendum.source)) return false;
-  if (!isSupportingStatus(addendum.status)) return false;
-
-  const baseText = observationText(base);
-  const addendumText = observationText(addendum);
-  if (!referencesRevisionDocument(baseText)) return false;
-  return hasPositiveProvision(addendumText);
+function classifyObservationRelevance(observation) {
+  if (typeof observation.relevant === "boolean") return observation.relevant;
+  if (observation.status === "not_found") {
+    const text = observationText(observation);
+    if (!text) return false;
+    if (isGenericPerSheetNotFound(text)) return false;
+    return false;
+  }
+  return isSubstantiveObservation(observation);
 }
 
-function observationsContradict(observations) {
-  const substantive = observations.filter(isSubstantiveObservation);
+function dedupeObservations(observations) {
+  const seen = new Set();
+  const deduped = [];
+  for (const observation of observations) {
+    const key = observationIdentity(observation);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(observation);
+  }
+  return deduped;
+}
 
-  for (let i = 0; i < substantive.length; i += 1) {
-    for (let j = i + 1; j < substantive.length; j += 1) {
-      if (isRevisionResolutionPair(substantive[i], substantive[j])) continue;
+function formatObservationNotes(observations, options = {}) {
+  const includeNotFound = options.includeNotFound === true;
+  const parts = [];
+  const seenNotes = new Set();
+  const seenCitations = new Set();
 
-      const left = observationText(substantive[i]);
-      const right = observationText(substantive[j]);
-      if (excerptsContradict(left, right)) return true;
+  for (const observation of observations) {
+    if (!includeNotFound && observation.status === "not_found") continue;
+    if (!classifyObservationRelevance(observation) && observation.status === "not_found") continue;
 
-      const leftSource = sourceIdentity(substantive[i].source);
-      const rightSource = sourceIdentity(substantive[j].source);
-      if (!leftSource || !rightSource || leftSource === rightSource) continue;
+    const citation = formatSourceCitation(observation.source);
+    const text = observationText(observation);
+    const rendered = citation && text ? `${citation}: ${text}` : citation || text || null;
+    if (!rendered) continue;
 
-      const leftPolarity = evidencePolarity(left);
-      const rightPolarity = evidencePolarity(right);
-      const leftNegative = leftPolarity === "negative";
-      const rightNegative = rightPolarity === "negative";
-      const leftPositive =
-        substantive[i].status === "verified" || leftPolarity === "positive";
-      const rightPositive =
-        substantive[j].status === "verified" || rightPolarity === "positive";
+    const dedupeKey = normalizeText(rendered);
+    if (seenNotes.has(dedupeKey)) continue;
 
-      if ((leftNegative && rightPositive) || (rightNegative && leftPositive)) {
-        return true;
-      }
-    }
+    const citationKey = sourceIdentity(observation.source) || normalizeText(citation || "");
+    if (citationKey && seenCitations.has(citationKey) && citation && text) continue;
+
+    seenNotes.add(dedupeKey);
+    if (citationKey) seenCitations.add(citationKey);
+    parts.push(rendered);
   }
 
-  return false;
+  return parts.length ? parts.join(" ") : null;
 }
 
 function observationFromFinding(finding) {
@@ -247,7 +208,7 @@ function isPlaceholderNotFoundObservation(observation) {
   return (
     observation.status === "not_found" &&
     !observation.source &&
-    observation.note === "No drawing evidence was reviewed for this measure."
+    observation.note === PLACEHOLDER_NOT_FOUND_NOTE
   );
 }
 
@@ -258,31 +219,63 @@ function effectiveObservations(observations) {
   return dedupeObservations(withoutPlaceholders.length > 0 ? withoutPlaceholders : observations);
 }
 
-function hasRevisionResolution(observations) {
+function observationsContradict(observations, measureText) {
   const substantive = observations.filter(isSubstantiveObservation);
+
   for (let i = 0; i < substantive.length; i += 1) {
     for (let j = i + 1; j < substantive.length; j += 1) {
-      if (isRevisionResolutionPair(substantive[i], substantive[j])) return true;
+      if (isRevisionResolutionPair(substantive[i], substantive[j], observations, evidencePolarity)) {
+        continue;
+      }
+
+      const left = observationText(substantive[i]);
+      const right = observationText(substantive[j]);
+      if (excerptsContradict(left, right)) return true;
+
+      const leftSource = sourceIdentity(substantive[i].source);
+      const rightSource = sourceIdentity(substantive[j].source);
+      if (!leftSource || !rightSource || leftSource === rightSource) continue;
+
+      const leftPolarity = evidencePolarity(left);
+      const rightPolarity = evidencePolarity(right);
+      const leftNegative = leftPolarity === "negative";
+      const rightNegative = rightPolarity === "negative";
+      const leftPositive = substantive[i].status === "verified" || leftPolarity === "positive";
+      const rightPositive = substantive[j].status === "verified" || rightPolarity === "positive";
+
+      if ((leftNegative && rightPositive) || (rightNegative && leftPositive)) {
+        return true;
+      }
     }
   }
-  return false;
+
+  const substantiveTexts = substantive.map((observation) => observationText(observation)).filter(Boolean);
+  return materialValuesConflict(substantiveTexts, measureText);
 }
 
 function pickPrimaryObservation(observations, options = {}) {
-  const preferAddendum = options.preferAddendumPrecedence === true;
-  const pool = observations.filter(isSubstantiveObservation);
-  const candidates = pool.length > 0 ? pool : observations;
+  const preferRevision = options.preferRevisionPrecedence === true;
+  const requireRelevant = options.requireRelevant !== false;
+  const pool = observations.filter((observation) =>
+    requireRelevant ? classifyObservationRelevance(observation) : true,
+  );
+  const candidates = pool.length > 0 ? pool : observations.filter(isSubstantiveObservation);
+  const fallback = candidates.length > 0 ? candidates : observations;
 
-  const ranked = candidates
-    .slice()
-    .sort((left, right) => (STATUS_RANK[right.status] || 0) - (STATUS_RANK[left.status] || 0));
+  const ranked = fallback.slice().sort((left, right) => {
+    const statusDelta = (STATUS_RANK[right.status] || 0) - (STATUS_RANK[left.status] || 0);
+    if (statusDelta !== 0) return statusDelta;
+    const leftKey = sourceIdentity(left.source) || "";
+    const rightKey = sourceIdentity(right.source) || "";
+    return leftKey.localeCompare(rightKey);
+  });
 
-  if (preferAddendum) {
-    const addendum = ranked.find(
+  if (preferRevision) {
+    const revision = ranked.find(
       (observation) =>
-        isSupportingStatus(observation.status) && isAddendumEvidenceSource(observation.source),
+        isSupportingStatus(observation.status) && isRevisionEvidenceSource(observation.source),
     );
-    if (addendum) return addendum;
+    if (revision) return revision;
   }
 
   return ranked[0] || observations[0];
@@ -303,57 +296,95 @@ function aggregateStatus(observations) {
   return "not_found";
 }
 
+function renderFinalNote({ status, observations, finding, supporting, primary }) {
+  if (status === "not_found") {
+    const relevant = observations.filter((observation) => classifyObservationRelevance(observation));
+    if (relevant.length === 0) return NOT_FOUND_NOTE;
+    return formatObservationNotes(relevant) || NOT_FOUND_NOTE;
+  }
+
+  if (status === "conflicting") {
+    const conflictPool = observations.filter(
+      (observation) =>
+        observation.status === "conflicting" ||
+        isSupportingStatus(observation.status) ||
+        evidencePolarity(observationText(observation)) !== "neutral",
+    );
+    return (
+      formatObservationNotes(conflictPool) ||
+      finding.note ||
+      "Conflicting evidence across submitted drawing sheets."
+    );
+  }
+
+  if (supporting.length >= 2) {
+    const ranked = supporting
+      .slice()
+      .sort((left, right) => (STATUS_RANK[right.status] || 0) - (STATUS_RANK[left.status] || 0))
+      .slice(0, 2);
+    return formatObservationNotes(ranked) || primary.note || finding.note || null;
+  }
+
+  return primary.note || finding.note || null;
+}
+
 function synthesizeMeasureEvidence(finding, options = {}) {
-  const observations = effectiveObservations(
+  const collected =
     finding.observations && finding.observations.length > 0
       ? finding.observations
-      : [observationFromFinding(finding)],
-  );
+      : [observationFromFinding(finding)];
 
-  const revisionResolution = hasRevisionResolution(observations);
+  const observations = effectiveObservations(collected);
+  const revisionResolution = hasRevisionResolution(
+    observations,
+    isSubstantiveObservation,
+    evidencePolarity,
+  );
   const explicitConflict = observations.some((observation) => observation.status === "conflicting");
   const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
-  const uniqueSupportedSources = new Set(
-    supporting.map((observation) => sourceIdentity(observation.source)).filter(Boolean),
+  const relevantSupporting = supporting.filter((observation) =>
+    classifyObservationRelevance(observation),
   );
 
   const shouldConflict =
     explicitConflict ||
-    (!revisionResolution &&
-      uniqueSupportedSources.size >= 2 &&
-      observationsContradict(observations));
+    (!revisionResolution && observationsContradict(observations, finding.measure));
 
-  if (shouldConflict) {
-    const primary = pickPrimaryObservation(
-      observations.filter(
-        (observation) =>
-          observation.status === "conflicting" || isSupportingStatus(observation.status),
-      ),
-    );
-    const combinedNote =
-      formatObservationNotes(observations) ||
-      finding.note ||
-      "Conflicting evidence across submitted drawing sheets.";
+  const preferRevision = revisionResolution || options.preferAddendumPrecedence === true;
+  const status = shouldConflict ? "conflicting" : aggregateStatus(observations);
+
+  const primary = shouldConflict
+    ? pickPrimaryObservation(
+        observations.filter(
+          (observation) =>
+            observation.status === "conflicting" || isSupportingStatus(observation.status),
+        ),
+        { requireRelevant: true },
+      )
+    : pickPrimaryObservation(relevantSupporting.length > 0 ? relevantSupporting : observations, {
+        preferRevisionPrecedence: preferRevision,
+        requireRelevant: status !== "not_found",
+      });
+
+  const note = renderFinalNote({
+    status,
+    observations,
+    finding,
+    supporting: relevantSupporting,
+    primary,
+  });
+
+  if (status === "not_found" && !classifyObservationRelevance(primary)) {
     return {
       id: finding.id,
       measureId: finding.measureId || null,
       measure: finding.measure,
-      status: "conflicting",
-      source: (primary.source && primary.source) || null,
-      note: combinedNote,
+      status,
+      source: null,
+      note: NOT_FOUND_NOTE,
+      observations,
     };
   }
-
-  const preferAddendum = revisionResolution || options.preferAddendumPrecedence === true;
-  const status = aggregateStatus(observations);
-  const primary = pickPrimaryObservation(supporting.length > 0 ? supporting : observations, {
-    preferAddendumPrecedence: preferAddendum,
-  });
-
-  const note =
-    supporting.length >= 2
-      ? formatObservationNotes(supporting) || primary.note || finding.note || null
-      : primary.note || finding.note || null;
 
   return {
     id: finding.id,
@@ -362,6 +393,7 @@ function synthesizeMeasureEvidence(finding, options = {}) {
     status,
     source: (primary.source && primary.source) || null,
     note,
+    observations,
   };
 }
 
@@ -369,7 +401,7 @@ function mergeMeasureEvidence(existing, incoming, options = {}) {
   const byMeasure = new Map();
 
   for (const finding of existing) {
-    const key = measureKey(finding);
+    const key = canonicalMeasureKey(finding);
     byMeasure.set(key, {
       ...finding,
       observations:
@@ -380,7 +412,7 @@ function mergeMeasureEvidence(existing, incoming, options = {}) {
   }
 
   for (const finding of incoming) {
-    const key = measureKey(finding);
+    const key = canonicalMeasureKey(finding);
     const prev = byMeasure.get(key);
     const nextObservation = observationFromFinding(finding);
 
@@ -395,6 +427,9 @@ function mergeMeasureEvidence(existing, incoming, options = {}) {
     const observations = [...(prev.observations || [observationFromFinding(prev)]), nextObservation];
     byMeasure.set(key, {
       ...prev,
+      id: prev.id || finding.id,
+      measureId: preferCanonicalMeasureId(prev.measureId, finding.measureId),
+      measure: preferCanonicalMeasureLabel(prev.measure, finding.measure),
       observations,
     });
   }
@@ -408,6 +443,16 @@ function mergeFindingsFromSheets(existing, incoming) {
   return mergeMeasureEvidence(existing, incoming);
 }
 
+function validateOneRowPerMeasure(findings) {
+  const keys = new Set();
+  for (const finding of findings) {
+    const key = canonicalMeasureKey(finding);
+    if (keys.has(key)) return false;
+    keys.add(key);
+  }
+  return true;
+}
+
 module.exports = {
   mergeFindingsFromSheets,
   mergeMeasureEvidence,
@@ -415,4 +460,7 @@ module.exports = {
   excerptsContradict,
   evidencePolarity,
   isAddendumEvidenceSource,
+  isRevisionEvidenceSource,
+  classifyObservationRelevance,
+  validateOneRowPerMeasure,
 };

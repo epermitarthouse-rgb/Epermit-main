@@ -3,6 +3,7 @@
  * Distinguishes applicant pages from blank official reviewer sections.
  */
 
+import { normalizeMeasureText } from "./canonicalMeasure";
 import {
   emptyExtractedRequest,
   type CitedCodeSection,
@@ -278,7 +279,7 @@ export function splitMeasureDescription(description: string): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
   for (const part of final) {
-    const key = part.toLowerCase();
+    const key = normalizeMeasureText(part);
     if (!key || seen.has(key)) continue;
     seen.add(key);
     unique.push(part);
@@ -449,9 +450,9 @@ export function mergeExtractedRequests(
     return left ?? right ?? null;
   };
   const measures = normalizeProposedMeasures([...primary.proposedMeasures]);
-  const seen = new Set(measures.map((m) => m.description.toLowerCase()));
+  const seen = new Set(measures.map((m) => normalizeMeasureText(m.description)));
   for (const measure of normalizeProposedMeasures(secondary.proposedMeasures)) {
-    const key = measure.description.toLowerCase();
+    const key = normalizeMeasureText(measure.description);
     if (seen.has(key)) continue;
     seen.add(key);
     measures.push({ ...measure, id: `measure-${measures.length + 1}` });
