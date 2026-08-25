@@ -25,6 +25,7 @@ const {
   normalizeProposedMeasures,
   filterDrawingEvidenceSheetsForReview,
   emptyExtractedRequest,
+  mergeFindingsFromSheets,
 } = require("../app/services/compliance/code-modification.service.js");
 
 const SAMPLE_PAGES = [
@@ -696,5 +697,231 @@ describe("splitMeasureDescription boilerplate and carryover cleanup", () => {
     );
     assert.equal(measures.every((measure) => measure.sourcePageNumber === 2), true);
     assert.equal(measures.length, 8);
+  });
+});
+
+describe("multi-sheet evidence merge", () => {
+  const STANDPIPE_MEASURE = "Include a standpipe";
+  const STANDPIPE_MEASURE_ID = "measure-standpipe";
+
+  it("A/B. standpipe base + addendum synthesize as conflicting with both citations", () => {
+    const merged = mergeFindingsFromSheets(
+      [
+        {
+          id: "base",
+          measureId: STANDPIPE_MEASURE_ID,
+          measure: STANDPIPE_MEASURE,
+          status: "verified",
+          source: {
+            fileName: "FP-101.pdf",
+            pageNumber: 4,
+            excerpt: "Standpipe not included on base fire protection plan.",
+          },
+        },
+      ],
+      [
+        {
+          id: "addendum",
+          measureId: STANDPIPE_MEASURE_ID,
+          measure: STANDPIPE_MEASURE,
+          status: "verified",
+          source: {
+            fileName: "Addendum_Standpipe.pdf",
+            pageNumber: 1,
+            excerpt: "Standpipe is included per addendum.",
+          },
+        },
+      ],
+    );
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].status, "conflicting");
+    assert.match(merged[0].note, /FP-101(\.pdf)? p\.4/i);
+    assert.match(merged[0].note, /Addendum_Standpipe\.pdf p\.1/i);
+  });
+
+  it("D. occupant conflict PDF still wins over base verified finding", () => {
+    const merged = mergeFindingsFromSheets(
+      [
+        {
+          id: "base",
+          measureId: "measure-occupant",
+          measure: "Maintain an occupant load below 49 people per floor",
+          status: "verified",
+          source: {
+            fileName: "1513_P_St_MOCK_Permit_Drawings_Base.pdf",
+            pageNumber: 3,
+            excerpt: "Occupant load 48 per floor.",
+          },
+        },
+      ],
+      [
+        {
+          id: "conflict",
+          measureId: "measure-occupant",
+          measure: "Maintain an occupant load below 49 people per floor",
+          status: "conflicting",
+          source: {
+            fileName: "1513_p_st_mock_conflict_occupant_load.pdf",
+            pageNumber: 1,
+            excerpt: "Occupant load schedule shows 52 occupants on level 2.",
+          },
+        },
+      ],
+    );
+    assert.equal(merged[0].status, "conflicting");
+    assert.match(merged[0].source.fileName, /conflict_occupant_load/i);
+  });
+
+  it("E. sprinkler findings from FA-101 and FP-101 combine without first-match discard", () => {
+    const merged = mergeFindingsFromSheets(
+      [
+        {
+          id: "fa",
+          measureId: "measure-sprinkler",
+          measure: "Provide a fully automatic sprinkler system throughout the building",
+          status: "verified",
+          source: {
+            fileName: "FA-101.pdf",
+            pageNumber: 2,
+            excerpt: "NFPA 13 sprinkler system noted.",
+          },
+        },
+      ],
+      [
+        {
+          id: "fp",
+          measureId: "measure-sprinkler",
+          measure: "Provide a fully automatic sprinkler system throughout the building",
+          status: "verified",
+          source: {
+            fileName: "FP-101.pdf",
+            pageNumber: 3,
+            excerpt: "Sprinkler riser shown.",
+          },
+        },
+      ],
+    );
+    assert.equal(merged[0].status, "verified");
+    assert.match(merged[0].note, /FA-101\.pdf p\.2/i);
+    assert.match(merged[0].note, /FP-101\.pdf p\.3/i);
+  });
+
+  it("analyzeCodeModification merges standpipe evidence across sequential sheet reviews", async () => {
+    const measures = normalizeProposedMeasures([
+      {
+        id: "measure-combined",
+        description: COMBINED_MEASURE_PARAGRAPH,
+        sourcePageNumber: 2,
+      },
+    ]);
+    const standpipeMeasure = measures.find((measure) => /standpipe/i.test(measure.description));
+    assert.ok(standpipeMeasure);
+
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async (args) => {
+            const blob = JSON.stringify(args);
+            if (blob.includes("Addendum_Standpipe.pdf")) {
+              return {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        findings: [
+                          {
+                            id: "addendum-finding",
+                            measureId: standpipeMeasure.id,
+                            measure: standpipeMeasure.description,
+                            status: "verified",
+                            source: {
+                              fileName: "Addendum_Standpipe.pdf",
+                              pageNumber: 1,
+                              excerpt: "Standpipe is included per addendum.",
+                            },
+                          },
+                        ],
+                      }),
+                    },
+                  },
+                ],
+              };
+            }
+            if (blob.includes("FP-101.pdf")) {
+              return {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        findings: [
+                          {
+                            id: "base-finding",
+                            measureId: standpipeMeasure.id,
+                            measure: standpipeMeasure.description,
+                            status: "verified",
+                            source: {
+                              fileName: "FP-101.pdf",
+                              pageNumber: 4,
+                              excerpt: "Standpipe not included on base fire protection plan.",
+                            },
+                          },
+                        ],
+                      }),
+                    },
+                  },
+                ],
+              };
+            }
+            return {
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      projectAddress: "1513 P St NW, Washington DC, 20005",
+                      requestedModification: "Standpipe and egress modification",
+                      citedSections: [],
+                      proposedMeasures: measures,
+                      extractionWarnings: [],
+                    }),
+                  },
+                },
+              ],
+            };
+          }),
+        },
+      },
+    };
+
+    const outcome = await analyzeCodeModification({
+      openai,
+      formPages: SCANNED_SPARSE_PAGES,
+      formImages: [{ pageNumber: 2, imageBase64: "aaaa", imageType: "image/png" }],
+      formDocument: { id: "form-app" },
+      sheets: [
+        {
+          id: "base-sheet",
+          documentId: "base-doc",
+          fileName: "FP-101.pdf",
+          pageNumber: 4,
+          imageBase64: "aaaa",
+        },
+        {
+          id: "addendum-sheet",
+          documentId: "addendum-doc",
+          fileName: "Addendum_Standpipe.pdf",
+          pageNumber: 1,
+          imageBase64: "bbbb",
+        },
+      ],
+    });
+
+    const standpipe = outcome.result.evidence.find((finding) =>
+      /standpipe/i.test(finding.measure),
+    );
+    assert.ok(standpipe);
+    assert.equal(standpipe.status, "conflicting");
+    assert.match(standpipe.note, /FP-101(\.pdf)? p\.4/i);
+    assert.match(standpipe.note, /Addendum_Standpipe\.pdf p\.1/i);
+    assert.equal(openai.chat.completions.create.mock.calls.length, 3);
   });
 });

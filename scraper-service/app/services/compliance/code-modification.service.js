@@ -945,27 +945,7 @@ function findingsFromExtracted(extracted) {
   }));
 }
 
-function mergeFindings(existing, incoming) {
-  const byMeasure = new Map();
-  for (const finding of existing) {
-    byMeasure.set((finding.measureId || finding.measure || finding.id).toLowerCase(), finding);
-  }
-  const rank = {
-    conflicting: 5,
-    requires_professional_dob_review: 4,
-    not_found: 1,
-    partially_supported: 2,
-    verified: 3,
-  };
-  for (const finding of incoming) {
-    const key = (finding.measureId || finding.measure || finding.id).toLowerCase();
-    const prev = byMeasure.get(key);
-    if (!prev || (rank[finding.status] || 0) >= (rank[prev.status] || 0)) {
-      byMeasure.set(key, finding);
-    }
-  }
-  return Array.from(byMeasure.values());
-}
+const { mergeFindingsFromSheets } = require("./code-mod-evidence-merge.js");
 
 async function reviewSheetWithVision(openai, extracted, sheet, logError, analysisInstructions = null) {
   const { systemPrompt, userPrompt } = buildSheetReviewPrompt(extracted, sheet, analysisInstructions);
@@ -1087,7 +1067,7 @@ async function analyzeCodeModification(params) {
           logError,
           analysisInstructions,
         );
-        findings = mergeFindings(findings, sheetFindings);
+        findings = mergeFindingsFromSheets(findings, sheetFindings);
       } catch (err) {
         const label = sheet.fileName || sheet.sheetLabel || `page ${sheet.pageNumber ?? "?"}`;
         const message = err instanceof Error ? err.message : String(err);
@@ -1158,4 +1138,5 @@ module.exports = {
   filterDrawingEvidenceSheetsForReview,
   sheetUsesExcludedEvidenceDocument,
   buildExcludedEvidenceDocumentIds,
+  mergeFindingsFromSheets,
 };
