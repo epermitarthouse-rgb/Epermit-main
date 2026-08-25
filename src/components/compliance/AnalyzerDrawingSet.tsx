@@ -4,16 +4,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Loader2, Trash2, X } from "lucide-react";
 import {
-  COMPLIANCE_MAX_INCLUDED_SHEETS,
   sheetDisplayName,
   type CodeAnalyzerRun,
   type CodeAnalyzerSheet,
 } from "@/lib/codeAnalyzer/model";
 import {
+  resolveAnalyzerRuntimeStatus,
+  type AnalyzerWorkflowMode,
+} from "@/lib/codeAnalyzer/analyzerRuntimeStatus";
+import {
   computeAnalyzerDatasetMetrics,
   computeRunAnalysisMetrics,
-  formatAnalysisProgressSummary,
-  formatAnalyzerDatasetSummary,
   type RunAnalysisMetrics,
   type RunAnalysisMetricsInput,
 } from "@/lib/codeAnalyzer/sheetState";
@@ -48,7 +49,10 @@ interface AnalyzerDrawingSetProps {
   displayRun: CodeAnalyzerRun | null;
   analysisStale: boolean;
   staleActionLabel?: string;
+  workflowMode?: AnalyzerWorkflowMode;
+  hasModificationReview?: boolean;
   analyzing: boolean;
+  batchProgress?: { completed: number; total: number } | null;
   /** Canonical run metrics from parent — keeps counters aligned with KPI strip. */
   runMetrics?: RunAnalysisMetrics;
   /** Shared inputs for per-document computeRunAnalysisMetrics (same source as KPI strip). */
@@ -144,7 +148,10 @@ export function AnalyzerDrawingSet({
   displayRun,
   analysisStale,
   staleActionLabel = "Update Analysis",
+  workflowMode = "standard",
+  hasModificationReview = false,
   analyzing,
+  batchProgress = null,
   runMetrics,
   runAnalysisContext,
   completedSheetIds,
@@ -200,9 +207,23 @@ export function AnalyzerDrawingSet({
     analyzedFailedCount,
     analysisTotalCount: canonicalMetrics.analysisTotalCount,
   };
-  const pendingCount =
-    analysisPendingCount ??
-    Math.max(0, datasetMetrics.analysisTotalCount - analyzedCompletedCount - analyzedFailedCount);
+  const codeModReviewComplete =
+    workflowMode === "code_modification" && hasModificationReview && !analysisStale;
+  const effectiveCompletedSheetIds = codeModReviewComplete
+    ? new Set(included.map((s) => s.id))
+    : canonicalMetrics.completedSheetIds;
+
+  const runtimeStatus = resolveAnalyzerRuntimeStatus({
+    mode: workflowMode,
+    metrics: datasetMetrics,
+    analyzing,
+    stale: analysisStale,
+    displayRunStatus: displayRun?.status ?? null,
+    batchProgress,
+    hasModificationReview,
+    reviewedSheetCount: codeModReviewComplete ? included.length : undefined,
+    excludedSheetCount: excluded.length,
+  });
 
   return (
     <div className="space-y-4 text-left">
@@ -214,42 +235,15 @@ export function AnalyzerDrawingSet({
           </AlertDescription>
         </Alert>
       )}
-      {displayRun?.status === "current" && !analysisStale && included.length > 0 && !analyzing && (
-        <p className="text-xs text-muted-foreground">
-          Analysis is current for {included.length} included sheet{included.length === 1 ? "" : "s"}.
-        </p>
-      )}
       <p className="text-xs text-muted-foreground" data-testid="analyzer-dataset-summary">
-        {formatAnalyzerDatasetSummary(datasetMetrics)}
+        {runtimeStatus.datasetLine}
+        {runtimeStatus.statusLine ? ` · ${runtimeStatus.statusLine}` : ""}
       </p>
-      {(analyzing || displayRun || failedSheetFiles.length > 0) && included.length > 0 && (
-        <p className="text-xs text-muted-foreground" data-testid="analyzer-analysis-summary">
-          {formatAnalysisProgressSummary(
-            {
-              ...datasetMetrics,
-              analyzedCompletedCount,
-              analyzedFailedCount,
-            },
-            analyzing
-              ? {
-                  inProgress: true,
-                  pendingCount,
-                  currentSheetName: currentAnalyzingSheetName,
-                }
-              : undefined,
-          )}
+      {runtimeStatus.capacityLine ? (
+        <p className="text-xs text-muted-foreground" data-testid="analyzer-included-sheet-capacity">
+          {runtimeStatus.capacityLine}
         </p>
-      )}
-      <p
-        className="text-xs text-muted-foreground"
-        data-testid="analyzer-included-sheet-capacity"
-      >
-        {included.length} of {COMPLIANCE_MAX_INCLUDED_SHEETS} included sheet
-        {COMPLIANCE_MAX_INCLUDED_SHEETS === 1 ? "" : "s"}
-        {excluded.length > 0
-          ? ` (${excluded.length} excluded — over the ${COMPLIANCE_MAX_INCLUDED_SHEETS}-sheet analysis cap)`
-          : ""}
-      </p>
+      ) : null}
       {isLegacy && sheets.length === 0 && (
         <p className="text-xs text-muted-foreground">
           These drawings were analyzed before sheet-level tracking. Add or remove files, then update
@@ -273,7 +267,7 @@ export function AnalyzerDrawingSet({
                   })
                 : null;
               const docCompletedSheetIds =
-                docRunMetrics?.completedSheetIds ?? canonicalMetrics.completedSheetIds;
+                docRunMetrics?.completedSheetIds ?? effectiveCompletedSheetIds;
               const docFailedSheetIds = docRunMetrics?.failedSheetIds ?? failedSheetIds;
               const cardStatus = deriveDocumentCardStatus({
                 includedSheets: group.pages,

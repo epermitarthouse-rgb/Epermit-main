@@ -2088,6 +2088,7 @@ export function AIComplianceAnalyzer() {
       await finalizeCodeModDrawingUpload(drawingUpload, pendingDrawingFiles, selectedProjectId);
       setModificationReview(review);
       setModificationForms(forms);
+      await reloadAnalyzerDataset(selectedProjectId);
       toast.success("Code Modification Review complete");
     } catch (err) {
       console.error("Code modification review error:", err);
@@ -3125,13 +3126,10 @@ export function AIComplianceAnalyzer() {
             )}
             {selectedProjectId &&
               !loadingDocsWithAnalysis &&
-              documentsWithAnalysis.length === 0 &&
-              documents.length > 0 && (
+              persistedSheets.length === 0 &&
+              files.length === 0 && (
                 <p className="text-xs text-muted-foreground mt-1" data-testid="text-docs-not-yet-analyzed">
-                  This project has {documents.length} uploaded document
-                  {documents.length === 1 ? "" : "s"}, but none have Code Analyzer results yet.
-                  Upload drawings below to analyze — Project Documents lists every file, while this
-                  dropdown only shows previously analyzed ones.
+                  No drawings added to this analysis yet.
                 </p>
               )}
           </div>
@@ -3455,6 +3453,13 @@ export function AIComplianceAnalyzer() {
                 displayRun={isModificationMode ? modificationDisplayRun : displayRun}
                 analysisStale={isModificationMode ? modificationStale : analysisStale}
                 staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
+                workflowMode={isModificationMode ? "code_modification" : "standard"}
+                hasModificationReview={Boolean(modificationReview)}
+                batchProgress={
+                  analyzing && batchProgress
+                    ? { completed: batchProgress.completed, total: batchProgress.total }
+                    : null
+                }
                 analyzing={analyzing}
                 isLegacy={hasAnalyzerRuns === false && persistedSheets.length === 0 && documentsWithAnalysis.length > 0}
                 onAddClick={() => document.getElementById("drawing-upload")?.click()}
