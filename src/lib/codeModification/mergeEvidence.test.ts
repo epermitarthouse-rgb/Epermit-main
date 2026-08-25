@@ -14,6 +14,7 @@ import {
   mergeFindingsFromSheets,
   synthesizeMeasureEvidence,
   validateOneRowPerMeasure,
+  validateSynthesisInvariants,
   type MergeableEvidenceFinding,
 } from "./mergeEvidence.ts";
 import { normalizeProposedMeasures, splitMeasureDescription } from "./extractForm.ts";
@@ -216,7 +217,8 @@ describe("mergeEvidence synthesis hardening A–L", () => {
       ],
     });
 
-    assert.equal(synthesized.status, "verified");
+    assert.equal(synthesized.status, "partially_supported");
+    assert.notEqual(synthesized.status, "conflicting");
     assert.doesNotMatch(synthesized.note ?? "", /No evidence for this measure/i);
   });
 
@@ -698,7 +700,8 @@ describe("mergeEvidence regression A–G", () => {
       ],
     });
 
-    assert.equal(synthesized.status, "verified");
+    assert.equal(synthesized.status, "partially_supported");
+    assert.notEqual(synthesized.status, "conflicting");
     assert.match(synthesized.source?.fileName ?? "", /G-001/);
     assert.doesNotMatch(synthesized.note ?? "", /No evidence for this measure/i);
   });
@@ -738,7 +741,7 @@ describe("mergeEvidence helpers", () => {
 });
 
 describe("generic synthesis defect guards A–D", () => {
-  it("A. three supportive 2-hour stair observations stay VERIFIED without numeric conflict", () => {
+  it("A. three supportive 2-hour stair observations stay PARTIAL without numeric conflict", () => {
     const measure = "Provide a two-hour fire rated enclosed stairway serving all occupied levels";
     const synthesized = synthesizeMeasureEvidence({
       id: "stair",
@@ -773,7 +776,8 @@ describe("generic synthesis defect guards A–D", () => {
       ],
     });
 
-    assert.equal(synthesized.status, "verified");
+    assert.equal(synthesized.status, "partially_supported");
+    assert.notEqual(synthesized.status, "conflicting");
   });
 
   it("B. base deferral + present revision provides Feature X → VERIFIED", () => {
@@ -1025,7 +1029,8 @@ describe("1513 regression fixture synthesis", () => {
     assert.equal(validateOneRowPerMeasure(merged), true);
 
     const byId = new Map(merged.map((row) => [row.measureId, row]));
-    assert.equal(byId.get(stair.id)?.status, "verified");
+    assert.equal(byId.get(stair.id)?.status, "partially_supported");
+    assert.notEqual(byId.get(stair.id)?.status, "conflicting");
     assert.equal(byId.get(sprinkler.id)?.status, "verified");
     assert.equal(byId.get(alarm.id)?.status, "verified");
     assert.equal(byId.get(occupant.id)?.status, "conflicting");
@@ -1034,6 +1039,64 @@ describe("1513 regression fixture synthesis", () => {
     assert.equal(byId.get(standpipe.id)?.status, "verified");
     assert.equal(byId.get(commonPath.id)?.status, "verified");
     assert.equal(byId.get(signage.id)?.status, "conflicting");
+  });
+
+  it("stair with partial component coverage is PARTIAL not CONFLICTING", () => {
+    const stair = measureByPattern(/two-hour fire rated enclosed stairway/i);
+    const merged = mergeSheetFindings([
+      finding({
+        id: "stair-provision",
+        measureId: stair.id,
+        measure: stair.description,
+        status: "verified",
+        source: {
+          fileName: "G-001.pdf",
+          pageNumber: 1,
+          excerpt: "2-hour fire rated enclosed stairway noted.",
+        },
+      }),
+      finding({
+        id: "stair-coverage-gap",
+        measureId: stair.id,
+        measure: stair.description,
+        status: "conflicting",
+        source: {
+          fileName: "A-101.pdf",
+          pageNumber: 1,
+          excerpt: "Drawing does not establish serving all occupied levels.",
+        },
+      }),
+    ]);
+
+    const row = merged.find((entry) => entry.measureId === stair.id);
+    assert.ok(row);
+    assert.equal(row.status, "partially_supported");
+    assert.notEqual(row.status, "conflicting");
+    assert.equal(validateSynthesisInvariants(row).length, 0);
+  });
+
+  it("PDRM with absence-only model verified output stays NOT_FOUND", () => {
+    const pdrm = measureByPattern(/PDRM/i);
+    const merged = mergeSheetFindings([
+      finding({
+        id: "pdrm-absence",
+        measureId: pdrm.id,
+        measure: pdrm.description,
+        status: "verified",
+        source: {
+          fileName: "G-001.pdf",
+          pageNumber: 1,
+          excerpt: "DOB recommendations from the review meeting are not mentioned or shown.",
+        },
+      }),
+    ]);
+
+    const row = merged.find((entry) => entry.measureId === pdrm.id);
+    assert.ok(row);
+    assert.notEqual(row.status, "verified");
+    assert.equal(row.status, "not_found");
+    assert.equal(row.source, null);
+    assert.equal(validateSynthesisInvariants(row).length, 0);
   });
 });
 

@@ -3,7 +3,7 @@
  * Raw model status labels are hints — final conflict requires validated contradiction.
  */
 
-import { evidencePolarity } from "./evidencePolarity";
+import { evidencePolarity, isAbsenceLanguage, isIncompleteEvidenceLanguage } from "./evidencePolarity";
 import { referencesRevisionDocument } from "./revisionReference";
 import { isEvidenceStatus, type EvidenceSource, type EvidenceStatus } from "./model";
 
@@ -19,8 +19,11 @@ const GENERIC_PER_SHEET_NOT_FOUND = /^no evidence for this measure on this sheet
 const EXPLICIT_CONTRADICTION =
   /\b(conflict(?:s|ing)?|contradict(?:s|ion|ory)?|disagree(?:s|ment)?|inconsistent|does not match|differs from)\b/i;
 
-const INCOMPLETE_EVIDENCE =
-  /\b(cannot (?:determine|verify|confirm)|unclear|insufficient|unable to (?:determine|verify)|not enough (?:information|evidence)|cannot assess)\b/i;
+export function isAbsenceOrIncompleteLanguage(text: string): boolean {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) return true;
+  return isAbsenceLanguage(normalized) || isIncompleteEvidenceLanguage(normalized);
+}
 
 export function normalizeEvidenceStatus(raw: string | null | undefined): EvidenceStatus {
   const value = String(raw ?? "")
@@ -58,10 +61,6 @@ function isGenericPerSheetNotFound(text: string): boolean {
 
 function hasExplicitContradictionLanguage(text: string): boolean {
   return EXPLICIT_CONTRADICTION.test(text);
-}
-
-function isIncompleteEvidenceLanguage(text: string): boolean {
-  return INCOMPLETE_EVIDENCE.test(text);
 }
 
 function supportingStatusFromPolarity(polarity: ReturnType<typeof evidencePolarity>): EvidenceStatus {
@@ -105,6 +104,7 @@ export function validateModelStatusAgainstEvidence(
   if (status === "verified" || status === "partially_supported") {
     if (!text) return "not_found";
     if (isGenericPerSheetNotFound(text)) return "not_found";
+    if (isAbsenceOrIncompleteLanguage(text) && !referencesRevisionDocument(text)) return "not_found";
     if (polarity === "negative" && !referencesRevisionDocument(text)) return "not_found";
     if (polarity === "positive") return "verified";
     if (referencesRevisionDocument(text)) return "partially_supported";

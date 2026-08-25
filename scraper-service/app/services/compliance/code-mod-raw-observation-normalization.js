@@ -1,6 +1,10 @@
 "use strict";
 
-const { evidencePolarity } = require("./code-mod-evidence-polarity.js");
+const {
+  evidencePolarity,
+  isAbsenceLanguage,
+  isIncompleteEvidenceLanguage,
+} = require("./code-mod-evidence-polarity.js");
 const { referencesRevisionDocument } = require("./code-mod-revision-reference.js");
 
 const EVIDENCE_STATUSES = new Set([
@@ -16,8 +20,11 @@ const GENERIC_PER_SHEET_NOT_FOUND = /^no evidence for this measure on this sheet
 const EXPLICIT_CONTRADICTION =
   /\b(conflict(?:s|ing)?|contradict(?:s|ion|ory)?|disagree(?:s|ment)?|inconsistent|does not match|differs from)\b/i;
 
-const INCOMPLETE_EVIDENCE =
-  /\b(cannot (?:determine|verify|confirm)|unclear|insufficient|unable to (?:determine|verify)|not enough (?:information|evidence)|cannot assess)\b/i;
+function isAbsenceOrIncompleteLanguage(text) {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) return true;
+  return isAbsenceLanguage(normalized) || isIncompleteEvidenceLanguage(normalized);
+}
 
 function normalizeEvidenceStatus(raw) {
   const value = String(raw ?? "")
@@ -56,10 +63,6 @@ function hasExplicitContradictionLanguage(text) {
   return EXPLICIT_CONTRADICTION.test(text);
 }
 
-function isIncompleteEvidenceLanguage(text) {
-  return INCOMPLETE_EVIDENCE.test(text);
-}
-
 function validateModelStatusAgainstEvidence(observation) {
   const status = normalizeEvidenceStatus(observation.status);
   const text = evidenceTextForValidation(observation);
@@ -87,6 +90,7 @@ function validateModelStatusAgainstEvidence(observation) {
   if (status === "verified" || status === "partially_supported") {
     if (!text) return "not_found";
     if (isGenericPerSheetNotFound(text)) return "not_found";
+    if (isAbsenceOrIncompleteLanguage(text) && !referencesRevisionDocument(text)) return "not_found";
     if (polarity === "negative" && !referencesRevisionDocument(text)) return "not_found";
     if (polarity === "positive") return "verified";
     if (referencesRevisionDocument(text)) return "partially_supported";
@@ -122,4 +126,6 @@ module.exports = {
   normalizeRawObservations,
   hasValidatedModelConflict,
   observationText,
+  evidenceTextForValidation,
+  isAbsenceOrIncompleteLanguage,
 };

@@ -186,7 +186,8 @@ describe("rawObservationNormalization A–O", () => {
       ],
     });
 
-    assert.equal(synthesized.status, "verified");
+    assert.equal(synthesized.status, "partially_supported");
+    assert.notEqual(synthesized.status, "conflicting");
   });
 
   it("K. not_found sheets do not override verified support after normalization", () => {

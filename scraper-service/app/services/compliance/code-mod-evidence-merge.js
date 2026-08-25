@@ -21,7 +21,14 @@ const { excerptsContradict, evidencePolarity } = require("./code-mod-evidence-po
 const {
   hasValidatedModelConflict,
   normalizeRawObservations,
+  evidenceTextForValidation,
+  isAbsenceOrIncompleteLanguage,
 } = require("./code-mod-raw-observation-normalization.js");
+const {
+  assessComponentCoverage,
+  observationsShareComponent,
+} = require("./code-mod-measure-component-completeness.js");
+const { isIncompleteEvidenceLanguage } = require("./code-mod-evidence-polarity.js");
 
 const STATUS_RANK = {
   conflicting: 5,
@@ -190,6 +197,14 @@ function observationsContradict(observations, measureText) {
       const rightSource = sourceIdentity(substantive[j].source);
       if (!leftSource || !rightSource || leftSource === rightSource) continue;
 
+      if (
+        isIncompleteEvidenceLanguage(left) ||
+        isIncompleteEvidenceLanguage(right) ||
+        !observationsShareComponent(left, right, measureText)
+      ) {
+        continue;
+      }
+
       const leftPolarity = evidencePolarity(left);
       const rightPolarity = evidencePolarity(right);
       const leftNegative = leftPolarity === "negative";
@@ -247,6 +262,46 @@ function aggregateStatus(observations) {
   return "not_found";
 }
 
+function reconcileFinalStatus({ shouldConflict, observations, measure }) {
+  if (shouldConflict) return "conflicting";
+
+  if (observations.some((observation) => observation.status === "requires_professional_dob_review")) {
+    return "requires_professional_dob_review";
+  }
+
+  const relevantSupporting = observations.filter(
+    (observation) => classifyObservationRelevance(observation) && isSupportingStatus(observation.status),
+  );
+
+  if (relevantSupporting.length === 0) return "not_found";
+
+  const allAbsenceOnly = relevantSupporting.every((observation) =>
+    isAbsenceOrIncompleteLanguage(evidenceTextForValidation(observation)),
+  );
+  if (allAbsenceOnly) return "not_found";
+
+  const substantiveTexts = observations
+    .filter(
+      (observation) =>
+        classifyObservationRelevance(observation) ||
+        isSubstantiveObservation(observation) ||
+        evidencePolarity(observationText(observation)) !== "neutral",
+    )
+    .map((observation) => observationText(observation))
+    .filter(Boolean);
+
+  const componentCoverage = assessComponentCoverage(measure, substantiveTexts);
+  if (componentCoverage.total > 1) {
+    if (componentCoverage.supported === 0) {
+      return relevantSupporting.length > 0 ? "partially_supported" : "not_found";
+    }
+    if (componentCoverage.supported < componentCoverage.total) return "partially_supported";
+  }
+
+  if (relevantSupporting.some((observation) => observation.status === "verified")) return "verified";
+  return "partially_supported";
+}
+
 function renderFinalNote({ status, observations, finding, supporting, primary }) {
   if (status === "not_found") {
     const relevant = observations.filter((observation) => classifyObservationRelevance(observation));
@@ -281,6 +336,11 @@ function renderFinalNote({ status, observations, finding, supporting, primary })
 
 function validateSynthesisInvariants(finding) {
   const violations = [];
+  const observations = finding.observations || [];
+  const relevantSupporting = observations.filter(
+    (observation) => classifyObservationRelevance(observation) && isSupportingStatus(observation.status),
+  );
+
   if (finding.status === "not_found" && finding.source) {
     violations.push("not_found finding must not retain a primary citation");
   }
@@ -290,8 +350,21 @@ function validateSynthesisInvariants(finding) {
   ) {
     violations.push("supported finding must retain a primary citation");
   }
+  if (finding.status === "verified" && relevantSupporting.length === 0) {
+    violations.push("verified status requires at least one relevant supporting observation");
+  }
+  if (finding.status === "verified" && relevantSupporting.length > 0) {
+    const absenceOnly = relevantSupporting.every((observation) =>
+      isAbsenceOrIncompleteLanguage(evidenceTextForValidation(observation)),
+    );
+    if (absenceOnly) {
+      violations.push("verified status cannot rest on absence-only evidence");
+    }
+  }
+  if (finding.status === "not_found" && relevantSupporting.length > 0) {
+    violations.push("not_found status conflicts with supporting observations");
+  }
   if (finding.status === "conflicting") {
-    const observations = finding.observations || [];
     const hasGenuine =
       observations.some((observation) => hasValidatedModelConflict(observation)) ||
       observationsContradict(observations, finding.measure);
@@ -326,7 +399,11 @@ function synthesizeMeasureEvidence(finding, options = {}) {
       observationsContradict(observations, finding.measure));
 
   const preferRevision = revisionResolution || options.preferAddendumPrecedence === true;
-  const status = shouldConflict ? "conflicting" : aggregateStatus(observations);
+  const status = reconcileFinalStatus({
+    shouldConflict,
+    observations,
+    measure: finding.measure,
+  });
 
   const primary = shouldConflict
     ? pickPrimaryObservation(
