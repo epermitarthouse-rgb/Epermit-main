@@ -20,27 +20,32 @@ import {
   preferCanonicalMeasureId,
   preferCanonicalMeasureLabel,
 } from "./canonicalMeasure";
-import { materialValuesConflict } from "./materialValueConflict";
 import {
   hasRevisionResolution,
   isAddendumEvidenceSource,
   isRevisionEvidenceSource,
-  isRevisionResolutionPair,
 } from "./revisionReference";
 import { excerptsContradict, evidencePolarity } from "./evidencePolarity";
 import {
   hasValidatedModelConflict,
   normalizeRawObservations,
-  evidenceTextForValidation,
-  isAbsenceOrIncompleteLanguage,
 } from "./rawObservationNormalization";
 import {
-  assessComponentCoverage,
-  observationRelatesToMeasure,
-  observationsShareComponent,
-} from "./measureComponentCompleteness";
-import { isIncompleteEvidenceLanguage } from "./evidencePolarity";
+  NOT_FOUND_NOTE,
+  classifyObservationPassage,
+  classifyObservationRelevance,
+  computeDeterministicEvidenceStatus,
+  enforceSynthesisConsistency,
+  observationsForReviewNote,
+  partitionObservationsByClassification,
+  shouldTreatAsConflict,
+  validateFinalConsistency,
+} from "./evidenceClassification";
 import type { EvidenceFinding, EvidenceSource, EvidenceStatus } from "./model";
+
+export {
+  classifyObservationRelevance,
+} from "./evidenceClassification";
 
 export { excerptsContradict, evidencePolarity };
 
@@ -66,7 +71,6 @@ const STATUS_RANK: Record<EvidenceStatus, number> = {
   not_found: 1,
 };
 
-const NOT_FOUND_NOTE = "No relevant evidence was found in the reviewed drawing set.";
 const PLACEHOLDER_NOT_FOUND_NOTE = "No drawing evidence was reviewed for this measure.";
 
 function normalizeText(value: string | null | undefined): string {
@@ -131,22 +135,6 @@ function isSubstantiveObservation(observation: SheetEvidenceObservation): boolea
 
 function isGenericPerSheetNotFound(text: string): boolean {
   return /^no evidence for this measure on this sheet\.?$/i.test(text.trim());
-}
-
-/** D. classify relevance — explicit metadata, substantive content, and measure-local lexical match. */
-export function classifyObservationRelevance(
-  observation: SheetEvidenceObservation,
-  measureText: string,
-): boolean {
-  if (typeof observation.relevant === "boolean") return observation.relevant;
-  if (observation.status === "not_found") {
-    const text = observationText(observation);
-    if (!text) return false;
-    if (isGenericPerSheetNotFound(text)) return false;
-    return false;
-  }
-  if (!isSubstantiveObservation(observation)) return false;
-  return observationRelatesToMeasure(observationText(observation), measureText);
 }
 
 function dedupeObservations(observations: SheetEvidenceObservation[]): SheetEvidenceObservation[] {
@@ -224,55 +212,6 @@ function effectiveObservations(observations: SheetEvidenceObservation[]): SheetE
   );
 }
 
-function observationsContradict(
-  observations: SheetEvidenceObservation[],
-  measureText: string,
-): boolean {
-  const substantive = observations.filter(
-    (observation) =>
-      isSubstantiveObservation(observation) &&
-      classifyObservationRelevance(observation, measureText),
-  );
-
-  for (let i = 0; i < substantive.length; i += 1) {
-    for (let j = i + 1; j < substantive.length; j += 1) {
-      if (isRevisionResolutionPair(substantive[i]!, substantive[j]!, observations, evidencePolarity)) {
-        continue;
-      }
-
-      const left = observationText(substantive[i]!);
-      const right = observationText(substantive[j]!);
-      if (excerptsContradict(left, right)) return true;
-
-      const leftSource = sourceIdentity(substantive[i]?.source);
-      const rightSource = sourceIdentity(substantive[j]?.source);
-      if (!leftSource || !rightSource || leftSource === rightSource) continue;
-
-      if (
-        isIncompleteEvidenceLanguage(left) ||
-        isIncompleteEvidenceLanguage(right) ||
-        !observationsShareComponent(left, right, measureText)
-      ) {
-        continue;
-      }
-
-      const leftPolarity = evidencePolarity(left);
-      const rightPolarity = evidencePolarity(right);
-      const leftNegative = leftPolarity === "negative";
-      const rightNegative = rightPolarity === "negative";
-      const leftPositive = leftPolarity === "positive";
-      const rightPositive = rightPolarity === "positive";
-
-      if ((leftNegative && rightPositive) || (rightNegative && leftPositive)) {
-        return true;
-      }
-    }
-  }
-
-  const substantiveTexts = substantive.map((observation) => observationText(observation)).filter(Boolean);
-  return materialValuesConflict(substantiveTexts, measureText);
-}
-
 function pickPrimaryObservation(
   observations: SheetEvidenceObservation[],
   measureText: string,
@@ -311,100 +250,32 @@ function pickPrimaryObservation(
   return ranked[0] ?? null;
 }
 
-function aggregateStatus(observations: SheetEvidenceObservation[]): EvidenceStatus {
-  if (observations.some((observation) => observation.status === "requires_professional_dob_review")) {
-    return "requires_professional_dob_review";
-  }
-  const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
-  if (supporting.length > 0) {
-    if (supporting.some((observation) => observation.status === "verified")) return "verified";
-    return "partially_supported";
-  }
-  return "not_found";
-}
-
-/** Deterministic status reconciliation — overrides inconsistent raw/model labels. */
-function reconcileFinalStatus(input: {
-  shouldConflict: boolean;
-  observations: SheetEvidenceObservation[];
-  measure: string;
-}): EvidenceStatus {
-  const { shouldConflict, observations, measure } = input;
-
-  if (shouldConflict) return "conflicting";
-
-  const isRelevant = (observation: SheetEvidenceObservation) =>
-    classifyObservationRelevance(observation, measure);
-
-  if (
-    observations.some(
-      (observation) =>
-        observation.status === "requires_professional_dob_review" && isRelevant(observation),
-    )
-  ) {
-    return "requires_professional_dob_review";
-  }
-
-  const relevantSupporting = observations.filter(
-    (observation) => isRelevant(observation) && isSupportingStatus(observation.status),
-  );
-
-  if (relevantSupporting.length === 0) return "not_found";
-
-  const allAbsenceOnly = relevantSupporting.every((observation) =>
-    isAbsenceOrIncompleteLanguage(evidenceTextForValidation(observation)),
-  );
-  if (allAbsenceOnly) return "not_found";
-
-  const substantiveTexts = observations
-    .filter((observation) => isRelevant(observation))
-    .map((observation) => observationText(observation))
-    .filter(Boolean);
-
-  const componentCoverage = assessComponentCoverage(measure, substantiveTexts);
-  if (componentCoverage.total > 1) {
-    if (componentCoverage.supported === 0) {
-      return relevantSupporting.length > 0 ? "partially_supported" : "not_found";
-    }
-    if (componentCoverage.supported < componentCoverage.total) return "partially_supported";
-  }
-
-  if (relevantSupporting.some((observation) => observation.status === "verified")) return "verified";
-  return "partially_supported";
-}
-
 /** J. render concise final note without unrelated per-sheet not_found noise. */
 function renderFinalNote(input: {
   status: EvidenceStatus;
   observations: SheetEvidenceObservation[];
   finding: MergeableEvidenceFinding;
-  supporting: SheetEvidenceObservation[];
   primary: SheetEvidenceObservation | null;
+  revisionResolution?: boolean;
 }): string | null {
-  const { status, observations, finding, supporting, primary } = input;
+  const { status, observations, finding, primary, revisionResolution } = input;
   const measureText = finding.measure;
+  const notePool = observationsForReviewNote(observations, measureText, { revisionResolution });
 
   if (status === "not_found") {
     return NOT_FOUND_NOTE;
   }
 
   if (status === "conflicting") {
-    const conflictPool = observations.filter(
-      (observation) =>
-        classifyObservationRelevance(observation, measureText) &&
-        (hasValidatedModelConflict(observation) ||
-          isSupportingStatus(observation.status) ||
-          evidencePolarity(observationText(observation)) !== "neutral"),
-    );
     return (
-      formatObservationNotes(conflictPool, measureText) ||
+      formatObservationNotes(notePool.length > 0 ? notePool : observations, measureText) ||
       finding.note ||
       "Conflicting evidence across submitted drawing sheets."
     );
   }
 
-  if (supporting.length >= 2) {
-    const ranked = supporting
+  if (notePool.length >= 2) {
+    const ranked = notePool
       .slice()
       .sort((left, right) => {
         const statusDelta = (STATUS_RANK[right.status] ?? 0) - (STATUS_RANK[left.status] ?? 0);
@@ -415,50 +286,15 @@ function renderFinalNote(input: {
     return formatObservationNotes(ranked, measureText) || primary?.note || finding.note || null;
   }
 
-  return primary?.note ?? finding.note ?? null;
+  if (primary) {
+    return formatObservationNotes([primary], measureText) || primary.note || finding.note || null;
+  }
+
+  return finding.note ?? null;
 }
 
 export function validateSynthesisInvariants(finding: MergeableEvidenceFinding): string[] {
-  const violations: string[] = [];
-  const observations = finding.observations ?? [];
-  const relevantSupporting = observations.filter(
-    (observation) =>
-      classifyObservationRelevance(observation, finding.measure) &&
-      isSupportingStatus(observation.status),
-  );
-
-  if (finding.status === "not_found" && finding.source) {
-    violations.push("not_found finding must not retain a primary citation");
-  }
-  if (
-    (finding.status === "verified" || finding.status === "partially_supported") &&
-    !finding.source
-  ) {
-    violations.push("supported finding must retain a primary citation");
-  }
-  if (finding.status === "verified" && relevantSupporting.length === 0) {
-    violations.push("verified status requires at least one relevant supporting observation");
-  }
-  if (finding.status === "verified" && relevantSupporting.length > 0) {
-    const absenceOnly = relevantSupporting.every((observation) =>
-      isAbsenceOrIncompleteLanguage(evidenceTextForValidation(observation)),
-    );
-    if (absenceOnly) {
-      violations.push("verified status cannot rest on absence-only evidence");
-    }
-  }
-  if (finding.status === "not_found" && relevantSupporting.length > 0) {
-    violations.push("not_found status conflicts with supporting observations");
-  }
-  if (finding.status === "conflicting") {
-    const hasGenuine =
-      observations.some((observation) => hasValidatedModelConflict(observation)) ||
-      observationsContradict(observations, finding.measure);
-    if (!hasGenuine) {
-      violations.push("conflicting status requires validated contradiction");
-    }
-  }
-  return violations;
+  return validateFinalConsistency(finding);
 }
 
 export function synthesizeMeasureEvidence(
@@ -485,34 +321,26 @@ export function synthesizeMeasureEvidence(
   );
 
   const supporting = observations.filter((observation) => isSupportingStatus(observation.status));
-  const relevantSupporting = supporting.filter((observation) =>
-    classifyObservationRelevance(observation, finding.measure),
-  );
+  const classified = partitionObservationsByClassification(observations, finding.measure);
+  const relevantSupporting = classified.supports;
 
-  // 8. detect genuine conflicts only — absence and raw model labels do not auto-conflict
-  const shouldConflict =
-    !revisionResolution &&
-    (observations.some(
-      (observation) =>
-        hasValidatedModelConflict(observation) &&
-        classifyObservationRelevance(observation, finding.measure),
-    ) ||
-      observationsContradict(observations, finding.measure));
-
-  // G. aggregate status with deterministic reconciliation
-  const preferRevision = revisionResolution || options?.preferAddendumPrecedence === true;
-  const status = reconcileFinalStatus({
-    shouldConflict,
+  // 8. detect genuine conflicts — NOT_RELEVANT passages excluded
+  const shouldConflict = shouldTreatAsConflict({
     observations,
-    measure: finding.measure,
+    measureText: finding.measure,
+    revisionResolution,
+  });
+
+  // G. aggregate status with deterministic classification reconciliation
+  const preferRevision = revisionResolution || options?.preferAddendumPrecedence === true;
+  const status = computeDeterministicEvidenceStatus({
+    observations,
+    measureText: finding.measure,
+    shouldConflict,
   });
 
   // H. select strongest relevant citations
-  const professionalReview = observations.filter(
-    (observation) =>
-      observation.status === "requires_professional_dob_review" &&
-      classifyObservationRelevance(observation, finding.measure),
-  );
+  const professionalReview = classified.professionalReview;
   const primaryPool =
     relevantSupporting.length > 0
       ? relevantSupporting
@@ -521,8 +349,7 @@ export function synthesizeMeasureEvidence(
         : shouldConflict
           ? observations.filter(
               (observation) =>
-                classifyObservationRelevance(observation, finding.measure) &&
-                (hasValidatedModelConflict(observation) || isSupportingStatus(observation.status)),
+                classifyObservationPassage(observation, finding.measure) !== "NOT_RELEVANT",
             )
           : [];
 
@@ -535,35 +362,34 @@ export function synthesizeMeasureEvidence(
     status,
     observations,
     finding,
-    supporting: relevantSupporting,
     primary,
+    revisionResolution: preferRevision,
   });
 
-  if (
+  const synthesized =
     status === "not_found" ||
     !primary ||
     !classifyObservationRelevance(primary, finding.measure)
-  ) {
-    return {
-      id: finding.id,
-      measureId: finding.measureId ?? null,
-      measure: finding.measure,
-      status: "not_found",
-      source: null,
-      note: NOT_FOUND_NOTE,
-      observations,
-    };
-  }
+      ? {
+          id: finding.id,
+          measureId: finding.measureId ?? null,
+          measure: finding.measure,
+          status: "not_found" as const,
+          source: null,
+          note: NOT_FOUND_NOTE,
+          observations,
+        }
+      : {
+          id: finding.id,
+          measureId: finding.measureId ?? null,
+          measure: finding.measure,
+          status,
+          source: primary.source ?? null,
+          note,
+          observations,
+        };
 
-  return {
-    id: finding.id,
-    measureId: finding.measureId ?? null,
-    measure: finding.measure,
-    status,
-    source: primary.source ?? null,
-    note,
-    observations,
-  };
+  return enforceSynthesisConsistency(synthesized);
 }
 
 /** A/I. canonicalize measures and enforce one-row-per-measure invariant. */

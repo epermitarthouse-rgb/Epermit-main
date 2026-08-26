@@ -145,7 +145,7 @@ function isDeferralResolutionPair(base, candidate, allObservations, polarity) {
     return false;
   }
 
-  return true;
+  return isRevisionEvidenceSource(candidate.source);
 }
 
 function isRevisionResolutionPair(left, right, allObservations, polarity) {

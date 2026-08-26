@@ -87,7 +87,7 @@ function normalizeStatus(status: string | null | undefined): EvidenceStatus {
   ) {
     return "requires_professional_dob_review";
   }
-  return isEvidenceStatus(raw) ? raw : "requires_professional_dob_review";
+  return isEvidenceStatus(raw) ? raw : "not_found";
 }
 
 /**

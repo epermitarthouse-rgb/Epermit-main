@@ -600,7 +600,7 @@ function normalizeStatus(status) {
   ) {
     return "requires_professional_dob_review";
   }
-  return EVIDENCE_STATUSES.has(raw) ? raw : "requires_professional_dob_review";
+  return EVIDENCE_STATUSES.has(raw) ? raw : "not_found";
 }
 
 function validateAndGroundFindings(findings, allowed) {

@@ -177,8 +177,8 @@ function isDeferralResolutionPair(
     return false;
   }
 
-  // Generic deferral without a named target reconciles with any positive supporting candidate.
-  return true;
+  // Generic deferral without a named target only reconciles against a revision-like source.
+  return isRevisionEvidenceSource(candidate.source);
 }
 
 /** Priority: reference text → stable IDs → revision metadata → filename fallback. */

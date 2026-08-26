@@ -197,7 +197,12 @@ describe("analyzeCodeModification", () => {
                           measureId: "measure-1",
                           measure: "Automatic sprinkler system designed and installed in accordance with NFPA 13",
                           status: "verified",
-                          source: { sheetId: "good", pageNumber: 1, fileName: "good.png" },
+                          source: {
+                            sheetId: "good",
+                            pageNumber: 1,
+                            fileName: "good.png",
+                            excerpt: "Automatic sprinkler heads visible on sheet.",
+                          },
                           note: "Sprinkler heads visible on sheet.",
                         },
                       ],
