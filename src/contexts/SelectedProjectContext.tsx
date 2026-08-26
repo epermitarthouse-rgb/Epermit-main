@@ -8,7 +8,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { getProjectIdFromSearchParams } from "@/lib/projectIdFromUrl";
 
 const STORAGE_KEY_PREFIX = "epermit:selectedProjectId";
 const URL_PARAM = "projectId";
@@ -24,34 +26,27 @@ function getStorageKey(userId: string) {
   return `${STORAGE_KEY_PREFIX}:${userId}`;
 }
 
-function getUrlProjectId(): string | null {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const val = params.get(URL_PARAM);
-    return val && val !== "null" ? val : null;
-  } catch {
-    return null;
-  }
-}
-
-function syncUrlProjectId(id: string | null) {
-  try {
-    const url = new URL(window.location.href);
-    if (id) {
-      url.searchParams.set(URL_PARAM, id);
-    } else {
-      url.searchParams.delete(URL_PARAM);
-    }
-    if (url.href !== window.location.href) {
-      window.history.replaceState(null, "", url.toString());
-    }
-  } catch {
-    // ignore
-  }
+function syncUrlProjectId(
+  setSearchParams: ReturnType<typeof useSearchParams>[1],
+  id: string | null,
+) {
+  setSearchParams(
+    (prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) {
+        next.set(URL_PARAM, id);
+      } else {
+        next.delete(URL_PARAM);
+      }
+      return next;
+    },
+    { replace: true },
+  );
 }
 
 export function SelectedProjectProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedProjectId, setState] = useState<string | null>(null);
   const initializedRef = useRef(false);
 
@@ -62,7 +57,7 @@ export function SelectedProjectProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const urlId = getUrlProjectId();
+    const urlId = getProjectIdFromSearchParams(searchParams);
 
     if (urlId) {
       setState(urlId);
@@ -77,17 +72,30 @@ export function SelectedProjectProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(getStorageKey(user.id));
       const value = raw === "" || raw === "null" ? null : raw;
       setState(value);
-      if (value) syncUrlProjectId(value);
+      if (value) syncUrlProjectId(setSearchParams, value);
     } catch {
       setState(null);
     }
     initializedRef.current = true;
+    // Init once per user; ?projectId= changes after mount are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- searchParams intentionally omitted
   }, [user?.id]);
+
+  // Deep links, back/forward, and in-app navigations that change ?projectId=.
+  useEffect(() => {
+    if (!user || !initializedRef.current) return;
+    const urlId = getProjectIdFromSearchParams(searchParams);
+    if (urlId == null) return;
+    setState((current) => (current === urlId ? current : urlId));
+    try {
+      localStorage.setItem(getStorageKey(user.id), urlId);
+    } catch {}
+  }, [searchParams, user?.id]);
 
   const setSelectedProjectId = useCallback(
     (id: string | null) => {
       setState(id);
-      syncUrlProjectId(id);
+      syncUrlProjectId(setSearchParams, id);
       if (user) {
         try {
           if (id == null) {
@@ -100,7 +108,7 @@ export function SelectedProjectProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [user?.id]
+    [user?.id, setSearchParams],
   );
 
   const value = useMemo(

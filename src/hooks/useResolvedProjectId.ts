@@ -1,17 +1,12 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSelectedProject } from "@/contexts/SelectedProjectContext";
+import {
+  getProjectIdFromLocation,
+  getProjectIdFromSearchParams,
+} from "@/lib/projectIdFromUrl";
 
-/** Read project ID from URL query (?projectId=, ?project=, ?project_id=). */
-export function getProjectIdFromSearchParams(
-  searchParams: URLSearchParams,
-): string | null {
-  const val =
-    searchParams.get("projectId") ??
-    searchParams.get("project") ??
-    searchParams.get("project_id");
-  return val && val !== "null" ? val : null;
-}
+export { getProjectIdFromSearchParams, getProjectIdFromLocation } from "@/lib/projectIdFromUrl";
 
 /**
  * Resolves active project for manual workflows: URL param overrides sidebar selection.
@@ -25,7 +20,10 @@ export function useResolvedProjectId(): {
 } {
   const [searchParams] = useSearchParams();
   const { selectedProjectId, setSelectedProjectId } = useSelectedProject();
-  const projectIdFromUrl = getProjectIdFromSearchParams(searchParams);
+  // Keep subscription to router navigations; resolve from live location so project
+  // selection updates stay visible before React Router searchParams catch up.
+  void searchParams;
+  const projectIdFromUrl = getProjectIdFromLocation();
   const projectId = projectIdFromUrl ?? selectedProjectId;
 
   useEffect(() => {
