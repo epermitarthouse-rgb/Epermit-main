@@ -55,9 +55,10 @@ PermitPilot is a permit-intelligence web platform: project tracking, multi-porta
 
 | State | Detail |
 |-------|--------|
-| **Production (`main`)** | **Verified:** URL and anon key are **hardcoded literals** in `src/lib/supabase.ts`. Root `.env` values may be ignored by the bundled client. This is a **configuration inconsistency**. |
-| **Prepared fix (not live)** | Branch `fix/frontend-supabase-env-config`: reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (legacy alias `VITE_SUPABASE_PUBLISHABLE_KEY`), fails fast if missing. **Unmerged; not deployed.** |
-| **Deployment prerequisite** | **Requires manual confirmation:** Vercel production and preview must define both variables before merging the fix. |
+| **Production (`main`)** | **Verified:** URL and anonymous key are **hardcoded literals** in `src/lib/supabase.ts`. Root `.env` / Vercel values may not match bundled client behavior. This is **configuration drift** — **Medium operational/configuration risk** (not a service-role exposure). |
+| **Prepared fix (not live)** | Branch `fix/frontend-supabase-env-config` (`2a5bf81`, **pushed** to `origin`): reads `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (legacy alias `VITE_SUPABASE_PUBLISHABLE_KEY`), fails fast if missing. **Unmerged; not deployed.** |
+| **Vercel state** | **Client/dashboard confirmed:** variable **names** present for All Environments (`VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). **Value correctness requires confirmation** before merge. |
+| **Security note** | Anonymous key is **browser-public by design**. **Verified:** no `SUPABASE_SERVICE_ROLE_KEY` in frontend `src/`. |
 
 See [ENV.md](./ENV.md) and [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md).
 
@@ -165,7 +166,7 @@ Details: [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUG
 
 ## 9. In-flight / manual gates (summary)
 
-See [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md). Key items: UCI live submission gates, Dominion production manifest blocked, QuickBooks API auth gap, PWA build failure, Supabase env inconsistency on `main`.
+See [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md). Key items: UCI live submission gates, Dominion production manifest blocked, QuickBooks API auth gap, Supabase frontend configuration drift on `main` (prepared fix unmerged), PWA build monitoring (not currently reproducible).
 
 ---
 

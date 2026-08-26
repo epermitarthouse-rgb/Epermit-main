@@ -3,7 +3,9 @@
 **Document date:** 2026-08-26  
 **No hourly rate or financial total** — hours only.
 
-Work already completed in this diligence pass (~40–60 h equivalent): initial ten-document bundle, Replit/Lovable audits, corrections, Supabase fix preparation, remediation backlog.
+Work has already been completed on the initial documentation and audits. Actual completed hours must be inserted manually from time records before the estimate is sent to the client.
+
+- **Actual hours completed:** `[MANUAL ENTRY REQUIRED]`
 
 ---
 
@@ -22,26 +24,34 @@ Work already completed in this diligence pass (~40–60 h equivalent): initial t
 | QuickBooks walkthrough agenda | **Done** |
 | Replit + Lovable retirement audits | **Done** |
 | Documentation structure proposal | **Done** |
+| Supabase frontend env fix preparation | **Done** (branch pushed; merge/deploy pending) |
 | Backup verification | **Remaining** — needs Supabase dashboard |
 | Safe staging restore drill | **Remaining** — needs staging project |
 | Documentation review + PR merge | **Remaining** |
 | One live PermitPilot walkthrough (incl. ~30 min QuickBooks, dry-run/sandbox) | **Remaining** |
+| Vercel env value confirmation + post-merge smoke test (after Supabase fix merge) | **Remaining** |
 
 ### Excluded
 
-QuickBooks security implementation, portal regression engineering, Vercel transfer execution, production migration execution, Code Analyzer development, UCI feature work, broad CI, optional remediation items (Section C).
+Replit/Lovable cleanup execution (unless separately approved), QuickBooks security implementation, PWA repair (not reproducible), new product work, portal regression engineering, account transfer execution, Code Analyzer development, UCI feature development, broad CI, optional remediation items (Section C).
 
-### Hours
+### Remaining hours (task breakdown)
 
-| | Low | High |
-|---|-----|------|
-| **Original total estimate** | 80 | 120 |
-| **Already completed** | 40 | 60 |
-| **Remaining** | 40 | 60 |
+| Task | Low (h) | High (h) |
+|------|--------:|---------:|
+| Supabase backup / PITR + Storage policy dashboard review | 4 | 8 |
+| Safe staging restore drill (documented procedure) | 12 | 20 |
+| Shared vault ↔ production env reconciliation (names only; no values in docs) | 6 | 10 |
+| Vercel env **value** confirmation + Supabase fix merge coordination | 2 | 4 |
+| Post-merge frontend smoke test | 2 | 4 |
+| Documentation review, PR merge, stakeholder Q&A | 4 | 8 |
+| Live PermitPilot walkthrough (incl. QuickBooks dry-run segment) | 8 | 12 |
+| Final cross-check / handover package | 2 | 4 |
+| **Remaining total** | **40** | **70** |
 
 ### Dependencies (cannot complete without)
 
-- Vercel dashboard access
+- Vercel dashboard access (names confirmed; values still need confirmation)
 - Supabase dashboard (backups, migration list)
 - Staging Supabase or approved disposable project for restore drill
 - Shared vault read access for env reconciliation
@@ -49,7 +59,15 @@ QuickBooks security implementation, portal regression engineering, Vercel transf
 
 ### Three-week sprint fit
 
-**Remaining 40–60 h fits a 3-week sprint** (≈15–20 h/week) if platform access is available in week 1. **Blocked** if Vercel/Supabase access delayed.
+**Assumed capacity:** ≈15–20 engineering hours/week (≈45–60 h over three calendar weeks).
+
+**Remaining 40–70 h** fits a **three-week sprint** if platform access is available in week 1. **Blocked** if Vercel/Supabase access or staging project is delayed.
+
+| Week | Focus (at 15–20 h/week) |
+|------|-------------------------|
+| 1 | Supabase backup review; vault/env reconciliation; Vercel value confirmation |
+| 2 | Staging restore drill; Supabase fix merge + smoke test (if approved) |
+| 3 | Walkthrough; documentation PR merge; final handover |
 
 ---
 
@@ -59,40 +77,47 @@ QuickBooks security implementation, portal regression engineering, Vercel transf
 
 ### Included
 
-- Secure intake of Ian’s documents into approved environment
-- Validate existing extraction + stage flow on those projects
+- Secure intake of 2–3 projects into approved environment
+- Baseline run on existing extraction + stage flow
 - Expected vs extracted comparison report
 - Failure classification
-- Fix **reusable** root causes found in pilot
+- Fix **reusable** root causes found in pilot (parser/extraction/stage-flow only)
 - Re-test selected projects
-- Update `ARCHITECTURE.md` / `ENV.md` with validated findings
+- Documentation and results report
+- Client review allowance (calendar time, not all engineering hours)
 
 ### Excluded
 
 All ten stages for all providers, Dominion portal adapter, firm-wide deployment, production certification, live submission rollout, unrelated features.
 
-### Hours
+### Remaining hours (task breakdown)
 
-| | Low | High |
-|---|-----|------|
-| **Estimate** | 120 | 200 |
+| Task | Low (h) | High (h) |
+|------|--------:|---------:|
+| Secure intake setup + document ingest (2–3 projects) | 8 | 16 |
+| Baseline UCI runs per project | 12 | 20 |
+| Expected-vs-extracted comparison + failure classification | 16 | 24 |
+| Reusable extraction/parser fixes (pilot scope only) | 20 | 40 |
+| Stage-flow fixes surfaced by pilot | 8 | 16 |
+| Re-test on selected projects | 8 | 12 |
+| Documentation updates + results report | 8 | 12 |
+| Engineering buffer for unknowns | 8 | 16 |
+| **Pilot engineering total** | **88** | **156** |
 
-### Assumptions
+### Capacity and calendar timeline
 
-- Usable documents received within 1–2 weeks of kickoff
-- Pilot projects represent typical electric/gas utility mix agreed with Ian
-- Production/staging Supabase and Railway access available
-- Synthetic paths remain disabled for pilot records
+| Assumption | Engineering hours | Calendar weeks |
+|------------|------------------:|---------------:|
+| Full-time engineering (~40 h/week) | 88–156 h | **≈3–4 weeks** after documents received |
+| Part-time engineering (~20 h/week) + client review wait | 88–156 h | **≈5–8 calendar weeks** |
+
+Client file delivery and document quality may extend **calendar** time but should not be counted as engineering hours in the table above.
 
 ### Variables affecting range
 
 - Document quality (native PDF vs scan)
 - Number of discrepancies requiring parser changes vs manual review
 - Client review turnaround
-
-### Timeline after documents received
-
-**6–10 weeks** engineering (120–200 h), overlapping client review.
 
 ---
 
@@ -102,12 +127,12 @@ See [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md):
 
 - QuickBooks authorization + OAuth CSRF
 - Holiday calendar decision
-- PWA/workbox build fix
 - Edge Function security review
 - Infrastructure-as-code
 - Wider scraper regression
 - Account transfers
 - Broader UCI rollout
 - Backup automation hardening
+- PWA/workbox — **monitoring only** (not reproducible locally; review Vercel history)
 
 **Separate scoping** when prioritized.

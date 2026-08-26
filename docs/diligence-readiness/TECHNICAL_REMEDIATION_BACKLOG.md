@@ -58,30 +58,33 @@
 
 ---
 
-## 5. PWA / workbox production build failure
+## 5. PWA / workbox production build — monitoring (not reproducible)
 
 | Field | Detail |
 |-------|--------|
-| Issue | `npm run build` fails at service worker generation (workbox/terser) |
-| Evidence | Local build output 2026-08-26 — Vite bundle completes, SW step fails |
-| Impact | **Complete production build fails locally** until fixed |
-| Severity | **High** |
-| Scope | **Diligence sprint** (verify on Vercel) + **Separate engineering** (fix) |
+| Issue | An earlier local build attempt failed during PWA/service-worker generation (workbox/terser) after the Vite bundle completed |
+| Evidence | Initial diligence worktree build output 2026-08-26; **not reproduced** on clean `fix/frontend-supabase-env-config` worktree where complete production build passed |
+| Impact | No currently reproducible repository build defect; Vercel build history still requires dashboard review |
+| Severity | **Closed / monitoring** (was transient local failure) |
+| Scope | **Monitoring only** — review Vercel build logs; no active engineering estimate |
+
+> An earlier local build attempt failed during PWA/service-worker generation. The issue was not reproduced in the clean Supabase fix worktree, where the complete production build passed. Vercel build history still requires dashboard review, but there is no currently reproducible repository build defect.
 
 ---
 
-## 6. Supabase frontend hardcoded credentials
+## 6. Hardcoded Supabase frontend configuration
 
 | Field | Detail |
 |-------|--------|
-| Issue | `src/lib/supabase.ts` on `main` embeds URL + anon key literals |
-| Evidence | Source inspection on `main` at `f7b5f02` |
-| Impact | Config drift; `.env` ignored; security hygiene |
-| Severity | **High** |
-| Root cause | Hardcoded literals bypass Vite env |
-| Prepared fix | Branch `fix/frontend-supabase-env-config` (unmerged) |
-| Acceptance criteria | Env-only config; Vercel vars confirmed before merge |
-| Scope | **Diligence sprint** (prepare) + **Separate** (merge after Vercel confirmation) |
+| Issue | `src/lib/supabase.ts` on `main` embeds Supabase URL and anonymous key literals instead of Vite environment configuration |
+| Evidence | Source inspection on `main`; prepared fix branch `fix/frontend-supabase-env-config` at `2a5bf81` (pushed to `origin`, unmerged, not deployed) |
+| Impact | **Configuration drift and environment inconsistency** — root `.env` / Vercel values may not match bundled client behavior on `main` |
+| Security note | The anonymous key is **browser-public by design**; **no service-role key** was found in frontend `src/` |
+| Severity | **Medium** operational/configuration risk |
+| Root cause | Hardcoded literals bypass Vite env on production line |
+| Prepared fix | Moves URL and anon key to `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`; Vercel variable **names** client/dashboard confirmed; **values** require confirmation before merge |
+| Acceptance criteria | Env-only config on `main`; Vercel values confirmed correct; post-merge frontend smoke test |
+| Scope | **Diligence sprint** (prepared) + **Separate** (merge after value confirmation) |
 
 ---
 

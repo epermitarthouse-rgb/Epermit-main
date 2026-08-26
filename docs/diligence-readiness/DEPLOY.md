@@ -32,7 +32,7 @@ Git, npm, Supabase CLI, optional Railway/Vercel CLI.
 |--------|--------|
 | GitHub `epermitarthouse-rgb/Epermit-main` | **Client confirmed** |
 | Railway workspace `PermitPilot` | **Client confirmed** |
-| Vercel project | **Client confirmed** private account — dashboard not verified in audit |
+| Vercel project | **Client confirmed** private account; frontend env var **names** client/dashboard confirmed (see §3) |
 | Supabase `eeqxyjrcldivtpikcpvk` | **Verified** ref in repo |
 | Shared password vault | **Client confirmed** in use |
 
@@ -44,7 +44,7 @@ Git, npm, Supabase CLI, optional Railway/Vercel CLI.
 |--------|------|
 | `main` | Production line for Railway scraper (**verified** deploy metadata) |
 | `docs/diligence-readiness` | Diligence documentation (this package) |
-| `fix/frontend-supabase-env-config` | Prepared Supabase env fix — **unmerged** |
+| `fix/frontend-supabase-env-config` | Prepared Supabase env fix — **pushed** (`2a5bf81`), **unmerged**, **not deployed** |
 
 ### Protected / intentionally excluded
 
@@ -69,15 +69,18 @@ Git, npm, Supabase CLI, optional Railway/Vercel CLI.
 - Production domain and preview URLs
 - Account/team ownership (private account — client confirmed)
 
-### Environment variables
+### Environment variables (client/dashboard confirmed — names and scope only)
 
-| Variable | Required when |
-|----------|---------------|
-| `VITE_SUPABASE_URL` | **Required** after Supabase fix merge; currently hardcoded on `main` |
-| `VITE_SUPABASE_ANON_KEY` | Same |
-| `VITE_API_BASE_URL` | **Required** — must target `https://epermit-main-production.up.railway.app` |
+| Variable | Vercel scope | Value status |
+|----------|--------------|--------------|
+| `VITE_API_BASE_URL` | All Environments | Correctness requires confirmation; expected `https://epermit-main-production.up.railway.app` |
+| `VITE_SUPABASE_URL` | All Environments | Correctness requires confirmation; expected project ref `eeqxyjrcldivtpikcpvk` |
+| `VITE_SUPABASE_ANON_KEY` | All Environments | Correctness requires confirmation; must be public anon key (not service-role) |
+| `VITE_API_BASE_URL` (second entry) | Preview only — branch `feat/lovable-ui-replication` | Likely obsolete; do not delete until Lovable preview retired — see [LOVABLE_RETIREMENT_AUDIT.md](./LOVABLE_RETIREMENT_AUDIT.md) |
 
-**Before merging Supabase fix:** confirm both Supabase variables exist in Vercel production **and** preview.
+**Do not document variable values in diligence materials.**
+
+On `main`, Supabase URL and anon key are still **hardcoded in source** until `fix/frontend-supabase-env-config` is merged. **Before merge:** confirm Vercel values are correct in production **and** preview; run post-merge frontend smoke test.
 
 ---
 
@@ -140,9 +143,9 @@ supabase functions deploy <function-name>
 
 ### PWA / production build status
 
-**Verified 2026-08-26:** `npm run build` **fails** at the service worker step (workbox/terser) after the Vite bundle completes.
+An earlier local build attempt failed during PWA/service-worker generation. The issue was **not reproduced** in the clean Supabase fix worktree (`fix/frontend-supabase-env-config`), where the complete production build passed (Vite bundle and PWA/service-worker generation both succeeded).
 
-Treat as a **failed complete production build** until fixed. **Do not assume** Vercel succeeds independently — **requires manual confirmation** via Vercel build logs.
+Vercel build history still requires dashboard review, but there is **no currently reproducible repository build defect**. Do not treat PWA/workbox as a confirmed active production failure.
 
 ---
 
@@ -178,7 +181,7 @@ Treat as a **failed complete production build** until fixed. **Do not assume** V
 |---------|--------------|
 | API 404 from frontend | Wrong `VITE_API_BASE_URL` |
 | Frontend blank after Supabase fix merge | Missing Vercel env vars |
-| `npm run build` fails | PWA/workbox step — see backlog |
+| Intermittent local PWA/workbox failure | Earlier local attempt only — not reproduced on clean worktree; review Vercel build history |
 | Edge 500 | Missing Supabase secret |
 
 ---

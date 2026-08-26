@@ -13,7 +13,7 @@
 | **Code Modification WIP** | Deliberate local WIP, **uncommitted** | Pipeline-order + final-invariant fixes; **not deployed** |
 | **`feat/code-analyzer-async-v2`** | **Intentionally local-only** | Owner decision; ~10 commits; **not on remote**; **no push/merge requested** |
 | **Diligence documentation** | On branch `docs/diligence-readiness` | This package |
-| **Supabase env fix** | Prepared on `fix/frontend-supabase-env-config` | **Unmerged** — Vercel vars required first |
+| **Supabase env fix** | Prepared on `fix/frontend-supabase-env-config` (`2a5bf81`, **pushed** to `origin`) | **Unmerged**, **not deployed** — Vercel variable names client/dashboard confirmed; **values** + smoke test before merge |
 
 ---
 
@@ -67,7 +67,7 @@
 
 ## 7. Open questions
 
-- Vercel production env parity
+- Vercel env **value** correctness (names confirmed for All Environments)
 - Railway production values for UCI live flags
 - Supabase backup/PITR availability
 - QuickBooks live invoice operational proof

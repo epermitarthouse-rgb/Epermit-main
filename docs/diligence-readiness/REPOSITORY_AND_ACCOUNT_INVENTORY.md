@@ -31,7 +31,7 @@ Index: [README.md](./README.md)
 |--------|--------|-------|
 | `main` | Yes | Production Railway target |
 | `docs/diligence-readiness` | Yes | This documentation package |
-| `fix/frontend-supabase-env-config` | **Not yet pushed** | Prepared Supabase fix |
+| `fix/frontend-supabase-env-config` | **Yes** (`origin`) | Commit `2a5bf81`; **pushed**, **unmerged**, **not deployed**; Vercel names confirmed; values + smoke test before merge |
 | `feat/code-analyzer-async-v2` | **No** | By design |
 | `origin/feat/stage2-load-profile-readiness` | Remote only | **Requires manual confirmation** before merge/delete |
 
@@ -62,7 +62,7 @@ Index: [README.md](./README.md)
 |---------|------------------|-------------------------|-------------------|
 | GitHub org | Yes | Yes (remote) | — |
 | Railway | Yes | Yes (CLI) | — |
-| Vercel | Private account | **No** | **Yes** |
+| Vercel | Private account | **Partial** — frontend env var **names** client/dashboard confirmed; full project ownership transfer not verified | **Yes** — value correctness, team access |
 | Supabase | — | **No** | **Yes** |
 | Intuit QuickBooks | — | Partial (status HTTP) | **Yes** |
 | Microsoft Graph | — | **No** | **Yes** |
