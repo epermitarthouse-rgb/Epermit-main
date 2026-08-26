@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/popover';
 import { AudioWaveform } from './AudioWaveform';
 import { TTSHealthcheck } from './TTSHealthcheck';
+import { getSupabaseFunctionHeaders, readSupabaseBrowserEnv } from '@/lib/supabaseEnv';
 
 import demoDashboard from '@/assets/videos/demo-dashboard.mp4';
 import demoSubmission from '@/assets/videos/demo-submission.mp4';
@@ -213,7 +214,8 @@ export function PlatformDemoVideo() {
     }
 
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`;
+      const { url: supabaseUrl } = readSupabaseBrowserEnv();
+      const url = `${supabaseUrl}/functions/v1/elevenlabs-tts`;
       console.debug('[TTS] request', {
         voiceId,
         cacheKey: fullCacheKey,
@@ -225,8 +227,7 @@ export function PlatformDemoVideo() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          ...getSupabaseFunctionHeaders(),
         },
         body: JSON.stringify({
           text,

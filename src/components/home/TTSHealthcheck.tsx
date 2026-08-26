@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Activity, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getSupabaseFunctionHeaders, readSupabaseBrowserEnv } from "@/lib/supabaseEnv";
 
 type HealthStatus = "idle" | "checking" | "success" | "error";
 
@@ -24,14 +25,14 @@ export const TTSHealthcheck = () => {
     const startTime = performance.now();
 
     try {
+      const { url: supabaseUrl } = readSupabaseBrowserEnv();
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+        `${supabaseUrl}/functions/v1/elevenlabs-tts`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            ...getSupabaseFunctionHeaders(),
           },
           body: JSON.stringify({
             text: "Health check.",
