@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Loader2, Trash2, X } from "lucide-react";
+import { Clock, FileText, Loader2, Trash2, X } from "lucide-react";
 import {
   sheetDisplayName,
   type CodeAnalyzerRun,
@@ -23,6 +23,7 @@ import {
   deriveSheetChipStatus,
   deriveUploadQueueCardStatus,
   sheetChipClassName,
+  type SheetChipStatus,
 } from "@/lib/codeAnalyzer/documentCardStatus";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
 import { DISCIPLINE_OPTIONS, type DocumentDiscipline } from "@/types/document";
@@ -77,6 +78,57 @@ interface AnalyzerDrawingSetProps {
 /** Responsive grid for persisted source-document cards (Current drawings). */
 export const CURRENT_DRAWINGS_GRID_CLASS =
   "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4";
+
+export function sheetChipStatusLabel(status: SheetChipStatus): string {
+  switch (status) {
+    case "completed":
+      return "Sheet completed";
+    case "failed":
+      return "Sheet failed";
+    case "analyzing":
+      return "Sheet analyzing";
+    case "pending":
+      return "Sheet pending";
+    case "excluded":
+      return "Sheet excluded";
+  }
+}
+
+function SheetChipStatusIndicator({ status }: { status: SheetChipStatus }) {
+  const label = sheetChipStatusLabel(status);
+  switch (status) {
+    case "completed":
+      return (
+        <span className="text-[11px] leading-none shrink-0" title={label} aria-hidden="true">
+          ✅
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="text-[11px] leading-none shrink-0" title={label} aria-hidden="true">
+          ❌
+        </span>
+      );
+    case "analyzing":
+      return (
+        <Loader2
+          className="h-3 w-3 animate-spin shrink-0"
+          title={label}
+          aria-hidden="true"
+        />
+      );
+    case "pending":
+      return (
+        <Clock
+          className="h-3 w-3 shrink-0 text-muted-foreground"
+          title={label}
+          aria-hidden="true"
+        />
+      );
+    default:
+      return null;
+  }
+}
 
 function renderSessionFileCard(
   f: AnalyzerPendingFile,
@@ -324,6 +376,8 @@ export function AnalyzerDrawingSet({
                       analyzing,
                       currentAnalyzingSheetId,
                     });
+                    const pageLabel = group.isPdf ? `p.${sheet.page_number}` : label;
+                    const statusLabel = sheetChipStatusLabel(chipStatus);
                     return (
                       <div
                         key={sheet.id}
@@ -332,30 +386,15 @@ export function AnalyzerDrawingSet({
                           sheetChipClassName(chipStatus),
                         )}
                         data-sheet-status={chipStatus}
+                        title={statusLabel}
+                        aria-label={`${pageLabel}: ${statusLabel}`}
                       >
-                        {chipStatus === "analyzing" && (
-                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                        <span>{pageLabel}</span>
+                        {chipStatus !== "excluded" && (
+                          <SheetChipStatusIndicator status={chipStatus} />
                         )}
-                        {chipStatus !== "analyzing" && <FileText className="h-3 w-3 shrink-0" />}
-                        <span>{group.isPdf ? `p.${sheet.page_number}` : label}</span>
-                        {chipStatus === "failed" && <Badge variant="destructive">Failed</Badge>}
-                        {chipStatus === "completed" && <Badge variant="success">Done</Badge>}
-                        {chipStatus === "analyzing" && <Badge variant="brand">Analyzing</Badge>}
-                        {chipStatus === "pending" && analyzing && (
-                          <Badge variant="outline">Pending</Badge>
-                        )}
+                        <span className="sr-only">{statusLabel}</span>
                         {sheet.excluded && <Badge variant="outline">Excluded</Badge>}
-                        {group.isPdf && (
-                          <button
-                            type="button"
-                            className="ml-1 text-muted-foreground hover:text-destructive"
-                            disabled={analyzing}
-                            onClick={() => onRequestRemoveSheet(sheet, label)}
-                            aria-label={`Remove ${label} from analysis`}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
                       </div>
                     );
                   })}
