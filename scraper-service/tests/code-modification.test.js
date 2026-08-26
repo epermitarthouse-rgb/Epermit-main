@@ -160,6 +160,20 @@ describe("code-modification.service prompts", () => {
     }
     assert.equal(formatStaffGuidanceBlock(""), "");
   });
+
+  it("sheet review prompt treats 3-hour stair staff guidance as non-evidence", () => {
+    const guidance =
+      "Focus on whether the 3-hour fire rated stair enclosure is shown on every egress sheet.";
+    const sheet = buildSheetReviewPrompt(
+      { requestedModification: "IBC 1021.2", proposedMeasures: [] },
+      { pageNumber: 1, fileName: "A-101" },
+      guidance,
+    );
+    assert.match(sheet.systemPrompt, /STAFF GUIDANCE \/ REVIEW FOCUS \(NOT EVIDENCE\)/i);
+    assert.match(sheet.systemPrompt, /3-hour fire rated stair/i);
+    assert.match(sheet.systemPrompt, /NOT submitted evidence/i);
+    assert.doesNotMatch(sheet.userPrompt, /3-hour/i);
+  });
 });
 
 describe("analyzeCodeModification", () => {

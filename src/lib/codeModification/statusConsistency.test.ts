@@ -219,4 +219,27 @@ describe("statusConsistency A–G", () => {
     assert.notEqual(synthesized.status, "verified");
     assert.equal(synthesized.status, "not_found");
   });
+
+  it("H. staff-guidance 3-hour stair without drawing proof → not VERIFIED", () => {
+    const measure = "Provide a 3-hour fire rated enclosed stairway serving all occupied levels";
+    const synthesized = synthesizeMeasureEvidence({
+      id: "stair-3h",
+      measureId: "measure-stair-3h",
+      measure,
+      status: "verified",
+      observations: [
+        {
+          status: "verified",
+          source: { fileName: "A-101.pdf", pageNumber: 1 },
+          note: "Staff guidance asked to verify 3-hour stair rating; no fire rating annotation visible on plan.",
+        },
+      ],
+    });
+
+    assert.notEqual(synthesized.status, "verified");
+    if (synthesized.source?.excerpt) {
+      assert.doesNotMatch(synthesized.source.excerpt, /staff guidance|analysis instructions/i);
+    }
+    assert.equal(validateSynthesisInvariants(synthesized).length, 0);
+  });
 });

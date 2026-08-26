@@ -127,6 +127,19 @@ describe("analyze-drawing.service", () => {
     assert.equal(formatStaffGuidanceBlock("   "), "");
   });
 
+  it("buildPrompts treats 3-hour stair staff guidance as non-evidence focus only", () => {
+    const withGuidance = buildPrompts({
+      codeType: "ibc",
+      codeYear: "2021",
+      analysisInstructions:
+        "Verify the 3-hour fire rating on the stair enclosure is shown on every egress sheet.",
+    });
+    assert.match(withGuidance.systemPrompt, /STAFF GUIDANCE \/ REVIEW FOCUS \(NOT EVIDENCE\)/i);
+    assert.match(withGuidance.systemPrompt, /3-hour fire rating/i);
+    assert.match(withGuidance.systemPrompt, /must NOT be treated as proof/i);
+    assert.doesNotMatch(withGuidance.userPrompt, /3-hour/i);
+  });
+
   it("returns success for normal content response", async () => {
     const openai = {
       chat: {

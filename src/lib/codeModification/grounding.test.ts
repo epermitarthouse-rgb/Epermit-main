@@ -57,6 +57,22 @@ describe("validateAndGroundFindings", () => {
     assert.equal(grounded.status, "requires_professional_dob_review");
   });
 
+  it("downgrades verified 3-hour stair claim with no allowed sheet to not_found", () => {
+    const [grounded] = validateAndGroundFindings(
+      [
+        finding({
+          measure: "Provide a 3-hour fire rated enclosed stairway",
+          status: "verified",
+          source: null,
+          note: "Per staff guidance, verify 3-hour stair rating on egress sheets.",
+        }),
+      ],
+      allowed,
+    );
+    assert.equal(grounded.status, "not_found");
+    assert.equal(grounded.source, null);
+  });
+
   it("strips approval claims from notes", () => {
     assert.match(stripApprovalClaims("DOB approved this stair"), /requires professional/i);
     assert.doesNotMatch(stripApprovalClaims("DOB approved this stair"), /DOB approved/i);
