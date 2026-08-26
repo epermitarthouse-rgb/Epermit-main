@@ -16,7 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { getScraperBaseUrl } from '@/lib/scraperBaseUrl';
+import {
+  getQuickBooksStatus,
+  postInvoiceTrigger,
+  quickBooksEnvironmentLabel,
+  type InvoiceTriggerSuccessBody,
+} from '@/lib/quickbooksApi';
 import { fetchProjectCoordinationCosts } from '@/lib/operations/operations-real-data';
 import { Project } from '@/types/project';
 import type { CoordinationCost } from '@/types/uci';
@@ -58,14 +63,6 @@ interface InvoiceTotals {
   reimbursementAmount?: number;
   adminFeeAmount?: number;
   totalInvoiceAmount?: number;
-}
-
-interface InvoiceTriggerSuccessBody {
-  dryRun: boolean;
-  milestone: string;
-  payload?: Record<string, unknown>;
-  totals?: InvoiceTotals;
-  invoice?: { id?: string };
 }
 
 interface BillingInvoicePanelProps {
@@ -161,6 +158,15 @@ function mapErrorToast(code: string | undefined, message: string): string {
       return message || 'Invoice request could not be validated.';
     case 'invoice_already_triggered':
       return message || 'This milestone invoice was already triggered.';
+    case 'invoice_trigger_in_progress':
+      return message || 'This milestone invoice is already being created.';
+    case 'invoice_trigger_uncertain':
+      return message || 'A QuickBooks invoice may already exist — reconcile before retrying.';
+    case 'UNAUTHENTICATED':
+    case 'INVALID_JWT':
+      return 'Your session expired. Sign in again and retry.';
+    case 'PROJECT_EDITOR_ACCESS_DENIED':
+      return 'You do not have permission to create invoices for this project.';
     case 'quickbooks_not_connected':
       return QB_NOT_CONNECTED_COPY;
     case 'quickbooks_item_missing':
@@ -170,33 +176,6 @@ function mapErrorToast(code: string | undefined, message: string): string {
     default:
       return message || 'Something went wrong while contacting the billing service.';
   }
-}
-
-async function postInvoiceTrigger(body: Record<string, unknown>): Promise<InvoiceTriggerSuccessBody> {
-  const base = getScraperBaseUrl();
-  const url = `${base}/api/quickbooks/invoice/trigger`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  let data: unknown = {};
-  try {
-    data = await res.json();
-  } catch {
-    /* ignore */
-  }
-
-  const obj = data as { error?: string; message?: string };
-
-  if (!res.ok) {
-    const err = new Error(obj.message || `Request failed (${res.status})`) as Error & { code?: string };
-    err.code = obj.error;
-    throw err;
-  }
-
-  return data as InvoiceTriggerSuccessBody;
 }
 
 export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoicePanelProps) {
@@ -220,6 +199,26 @@ export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoic
   const [dryRunOnly, setDryRunOnly] = useState(true);
   const [previewResult, setPreviewResult] = useState<InvoiceTriggerSuccessBody | null>(null);
   const [pendingAction, setPendingAction] = useState<'preview' | 'create' | null>(null);
+  const [qbConnected, setQbConnected] = useState<boolean | null>(null);
+  const [qbEnvironment, setQbEnvironment] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getQuickBooksStatus()
+      .then(status => {
+        if (cancelled) return;
+        setQbConnected(Boolean(status.connected));
+        setQbEnvironment(status.environment ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setQbConnected(null);
+        setQbEnvironment(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeDef = useMemo(
     () => MILESTONE_DEFS.find(d => d.key === modalMilestone) ?? null,
@@ -354,6 +353,13 @@ export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoic
           Milestone amounts follow contract value × milestone percentage plus optional reimbursement and 15%
           admin fee on reimbursement.
         </p>
+        {qbEnvironment ? (
+          <p className="text-xs text-muted-foreground" role="status">
+            QuickBooks backend environment:{' '}
+            <span className="font-medium text-foreground">{quickBooksEnvironmentLabel(qbEnvironment)}</span>
+            {qbConnected === false ? ' (not connected)' : qbConnected ? ' (connected)' : null}
+          </p>
+        ) : null}
       </div>
 
       {gateMsg ? (
@@ -552,7 +558,7 @@ export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoic
                 htmlFor="qb-dry-run"
                 className="cursor-pointer select-none font-tight text-sm leading-snug text-foreground"
               >
-                Dry run / preview only
+                Dry run / preview only (no QuickBooks draft created)
               </label>
             </div>
             </div>
@@ -629,8 +635,10 @@ export function BillingInvoicePanel({ project, onBillingRefresh }: BillingInvoic
               disabled={pendingAction !== null || dryRunOnly}
               title={
                 dryRunOnly
-                  ? 'Uncheck dry run to create a QuickBooks draft (requires QuickBooks connected).'
-                  : undefined
+                  ? `Uncheck dry run to create a QuickBooks draft in ${quickBooksEnvironmentLabel(qbEnvironment)} (requires QuickBooks connected).`
+                  : qbEnvironment
+                    ? `Creates a live draft invoice in QuickBooks ${quickBooksEnvironmentLabel(qbEnvironment)}.`
+                    : undefined
               }
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => void runCreateDraft()}

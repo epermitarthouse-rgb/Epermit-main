@@ -117,4 +117,5 @@ module.exports = {
   encryptToken,
   decryptToken,
   getEncryptionKeyDiagnostics,
+  loadKeyBytes,
 };

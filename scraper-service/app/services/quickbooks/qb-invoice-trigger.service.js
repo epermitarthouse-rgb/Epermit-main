@@ -2,11 +2,18 @@
 
 const { generateInvoicePayload } = require("./qb-invoice-payload.js");
 const qbApi = require("./qb-api.service.js");
-const { getDefaultItemId, getDefaultItemName } = require("./qb-config.js");
+const { getDefaultItemId, getDefaultItemName, getEnvironment } = require("./qb-config.js");
 const {
   validateProjectClientPresent,
   resolveProjectQbCustomerId,
 } = require("./qb-project-customer.service.js");
+const {
+  MilestoneClaimError,
+  assertMilestoneAvailable,
+  claimMilestoneForInvoice,
+  releaseMilestoneClaim,
+  completeMilestoneInvoice,
+} = require("./qb-milestone-claim.service.js");
 
 const MILESTONE_PCT = {
   M1: 0.4,
@@ -29,6 +36,15 @@ const PROJECT_SELECT_FOR_TRIGGER = [
   "m1_triggered",
   "m2_triggered",
   "m3_triggered",
+  "m1_invoice_trigger_status",
+  "m2_invoice_trigger_status",
+  "m3_invoice_trigger_status",
+  "m1_qb_pending_invoice_id",
+  "m2_qb_pending_invoice_id",
+  "m3_qb_pending_invoice_id",
+  "m1_triggered_at",
+  "m2_triggered_at",
+  "m3_triggered_at",
   "reimbursement_amount",
   "reimbursement_description",
 ].join(",");
@@ -38,12 +54,14 @@ class InvoiceTriggerError extends Error {
    * @param {string} code
    * @param {string} message
    * @param {number} [httpStatus]
+   * @param {Record<string, unknown>} [details]
    */
-  constructor(code, message, httpStatus = 400) {
+  constructor(code, message, httpStatus = 400, details = undefined) {
     super(message);
     this.name = "InvoiceTriggerError";
     this.code = code;
     this.httpStatus = httpStatus;
+    if (details) this.details = details;
   }
 }
 
@@ -54,26 +72,22 @@ function normalizeMilestone(raw) {
   return null;
 }
 
-function milestoneDuplicateBlocked(project, milestone) {
-  if (milestone === "M1") {
-    return Boolean(project.m1_triggered) || Boolean(project.qb_invoice_id_m1?.trim?.());
-  }
-  if (milestone === "M2") {
-    return Boolean(project.m2_triggered) || Boolean(project.qb_invoice_id_m2?.trim?.());
-  }
-  if (milestone === "M3") {
-    return Boolean(project.m3_triggered) || Boolean(project.qb_invoice_id_m3?.trim?.());
-  }
-  return false;
-}
-
 /**
  * Manual milestone invoice trigger (dry-run or QuickBooks draft invoice).
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {Record<string, unknown>} body
+ * @param {{ userId: string }} [authContext] Authenticated caller — required for all triggers.
  */
-async function executeInvoiceTrigger(supabase, body) {
+async function executeInvoiceTrigger(supabase, body, authContext = undefined) {
+  if (!authContext?.userId) {
+    throw new InvoiceTriggerError(
+      "UNAUTHENTICATED",
+      "Authentication required.",
+      401,
+    );
+  }
+
   if (!body || typeof body !== "object") {
     throw new InvoiceTriggerError(
       "invoice_trigger_validation_failed",
@@ -133,6 +147,25 @@ async function executeInvoiceTrigger(supabase, body) {
     );
   }
 
+  const { requireProjectEditorAccess } = require("../uci/uci-access.service.js");
+  try {
+    await requireProjectEditorAccess({
+      supabase,
+      userId: authContext.userId,
+      projectId,
+    });
+  } catch (err) {
+    const statusCode =
+      typeof err.statusCode === "number" ? err.statusCode : 403;
+    throw new InvoiceTriggerError(
+      statusCode === 403 ? "PROJECT_EDITOR_ACCESS_DENIED" : "invoice_trigger_failed",
+      statusCode === 403
+        ? "Forbidden: editor access required for this project."
+        : err.message || "Project access check failed.",
+      statusCode,
+    );
+  }
+
   const { data: project, error: fetchErr } = await supabase
     .from("projects")
     .select(PROJECT_SELECT_FOR_TRIGGER)
@@ -142,7 +175,7 @@ async function executeInvoiceTrigger(supabase, body) {
   if (fetchErr) {
     throw new InvoiceTriggerError(
       "invoice_trigger_failed",
-      `Failed to load project: ${fetchErr.message}`,
+      "Failed to load project.",
       502,
     );
   }
@@ -170,12 +203,13 @@ async function executeInvoiceTrigger(supabase, body) {
     );
   }
 
-  if (milestoneDuplicateBlocked(project, milestone)) {
-    throw new InvoiceTriggerError(
-      "invoice_already_triggered",
-      `Invoice for ${milestone} has already been triggered or recorded for this project.`,
-      409,
-    );
+  try {
+    assertMilestoneAvailable(project, milestone);
+  } catch (err) {
+    if (err instanceof MilestoneClaimError) {
+      throw new InvoiceTriggerError(err.code, err.message, err.httpStatus, err.details);
+    }
+    throw err;
   }
 
   const milestonePct = MILESTONE_PCT[milestone];
@@ -188,37 +222,65 @@ async function executeInvoiceTrigger(supabase, body) {
     service_type: project.service_type,
   };
 
-  if (dryRun) {
-    const qbCustomerId =
-      project.qb_customer_id != null &&
-      String(project.qb_customer_id).trim()
-        ? String(project.qb_customer_id).trim()
-        : "DRY_RUN_CUSTOMER";
-    const qbItemIdResolved = qbItemIdBody || "DRY_RUN_ITEM";
+  const previewItemId = qbItemIdBody || getDefaultItemId() || "DRY_RUN_ITEM";
+  const previewCustomerId =
+    project.qb_customer_id != null && String(project.qb_customer_id).trim()
+      ? String(project.qb_customer_id).trim()
+      : "DRY_RUN_CUSTOMER";
 
-    const { payload, totals } = generateInvoicePayload({
+  let payload;
+  let totals;
+  try {
+    const gen = generateInvoicePayload({
       project: payloadProject,
       milestone,
       milestonePct,
       reimbursementAmount: reimburseAmt,
       reimbursementDescription:
         reimburseAmt > 0 ? String(reimbursementDescription).trim() : "",
-      qbCustomerId,
-      qbItemId: qbItemIdResolved,
+      qbCustomerId: previewCustomerId,
+      qbItemId: previewItemId,
       invoiceDate,
     });
+    payload = gen.payload;
+    totals = gen.totals;
+  } catch (e) {
+    throw new InvoiceTriggerError(
+      "invoice_trigger_validation_failed",
+      e.message || String(e),
+    );
+  }
 
+  if (!Number.isFinite(totals.totalInvoiceAmount) || totals.totalInvoiceAmount <= 0) {
+    throw new InvoiceTriggerError(
+      "invoice_trigger_validation_failed",
+      "Invoice total must be greater than zero.",
+    );
+  }
+
+  if (dryRun) {
     return {
       dryRun: true,
       milestone,
+      environment: getEnvironment(),
       payload,
       totals,
     };
   }
 
   try {
+    await claimMilestoneForInvoice(supabase, projectId, milestone, project);
+  } catch (err) {
+    if (err instanceof MilestoneClaimError) {
+      throw new InvoiceTriggerError(err.code, err.message, err.httpStatus, err.details);
+    }
+    throw err;
+  }
+
+  try {
     await qbApi.getValidConnection(supabase, {});
   } catch (e) {
+    await releaseMilestoneClaim(supabase, projectId, milestone);
     if (e.code === "QB_NOT_CONNECTED") {
       throw new InvoiceTriggerError(
         "quickbooks_not_connected",
@@ -244,6 +306,7 @@ async function executeInvoiceTrigger(supabase, body) {
   try {
     customerId = await resolveProjectQbCustomerId(supabase, project, { projectId });
   } catch (e) {
+    await releaseMilestoneClaim(supabase, projectId, milestone);
     const code = e && typeof e === "object" && e.code != null ? String(e.code) : "";
     if (code === "quickbooks_customer_missing") {
       throw new InvoiceTriggerError(
@@ -289,6 +352,7 @@ async function executeInvoiceTrigger(supabase, body) {
   }
 
   if (!itemId) {
+    await releaseMilestoneClaim(supabase, projectId, milestone);
     throw new InvoiceTriggerError(
       "quickbooks_item_missing",
       "Could not resolve a QuickBooks item ID (service_type match, QB_DEFAULT_ITEM_ID, or QB_DEFAULT_ITEM_NAME).",
@@ -296,8 +360,6 @@ async function executeInvoiceTrigger(supabase, body) {
     );
   }
 
-  let payload;
-  let totals;
   try {
     const gen = generateInvoicePayload({
       project: payloadProject,
@@ -313,9 +375,18 @@ async function executeInvoiceTrigger(supabase, body) {
     payload = gen.payload;
     totals = gen.totals;
   } catch (e) {
+    await releaseMilestoneClaim(supabase, projectId, milestone);
     throw new InvoiceTriggerError(
       "invoice_trigger_validation_failed",
       e.message || String(e),
+    );
+  }
+
+  if (!Number.isFinite(totals.totalInvoiceAmount) || totals.totalInvoiceAmount <= 0) {
+    await releaseMilestoneClaim(supabase, projectId, milestone);
+    throw new InvoiceTriggerError(
+      "invoice_trigger_validation_failed",
+      "Invoice total must be greater than zero.",
     );
   }
 
@@ -330,6 +401,7 @@ async function executeInvoiceTrigger(supabase, body) {
       customerMemo: payload.CustomerMemo,
     });
   } catch (e) {
+    await releaseMilestoneClaim(supabase, projectId, milestone);
     if (e instanceof qbApi.QuickBooksApiError) {
       throw new InvoiceTriggerError(
         "invoice_trigger_failed",
@@ -348,46 +420,26 @@ async function executeInvoiceTrigger(supabase, body) {
     );
   }
 
-  /** @type {Record<string, unknown>} */
-  const patch = {
-    reimbursement_amount: reimburseAmt,
-    reimbursement_description:
-      reimburseAmt > 0 ? String(reimbursementDescription).trim() : null,
-  };
-
-  if (milestone === "M1") {
-    patch.qb_invoice_id_m1 = invoiceResult.id;
-    patch.m1_triggered = true;
-    patch.m1_triggered_at = new Date().toISOString();
-    patch.m1_trigger_source = "manual";
-  } else if (milestone === "M2") {
-    patch.qb_invoice_id_m2 = invoiceResult.id;
-    patch.m2_triggered = true;
-    patch.m2_triggered_at = new Date().toISOString();
-    patch.m2_trigger_source = "manual";
-  } else if (milestone === "M3") {
-    patch.qb_invoice_id_m3 = invoiceResult.id;
-    patch.m3_triggered = true;
-    patch.m3_triggered_at = new Date().toISOString();
-    patch.m3_trigger_source = "manual";
-  }
-
-  const { error: upErr } = await supabase
-    .from("projects")
-    .update(patch)
-    .eq("id", projectId);
-
-  if (upErr) {
-    throw new InvoiceTriggerError(
-      "invoice_trigger_failed",
-      `Invoice was created in QuickBooks but saving project failed: ${upErr.message}. Invoice id: ${invoiceResult.id}`,
-      502,
-    );
+  try {
+    await completeMilestoneInvoice(supabase, {
+      projectId,
+      milestone,
+      invoiceId: invoiceResult.id,
+      reimburseAmt,
+      reimbursementDescription:
+        reimburseAmt > 0 ? String(reimbursementDescription).trim() : "",
+    });
+  } catch (err) {
+    if (err instanceof MilestoneClaimError) {
+      throw new InvoiceTriggerError(err.code, err.message, err.httpStatus, err.details);
+    }
+    throw err;
   }
 
   return {
     dryRun: false,
     milestone,
+    environment: getEnvironment(),
     invoice: invoiceResult,
     totals,
   };
@@ -396,4 +448,5 @@ async function executeInvoiceTrigger(supabase, body) {
 module.exports = {
   InvoiceTriggerError,
   executeInvoiceTrigger,
+  MILESTONE_PCT,
 };

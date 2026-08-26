@@ -2,7 +2,11 @@
 
 const crypto = require("crypto");
 const { Router } = require("express");
-const { getEnvironment, getOAuthConfig, getRedirectUrls } = require("../services/quickbooks/qb-config.js");
+const {
+  getEnvironment,
+  getOAuthConfig,
+  getRedirectUrls,
+} = require("../services/quickbooks/qb-config.js");
 const {
   buildAuthorizationUrl,
   exchangeCodeForTokens,
@@ -12,6 +16,12 @@ const {
   getEncryptionKeyDiagnostics,
 } = require("../services/quickbooks/qb-token-crypto.js");
 const {
+  createSignedQuickBooksOAuthState,
+  verifySignedQuickBooksOAuthState,
+  consumeQuickBooksOAuthNonce,
+  maskRealmId,
+} = require("../services/quickbooks/qb-oauth-state.service.js");
+const {
   generateInvoicePayload,
 } = require("../services/quickbooks/qb-invoice-payload.js");
 const qbApi = require("../services/quickbooks/qb-api.service.js");
@@ -19,6 +29,11 @@ const {
   InvoiceTriggerError,
   executeInvoiceTrigger,
 } = require("../services/quickbooks/qb-invoice-trigger.service.js");
+const {
+  getAuthenticatedUser,
+  requireAuthenticatedUser,
+  sanitizeUciError,
+} = require("../services/uci/uci-access.service.js");
 
 /** Offline payload preview only (no Intuit calls). */
 function isDevPayloadPreviewEnabled() {
@@ -61,15 +76,13 @@ function logQuickBooksOAuthCallbackStorageFailure(p) {
 
   console.error("[QuickBooks][OAuthCallback] reached callback", {
     environment,
-    realmId,
+    realmIdMasked: maskRealmId(realmId),
     tokenResponseHasAccessToken: Boolean(tokens?.accessToken),
     tokenResponseHasRefreshToken: Boolean(tokens?.refreshToken),
     encryptedRefreshTokenGenerated: Boolean(err.qbEncryptedRefreshTokenGenerated),
     qbTokenEncryptionKeyPresent: keyDiag.keyPresent,
     qbTokenEncryptionKeyDecodedByteLength: keyDiag.decodedByteLength,
     supabaseErrorMessage: cause?.message ?? null,
-    supabaseErrorDetails: cause?.details ?? null,
-    supabaseErrorHint: cause?.hint ?? null,
     supabaseErrorCode: cause?.code ?? null,
     caughtErrorMessage: err.message || String(err),
     stackFirstTwoLines,
@@ -91,40 +104,98 @@ function appendQuery(url, params) {
 }
 
 /**
+ * Redirect targets are fixed env vars only — never from request input.
+ * @param {'success'|'failure'} kind
+ */
+function safeRedirectBase(kind) {
+  const { success: okUrl, failure: failUrl } = getRedirectUrls();
+  const base = kind === "success" ? okUrl : failUrl;
+  try {
+    const parsed = new URL(base);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error("invalid protocol");
+    }
+    return parsed.toString();
+  } catch {
+    return kind === "success" ? "http://localhost:5001" : "http://localhost:5001";
+  }
+}
+
+/**
+ * @param {import("express").Request} req
+ */
+function wantsJsonStartResponse(req) {
+  const f = String(req.query.format || "").trim().toLowerCase();
+  if (f === "json") return true;
+  const accept = String(req.headers.accept || "");
+  return accept.includes("application/json");
+}
+
+/**
  * @param {{ supabase: import("@supabase/supabase-js").SupabaseClient }} opts
  */
 function createQuickBooksRouter(opts) {
   const { supabase } = opts;
   const router = Router();
 
-  router.get("/oauth/start", (req, res) => {
+  router.get("/oauth/start", async (req, res) => {
+    const json = wantsJsonStartResponse(req);
     try {
       getOAuthConfig();
+      getEncryptionKeyDiagnostics();
     } catch (e) {
-      return res.status(503).json({
+      const body = {
         error: "quickbooks_oauth_unconfigured",
         message: e.message || String(e),
-      });
+      };
+      if (json) return res.status(503).json(body);
+      return res.status(503).send("QuickBooks OAuth is not configured.");
     }
 
-    // TODO: Bind state to server-side session (or signed cookie) and validate on callback (CSRF).
-    const state = crypto.randomBytes(24).toString("hex");
+    let user;
+    try {
+      user = await requireAuthenticatedUser(req, supabase);
+    } catch (err) {
+      if (json) {
+        const s = sanitizeUciError(err);
+        return res.status(s.httpStatus).json(s.body);
+      }
+      return res.status(401).send("Authentication required.");
+    }
+
+    let state;
+    try {
+      state = createSignedQuickBooksOAuthState({ userId: String(user.id) });
+    } catch (e) {
+      if (json) {
+        return res.status(503).json({
+          error: "oauth_state_failure",
+          message: "Could not prepare QuickBooks OAuth state.",
+        });
+      }
+      return res.status(503).send("Could not prepare QuickBooks OAuth.");
+    }
 
     let authUrl;
     try {
       authUrl = buildAuthorizationUrl({ state });
     } catch (e) {
-      return res.status(503).json({
-        error: "quickbooks_oauth_unconfigured",
-        message: e.message || String(e),
-      });
+      if (json) {
+        return res.status(503).json({
+          error: "quickbooks_oauth_unconfigured",
+          message: e.message || String(e),
+        });
+      }
+      return res.status(503).send("QuickBooks OAuth is not configured.");
     }
 
+    if (json) return res.status(200).json({ authorizeUrl: authUrl, environment: getEnvironment() });
     return res.redirect(302, authUrl);
   });
 
   router.get("/oauth/callback", async (req, res) => {
-    const { success: okUrl, failure: failUrl } = getRedirectUrls();
+    const failUrl = safeRedirectBase("failure");
+    const okUrl = safeRedirectBase("success");
 
     const intuitError = req.query.error;
     if (intuitError) {
@@ -140,8 +211,26 @@ function createQuickBooksRouter(opts) {
 
     const code = req.query.code;
     const realmId = req.query.realmId;
+    const stateRaw =
+      typeof req.query.state === "string" ? req.query.state.trim() : "";
 
-    // TODO: Validate req.query.state against stored value from /oauth/start.
+    if (!stateRaw) {
+      return res.redirect(
+        302,
+        appendQuery(failUrl, { qb_error: "missing_state" }),
+      );
+    }
+
+    const decoded = verifySignedQuickBooksOAuthState(stateRaw);
+    if (!decoded) {
+      return res.redirect(
+        302,
+        appendQuery(failUrl, { qb_error: "invalid_state" }),
+      );
+    }
+
+    consumeQuickBooksOAuthNonce(decoded.nonce);
+
     if (!code || typeof code !== "string") {
       return res.redirect(
         302,
@@ -182,6 +271,7 @@ function createQuickBooksRouter(opts) {
         scopes: tokens.scopes,
         tokenType: tokens.tokenType,
         environment,
+        userId: decoded.userId,
       });
       qbApi.primeAccessTokenCache(
         realmId,
@@ -215,36 +305,57 @@ function createQuickBooksRouter(opts) {
   });
 
   router.post("/invoice/trigger", async (req, res) => {
+    const auth = await getAuthenticatedUser(req, supabase);
+    if (!auth.user) {
+      return res.status(auth.error?.status ?? 401).json({
+        error: auth.error?.code ?? "UNAUTHENTICATED",
+        message: auth.error?.message ?? "Authentication required.",
+      });
+    }
+
     try {
-      const result = await executeInvoiceTrigger(supabase, req.body || {});
+      const result = await executeInvoiceTrigger(supabase, req.body || {}, {
+        userId: String(auth.user.id),
+      });
       return res.status(200).json(result);
     } catch (err) {
       if (err instanceof InvoiceTriggerError) {
-        return res.status(err.httpStatus).json({
+        const body = {
           error: err.code,
           message: err.message,
-        });
+        };
+        if (err.details) body.details = err.details;
+        return res.status(err.httpStatus).json(body);
       }
       console.error("[invoice/trigger]", err.message || err);
       return res.status(500).json({
         error: "invoice_trigger_failed",
-        message: err.message || String(err),
+        message: "An unexpected server error occurred.",
       });
     }
   });
 
-  router.get("/status", async (_req, res) => {
+  router.get("/status", async (req, res) => {
     const environment = getEnvironment();
+    const auth = await getAuthenticatedUser(req, supabase);
+
     try {
       const row = await tokenStore.getLatestConnection(supabase, {
         environment,
       });
 
       if (!row) {
+        if (!auth.user) {
+          return res.json({ connected: false });
+        }
         return res.json({
           connected: false,
           environment,
         });
+      }
+
+      if (!auth.user) {
+        return res.json({ connected: true });
       }
 
       const expiryMeta = qbApi.getCachedAccessTokenExpiryMeta(
@@ -254,14 +365,14 @@ function createQuickBooksRouter(opts) {
 
       return res.json({
         connected: true,
-        realmId: row.realm_id,
         environment: row.environment || environment,
+        realmIdMasked: maskRealmId(row.realm_id),
         accessTokenExpiresAt: expiryMeta?.accessTokenExpiresAt ?? null,
       });
     } catch (e) {
       return res.status(500).json({
         error: "quickbooks_status_failed",
-        message: e.message || String(e),
+        message: "Could not read QuickBooks connection status.",
       });
     }
   });
