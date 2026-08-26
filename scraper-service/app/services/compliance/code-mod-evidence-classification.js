@@ -27,6 +27,15 @@ const {
 
 const NOT_FOUND_NOTE = "No relevant evidence was found in the reviewed drawing set.";
 const GENERIC_PER_SHEET_NOT_FOUND = /^no evidence for this measure on this sheet\.?$/i;
+const PER_SHEET_SCOPED_ABSENCE =
+  /\b(?:no evidence(?:\s+(?:of|for|on))?|not shown|not indicated|not depicted|not mentioned|not provided)[\s\S]{0,96}\bon (?:this|the|that|[\w-]+(?:[-\s][\w-]+)*)\s+(?:sheet|plan|drawing|diagram)\b/i;
+
+function isPerSheetScopedAbsence(text) {
+  const normalized = String(text ?? "").trim();
+  if (!normalized) return false;
+  if (GENERIC_PER_SHEET_NOT_FOUND.test(normalized)) return true;
+  return PER_SHEET_SCOPED_ABSENCE.test(normalized);
+}
 
 function isSupportingStatus(status) {
   return status === "verified" || status === "partially_supported";
@@ -64,10 +73,13 @@ function classifyObservationPassage(observation, measureText) {
 
   if (!validationText && !fullText) return "NOT_RELEVANT";
   if (isGenericPerSheetNotFound(fullText)) return "NOT_RELEVANT";
+  if (isPerSheetScopedAbsence(validationText) || isPerSheetScopedAbsence(fullText)) {
+    return "NOT_RELEVANT";
+  }
 
   if (hasValidatedModelConflict(observation)) return "CONTRADICTS";
 
-  if (isAbsenceOrIncompleteLanguage(validationText)) {
+  if (isAbsenceOrIncompleteLanguage(validationText) || isAbsenceOrIncompleteLanguage(fullText)) {
     return "NOT_RELEVANT";
   }
 
@@ -76,7 +88,7 @@ function classifyObservationPassage(observation, measureText) {
   if (observation.status === "conflicting") {
     if (polarity === "negative") return "NOT_RELEVANT";
     if (polarity === "positive") return "SUPPORTS";
-    return "CONTRADICTS";
+    return "NOT_RELEVANT";
   }
 
   if (observation.status === "requires_professional_dob_review") {
@@ -145,6 +157,10 @@ function observationsGenuinelyContradict(observations, measureText) {
       if (
         isIncompleteEvidenceLanguage(left) ||
         isIncompleteEvidenceLanguage(right) ||
+        isAbsenceOrIncompleteLanguage(left) ||
+        isAbsenceOrIncompleteLanguage(right) ||
+        isPerSheetScopedAbsence(left) ||
+        isPerSheetScopedAbsence(right) ||
         !observationsShareComponent(left, right, measureText)
       ) {
         continue;
@@ -290,9 +306,19 @@ function validateFinalConsistency(finding) {
   }
   if (finding.status === "conflicting") {
     const conflict = observationsGenuinelyContradict(observations, measureText);
-    if (!conflict) {
+    const { contradicts } = partitionObservationsByClassification(observations, measureText);
+    if (!conflict && contradicts.length === 0) {
       violations.push("conflicting status requires validated contradiction");
     }
+  }
+  if (finding.status === "requires_professional_dob_review") {
+    const { professionalReview } = partitionObservationsByClassification(observations, measureText);
+    if (professionalReview.length === 0) {
+      violations.push("professional review requires relevant unresolved evidence");
+    }
+  }
+  if (finding.note && /\bNOT_RELEVANT\b/i.test(finding.note)) {
+    violations.push("review note must not contain NOT_RELEVANT classification labels");
   }
   if (finding.source && finding.status !== "not_found") {
     if (classifyPrimaryCitation(finding) === "NOT_RELEVANT") {
@@ -337,6 +363,55 @@ function enforceSynthesisConsistency(finding) {
     };
   }
 
+  if (finding.status === "conflicting") {
+    const shouldConflict = shouldTreatAsConflict({
+      observations,
+      measureText: finding.measure,
+      revisionResolution: false,
+    });
+    const status = computeDeterministicEvidenceStatus({
+      observations,
+      measureText: finding.measure,
+      shouldConflict,
+    });
+    if (status !== "conflicting") {
+      const { supports: supportPassages } = partitionObservationsByClassification(
+        observations,
+        finding.measure,
+      );
+      const primary = supportPassages[0] || null;
+      if (status === "not_found" || !primary) {
+        return {
+          ...finding,
+          status: "not_found",
+          source: null,
+          note: NOT_FOUND_NOTE,
+        };
+      }
+      return {
+        ...finding,
+        status,
+        source: (primary.source && primary.source) || null,
+        note: observationText(primary) || finding.note,
+      };
+    }
+  }
+
+  if (finding.status === "requires_professional_dob_review") {
+    const { professionalReview } = partitionObservationsByClassification(
+      observations,
+      finding.measure,
+    );
+    if (professionalReview.length === 0) {
+      return {
+        ...finding,
+        status: "not_found",
+        source: null,
+        note: NOT_FOUND_NOTE,
+      };
+    }
+  }
+
   if (finding.source) {
     if (classifyPrimaryCitation(finding) === "NOT_RELEVANT") {
       const fallback = supports[0] || null;
@@ -348,8 +423,21 @@ function enforceSynthesisConsistency(finding) {
           note: NOT_FOUND_NOTE,
         };
       }
+      const nextStatus =
+        finding.status === "conflicting" || finding.status === "requires_professional_dob_review"
+          ? computeDeterministicEvidenceStatus({
+              observations,
+              measureText: finding.measure,
+              shouldConflict: shouldTreatAsConflict({
+                observations,
+                measureText: finding.measure,
+                revisionResolution: false,
+              }),
+            })
+          : finding.status;
       return {
         ...finding,
+        status: nextStatus,
         source: (fallback.source && fallback.source) || null,
         note: observationText(fallback) || finding.note,
       };
@@ -371,6 +459,7 @@ module.exports = {
   computeDeterministicEvidenceStatus,
   enforceSynthesisConsistency,
   isObservationRelevant,
+  isPerSheetScopedAbsence,
   observationsForReviewNote,
   partitionObservationsByClassification,
   shouldTreatAsConflict,

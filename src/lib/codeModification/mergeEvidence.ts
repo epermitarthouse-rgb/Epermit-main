@@ -17,6 +17,7 @@
 
 import {
   canonicalMeasureKey,
+  measuresAreCanonicallyEquivalent,
   preferCanonicalMeasureId,
   preferCanonicalMeasureLabel,
 } from "./canonicalMeasure";
@@ -41,7 +42,8 @@ import {
   shouldTreatAsConflict,
   validateFinalConsistency,
 } from "./evidenceClassification";
-import type { EvidenceFinding, EvidenceSource, EvidenceStatus } from "./model";
+import type { AllowedEvidenceRef, EvidenceFinding, EvidenceSource, EvidenceStatus } from "./model";
+import { validateAndGroundFindings } from "./grounding";
 
 export {
   classifyObservationRelevance,
@@ -454,4 +456,107 @@ export function validateOneRowPerMeasure(findings: EvidenceFinding[]): boolean {
     keys.add(key);
   }
   return true;
+}
+
+function findingObservations(finding: MergeableEvidenceFinding): SheetEvidenceObservation[] {
+  if (finding.observations && finding.observations.length > 0) {
+    return finding.observations.slice();
+  }
+  return [observationFromFinding(finding)];
+}
+
+function resolveConsolidationKey(
+  finding: MergeableEvidenceFinding,
+  keys: string[],
+  groups: Map<string, MergeableEvidenceFinding[]>,
+): string {
+  const key = canonicalMeasureKey(finding);
+  for (const existingKey of keys) {
+    const representative = groups.get(existingKey)?.[0];
+    if (!representative) continue;
+    if (
+      existingKey === key ||
+      (finding.measureId &&
+        representative.measureId &&
+        finding.measureId === representative.measureId) ||
+      measuresAreCanonicallyEquivalent(finding.measure, representative.measure)
+    ) {
+      return existingKey;
+    }
+  }
+  return key;
+}
+
+function mergeFindingGroup(group: MergeableEvidenceFinding[]): MergeableEvidenceFinding {
+  if (group.length === 1) {
+    return enforceSynthesisConsistency(synthesizeMeasureEvidence(group[0]!));
+  }
+
+  let combined: MergeableEvidenceFinding = {
+    ...group[0]!,
+    observations: [],
+  };
+
+  for (const finding of group) {
+    combined = {
+      id: combined.id || finding.id,
+      measureId: preferCanonicalMeasureId(combined.measureId, finding.measureId),
+      measure: preferCanonicalMeasureLabel(combined.measure, finding.measure),
+      status: finding.status,
+      source: finding.source ?? null,
+      note: finding.note ?? null,
+      observations: [...(combined.observations ?? []), ...findingObservations(finding)],
+    };
+  }
+
+  return enforceSynthesisConsistency(synthesizeMeasureEvidence(combined));
+}
+
+/** After synthesis, collapse duplicate canonical-measure rows into one recomputed result. */
+export function consolidateFinalMeasureResults(
+  findings: MergeableEvidenceFinding[],
+): MergeableEvidenceFinding[] {
+  const groups = new Map<string, MergeableEvidenceFinding[]>();
+  const keys: string[] = [];
+
+  for (const finding of findings) {
+    const key = resolveConsolidationKey(finding, keys, groups);
+    if (!groups.has(key)) keys.push(key);
+    const bucket = groups.get(key) ?? [];
+    bucket.push(finding);
+    groups.set(key, bucket);
+  }
+
+  return keys.map((key) => mergeFindingGroup(groups.get(key) ?? []));
+}
+
+function stripInternalObservations(finding: MergeableEvidenceFinding): EvidenceFinding {
+  const { observations: _observations, ...rest } = finding;
+  return rest;
+}
+
+/** Enforce end-of-pipeline invariants before persist/API — recompute rather than log only. */
+export function enforceFinalPersistenceInvariants(
+  findings: MergeableEvidenceFinding[],
+): EvidenceFinding[] {
+  const consolidated = consolidateFinalMeasureResults(findings);
+  return consolidated.map((finding) => {
+    let current = enforceSynthesisConsistency(finding);
+    if (validateFinalConsistency(current).length > 0) {
+      current = enforceSynthesisConsistency(synthesizeMeasureEvidence(current));
+    }
+    return stripInternalObservations(enforceSynthesisConsistency(current));
+  });
+}
+
+/**
+ * Production order: per-sheet synthesis → source grounding → consolidation + final invariants.
+ * Grounding validates sheet/page refs only; semantic status is finalized after grounding.
+ */
+export function finalizeCodeModificationEvidence(
+  findings: MergeableEvidenceFinding[],
+  allowed: AllowedEvidenceRef[],
+): EvidenceFinding[] {
+  const grounded = validateAndGroundFindings(findings, allowed) as MergeableEvidenceFinding[];
+  return enforceFinalPersistenceInvariants(grounded);
 }

@@ -5,13 +5,17 @@ import {
   classifyObservationPassage,
   computeDeterministicEvidenceStatus,
   enforceSynthesisConsistency,
+  isPerSheetScopedAbsence,
   partitionObservationsByClassification,
   shouldTreatAsConflict,
   validateFinalConsistency,
 } from "./evidenceClassification.ts";
 import {
+  consolidateFinalMeasureResults,
+  enforceFinalPersistenceInvariants,
   mergeFindingsFromSheets,
   synthesizeMeasureEvidence,
+  validateOneRowPerMeasure,
   validateSynthesisInvariants,
 } from "./mergeEvidence.ts";
 import type { EvidenceFinding } from "./model.ts";
@@ -345,6 +349,271 @@ describe("evidenceClassification", () => {
       ),
       "NOT_RELEVANT",
     );
+  });
+
+  it("per-sheet absence on unrelated discipline plan is NOT_RELEVANT", () => {
+    const text = "Two-hour stair enclosure not shown on sprinkler plan.";
+    assert.equal(isPerSheetScopedAbsence(text), true);
+    assert.equal(
+      classifyObservationPassage(
+        { status: "verified", source: { fileName: "FP-101.pdf", pageNumber: 3, excerpt: text } },
+        stairMeasure,
+      ),
+      "NOT_RELEVANT",
+    );
+    const merged = mergeFindingsFromSheets(
+      [
+        finding({
+          id: "support",
+          measureId: "measure-stair",
+          measure: stairMeasure,
+          status: "verified",
+          source: {
+            fileName: "G-001.pdf",
+            pageNumber: 1,
+            excerpt: "2-hour fire rated stair enclosure noted.",
+          },
+        }),
+      ],
+      [
+        finding({
+          id: "fp101",
+          measureId: "measure-stair",
+          measure: stairMeasure,
+          status: "verified",
+          source: { fileName: "FP-101.pdf", pageNumber: 3, excerpt: text },
+        }),
+      ],
+    );
+    assert.notEqual(merged[0]?.status, "conflicting");
+    assert.equal(validateFinalConsistency(merged[0]!).length, 0);
+  });
+});
+
+describe("end-of-pipeline invariants", () => {
+  const stairMeasure = "Provide a two-hour fire rated enclosed stairway serving all occupied levels";
+  const pdrmMeasure = "Incorporate DOB recommendations from June 9, 2026 PDRM";
+
+  it("1. support + unrelated discipline no-evidence-on-sheet → not conflicting", () => {
+    const result = enforceFinalPersistenceInvariants([
+      {
+        id: "stair",
+        measureId: "measure-stair",
+        measure: stairMeasure,
+        status: "conflicting",
+        source: { fileName: "G-001.pdf", pageNumber: 1, excerpt: "2-hour stair noted." },
+        observations: [
+          {
+            status: "verified",
+            source: {
+              fileName: "G-001.pdf",
+              pageNumber: 1,
+              excerpt: "2-hour fire rated stair enclosure noted.",
+            },
+          },
+          {
+            status: "conflicting",
+            source: {
+              fileName: "FP-101.pdf",
+              pageNumber: 3,
+              excerpt: "No evidence of two-hour stair enclosure on sprinkler plan.",
+            },
+          },
+        ],
+      },
+    ]);
+    assert.equal(result.length, 1);
+    assert.notEqual(result[0]?.status, "conflicting");
+  });
+
+  it("2. support + incomplete coverage → partial/verified not conflicting", () => {
+    const result = enforceFinalPersistenceInvariants([
+      {
+        id: "stair",
+        measureId: "measure-stair",
+        measure: stairMeasure,
+        status: "conflicting",
+        source: { fileName: "G-001.pdf", pageNumber: 1 },
+        observations: [
+          {
+            status: "verified",
+            source: {
+              fileName: "G-001.pdf",
+              pageNumber: 1,
+              excerpt: "2-hour fire rated enclosed stairway noted.",
+            },
+          },
+          {
+            status: "conflicting",
+            source: {
+              fileName: "A-101.pdf",
+              pageNumber: 1,
+              excerpt: "Drawing does not establish serving all occupied levels.",
+            },
+          },
+        ],
+      },
+    ]);
+    assert.equal(result[0]?.status, "partially_supported");
+  });
+
+  it("3. two candidate statuses for one measure → one final row", () => {
+    const result = consolidateFinalMeasureResults([
+      {
+        id: "p1",
+        measureId: "measure-pdrm",
+        measure: pdrmMeasure,
+        status: "requires_professional_dob_review",
+        source: { fileName: "G-001.pdf", pageNumber: 1, excerpt: "PDRM unclear." },
+        note: "Review needed.",
+        observations: [
+          {
+            status: "requires_professional_dob_review",
+            source: { fileName: "G-001.pdf", pageNumber: 1, excerpt: "PDRM unclear." },
+          },
+          {
+            status: "not_found",
+            note: "No drawing evidence was reviewed for this measure.",
+          },
+        ],
+      },
+      {
+        id: "p2",
+        measureId: "measure-pdrm",
+        measure: pdrmMeasure,
+        status: "not_found",
+        source: null,
+        note: "No drawing evidence was reviewed for this measure.",
+        observations: [
+          {
+            status: "not_found",
+            note: "No drawing evidence was reviewed for this measure.",
+          },
+        ],
+      },
+    ]);
+    assert.equal(result.length, 1);
+    assert.equal(result[0]?.status, "not_found");
+    assert.equal(result[0]?.source, null);
+  });
+
+  it("4. no evidence + pro-review candidate → NOT_FOUND", () => {
+    const result = enforceFinalPersistenceInvariants([
+      {
+        id: "pdrm",
+        measureId: "measure-pdrm",
+        measure: pdrmMeasure,
+        status: "requires_professional_dob_review",
+        source: {
+          fileName: "G-001.pdf",
+          pageNumber: 1,
+          excerpt: "DOB recommendations from the review meeting are not mentioned or shown.",
+        },
+        observations: [
+          {
+            status: "requires_professional_dob_review",
+            source: {
+              fileName: "G-001.pdf",
+              pageNumber: 1,
+              excerpt: "DOB recommendations from the review meeting are not mentioned or shown.",
+            },
+          },
+        ],
+      },
+    ]);
+    assert.equal(result[0]?.status, "not_found");
+    assert.equal(result[0]?.source, null);
+  });
+
+  it("5. irrelevant absence → not citation/note", () => {
+    const result = enforceFinalPersistenceInvariants([
+      {
+        id: "pdrm",
+        measureId: "measure-pdrm",
+        measure: pdrmMeasure,
+        status: "verified",
+        source: {
+          fileName: "FP-102.pdf",
+          pageNumber: 1,
+          excerpt: "Class I standpipe noted on riser diagram.",
+        },
+        observations: [
+          {
+            status: "verified",
+            source: {
+              fileName: "FP-102.pdf",
+              pageNumber: 1,
+              excerpt: "Class I standpipe noted on riser diagram.",
+            },
+          },
+        ],
+      },
+    ]);
+    assert.equal(result[0]?.status, "not_found");
+    assert.equal(result[0]?.source, null);
+    assert.doesNotMatch(result[0]?.note ?? "", /standpipe/i);
+  });
+
+  it("6. genuine contradiction → CONFLICTING", () => {
+    const occupantMeasure = "Maintain an occupant load below 49 people per floor";
+    const result = enforceFinalPersistenceInvariants([
+      {
+        id: "occ",
+        measureId: "measure-occupant",
+        measure: occupantMeasure,
+        status: "verified",
+        observations: [
+          {
+            status: "verified",
+            source: {
+              fileName: "Base_Set.pdf",
+              pageNumber: 3,
+              excerpt: "Occupant load 48 per floor.",
+            },
+          },
+          {
+            status: "verified",
+            source: {
+              fileName: "Evidence_Conflict.pdf",
+              pageNumber: 1,
+              excerpt: "Occupant load schedule shows 60 occupants.",
+            },
+          },
+        ],
+      },
+    ]);
+    assert.equal(result[0]?.status, "conflicting");
+  });
+
+  it("7. enforce downgrades invalid CONFLICTING instead of logging only", () => {
+    const corrected = enforceSynthesisConsistency({
+      id: "stair",
+      measureId: "measure-stair",
+      measure: stairMeasure,
+      status: "conflicting",
+      source: { fileName: "G-001.pdf", pageNumber: 1 },
+      note: "Conflicting evidence across submitted drawing sheets.",
+      observations: [
+        {
+          status: "verified",
+          source: {
+            fileName: "G-001.pdf",
+            pageNumber: 1,
+            excerpt: "2-hour fire rated stair enclosure noted.",
+          },
+        },
+        {
+          status: "conflicting",
+          source: {
+            fileName: "FP-101.pdf",
+            pageNumber: 3,
+            excerpt: "No evidence of two-hour stair enclosure on sprinkler plan.",
+          },
+        },
+      ],
+    });
+    assert.notEqual(corrected.status, "conflicting");
+    assert.equal(validateFinalConsistency(corrected).length, 0);
   });
 });
 

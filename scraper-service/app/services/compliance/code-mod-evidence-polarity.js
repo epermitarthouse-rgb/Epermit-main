@@ -8,7 +8,7 @@ function normalizeText(value) {
 }
 
 const NEGATIVE_EVIDENCE =
-  /\b(not included|not shown|not provided|not indicated|not present|not depicted|not mentioned|absent|omitted|excluded|without|does not include|does not show|does not indicate|does not mention|are not mentioned|is not mentioned)\b/;
+  /\b(not included|not shown|not provided|not indicated|not present|not depicted|not mentioned|absent|omitted|excluded|without|no evidence(?:\s+of|\s+on|\s+for)?|no information(?:\s+(?:about|regarding|on|for))?|does not include|does not show|does not indicate|does not mention|are not mentioned|is not mentioned)\b/;
 
 const INCOMPLETE_EVIDENCE =
   /\b(cannot (?:determine|verify|confirm)|unclear|insufficient|unable to (?:determine|verify)|not enough (?:information|evidence)|cannot assess|does not establish|does not provide(?: full details?)?)\b/;

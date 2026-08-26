@@ -73,6 +73,19 @@ describe("validateAndGroundFindings", () => {
     assert.equal(grounded.source, null);
   });
 
+  it("matches fileName.pdf sources to sheetLabel-only allowed refs", () => {
+    const [grounded] = validateAndGroundFindings(
+      [
+        finding({
+          source: { fileName: "G-001.pdf", pageNumber: 1, excerpt: "Sprinkler noted." },
+        }),
+      ],
+      [{ sheetId: "g1", pageNumber: 1, fileName: "G-001.pdf", sheetLabel: "G-001" }],
+    );
+    assert.equal(grounded.status, "verified");
+    assert.equal(grounded.source?.fileName, "G-001.pdf");
+  });
+
   it("strips approval claims from notes", () => {
     assert.match(stripApprovalClaims("DOB approved this stair"), /requires professional/i);
     assert.doesNotMatch(stripApprovalClaims("DOB approved this stair"), /DOB approved/i);

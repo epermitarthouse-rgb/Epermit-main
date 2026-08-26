@@ -550,6 +550,33 @@ function normalizeRef(value) {
     .toLowerCase();
 }
 
+function expandLabelVariants(value) {
+  const normalized = normalizeRef(value);
+  if (!normalized) return [];
+  const variants = new Set([normalized]);
+  if (normalized.endsWith(".pdf")) {
+    variants.add(normalized.replace(/\.pdf$/, ""));
+  } else {
+    variants.add(`${normalized}.pdf`);
+  }
+  return [...variants];
+}
+
+function labelsMatchForRef(source, ref) {
+  const sourceLabels = new Set([
+    ...expandLabelVariants(source.sheetLabel),
+    ...expandLabelVariants(source.fileName),
+  ]);
+  const refLabels = new Set([
+    ...expandLabelVariants(ref.sheetLabel),
+    ...expandLabelVariants(ref.fileName),
+  ]);
+  const matchingLabel = [...sourceLabels].some((label) => refLabels.has(label));
+  if (!matchingLabel) return false;
+  if (source.pageNumber == null || ref.pageNumber == null) return true;
+  return source.pageNumber === ref.pageNumber;
+}
+
 function sourceIsAllowed(source, allowed) {
   if (!sourceHasSheetOrPage(source) || !source) return false;
   if (!allowed || !allowed.length) return false;
@@ -565,18 +592,14 @@ function sourceIsAllowed(source, allowed) {
     ) {
       return true;
     }
-    const sourceLabel = normalizeRef(source.sheetLabel || source.fileName);
-    const refLabel = normalizeRef(ref.sheetLabel || ref.fileName);
-    if (sourceLabel && refLabel && sourceLabel === refLabel) {
-      if (source.pageNumber == null || ref.pageNumber == null) return true;
-      return source.pageNumber === ref.pageNumber;
-    }
+    if (labelsMatchForRef(source, ref)) return true;
     if (
       source.pageNumber != null &&
       ref.pageNumber === source.pageNumber &&
       !source.sheetId &&
       !source.documentId &&
-      !sourceLabel
+      !source.sheetLabel &&
+      !source.fileName
     ) {
       return true;
     }
@@ -603,6 +626,15 @@ function normalizeStatus(status) {
   return EVIDENCE_STATUSES.has(raw) ? raw : "not_found";
 }
 
+function filterObservationsForGrounding(observations, allowed) {
+  if (!observations || observations.length === 0) return observations;
+  const filtered = observations.filter((observation) => {
+    if (!sourceHasSheetOrPage(observation.source)) return true;
+    return sourceIsAllowed(observation.source, allowed);
+  });
+  return filtered.length > 0 ? filtered : undefined;
+}
+
 function validateAndGroundFindings(findings, allowed) {
   return (findings || []).map((finding, index) => {
     const status = normalizeStatus(finding.status);
@@ -612,6 +644,9 @@ function validateAndGroundFindings(findings, allowed) {
       ? { ...finding.source, excerpt: excerpt || finding.source.excerpt || null }
       : null;
     const allowedSource = sourceIsAllowed(source, allowed);
+    const observations = filterObservationsForGrounding(finding.observations, allowed);
+    const applyObservations = (result) =>
+      observations && observations.length > 0 ? { ...result, observations } : result;
     const grounded = {
       id: finding.id || `finding-${index + 1}`,
       measureId: finding.measureId || null,
@@ -626,24 +661,20 @@ function validateAndGroundFindings(findings, allowed) {
           ...grounded,
           status: "not_found",
           source: null,
-          note: note
-            ? `${note} Evidence was not grounded to a submitted sheet or page.`
-            : "Not found in submitted documents. The cited sheet/page is missing or not in the drawing set.",
+          note: "Not found in submitted documents. The cited sheet/page is missing or not in the drawing set.",
         };
       }
-      return grounded;
+      return applyObservations(grounded);
     }
     if (status === "conflicting" && !allowedSource) {
       return {
         ...grounded,
         status: "requires_professional_dob_review",
         source: sourceHasSheetOrPage(source) ? null : source,
-        note: note
-          ? `${note} Conflict could not be grounded to a submitted source.`
-          : "Conflicting information was claimed without a submitted source and requires professional / DOB review.",
+        note: "Conflicting information was claimed without a submitted source and requires professional / DOB review.",
       };
     }
-    return grounded;
+    return applyObservations(grounded);
   });
 }
 
@@ -945,7 +976,7 @@ function findingsFromExtracted(extracted) {
   }));
 }
 
-const { mergeFindingsFromSheets, mergeMeasureEvidence, synthesizeMeasureEvidence, validateSynthesisInvariants } = require("./code-mod-evidence-merge.js");
+const { mergeFindingsFromSheets, mergeMeasureEvidence, synthesizeMeasureEvidence, validateSynthesisInvariants, enforceFinalPersistenceInvariants } = require("./code-mod-evidence-merge.js");
 
 async function reviewSheetWithVision(openai, extracted, sheet, logError, analysisInstructions = null) {
   const { systemPrompt, userPrompt } = buildSheetReviewPrompt(extracted, sheet, analysisInstructions);
@@ -1076,14 +1107,6 @@ async function analyzeCodeModification(params) {
       }
     }
     findings = findings.map((finding) => synthesizeMeasureEvidence(finding));
-    for (const finding of findings) {
-      const violations = validateSynthesisInvariants(finding);
-      if (violations.length > 0) {
-        logError(
-          `[analyze-code-modification] Synthesis invariant violation (${finding.measureId || finding.id}): ${violations.join("; ")}`,
-        );
-      }
-    }
   } else if (reviewable.length === 0) {
     if (excludedFormSheetCount > 0 && (sheets || []).length > 0) {
       sheetWarnings.push(
@@ -1093,7 +1116,10 @@ async function analyzeCodeModification(params) {
     sheetWarnings.push("No drawing sheets were provided for evidence review.");
   }
 
-  const grounded = validateAndGroundFindings(findings, allowed);
+  findings = validateAndGroundFindings(findings, allowed);
+  findings = enforceFinalPersistenceInvariants(findings);
+
+  const grounded = findings;
   const overall_status = normalizeOverallStatus(computeOverallStatus(grounded));
   const extraction_warnings = [
     ...(extracted.extractionWarnings || []),

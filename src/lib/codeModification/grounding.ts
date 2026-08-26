@@ -10,6 +10,7 @@ import {
   type EvidenceFinding,
   type EvidenceStatus,
 } from "./model";
+import type { NormalizableObservation } from "./rawObservationNormalization";
 
 const APPROVAL_CLAIM =
   /\b(?:dob|department of buildings)\s+(?:has\s+)?(?:approved|rejected)\b|\b(?:officially|formally)\s+approved\b|\bapproval\s+(?:granted|issued|probability)\b|\bdob approved\b|\bdob rejected\b/gi;
@@ -36,6 +37,36 @@ export function sourceHasSheetOrPage(
   return Boolean(source.sheetId || source.sheetLabel || source.fileName || source.documentId);
 }
 
+function expandLabelVariants(value: string | null | undefined): string[] {
+  const normalized = normalizeRef(value);
+  if (!normalized) return [];
+  const variants = new Set<string>([normalized]);
+  if (normalized.endsWith(".pdf")) {
+    variants.add(normalized.replace(/\.pdf$/, ""));
+  } else {
+    variants.add(`${normalized}.pdf`);
+  }
+  return [...variants];
+}
+
+function labelsMatchForRef(
+  source: NonNullable<EvidenceFinding["source"]>,
+  ref: AllowedEvidenceRef,
+): boolean {
+  const sourceLabels = new Set([
+    ...expandLabelVariants(source.sheetLabel),
+    ...expandLabelVariants(source.fileName),
+  ]);
+  const refLabels = new Set([
+    ...expandLabelVariants(ref.sheetLabel),
+    ...expandLabelVariants(ref.fileName),
+  ]);
+  const matchingLabel = [...sourceLabels].some((label) => refLabels.has(label));
+  if (!matchingLabel) return false;
+  if (source.pageNumber == null || ref.pageNumber == null) return true;
+  return source.pageNumber === ref.pageNumber;
+}
+
 export function sourceIsAllowed(
   source: EvidenceFinding["source"] | null | undefined,
   allowed: AllowedEvidenceRef[],
@@ -55,23 +86,31 @@ export function sourceIsAllowed(
     ) {
       return true;
     }
-    const sourceLabel = normalizeRef(source.sheetLabel || source.fileName);
-    const refLabel = normalizeRef(ref.sheetLabel || ref.fileName);
-    if (sourceLabel && refLabel && sourceLabel === refLabel) {
-      if (source.pageNumber == null || ref.pageNumber == null) return true;
-      return source.pageNumber === ref.pageNumber;
-    }
+    if (labelsMatchForRef(source, ref)) return true;
     if (
       source.pageNumber != null &&
       ref.pageNumber === source.pageNumber &&
       !source.sheetId &&
       !source.documentId &&
-      !sourceLabel
+      !source.sheetLabel &&
+      !source.fileName
     ) {
       return true;
     }
     return false;
   });
+}
+
+function filterObservationsForGrounding(
+  observations: NormalizableObservation[] | undefined,
+  allowed: AllowedEvidenceRef[],
+): NormalizableObservation[] | undefined {
+  if (!observations?.length) return observations;
+  const filtered = observations.filter((observation) => {
+    if (!sourceHasSheetOrPage(observation.source)) return true;
+    return sourceIsAllowed(observation.source, allowed);
+  });
+  return filtered.length > 0 ? filtered : undefined;
 }
 
 function normalizeStatus(status: string | null | undefined): EvidenceStatus {
@@ -93,9 +132,14 @@ function normalizeStatus(status: string | null | undefined): EvidenceStatus {
 /**
  * A supported finding without an allowed sheet/page becomes not_found.
  * Conflicting without a source becomes requires_professional_dob_review.
+ * Preserves internal observations for downstream final invariants.
  */
 export function validateAndGroundFindings(
-  findings: EvidenceFinding[],
+  findings: Array<
+    EvidenceFinding & {
+      observations?: NormalizableObservation[];
+    }
+  >,
   allowed: AllowedEvidenceRef[],
 ): EvidenceFinding[] {
   return findings.map((finding, index) => {
@@ -106,6 +150,11 @@ export function validateAndGroundFindings(
       ? { ...finding.source, excerpt: excerpt || finding.source.excerpt || null }
       : null;
     const allowedSource = sourceIsAllowed(source, allowed);
+    const observations = filterObservationsForGrounding(finding.observations, allowed);
+
+    const applyObservations = (result: EvidenceFinding): EvidenceFinding =>
+      observations && observations.length > 0 ? { ...result, observations } : result;
+
     const grounded: EvidenceFinding = {
       id: finding.id || `finding-${index + 1}`,
       measureId: finding.measureId ?? null,
@@ -121,12 +170,10 @@ export function validateAndGroundFindings(
           ...grounded,
           status: "not_found",
           source: null,
-          note: note
-            ? `${note} Evidence was not grounded to a submitted sheet or page.`
-            : "Not found in submitted documents. The cited sheet/page is missing or not in the drawing set.",
+          note: "Not found in submitted documents. The cited sheet/page is missing or not in the drawing set.",
         };
       }
-      return grounded;
+      return applyObservations(grounded);
     }
 
     if (status === "conflicting" && !allowedSource) {
@@ -134,13 +181,11 @@ export function validateAndGroundFindings(
         ...grounded,
         status: "requires_professional_dob_review",
         source: sourceHasSheetOrPage(source) ? null : source,
-        note: note
-          ? `${note} Conflict could not be grounded to a submitted source.`
-          : "Conflicting information was claimed without a submitted source and requires professional / DOB review.",
+        note: "Conflicting information was claimed without a submitted source and requires professional / DOB review.",
       };
     }
 
-    return grounded;
+    return applyObservations(grounded);
   });
 }
 

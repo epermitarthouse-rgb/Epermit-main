@@ -7,6 +7,7 @@
 
 const {
   canonicalMeasureKey,
+  measuresAreCanonicallyEquivalent,
   preferCanonicalMeasureId,
   preferCanonicalMeasureLabel,
 } = require("./code-mod-canonical-measure.js");
@@ -386,6 +387,87 @@ function validateOneRowPerMeasure(findings) {
   return true;
 }
 
+function findingObservations(finding) {
+  if (finding.observations && finding.observations.length > 0) {
+    return finding.observations.slice();
+  }
+  return [observationFromFinding(finding)];
+}
+
+function resolveConsolidationKey(finding, keys, groups) {
+  const key = canonicalMeasureKey(finding);
+  for (const existingKey of keys) {
+    const representative = groups.get(existingKey) && groups.get(existingKey)[0];
+    if (!representative) continue;
+    if (
+      existingKey === key ||
+      (finding.measureId &&
+        representative.measureId &&
+        finding.measureId === representative.measureId) ||
+      measuresAreCanonicallyEquivalent(finding.measure, representative.measure)
+    ) {
+      return existingKey;
+    }
+  }
+  return key;
+}
+
+function mergeFindingGroup(group) {
+  if (group.length === 1) {
+    return enforceSynthesisConsistency(synthesizeMeasureEvidence(group[0]));
+  }
+
+  let combined = {
+    ...group[0],
+    observations: [],
+  };
+
+  for (const finding of group) {
+    combined = {
+      id: combined.id || finding.id,
+      measureId: preferCanonicalMeasureId(combined.measureId, finding.measureId),
+      measure: preferCanonicalMeasureLabel(combined.measure, finding.measure),
+      status: finding.status,
+      source: finding.source || null,
+      note: finding.note || null,
+      observations: [...(combined.observations || []), ...findingObservations(finding)],
+    };
+  }
+
+  return enforceSynthesisConsistency(synthesizeMeasureEvidence(combined));
+}
+
+function consolidateFinalMeasureResults(findings) {
+  const groups = new Map();
+  const keys = [];
+
+  for (const finding of findings) {
+    const key = resolveConsolidationKey(finding, keys, groups);
+    if (!groups.has(key)) keys.push(key);
+    const bucket = groups.get(key) || [];
+    bucket.push(finding);
+    groups.set(key, bucket);
+  }
+
+  return keys.map((key) => mergeFindingGroup(groups.get(key) || []));
+}
+
+function stripInternalObservations(finding) {
+  const { observations, ...rest } = finding;
+  return rest;
+}
+
+function enforceFinalPersistenceInvariants(findings) {
+  const consolidated = consolidateFinalMeasureResults(findings);
+  return consolidated.map((finding) => {
+    let current = enforceSynthesisConsistency(finding);
+    if (validateFinalConsistency(current).length > 0) {
+      current = enforceSynthesisConsistency(synthesizeMeasureEvidence(current));
+    }
+    return stripInternalObservations(enforceSynthesisConsistency(current));
+  });
+}
+
 module.exports = {
   mergeFindingsFromSheets,
   mergeMeasureEvidence,
@@ -397,4 +479,6 @@ module.exports = {
   classifyObservationRelevance,
   validateOneRowPerMeasure,
   validateSynthesisInvariants,
+  consolidateFinalMeasureResults,
+  enforceFinalPersistenceInvariants,
 };
