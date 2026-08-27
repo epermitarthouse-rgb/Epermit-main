@@ -1,31 +1,30 @@
 # Technical Remediation Backlog
 
 **Audit date:** 2026-08-26  
-**Updated:** 2026-08-27 — QuickBooks hardening items 1–3 **completed and deployed** (`a7ef113`, frontend `46b00bb`).
+**Status:** Documented only — **not implemented** in this task (except prepared Supabase env fix on separate branch).
 
 | Scope key | Diligence sprint | Separate engineering |
 
 ---
 
-## 1. QuickBooks invoice trigger authorization
+## 1. QuickBooks invoice trigger authorization — **RESOLVED on `main` @ `a7ef113`**
 
 | Field | Detail |
 |-------|--------|
-| Issue | `POST /api/quickbooks/invoice/trigger` accepted unauthenticated requests |
-| Remediation | Supabase JWT via `getAuthenticatedUser`; `has_project_editor_access` RPC; dry-run requires auth |
-| Status | **Completed and deployed** (`a7ef113`) — **verified** in production dry-run and live attempt |
-| Acceptance criteria | Unauthenticated → 401; viewer → 403; editor dry-run/live → reaches QuickBooks when connected |
+| Issue | ~~`POST /api/quickbooks/invoice/trigger` accepts unauthenticated requests~~ |
+| Resolution | JWT middleware + `has_project_editor_access` deployed and verified in production dry-run (2026-08-27) |
+| Evidence | `scraper-service/app/routes/quickbooks.routes.js`; `QUICKBOOKS_PRODUCTION_E2E.md` |
+| Status | **Closed** — do not re-open unless regression found |
 
 ---
 
-## 2. QuickBooks OAuth state / CSRF validation
+## 2. QuickBooks OAuth state / CSRF validation — **RESOLVED on `main` @ `a7ef113`**
 
 | Field | Detail |
 |-------|--------|
-| Issue | OAuth `state` parameter was not validated on callback |
-| Remediation | `qb-oauth-state.service.js` — HMAC-signed state bound to user id, 15 min TTL, single-use nonce (in-process) |
-| Status | **Completed and deployed** (`a7ef113`) |
-| Note | OAuth `/start` requires authenticated user (`format=json` or redirect) |
+| Issue | ~~OAuth `state` parameter not validated on callback~~ |
+| Resolution | HMAC-signed state with expiry and single-use nonce (`qb-oauth-state.service.js`) |
+| Status | **Closed** |
 
 ---
 
@@ -33,9 +32,11 @@
 
 | Field | Detail |
 |-------|--------|
-| Issue | Public endpoint returned full realm id and environment |
-| Remediation | Unauthenticated: `{ connected }` only; authenticated: masked realm, environment, token expiry |
-| Status | **Completed and deployed** (`a7ef113`) |
+| Issue | Public endpoint returns connection metadata (realm id, environment) |
+| Evidence | Production HTTP 200 on `/api/quickbooks/status` |
+| Impact | Reconnaissance; should require auth or return minimal public shape |
+| Severity | **Medium** |
+| Scope | **Separate engineering** |
 
 ---
 

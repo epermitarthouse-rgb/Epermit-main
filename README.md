@@ -2,6 +2,8 @@
 
 Permit intelligence platform: project and jurisdiction tracking, **multi-portal scraping**, portal data viewing, AI-assisted comment workflows, inspections, and related tooling. The web app talks to **Supabase** (database, auth, storage, edge functions). A separate **Node/Express + Playwright** service performs browser automation and writes **`projects.portal_data`** in Postgres.
 
+**Technical diligence handover:** see [docs/diligence-readiness/README.md](docs/diligence-readiness/README.md).
+
 ## Architecture
 
 | Layer | Stack | Location |

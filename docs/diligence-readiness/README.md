@@ -1,7 +1,7 @@
 # Diligence Readiness Package
 
 **Repository:** [epermitarthouse-rgb/Epermit-main](https://github.com/epermitarthouse-rgb/Epermit-main)  
-**Branch:** `docs/diligence-readiness`  
+**Branch:** `main` (merged 2026-08-27)  
 **Last updated:** 2026-08-27
 
 This folder is the **authoritative diligence handover bundle** for PermitPilot. It supplements — but does not replace — feature-specific docs under `docs/`, `uci/`, and `memory.md`.
@@ -15,7 +15,7 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 | Investor / acquirer reviewer | [REPOSITORY_AND_ACCOUNT_INVENTORY.md](./REPOSITORY_AND_ACCOUNT_INVENTORY.md) → [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md) |
 | Incoming engineer | [ARCHITECTURE.md](./ARCHITECTURE.md) → [DEPLOY.md](./DEPLOY.md) → [ENV.md](./ENV.md) |
 | Ops / recovery | [RESTORE.md](./RESTORE.md) → [RAILWAY_PRODUCTION_STATUS.md](./RAILWAY_PRODUCTION_STATUS.md) |
-| Finance / billing | [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md) → [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md) |
+| Finance / billing | [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md) |
 
 ---
 
@@ -30,6 +30,16 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 
 ---
 
+## 360° production audit (2026-08-27)
+
+| Document | Purpose |
+|----------|---------|
+| [PERMITPILOT_360_PRODUCTION_AUDIT.md](./PERMITPILOT_360_PRODUCTION_AUDIT.md) | Full production audit — architecture through testing |
+| [PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md](./PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md) | Feature status matrix with evidence |
+| [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) | P0–P3 backlog, estimates, sprint options |
+
+---
+
 ## Supporting audits
 
 | Document | Purpose |
@@ -37,15 +47,15 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 | [REPOSITORY_AND_ACCOUNT_INVENTORY.md](./REPOSITORY_AND_ACCOUNT_INVENTORY.md) | Git, branches, account ownership |
 | [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md) | Active work and risk summary |
 | [RAILWAY_PRODUCTION_STATUS.md](./RAILWAY_PRODUCTION_STATUS.md) | Production deploy snapshot |
-| [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md) | QuickBooks implementation and production status |
-| [QUICKBOOKS_UAT.md](./QUICKBOOKS_UAT.md) | QuickBooks UAT procedures |
-| [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md) | Production E2E test project, results, continuation |
+| [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md) | QuickBooks implementation |
 | [TECHNICAL_EFFORT_ESTIMATES.md](./TECHNICAL_EFFORT_ESTIMATES.md) | Scoped hour estimates |
 | [DOCUMENTATION_CLEANUP_AUDIT.md](./DOCUMENTATION_CLEANUP_AUDIT.md) | Doc overlap and cleanup plan |
 | [REPLIT_RETIREMENT_AUDIT.md](./REPLIT_RETIREMENT_AUDIT.md) | Replit branch retirement |
 | [LOVABLE_RETIREMENT_AUDIT.md](./LOVABLE_RETIREMENT_AUDIT.md) | Lovable reference retirement |
 | [REPOSITORY_DOCUMENTATION_STRUCTURE.md](./REPOSITORY_DOCUMENTATION_STRUCTURE.md) | Recommended doc layout |
 | [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md) | Known issues not fixed here |
+| [IAN_DILIGENCE_RESPONSE_DRAFT.md](./IAN_DILIGENCE_RESPONSE_DRAFT.md) | Client email draft (PermitPilot/UCI) |
+| [IAN_REQUIREMENT_MATRIX.md](./IAN_REQUIREMENT_MATRIX.md) | Ian's asks vs email/docs coverage |
 
 ---
 

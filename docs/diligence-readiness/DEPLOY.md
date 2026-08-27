@@ -160,7 +160,7 @@ Vercel build history still requires dashboard review, but there is **no currentl
 | Scraper API | Authenticated UCI or QB status | Expected JSON (not 5xx) |
 | Critical Edge Functions | e.g. team invitation, scheduled report dry run | 2xx or expected auth error |
 | UCI live flags | Railway env dashboard | Live submission flags **not** enabled unless approved |
-| QuickBooks | `/api/quickbooks/status` | Public `{ connected }` only; authenticated details require JWT. Hardening deployed (`a7ef113`). Production dry-run verified; live invoice blocked by QuickBooks subscription — see [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md). |
+| QuickBooks | `/api/quickbooks/status` | JSON response (does not prove invoice success) |
 
 ---
 
