@@ -112,9 +112,9 @@ Assumes single engineer; parallel work reduces calendar time but not hours.
 | **15–20 h/week** | 14–18 weeks | 25–33 weeks | 38–51 weeks |
 | **30–40 h/week** | 7–9 weeks | 12–16 weeks | 19–25 weeks |
 
-### 3.3 Diligence-readiness sprint (unchanged scope)
+### 3.3 Diligence-readiness sprint (recalculated 2026-08-27)
 
-See [TECHNICAL_EFFORT_ESTIMATES.md](./TECHNICAL_EFFORT_ESTIMATES.md) §A — **40–70 h remaining** for handover tasks (backups, restore drill, walkthrough). Still valid; orthogonal to product backlog above.
+See [TECHNICAL_EFFORT_ESTIMATES.md](./TECHNICAL_EFFORT_ESTIMATES.md) §A — **32–56 h remaining** for handover tasks (restore drill, walkthrough, QB live proof after subscription). Orthogonal to product backlog above.
 
 ---
 

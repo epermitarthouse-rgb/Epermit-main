@@ -1,6 +1,6 @@
 # Restore and Disaster Recovery
 
-**Document date:** 2026-08-26  
+**Document date:** 2026-08-27  
 **No restore test performed.** No destructive operations.
 
 Index: [README.md](./README.md)
@@ -24,15 +24,16 @@ Index: [README.md](./README.md)
 
 | Mechanism | Status |
 |-----------|--------|
-| GitHub source | **Verified** — org repo accessible |
-| Shared password vault | **Client confirmed** in use; **completeness and recovery access require manual confirmation** |
-| Supabase automated backups | **Requires manual confirmation** — not verified from repo |
-| Supabase PITR | **Requires manual confirmation** — plan-dependent; **do not assume available** |
+| GitHub source | **Verified** — org repo accessible; WIP branches pushed (see inventory) |
+| Shared password vault | **Manually confirmed by Javeria** — secrets stored in shared vault; per-variable reconciliation still recommended |
+| Supabase automated **physical** backups | **Verified** — **7 daily backups** dated **2026-08-20 through 2026-08-26** |
+| Supabase **PITR** | **Verified disabled** — paid add-on; **not enabled** on production project |
+| Storage objects in DB backups | **Verified excluded** — Storage requires **separate** recovery path |
 | Storage versioning / replication | **Requires manual confirmation** |
 | Railway backups | Deploy history only — **not** database backup |
 | Local `gitsafe-backup` remote | **Inferred** local backup — operator **requires manual confirmation** |
 
-**Tested backup requirement:** **Incomplete** — no successful restore drill recorded.
+**Tested backup requirement:** **Incomplete** — no successful **restore drill** recorded.
 
 ---
 
@@ -40,8 +41,8 @@ Index: [README.md](./README.md)
 
 | Layer | Recovery approach |
 |-------|-------------------|
-| **Postgres** | Supabase backup/PITR if enabled; or migrations-only rebuild (schema only) |
-| **Storage** | Separate from DB — bucket restore/versioning **requires manual confirmation** |
+| **Postgres** | Supabase physical backups (7-day window verified); PITR **not** available unless purchased and enabled |
+| **Storage** | **Separate from DB** — bucket restore/versioning **requires manual confirmation** |
 
 **Critical:** `supabase db push` / migrations rebuild **schema only**. They do **not** restore:
 
@@ -59,21 +60,22 @@ Index: [README.md](./README.md)
 git clone git@github.com:epermitarthouse-rgb/Epermit-main.git
 ```
 
-### Deliberately not on GitHub
+### WIP branches on org remote (2026-08-27)
 
-| Item | Status |
-|------|--------|
-| `feat/code-analyzer-async-v2` | **Intentionally local-only** — excluded by owner decision; not protected on GitHub |
-| Code Modification WIP | **Deliberate uncommitted local work** — not protected on GitHub |
+| Item | Remote status |
+|------|---------------|
+| `wip/code-mod-uat-cleanup` | **Pushed** — Code Mod UAT SQL |
+| `feat/code-analyzer-async-v2` | **Pushed** — experimental; not for production |
+| `replit-agent` | **Local + git bundle** — remote push failed; see [REPLIT_RETIREMENT_AUDIT.md](./REPLIT_RETIREMENT_AUDIT.md) |
 
 ---
 
 ## 5. Recovery order (empty environment)
 
-1. Restore/recreate Supabase project (DB + Storage) — **requires manual confirmation** of method
+1. Restore/recreate Supabase project (DB + Storage) — use verified physical backup or accept data gap
 2. Apply migrations only if starting empty schema
-3. Restore Storage objects from backup — or accept data gap
-4. Set Edge Function secrets from **shared vault** (**client confirmed**)
+3. Restore Storage objects from backup — or accept data gap (**verified gap** if only DB restored)
+4. Set Edge Function secrets from **shared vault**
 5. Deploy Edge Functions from git
 6. Recreate Railway services + env from vault
 7. Recreate Vercel project + env (including Supabase vars before Supabase fix merge)
@@ -81,7 +83,7 @@ git clone git@github.com:epermitarthouse-rgb/Epermit-main.git
 9. Update Stripe webhook URL if domain changed
 10. Run smoke checks ([DEPLOY.md](./DEPLOY.md) §8)
 
-**Recovery time estimate:** **Not provided** — requires real drill ([§8](#8-restore-test-status)).
+**Recovery time estimate:** **Not provided** — requires staging restore drill.
 
 ---
 

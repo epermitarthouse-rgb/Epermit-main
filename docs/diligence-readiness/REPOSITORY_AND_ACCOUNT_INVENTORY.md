@@ -1,6 +1,6 @@
 # Repository and Account Inventory
 
-**Audit date:** 2026-08-26
+**Audit date:** 2026-08-27
 
 Index: [README.md](./README.md)
 
@@ -12,16 +12,18 @@ Index: [README.md](./README.md)
 |-------|--------|
 | Remote | `git@github.com:epermitarthouse-rgb/Epermit-main.git` |
 | Ownership | **Client confirmed** + **verified** remote URL and Railway repo linkage |
+| Org account ID / owner email | `[PLACEHOLDER — Javeria to insert]` |
 
 ---
 
-## 2. Protected / intentional local state
+## 2. WIP preservation status (2026-08-27)
 
-| Item | Policy |
-|------|--------|
-| **`feat/code-analyzer-async-v2`** | **Intentionally local-only** — no push/merge/archive action requested |
-| **Code Modification WIP** | **Deliberate uncommitted work** — includes `scripts/code-mod-uat-cleanup.sql` and related Code Mod files on developer machine — **do not commit/push** as part of diligence |
-| **`replit-agent`** | Local-only historical branch — assess via [REPLIT_RETIREMENT_AUDIT.md](./REPLIT_RETIREMENT_AUDIT.md) before any deletion |
+| Item | Remote | Deploy | Notes |
+|------|--------|--------|-------|
+| **`wip/code-mod-uat-cleanup`** | **Yes** (`edc20c4`) | **No** | Code Mod UAT cleanup SQL |
+| **`feat/code-analyzer-async-v2`** | **Yes** (`b8e1da5`) | **No** | Experimental async analyzer — not for production |
+| **Code Mod pipeline WIP** | On `wip/code-mod-uat-cleanup` | **No** | Separate from `main` |
+| **`replit-agent`** | **Bundle archive** | N/A | Remote push failed — see [REPLIT_RETIREMENT_AUDIT.md](./REPLIT_RETIREMENT_AUDIT.md) |
 
 ---
 
@@ -29,13 +31,12 @@ Index: [README.md](./README.md)
 
 | Branch | Remote | Notes |
 |--------|--------|-------|
-| `main` | Yes | Production Railway target |
-| `docs/diligence-readiness` | Yes | This documentation package |
-| `fix/frontend-supabase-env-config` | **Yes** (`origin`) | Commit `2a5bf81`; **pushed**, **unmerged**, **not deployed**; Vercel names confirmed; values + smoke test before merge |
-| `feat/code-analyzer-async-v2` | **No** | By design |
+| `main` | Yes | Production Railway target @ `331fa80` |
+| `docs/diligence-readiness` | Yes | Merged to `main` |
+| `fix/frontend-supabase-env-config` | Yes (`2a5bf81`) | **Unmerged**, **not deployed** |
+| `fix/quickbooks-core-hardening` | Yes | Merged to `main` |
+| `feat/uci-track-ab-*` | Yes | UCI Track A+B — unmerged feature branches |
 | `origin/feat/stage2-load-profile-readiness` | Remote only | **Requires manual confirmation** before merge/delete |
-
-**Do not recommend push** for async-v2 or Code Mod WIP.
 
 ---
 
@@ -60,22 +61,24 @@ Index: [README.md](./README.md)
 
 | Service | Client confirmed | Live dashboard verified | Manual completion |
 |---------|------------------|-------------------------|-------------------|
-| GitHub org | Yes | Yes (remote) | — |
-| Railway | Yes | Yes (CLI) | — |
-| Vercel | Private account | **Partial** — frontend env var **names** client/dashboard confirmed; full project ownership transfer not verified | **Yes** — value correctness, team access |
-| Supabase | — | **No** | **Yes** |
-| Intuit QuickBooks | — | Partial (status HTTP) | **Yes** |
+| GitHub org | Yes | Yes (remote) | Account ID placeholder |
+| Railway | Yes | Yes (CLI) | `[PLACEHOLDER — Javeria to insert]` |
+| Vercel | Private account | **Partial** — env var **names** confirmed | **Yes** — value correctness, team access |
+| Supabase | — | **Partial** — backups verified | **Yes** — full dashboard ownership |
+| Intuit QuickBooks | — | Partial (status HTTP + dry-run) | **Yes** — subscription restoration |
 | Microsoft Graph | — | **No** | **Yes** |
-| Shared password vault | **Yes** (in use) | **No** | **Yes** — admin, recovery access, completeness |
+| Shared password vault | **Manually confirmed by Javeria** | **No** | Per-variable reconciliation |
 | Resend / Stripe / OpenAI / Mapbox | — | **No** | **Yes** each |
 
-Secrets: **client confirmed** stored in shared vault. Per-variable vault reconciliation: **requires manual confirmation** ([ENV.md](./ENV.md)).
+**Accounts/API keys under developer email (not Ian's):** `[PLACEHOLDER — Javeria to insert list]`
+
+Secrets: **manually confirmed by Javeria** stored in shared vault. Per-variable vault reconciliation: [ENV.md](./ENV.md).
 
 ---
 
 ## 7. UCI source
 
-**Verified:** UCI runtime code and docs are in the organization repository (`scraper-service/app/services/uci/`, `src/components/uci/`, `uci/`, migrations).
+**Verified:** UCI runtime code and docs are in the organization repository (`scraper-service/app/services/uci/`, `src/components/uci/`, `uci/`, migrations). Live pilot will use org repo + Railway + Supabase — **not** Replit or personal namespace.
 
 ---
 

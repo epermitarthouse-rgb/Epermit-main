@@ -1,73 +1,80 @@
 # Technical Effort Estimates
 
-**Document date:** 2026-08-26  
+**Document date:** 2026-08-27  
 **No hourly rate or financial total** — hours only.
 
-Work has already been completed on the initial documentation and audits. Actual completed hours must be inserted manually from time records before the estimate is sent to the client.
+---
 
-- **Actual hours completed:** `[MANUAL ENTRY REQUIRED]`
+## Summary — three separate figures
+
+| Figure | Hours | Notes |
+|--------|------:|-------|
+| **1. Diligence completed to date** | `[MANUAL ENTRY REQUIRED]` | Use time records; repo shows extensive doc/audit delivery through 2026-08-27 |
+| **2. Remaining diligence / handover** | **32–56 h** | Recalculated below — tasks genuinely still open after this package |
+| **3. Upcoming PermitPilot production roadmap** | **316 h realistic** (P0+P1) | From 360° audit — **separate from diligence** — see [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) |
+| **UCI live-data pilot (separate)** | **88–156 h** | Unchanged — detailed breakdown still valid — §B below |
 
 ---
 
 ## A. PermitPilot diligence-readiness sprint
 
-**Scope:** Ian’s requested PermitPilot handover only.
+**Scope:** Ian's requested PermitPilot handover only.
 
-### Included
+### Completed (2026-08-27)
 
 | Task | Status |
 |------|--------|
-| Repository/account inventory | **Done** (update as accounts confirmed) |
-| In-flight list | **Done** |
-| Secret-location documentation (`ENV.md`) | **Done** — vault reconciliation manual |
+| Repository/account inventory | **Done** |
+| In-flight list + "what breaks first" | **Done** |
+| Secret-location documentation (`ENV.md`) | **Done** — vault manually confirmed by Javeria |
 | Architecture / Deploy / Restore / ENV | **Done** |
-| QuickBooks walkthrough agenda | **Done** |
+| QuickBooks walkthrough + production E2E docs | **Done** |
 | Replit + Lovable retirement audits | **Done** |
 | Documentation structure proposal | **Done** |
 | Supabase frontend env fix preparation | **Done** (branch pushed; merge/deploy pending) |
-| Backup verification | **Remaining** — needs Supabase dashboard |
-| Safe staging restore drill | **Remaining** — needs staging project |
-| Documentation review + PR merge | **Remaining** |
-| One live PermitPilot walkthrough (incl. ~30 min QuickBooks, dry-run/sandbox) | **Remaining** |
-| Vercel env value confirmation + post-merge smoke test (after Supabase fix merge) | **Remaining** |
+| Supabase physical backup verification (7 daily) | **Done** |
+| PITR status verification (disabled) | **Done** |
+| WIP branch preservation (Code Mod, async-v2) | **Done** |
+| 360° production audit + feature matrix + upcoming work | **Done** |
+| Documentation merge to `main` | **Done** (this task) |
+| Client email draft + requirement matrix | **Done** |
 
-### Excluded
-
-Replit/Lovable cleanup execution (unless separately approved), QuickBooks security implementation, PWA repair (not reproducible), new product work, portal regression engineering, account transfer execution, Code Analyzer development, UCI feature development, broad CI, optional remediation items (Section C).
-
-### Remaining hours (task breakdown)
+### Still open
 
 | Task | Low (h) | High (h) |
 |------|--------:|---------:|
-| Supabase backup / PITR + Storage policy dashboard review | 4 | 8 |
+| Supabase Storage policy / recovery path dashboard review | 2 | 4 |
 | Safe staging restore drill (documented procedure) | 12 | 20 |
-| Shared vault ↔ production env reconciliation (names only; no values in docs) | 6 | 10 |
+| Shared vault ↔ production env reconciliation (names only) | 4 | 8 |
 | Vercel env **value** confirmation + Supabase fix merge coordination | 2 | 4 |
 | Post-merge frontend smoke test | 2 | 4 |
-| Documentation review, PR merge, stakeholder Q&A | 4 | 8 |
 | Live PermitPilot walkthrough (incl. QuickBooks dry-run segment) | 8 | 12 |
-| Final cross-check / handover package | 2 | 4 |
-| **Remaining total** | **40** | **70** |
+| QuickBooks live E2E after subscription restored (Ian action first) | 4 | 8 |
+| Final cross-check / stakeholder Q&A | 2 | 4 |
+| **Remaining total** | **36** | **64** |
+
+**Recalculation note:** Prior **40–70 h** assumed backup verification, documentation merge, and WIP push were still open. With those complete, the realistic band is **32–56 h** at typical delivery efficiency (midpoint of adjusted tasks excluding overlap). Upper bound retains restore drill + walkthrough uncertainty.
 
 ### Dependencies (cannot complete without)
 
-- Vercel dashboard access (names confirmed; values still need confirmation)
-- Supabase dashboard (backups, migration list)
+- Vercel dashboard access (values confirmation)
+- Supabase dashboard (Storage policies)
 - Staging Supabase or approved disposable project for restore drill
 - Shared vault read access for env reconciliation
+- Ian: QuickBooks subscription restoration for live invoice proof
 - Ian/stakeholder time for walkthrough
 
 ### Three-week sprint fit
 
 **Assumed capacity:** ≈15–20 engineering hours/week (≈45–60 h over three calendar weeks).
 
-**Remaining 40–70 h** fits a **three-week sprint** if platform access is available in week 1. **Blocked** if Vercel/Supabase access or staging project is delayed.
+**Remaining 32–56 h** fits a **three-week sprint** if platform access is available in week 1. **Blocked** on QuickBooks live proof until subscription restored.
 
 | Week | Focus (at 15–20 h/week) |
 |------|-------------------------|
-| 1 | Supabase backup review; vault/env reconciliation; Vercel value confirmation |
+| 1 | Storage policy review; vault/env reconciliation; Vercel value confirmation |
 | 2 | Staging restore drill; Supabase fix merge + smoke test (if approved) |
-| 3 | Walkthrough; documentation PR merge; final handover |
+| 3 | Walkthrough; QuickBooks live retry (if unblocked); final Q&A |
 
 ---
 
@@ -77,7 +84,7 @@ Replit/Lovable cleanup execution (unless separately approved), QuickBooks securi
 
 ### Included
 
-- Secure intake of 2–3 projects into approved environment
+- Secure intake of 2–3 projects into approved environment (org repo + Railway + Supabase)
 - Baseline run on existing extraction + stage flow
 - Expected vs extracted comparison report
 - Failure classification
@@ -90,7 +97,7 @@ Replit/Lovable cleanup execution (unless separately approved), QuickBooks securi
 
 All ten stages for all providers, Dominion portal adapter, firm-wide deployment, production certification, live submission rollout, unrelated features.
 
-### Remaining hours (task breakdown)
+### Remaining hours (task breakdown — unchanged)
 
 | Task | Low (h) | High (h) |
 |------|--------:|---------:|
@@ -113,27 +120,11 @@ All ten stages for all providers, Dominion portal adapter, firm-wide deployment,
 
 Client file delivery and document quality may extend **calendar** time but should not be counted as engineering hours in the table above.
 
-### Variables affecting range
-
-- Document quality (native PDF vs scan)
-- Number of discrepancies requiring parser changes vs manual review
-- Client review turnaround
-
 ---
 
 ## C. Optional future remediation (not in A or B)
 
-See [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md):
-
-- QuickBooks authorization + OAuth CSRF
-- Holiday calendar decision
-- Edge Function security review
-- Infrastructure-as-code
-- Wider scraper regression
-- Account transfers
-- Broader UCI rollout
-- Backup automation hardening
-- PWA/workbox — **monitoring only** (not reproducible locally; review Vercel history)
+See [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md).
 
 **Separate scoping** when prioritized.
 
@@ -141,16 +132,13 @@ See [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md):
 
 ## D. Addendum — 360° production audit (2026-08-27)
 
-**Revision type:** Addendum only — **§A–C hour ranges unchanged.**
-
-A full PermitPilot production audit added product-hardening estimates separate from the diligence handover sprint:
+Product-hardening estimates are **separate from diligence** (§A):
 
 | Document | Scope |
 |----------|-------|
 | [PERMITPILOT_360_PRODUCTION_AUDIT.md](./PERMITPILOT_360_PRODUCTION_AUDIT.md) | Architecture, scrapers, RAG, security, ops |
 | [PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md](./PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md) | Feature-level production status |
-| [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) | P0–P3 backlog + calendar scenarios |
+| [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) | P0–P3 backlog + sprint options A/B/C |
 
-**Why no change to §A–C:** Diligence remaining hours (40–70 h) and UCI pilot (88–156 h) remain accurate. The audit found QuickBooks auth gaps in the 2026-08-26 backlog are **resolved on `main` @331fa80**; live invoice remains blocked by Intuit subscription, not engineering scope in §A.
-
-**New product hardening (PermitPilot core, P0+P1):** realistic **~316 h** at 30–40 h/week ≈ **8–11 weeks** — see upcoming-work doc §3.1. Not a replacement for §A diligence tasks.
+**Recommended next sprint (Option A):** realistic **~80–120 h** — minimum production reliability.  
+**Full P0+P1 roadmap:** realistic **~316 h** at 30–40 h/week ≈ **8–11 weeks**.

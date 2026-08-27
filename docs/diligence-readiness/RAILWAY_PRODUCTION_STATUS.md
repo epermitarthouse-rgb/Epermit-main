@@ -1,6 +1,6 @@
 # Railway Production Status
 
-**Snapshot date:** 2026-08-26  
+**Snapshot date:** 2026-08-27  
 **Read-only audit** — no deploy actions.
 
 Index: [README.md](./README.md)
@@ -18,29 +18,28 @@ Index: [README.md](./README.md)
 
 ---
 
-## 2. Active deployment (**verified** Railway CLI JSON)
+## 2. Active deployment (**verified** Railway CLI, 2026-08-27)
 
 | Field | Value |
 |-------|-------|
-| Deployment ID | `decd72b1-5f78-4366-a612-f33c620b5bba` |
 | Status | **SUCCESS** |
-| Commit | `da66200bde35c59ae4577acb308f3100eff07759` |
+| Commit | `331fa802453a` (`331fa80`) |
 | Branch | `main` |
-| Created (UTC) | `2026-08-26T05:46:33.777Z` |
+| Message | Document QuickBooks production E2E status and deployment verification |
 
-**Note:** Local `main` has since advanced to `f7b5f02` — production may lag until next deploy.
+**Current production is healthy** on the latest documented `main` commit including QuickBooks hardening path.
 
 ---
 
-## 3. Recent deployment history
+## 3. Historical Friday failures (2026-08-22 area)
 
 | Observation | Classification |
 |-------------|----------------|
-| Recent CLI window shows **SUCCESS** and **REMOVED** statuses | **Verified** |
-| **`REMOVED`** | Superseded/removed deployment record — **not synonymous with failed build** |
-| Whether a REMOVED deployment served traffic | **Not proven** without serve-window metadata |
-| **`FAILED` / `CRASHED`** in recent CLI list | **Not observed** in retrieved window |
-| Friday failure notifications (2) | **Outside or absent** from retrieved CLI history — **cannot attribute cause** without logs |
+| Ian reported **two failed production builds** on Friday evening | **Client confirmed** |
+| Exact failure logs from that window | **Unavailable** for specific root-cause attribution in this audit |
+| Likely context | Failures occurred during **active deployment work** while fixes were landing |
+| Current state | **SUCCESS** deploy on `331fa80` — production running on good build |
+| Partial deployment served traffic | **Not proven** without serve-window metadata — do not claim either way |
 
 ---
 
@@ -53,8 +52,6 @@ Index: [README.md](./README.md)
 | `GET /api/quickbooks/status` | HTTP 200 | Route responds; reports stored connection **state** |
 
 **Root HTTP 200 is not full application health** (Playwright, workers, DB latency not tested).
-
-**QuickBooks status** confirms route + recorded connection state — **not** a successful live Intuit API transaction.
 
 ---
 

@@ -1,7 +1,7 @@
 # Diligence Readiness Package
 
 **Repository:** [epermitarthouse-rgb/Epermit-main](https://github.com/epermitarthouse-rgb/Epermit-main)  
-**Branch:** `docs/diligence-readiness`  
+**Branch:** `main` (merged 2026-08-27)  
 **Last updated:** 2026-08-27
 
 This folder is the **authoritative diligence handover bundle** for PermitPilot. It supplements — but does not replace — feature-specific docs under `docs/`, `uci/`, and `memory.md`.
@@ -54,6 +54,8 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 | [LOVABLE_RETIREMENT_AUDIT.md](./LOVABLE_RETIREMENT_AUDIT.md) | Lovable reference retirement |
 | [REPOSITORY_DOCUMENTATION_STRUCTURE.md](./REPOSITORY_DOCUMENTATION_STRUCTURE.md) | Recommended doc layout |
 | [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md) | Known issues not fixed here |
+| [IAN_DILIGENCE_RESPONSE_DRAFT.md](./IAN_DILIGENCE_RESPONSE_DRAFT.md) | Client email draft (PermitPilot/UCI) |
+| [IAN_REQUIREMENT_MATRIX.md](./IAN_REQUIREMENT_MATRIX.md) | Ian's asks vs email/docs coverage |
 
 ---
 

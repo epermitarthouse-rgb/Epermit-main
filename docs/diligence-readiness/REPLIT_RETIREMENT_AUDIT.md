@@ -22,12 +22,8 @@
 |-------|-------|
 | Branch | `replit-agent` (local only) |
 | Tip commit | `d867472` — *Update platform one-pager title for AI assistant* |
-| Commits on `replit-agent` not in `main` | **399** |
-| Commits on `main` not in `replit-agent` | **344** |
-| Shared commits (`git rev-list` intersection) | **0** — **unrelated histories** (no `git merge-base`) |
-| `git cherry main replit-agent` (non-patch-equivalent) | **202** commits marked `+` |
-| Remote tracking | **None** — not on `origin` |
-| `main` tip (comparison date) | `0dfbb49` |
+| Remote tracking | **Push failed (2026-08-27)** — missing object in unrelated history |
+| **Recoverable archive** | Git bundle: `docs/diligence-readiness/archives/replit-agent-2026-08-27.bundle` (~202 MB, local) — restore via `git clone replit-agent-2026-08-27.bundle replit-agent-restored` |
 
 **Method note:** Because histories do not share a merge base, commit counts and `git cherry` measure **historical divergence**, not a simple fork behind/ahead of a common ancestor. **File-path tree comparison** is the authoritative check for missing production functionality.
 
