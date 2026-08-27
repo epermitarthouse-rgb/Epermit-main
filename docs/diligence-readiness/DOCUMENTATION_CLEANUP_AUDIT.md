@@ -1,7 +1,7 @@
 # Documentation Cleanup Audit
 
 **Audit date:** 2026-08-26 (corrected)  
-**No cleanup performed.** Deletion/archival requires explicit approval after retirement audits.
+**Cleanup performed:** 2026-08-27 — duplicate `attachment-package/` and `internal/` email drafts removed from `main`; worktrees pruned.
 
 Index: [README.md](./README.md)
 
@@ -83,13 +83,15 @@ See [REPOSITORY_DOCUMENTATION_STRUCTURE.md](./REPOSITORY_DOCUMENTATION_STRUCTURE
 
 ---
 
-## 6. Cleanup gate
+## 6. Cleanup performed (2026-08-27)
 
-Cleanup proceeds only after:
-
-1. Documentation corrections merged from `docs/diligence-readiness`
-2. Replit and Lovable retirement audits reviewed and approved
-3. Explicit deletion/consolidation plan sign-off
+| Action | Status |
+|--------|--------|
+| Remove duplicate `attachment-package/` (regeneratable from canonical docs) | **Done** |
+| Remove `internal/` email draft and requirement matrix | **Done** |
+| Prune merged diligence worktrees | **Done** |
+| Replit bundle | **Retained** — `archives/replit-agent-2026-08-27.bundle` (verified) |
+| Lovable reference tree | **Retained** — minimum per [LOVABLE_RETIREMENT_AUDIT.md](./LOVABLE_RETIREMENT_AUDIT.md) |
 
 ---
 

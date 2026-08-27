@@ -59,16 +59,7 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 
 ## Client attachment package
 
-Ready-to-send folder for investor/acquirer review: [attachment-package/](./attachment-package/README.md) (15 client-facing docs + README).
-
----
-
-## Internal QA (not in client package)
-
-| Document | Purpose |
-|----------|---------|
-| [DILIGENCE_RESPONSE_EMAIL_DRAFT.md](./internal/DILIGENCE_RESPONSE_EMAIL_DRAFT.md) | Client email draft (PermitPilot/UCI) |
-| [DILIGENCE_REQUIREMENT_COVERAGE_MATRIX.md](./internal/DILIGENCE_REQUIREMENT_COVERAGE_MATRIX.md) | Diligence asks vs email/docs coverage |
+All client-facing diligence documents live in this folder (`docs/diligence-readiness/`). To produce a ZIP for investor/acquirer review, copy the 15 documents listed under **Core documents**, **360° production audit**, and **Supporting audits** above (exclude this README, cleanup audits, and archives).
 
 ---
 
@@ -91,4 +82,4 @@ Throughout this package:
 | [memory.md](../../memory.md) | Scraper engineering handbook |
 | [docs/uci-action-items-status.md](../uci-action-items-status.md) | UCI lifecycle tracker |
 
-**Cleanup of duplicate or legacy docs requires explicit approval** — see [DOCUMENTATION_CLEANUP_AUDIT.md](./DOCUMENTATION_CLEANUP_AUDIT.md).
+Duplicate attachment-package and internal email drafts removed 2026-08-27 — see [DOCUMENTATION_CLEANUP_AUDIT.md](./DOCUMENTATION_CLEANUP_AUDIT.md).
