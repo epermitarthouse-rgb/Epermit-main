@@ -2,7 +2,7 @@
 
 **Repository:** [epermitarthouse-rgb/Epermit-main](https://github.com/epermitarthouse-rgb/Epermit-main)  
 **Branch:** `docs/diligence-readiness`  
-**Last updated:** 2026-08-26
+**Last updated:** 2026-08-27
 
 This folder is the **authoritative diligence handover bundle** for PermitPilot. It supplements — but does not replace — feature-specific docs under `docs/`, `uci/`, and `memory.md`.
 
@@ -27,6 +27,16 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 | [DEPLOY.md](./DEPLOY.md) | Deploy, verify, rollback (non-destructive) |
 | [RESTORE.md](./RESTORE.md) | Recovery procedures and verified gaps |
 | [ENV.md](./ENV.md) | Complete environment variable inventory |
+
+---
+
+## 360° production audit (2026-08-27)
+
+| Document | Purpose |
+|----------|---------|
+| [PERMITPILOT_360_PRODUCTION_AUDIT.md](./PERMITPILOT_360_PRODUCTION_AUDIT.md) | Full production audit — architecture through testing |
+| [PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md](./PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md) | Feature status matrix with evidence |
+| [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) | P0–P3 backlog, estimates, sprint options |
 
 ---
 

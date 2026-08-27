@@ -136,3 +136,21 @@ See [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md):
 - PWA/workbox — **monitoring only** (not reproducible locally; review Vercel history)
 
 **Separate scoping** when prioritized.
+
+---
+
+## D. Addendum — 360° production audit (2026-08-27)
+
+**Revision type:** Addendum only — **§A–C hour ranges unchanged.**
+
+A full PermitPilot production audit added product-hardening estimates separate from the diligence handover sprint:
+
+| Document | Scope |
+|----------|-------|
+| [PERMITPILOT_360_PRODUCTION_AUDIT.md](./PERMITPILOT_360_PRODUCTION_AUDIT.md) | Architecture, scrapers, RAG, security, ops |
+| [PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md](./PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md) | Feature-level production status |
+| [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) | P0–P3 backlog + calendar scenarios |
+
+**Why no change to §A–C:** Diligence remaining hours (40–70 h) and UCI pilot (88–156 h) remain accurate. The audit found QuickBooks auth gaps in the 2026-08-26 backlog are **resolved on `main` @331fa80**; live invoice remains blocked by Intuit subscription, not engineering scope in §A.
+
+**New product hardening (PermitPilot core, P0+P1):** realistic **~316 h** at 30–40 h/week ≈ **8–11 weeks** — see upcoming-work doc §3.1. Not a replacement for §A diligence tasks.
