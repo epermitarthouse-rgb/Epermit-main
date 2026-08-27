@@ -1,6 +1,6 @@
 # Environment Variables Inventory
 
-**Document date:** 2026-08-26
+**Document date:** 2026-08-27
 
 **Client confirmed:** secrets stored in shared password vault (category-level).
 **Per-variable vault reconciliation:** requires manual confirmation unless dashboard access proves otherwise.
@@ -8,6 +8,58 @@
 **No secret values in this document.**
 
 Index: [README.md](./README.md)
+
+## Authoritative production endpoints
+
+Code-confirmed production hosts (non-secret):
+
+| Surface | URL | Verified in |
+|---------|-----|-------------|
+| Frontend (Vercel) | `https://epermit-main-nine.vercel.app` | `send-project-team-invitation` default; `QUICKBOOKS_PRODUCTION_E2E.md` |
+| Railway backend (`scraper-service`) | `https://epermit-main-production.up.railway.app` | `scraperBaseUrl.ts` default; `ARCHITECTURE.md`; Railway metadata |
+| Supabase project | `https://eeqxyjrcldivtpikcpvk.supabase.co` | `supabase/config.toml`; hardcoded `src/lib/supabase.ts` on `main` |
+| Supabase Edge Functions base | `https://eeqxyjrcldivtpikcpvk.supabase.co/functions/v1/` | Edge function callers |
+
+## URL and callback configuration
+
+Routes traced on `main` at audit time. **Production column values are derived from code + authoritative hosts above** unless a live dashboard read confirmed them during this audit (none were — documentation-only audit).
+
+**Status legend:** `CONFIRMED` · `DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED` · `MISSING PRODUCTION URL` · `LOCAL ONLY` · `NOT APPLICABLE` · `STALE` · `CONFLICTING`
+
+| Variable | Local development | Production | Configured in | External registration required | Status |
+|----------|-------------------|------------|---------------|-------------------------------|--------|
+| `VITE_API_BASE_URL` | **Parallel (default):** unset or `http://localhost:5001` (Vite proxy → `:3002`). **Classic:** unset or `http://localhost:5000` (proxy → `:3001`). **Direct scraper:** `http://127.0.0.1:3001` | `https://epermit-main-production.up.railway.app` — code default when unset (`src/lib/scraperBaseUrl.ts`) | Vercel → All Environments | No | **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** (Vercel value) |
+| `VITE_SUPABASE_URL` | Same Supabase project URL as production | `https://eeqxyjrcldivtpikcpvk.supabase.co` | Vercel (names present); **`main` hardcodes URL** in `src/lib/supabase.ts` | No | **CONFIRMED** (URL) · **CONFLICTING** (hardcoded on `main` vs Vite env) |
+| `VITE_SUPABASE_ANON_KEY` | Public anon key from Supabase Dashboard | Same (public by design) | Vercel → All Environments | No | **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** |
+| `SUPABASE_URL` | `https://eeqxyjrcldivtpikcpvk.supabase.co` | Same | Railway scraper + worker; Supabase Edge (platform-injected) | No | **CONFIRMED** |
+| `MS_GRAPH_REDIRECT_URI` | **Classic:** `http://localhost:3001/api/microsoft/oauth/callback` · **Parallel:** `http://localhost:3002/api/microsoft/oauth/callback` | `https://epermit-main-production.up.railway.app/api/microsoft/oauth/callback` | Railway `Epermit-main` | **Yes** — Azure App Registration → Authentication → Redirect URIs (register local + production) | **CONFIRMED** (route `GET /api/microsoft/oauth/callback`) · **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** (Railway + Azure values) |
+| `QB_REDIRECT_URI` | **Classic:** `http://localhost:3001/api/quickbooks/oauth/callback` · **Parallel:** `http://localhost:3002/api/quickbooks/oauth/callback` | `https://epermit-main-production.up.railway.app/api/quickbooks/oauth/callback` | Railway `Epermit-main` | **Yes** — Intuit Developer → app → Redirect URIs (sandbox + production keys as applicable) | **CONFIRMED** (route `GET /api/quickbooks/oauth/callback`) · **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** |
+| `QB_SUCCESS_REDIRECT_URL` / `QB_FAILURE_REDIRECT_URL` | Code fallback `http://localhost:5001` (`qb-config.js`); **classic stack should set** `http://localhost:5000` | Expected `https://epermit-main-nine.vercel.app` (SPA return after Intuit OAuth; not an Intuit callback) | Railway `Epermit-main` | No | **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** · **STALE** (template/default port 5001 vs classic Vite :5000) |
+| `APP_URL` / `SITE_URL` | Optional override; else request `Origin` header | Default `https://epermit-main-nine.vercel.app` when unset (`send-project-team-invitation`); builds `/invite/{token}` links | Supabase Edge secrets (`supabase secrets set`) | No | **CONFIRMED** (default URL in code) · **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** (secret override) |
+| `SCRAPER_SERVICE_URL` | Default `http://localhost:3001` when unset (`permitwizard-execute`) | Expected `https://epermit-main-production.up.railway.app` | Supabase Edge secrets | No | **MISSING PRODUCTION URL** (no `.env.example`); **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** |
+| UCI inbound email webhook (path + secret) | `POST http://localhost:3001/webhooks/uci/email-inbound` (or `:3002` parallel) — header `x-uci-webhook-secret` or `?secret=` | `POST https://epermit-main-production.up.railway.app/webhooks/uci/email-inbound` | Railway `UCI_EMAIL_INBOUND_WEBHOOK_SECRET`; external mail provider if webhook-driven | **Yes** — if provider pushes inbound mail (Graph uses poller by default, not this webhook) | **CONFIRMED** (route) · **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** (secret + provider URL) |
+| Stripe webhook (fixed Edge path) | Stripe CLI forward or dashboard test mode | `https://eeqxyjrcldivtpikcpvk.supabase.co/functions/v1/stripe-webhook` | Supabase function deploy; Stripe Dashboard → Webhooks | **Yes** — Stripe endpoint URL + `STRIPE_WEBHOOK_SIGNING_SECRET` | **CONFIRMED** (path in repo) |
+| Supabase Auth Site URL / redirect allow list | `http://localhost:5000`, `http://localhost:5001` | `https://epermit-main-nine.vercel.app` (+ password reset / invite paths as used) | Supabase Dashboard → Authentication → URL Configuration | **Yes** — Site URL + Redirect URLs for auth, password reset, magic links | **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED** (dashboard-only; not in repo) |
+| Railway HTTP CORS | `cors()` — all origins (`scraper-service/app/http-app.js`) | Same permissive default | Code default on Railway | No | **CONFIRMED** (code) · **NOT APPLICABLE** (no `CORS_ORIGIN` env var) |
+| `VITE_SCRAPER_USE_SAME_ORIGIN` | `true` — parallel dev only (`vite.config.parallel.ts`) | Unset in production builds | Vite define (parallel config only) | No | **LOCAL ONLY** |
+
+### OAuth / callback route map (Railway)
+
+| Provider | Start route | Callback route | Handler |
+|----------|-------------|----------------|---------|
+| Microsoft Graph | `GET /api/microsoft/oauth/start` | `GET /api/microsoft/oauth/callback` | `microsoft.routes.js` |
+| Intuit QuickBooks | `GET /api/quickbooks/oauth/start` | `GET /api/quickbooks/oauth/callback` | `quickbooks.routes.js` |
+
+### Audit scans (2026-08-27)
+
+| Scan | Result |
+|------|--------|
+| Stale localhost in diligence docs | Localhost in `ENV.md` / `DEPLOY.md` URL tables is **intentional** (labeled local dev alongside production). No undocumented localhost-only production gaps remain in templates after this audit. |
+| Missing production counterpart | **`SCRAPER_SERVICE_URL`** not in any template; **`MS_GRAPH_REDIRECT_URI`** production absent from `scraper-service/.env.example` (local-only lines); **`QB_*` redirect vars** local-only in template |
+| `.env.example` port drift | **`MS_GRAPH_REDIRECT_URI`** was `:3002` only — **STALE** vs classic `:3001`; **`QB_SUCCESS/FAILURE`** default `:5001` matches parallel stack, not classic `:5000` |
+| Markdown links (diligence package) | Internal relative links validated at edit time — no broken `./` targets introduced |
+
+Dashboard confirmation checklist: [DEPLOY.md §11](./DEPLOY.md#11-url-and-callback-dashboard-locations).
 
 ## Summary
 

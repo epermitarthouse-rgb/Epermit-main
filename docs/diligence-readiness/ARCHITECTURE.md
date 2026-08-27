@@ -1,7 +1,7 @@
 # PermitPilot Architecture
 
-**Document date:** 2026-08-26  
-**Branch context:** Describes `main` at `f7b5f02` unless noted  
+**Document date:** 2026-08-27  
+**Branch context:** Describes `main` unless noted  
 **Index:** [README.md](./README.md)
 
 Legend: **Verified** | **Client confirmed** | **Inferred** | **Requires manual confirmation**
@@ -33,7 +33,7 @@ PermitPilot is a permit-intelligence web platform: project tracking, multi-porta
 
 | Component | Verified location | Hosting |
 |-----------|-------------------|---------|
-| Frontend | `src/` | **Client confirmed:** Vercel (private account). **Requires manual confirmation:** project linkage, production branch, domain. |
+| Frontend | `src/` | **Client confirmed:** Vercel → `https://epermit-main-nine.vercel.app` |
 | Scraper / UCI API | `scraper-service/` | **Verified + client confirmed:** Railway `Epermit-main` |
 | Database / Auth / Storage / Edge Functions | `supabase/` | **Verified:** project ref `eeqxyjrcldivtpikcpvk` in `supabase/config.toml` |
 | Ingestion worker | `document-ingestion-worker/` | **Verified:** Railway service name `document-ingestion-worker` |
@@ -84,6 +84,14 @@ See [ENV.md](./ENV.md) and [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDI
 | Entry | `server.js` → `app/register-execution-routes.js` |
 | Deploy | Docker — `scraper-service/Dockerfile`, `railway.toml` |
 | Production URL | **Verified:** `https://epermit-main-production.up.railway.app` |
+
+OAuth callbacks (Railway-hosted; redirect URIs from env — see [ENV.md](./ENV.md)):
+
+| Integration | Callback route |
+|-------------|----------------|
+| Microsoft Graph mailbox | `GET /api/microsoft/oauth/callback` |
+| Intuit QuickBooks | `GET /api/quickbooks/oauth/callback` |
+| UCI inbound email (webhook) | `POST /webhooks/uci/email-inbound` |
 
 Background workers (start with server): Arlington scrape jobs, optional UCI durable jobs, UCI Graph inbound poller, UCI lifecycle scheduler.
 

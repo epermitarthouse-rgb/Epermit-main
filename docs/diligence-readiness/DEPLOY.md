@@ -1,6 +1,6 @@
 # Deployment Guide
 
-**Document date:** 2026-08-26  
+**Document date:** 2026-08-27  
 **Scope:** Procedures only. **No deployment performed** during this audit.
 
 Legend: **Verified** | **Client confirmed** | **Requires manual confirmation**
@@ -68,6 +68,14 @@ Git, npm, Supabase CLI, optional Railway/Vercel CLI.
 - Automated deploy on push (**not verified**)
 - Production domain and preview URLs
 - Account/team ownership (private account — client confirmed)
+
+### Production URLs (**verified in code / prior audits**)
+
+| Surface | URL |
+|---------|-----|
+| Frontend (Vercel) | `https://epermit-main-nine.vercel.app` |
+| Backend (Railway) | `https://epermit-main-production.up.railway.app` |
+| Supabase project | `https://eeqxyjrcldivtpikcpvk.supabase.co` |
 
 ### Environment variables (client/dashboard confirmed — names and scope only)
 
@@ -183,6 +191,26 @@ Vercel build history still requires dashboard review, but there is **no currentl
 | Frontend blank after Supabase fix merge | Missing Vercel env vars |
 | Intermittent local PWA/workbox failure | Earlier local attempt only — not reproduced on clean worktree; review Vercel build history |
 | Edge 500 | Missing Supabase secret |
+
+---
+
+## 11. URL and callback dashboard locations
+
+Use this when reconciling [ENV.md](./ENV.md) URL table statuses marked **DOCUMENTED — DASHBOARD CONFIRMATION REQUIRED**. **Do not change live CORS or deploy** from diligence docs alone.
+
+| What | Dashboard path | Variables / URLs to verify |
+|------|----------------|----------------------------|
+| Frontend API + Supabase public config | **Vercel** → project `epermit-main` → Settings → Environment Variables | `VITE_API_BASE_URL` = `https://epermit-main-production.up.railway.app`; `VITE_SUPABASE_URL` = `https://eeqxyjrcldivtpikcpvk.supabase.co`; `VITE_SUPABASE_ANON_KEY` = public anon key |
+| Scraper OAuth + webhooks | **Railway** → workspace `PermitPilot` → service `Epermit-main` → Variables | `MS_GRAPH_REDIRECT_URI`, `QB_REDIRECT_URI`, `QB_SUCCESS_REDIRECT_URL`, `QB_FAILURE_REDIRECT_URL`, `UCI_EMAIL_INBOUND_WEBHOOK_SECRET`, `SUPABASE_URL`, QuickBooks + Graph secrets |
+| Permit filing → scraper | **Supabase** → Project Settings → Edge Functions → Secrets | `SCRAPER_SERVICE_URL` = `https://epermit-main-production.up.railway.app` (used by `permitwizard-execute`) |
+| Invitation email links | **Supabase** Edge secrets (optional override) | `APP_URL` or `SITE_URL` = `https://epermit-main-nine.vercel.app` |
+| Auth redirects / Site URL | **Supabase** → Authentication → URL Configuration | Site URL = production frontend; Redirect URLs include `https://epermit-main-nine.vercel.app/**` and local dev `http://localhost:5000/**`, `http://localhost:5001/**` |
+| Microsoft Graph OAuth | **Azure Portal** → App registrations → PermitPilot app → Authentication | Redirect URIs: `https://epermit-main-production.up.railway.app/api/microsoft/oauth/callback` + local `http://localhost:3001/...` and/or `http://localhost:3002/...` matching Railway/local stack |
+| QuickBooks OAuth | **Intuit Developer** → app → Keys & OAuth | Redirect URI: `https://epermit-main-production.up.railway.app/api/quickbooks/oauth/callback` + local dev URIs; `QB_ENV=production` on Railway for live company |
+| Stripe billing webhook | **Stripe Dashboard** → Developers → Webhooks | Endpoint `https://eeqxyjrcldivtpikcpvk.supabase.co/functions/v1/stripe-webhook`; signing secret → Supabase `STRIPE_WEBHOOK_SIGNING_SECRET` |
+| UCI inbound email (optional) | External mail provider + **Railway** secret | Webhook target `https://epermit-main-production.up.railway.app/webhooks/uci/email-inbound`; shared secret `UCI_EMAIL_INBOUND_WEBHOOK_SECRET` |
+
+Local dev stack ports: see root [README.md](../../README.md) (parallel **5001→3002** default; classic **5000→3001**).
 
 ---
 

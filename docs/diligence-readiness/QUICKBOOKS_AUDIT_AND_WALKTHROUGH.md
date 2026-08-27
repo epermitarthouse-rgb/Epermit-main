@@ -124,6 +124,18 @@ Production dry-run initially failed because:
 
 ## 7. Production configuration verified (2026-08-27)
 
+### OAuth redirect URI registration (Intuit Developer + Railway)
+
+| Environment | `QB_REDIRECT_URI` (must match Intuit app redirect list) | Post-OAuth SPA return (`QB_SUCCESS_REDIRECT_URL` / `QB_FAILURE_REDIRECT_URL`) |
+|-------------|----------------------------------------------------------|----------------------------------------------------------------------------------|
+| Local classic (`server.js` :3001, Vite :5000) | `http://localhost:3001/api/quickbooks/oauth/callback` | `http://localhost:5000` |
+| Local parallel (default; scraper :3002, Vite :5001) | `http://localhost:3002/api/quickbooks/oauth/callback` | `http://localhost:5001` |
+| Production | `https://epermit-main-production.up.railway.app/api/quickbooks/oauth/callback` | `https://epermit-main-nine.vercel.app` |
+
+**Routes (verified in code):** `GET /api/quickbooks/oauth/start` → Intuit → `GET /api/quickbooks/oauth/callback` on Railway.
+
+Dashboard locations: [DEPLOY.md §11](./DEPLOY.md#11-url-and-callback-dashboard-locations). Full URL table: [ENV.md](./ENV.md).
+
 | Check | Result |
 |-------|--------|
 | `QB_ENV` | `production` |
