@@ -1,7 +1,7 @@
 # QuickBooks UAT Guide
 
-**Document date:** 2026-08-26  
-**Branch:** `fix/quickbooks-core-hardening`  
+**Document date:** 2026-08-27  
+**Deployed on `main`:** Backend `a7ef113`, frontend `46b00bb`  
 **No credentials or client financial data in this document.**
 
 Index: [README.md](./README.md)
@@ -10,7 +10,9 @@ Index: [README.md](./README.md)
 
 ## Scope
 
-This guide supports **manual UAT tomorrow** for PermitPilot milestone (M1/M2/M3) draft invoicing through the **Railway backend** (`scraper-service`). **n8n is not used.** Payment-status webhooks and paid-invoice sync remain **out of scope**.
+This guide supports manual UAT for PermitPilot milestone (M1/M2/M3) draft invoicing through the **Railway backend** (`scraper-service`). **n8n is not used.** Payment-status webhooks and paid-invoice sync remain **out of scope**.
+
+For production E2E results and continuation steps, see [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md).
 
 | Stage | What it exercises | Production invoice? |
 |-------|-------------------|---------------------|
@@ -21,10 +23,25 @@ This guide supports **manual UAT tomorrow** for PermitPilot milestone (M1/M2/M3)
 
 ---
 
+## Production status summary (2026-08-27)
+
+| Phase | Status |
+|-------|--------|
+| Hardening deployed (`a7ef113`) | **Complete** |
+| Frontend auth refresh deployed (`46b00bb`) | **Complete** |
+| Migration applied | **Complete** |
+| Authenticated production dry-run | **Verified passed** |
+| Live production draft invoice | **Blocked externally** — QuickBooks company subscription inactive/billing issue |
+| Full live invoice flow production-verified | **Not yet** — resume after Ian restores QuickBooks billing |
+
+See [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md) and [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md).
+
+---
+
 ## Prerequisites
 
-1. **Branch deployed or running locally:** `fix/quickbooks-core-hardening` (not merged to `main` at time of writing).
-2. **Supabase migration applied:** `20260826120000_quickbooks_milestone_claim.sql` (milestone claim RPC + status columns).
+1. **`main` deployed** on Railway (`a7ef113`) and Vercel (`46b00bb` for auth fix).
+2. **Supabase migration applied:** `20260826120000_quickbooks_milestone_claim.sql`.
 3. **Signed-in PermitPilot user** with **project editor** access (owner/admin/editor — not viewer).
 4. **Safe test project:**
    - Non-production client data preferred (internal/UAT project).

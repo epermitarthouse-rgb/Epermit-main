@@ -142,13 +142,16 @@ Authoritative lifecycle tracker: [docs/uci-action-items-status.md](../uci-action
 
 | Fact | Classification |
 |------|----------------|
-| OAuth + invoice code on `main` / Railway (pre-hardening deploy) | **Verified** |
-| Security hardening branch `fix/quickbooks-core-hardening` | **Implemented locally** — JWT trigger auth, OAuth state, status masking, milestone claim RPC |
-| Hardening **deployed** / **production-verified** | **Not verified** |
-| Successful live production invoice creation | **Not verified** |
+| Hardening deployed on `main` / Railway (`a7ef113`) | **Verified deployed** |
+| Frontend auth refresh deployed on Vercel (`46b00bb`) | **Verified deployed** |
+| JWT trigger auth, OAuth state, status masking, milestone claim RPC | **Deployed** |
+| Authenticated production dry-run (M1) | **Verified passed** (2026-08-27) |
+| Live production draft invoice created | **Not verified** — externally blocked (QuickBooks subscription) |
 | UCI passthrough (RequestId idempotency) | **Verified** in code — live success **not verified** |
 
-UAT: [QUICKBOOKS_UAT.md](./QUICKBOOKS_UAT.md). Details: [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md).
+QuickBooks core implementation, security hardening, production deployment and authenticated production dry-run are **complete**. Live customer/invoice creation is **externally blocked** until Ian restores the connected QuickBooks company subscription. **Do not** state that a production invoice was successfully created.
+
+UAT: [QUICKBOOKS_UAT.md](./QUICKBOOKS_UAT.md). Production E2E: [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md). Details: [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md).
 
 **Pending business decision:** US federal / observed / custom holiday calendar for Net 10 due dates ([TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md) §4).
 
@@ -171,7 +174,7 @@ UAT: [QUICKBOOKS_UAT.md](./QUICKBOOKS_UAT.md). Details: [QUICKBOOKS_AUDIT_AND_WA
 
 ## 9. In-flight / manual gates (summary)
 
-See [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md). Key items: UCI live submission gates, Dominion production manifest blocked, QuickBooks hardening on `fix/quickbooks-core-hardening` (not deployed), Supabase frontend configuration drift on `main` (prepared fix unmerged), PWA build monitoring (not currently reproducible).
+See §9 summary. Key items: UCI live submission gates, Dominion production manifest blocked, QuickBooks live invoice **externally blocked** (dry-run verified; subscription restore pending), Supabase frontend configuration drift on `main` (prepared fix unmerged), PWA build monitoring (not currently reproducible).
 
 ---
 
