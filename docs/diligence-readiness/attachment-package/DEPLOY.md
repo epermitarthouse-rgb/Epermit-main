@@ -190,4 +190,4 @@ Vercel build history still requires dashboard review, but there is **no currentl
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [ENV.md](./ENV.md)
-- [RAILWAY_PRODUCTION_STATUS.md](./RAILWAY_PRODUCTION_STATUS.md)
+- [RAILWAY_PRODUCTION_STATUS.md](../RAILWAY_PRODUCTION_STATUS.md)

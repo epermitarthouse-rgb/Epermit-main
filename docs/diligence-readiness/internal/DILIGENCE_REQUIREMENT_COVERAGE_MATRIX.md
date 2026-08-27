@@ -1,9 +1,9 @@
-# Ian Requirement Coverage Matrix
+# Diligence Requirement Coverage Matrix
 
 **Document date:** 2026-08-27  
 **Scope:** PermitPilot and UCI only — Comprovare asks listed for completeness but marked N/A
 
-Index: [IAN_DILIGENCE_RESPONSE_DRAFT.md](./IAN_DILIGENCE_RESPONSE_DRAFT.md)
+Index: [DILIGENCE_RESPONSE_EMAIL_DRAFT.md](./DILIGENCE_RESPONSE_EMAIL_DRAFT.md)
 
 ---
 

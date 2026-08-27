@@ -6,7 +6,7 @@
 **Architecture:** Railway `scraper-service` only — **n8n is not used**  
 **No credentials, tokens, realm IDs, or client financial data in this document.**
 
-Index: [README.md](./README.md) · Related: [QUICKBOOKS_UAT.md](./QUICKBOOKS_UAT.md) · [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md)
+Index: [README.md](./README.md) · Related: [QUICKBOOKS_UAT.md](../QUICKBOOKS_UAT.md) · [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md)
 
 ---
 
@@ -532,5 +532,5 @@ Stop if **any** of the following is true:
 ## Related documents
 
 - [QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md](./QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md)
-- [QUICKBOOKS_UAT.md](./QUICKBOOKS_UAT.md)
+- [QUICKBOOKS_UAT.md](../QUICKBOOKS_UAT.md)
 - [ENV.md](./ENV.md)

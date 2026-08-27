@@ -2,7 +2,7 @@
 
 **Document date:** 2026-08-27  
 **Audience:** Executive / handover (Ian)  
-**Detail:** [docs/uci-action-items-status.md](../uci-action-items-status.md)
+**Detail:** [docs/uci-action-items-status.md](../../uci-action-items-status.md)
 
 ---
 

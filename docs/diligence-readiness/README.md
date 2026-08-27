@@ -54,8 +54,21 @@ This folder is the **authoritative diligence handover bundle** for PermitPilot. 
 | [LOVABLE_RETIREMENT_AUDIT.md](./LOVABLE_RETIREMENT_AUDIT.md) | Lovable reference retirement |
 | [REPOSITORY_DOCUMENTATION_STRUCTURE.md](./REPOSITORY_DOCUMENTATION_STRUCTURE.md) | Recommended doc layout |
 | [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md) | Known issues not fixed here |
-| [IAN_DILIGENCE_RESPONSE_DRAFT.md](./IAN_DILIGENCE_RESPONSE_DRAFT.md) | Client email draft (PermitPilot/UCI) |
-| [IAN_REQUIREMENT_MATRIX.md](./IAN_REQUIREMENT_MATRIX.md) | Ian's asks vs email/docs coverage |
+
+---
+
+## Client attachment package
+
+Ready-to-send folder for investor/acquirer review: [attachment-package/](./attachment-package/README.md) (15 client-facing docs + README).
+
+---
+
+## Internal QA (not in client package)
+
+| Document | Purpose |
+|----------|---------|
+| [DILIGENCE_RESPONSE_EMAIL_DRAFT.md](./internal/DILIGENCE_RESPONSE_EMAIL_DRAFT.md) | Client email draft (PermitPilot/UCI) |
+| [DILIGENCE_REQUIREMENT_COVERAGE_MATRIX.md](./internal/DILIGENCE_REQUIREMENT_COVERAGE_MATRIX.md) | Diligence asks vs email/docs coverage |
 
 ---
 

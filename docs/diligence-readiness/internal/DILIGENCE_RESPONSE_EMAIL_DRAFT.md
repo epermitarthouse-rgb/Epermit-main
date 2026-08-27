@@ -1,4 +1,4 @@
-# Ian Diligence Response — Draft Email
+# Diligence Response — Draft Email
 
 **Document date:** 2026-08-27  
 **Scope:** PermitPilot and UCI only — **Comprovare excluded**  
@@ -248,4 +248,4 @@ Best,
 
 ## Related
 
-- [IAN_REQUIREMENT_MATRIX.md](./IAN_REQUIREMENT_MATRIX.md) — Ian's asks mapped to this email and evidence
+- [DILIGENCE_REQUIREMENT_COVERAGE_MATRIX.md](./DILIGENCE_REQUIREMENT_COVERAGE_MATRIX.md) — diligence asks mapped to this email and evidence

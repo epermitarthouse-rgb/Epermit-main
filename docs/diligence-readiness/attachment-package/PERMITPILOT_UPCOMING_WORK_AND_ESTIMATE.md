@@ -170,4 +170,4 @@ See [TECHNICAL_EFFORT_ESTIMATES.md](./TECHNICAL_EFFORT_ESTIMATES.md) §A — **3
 |----------|------|
 | [TECHNICAL_EFFORT_ESTIMATES.md](./TECHNICAL_EFFORT_ESTIMATES.md) | Diligence + UCI pilot hours |
 | [TECHNICAL_REMEDIATION_BACKLOG.md](./TECHNICAL_REMEDIATION_BACKLOG.md) | Known issues register |
-| [QUICKBOOKS_PRODUCTION_E2E.md](../../Epermit-main/docs/diligence-readiness/QUICKBOOKS_PRODUCTION_E2E.md) | Billing E2E status |
+| [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md) | Billing E2E status |

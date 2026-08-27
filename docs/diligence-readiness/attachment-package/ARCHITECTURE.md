@@ -124,7 +124,7 @@ UCI manages utility coordination (stages 1–10), separate from municipal permit
 
 Synthetic pipeline locations: [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md).
 
-Authoritative lifecycle tracker: [docs/uci-action-items-status.md](../uci-action-items-status.md).
+Authoritative lifecycle tracker: [docs/uci-action-items-status.md](../../uci-action-items-status.md).
 
 ---
 
@@ -177,4 +177,4 @@ See [IN_FLIGHT_STATUS.md](./IN_FLIGHT_STATUS.md). Key items: UCI live submission
 | [DEPLOY.md](./DEPLOY.md) | Deployment |
 | [ENV.md](./ENV.md) | Configuration |
 | [RESTORE.md](./RESTORE.md) | Recovery |
-| [memory.md](../../memory.md) | Scraper contracts |
+| [memory.md](../../../memory.md) | Scraper contracts |

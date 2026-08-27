@@ -370,8 +370,8 @@ PermitPilot core handover should treat UCI as **prototype** unless/until pilot h
 | [PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md](./PERMITPILOT_FEATURE_CONNECTIVITY_MATRIX.md) | Feature-level status table |
 | [PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md](./PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md) | Backlog, estimates, sprint options |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Prior architecture snapshot |
-| [QUICKBOOKS_PRODUCTION_E2E.md](../../Epermit-main/docs/diligence-readiness/QUICKBOOKS_PRODUCTION_E2E.md) | QB E2E status on main |
-| [memory.md](../../memory.md) | Scraper engineering handbook |
+| [QUICKBOOKS_PRODUCTION_E2E.md](./QUICKBOOKS_PRODUCTION_E2E.md) | QB E2E status on main |
+| [memory.md](../../../memory.md) | Scraper engineering handbook |
 
 ---
 
