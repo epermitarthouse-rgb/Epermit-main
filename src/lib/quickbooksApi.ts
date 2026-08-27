@@ -1,5 +1,8 @@
-import { supabase } from "@/lib/supabase";
 import { getScraperBaseUrl } from "@/lib/scraperBaseUrl";
+import {
+  isUciSessionExpiredError,
+  uciAuthenticatedFetch,
+} from "@/lib/uciApi";
 
 export type QuickBooksEnvironment = "sandbox" | "production" | string;
 
@@ -27,15 +30,6 @@ export interface InvoiceTriggerSuccessBody {
   invoice?: { id?: string };
 }
 
-async function bearer(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error("Not authenticated");
-  return { Authorization: `Bearer ${token}` };
-}
-
 async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   const text = await res.text();
   if (!text) return {};
@@ -46,29 +40,54 @@ async function parseJsonSafe(res: Response): Promise<Record<string, unknown>> {
   }
 }
 
+function rethrowQuickBooksAuthError(err: unknown): never {
+  if (isUciSessionExpiredError(err)) {
+    const authErr = new Error("Your session expired. Sign in again and retry.") as Error & {
+      code?: string;
+    };
+    authErr.code = "INVALID_JWT";
+    throw authErr;
+  }
+  if (err instanceof Error && err.message === "Not authenticated") {
+    const authErr = new Error("Not authenticated") as Error & { code?: string };
+    authErr.code = "UNAUTHENTICATED";
+    throw authErr;
+  }
+  throw err;
+}
+
 /** GET /api/quickbooks/status — authenticated callers receive environment metadata. */
 export async function getQuickBooksStatus(): Promise<QuickBooksAuthenticatedStatus> {
-  const base = getScraperBaseUrl();
-  let headers: Record<string, string> = {};
   try {
-    headers = await bearer();
-  } catch {
-    /* unauthenticated public-safe probe */
+    const res = await uciAuthenticatedFetch("/api/quickbooks/status");
+    if (!res.ok) {
+      const err = await parseJsonSafe(res);
+      throw new Error(String(err.message || err.error || `QuickBooks status failed (${res.status})`));
+    }
+    return (await res.json()) as QuickBooksAuthenticatedStatus;
+  } catch (err) {
+    if (err instanceof Error && err.message === "Not authenticated") {
+      const base = getScraperBaseUrl();
+      const res = await fetch(`${base}/api/quickbooks/status`);
+      if (!res.ok) {
+        const body = await parseJsonSafe(res);
+        throw new Error(String(body.message || body.error || `QuickBooks status failed (${res.status})`));
+      }
+      return (await res.json()) as QuickBooksAuthenticatedStatus;
+    }
+    rethrowQuickBooksAuthError(err);
   }
-  const res = await fetch(`${base}/api/quickbooks/status`, { headers });
-  if (!res.ok) {
-    const err = await parseJsonSafe(res);
-    throw new Error(String(err.message || err.error || `QuickBooks status failed (${res.status})`));
-  }
-  return (await res.json()) as QuickBooksAuthenticatedStatus;
 }
 
 /** GET /api/quickbooks/oauth/start?format=json */
 export async function getQuickBooksAuthorizeUrl(): Promise<string> {
-  const base = getScraperBaseUrl();
-  const headers = await bearer();
-  const q = new URLSearchParams({ format: "json" });
-  const res = await fetch(`${base}/api/quickbooks/oauth/start?${q.toString()}`, { headers });
+  let res: Response;
+  try {
+    res = await uciAuthenticatedFetch("/api/quickbooks/oauth/start?format=json");
+  } catch (err) {
+    rethrowQuickBooksAuthError(err);
+  }
+
   if (!res.ok) {
     const err = await parseJsonSafe(res);
     throw new Error(String(err.message || err.error || `QuickBooks OAuth start failed (${res.status})`));
@@ -82,16 +101,17 @@ export async function getQuickBooksAuthorizeUrl(): Promise<string> {
 export async function postInvoiceTrigger(
   body: Record<string, unknown>,
 ): Promise<InvoiceTriggerSuccessBody> {
-  const base = getScraperBaseUrl();
-  const headers = {
-    ...(await bearer()),
-    "Content-Type": "application/json",
-  };
-  const res = await fetch(`${base}/api/quickbooks/invoice/trigger`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await uciAuthenticatedFetch("/api/quickbooks/invoice/trigger", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    rethrowQuickBooksAuthError(err);
+  }
+
   const data = await parseJsonSafe(res);
   if (!res.ok) {
     const err = new Error(String(data.message || `Request failed (${res.status})`)) as Error & {

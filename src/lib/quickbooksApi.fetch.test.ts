@@ -1,30 +1,73 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { __uciApiTestHooks } from "./uciApi.ts";
+import { getQuickBooksStatus, postInvoiceTrigger } from "./quickbooksApi.ts";
 
-vi.mock("@/lib/supabase", () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(async () => ({
-        data: { session: { access_token: "test-jwt-token" } },
-      })),
-    },
-  },
-}));
+const FAR_FUTURE_EXP = Math.floor(Date.now() / 1000) + 3600;
 
-import { postInvoiceTrigger } from "@/lib/quickbooksApi";
+function buildJwtWithExp(exp: number): string {
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = btoa(JSON.stringify({ exp }));
+  return `${header}.${payload}.signature`;
+}
 
-describe("quickbooksApi.postInvoiceTrigger", () => {
+type FetchCall = { url: string; init?: RequestInit };
+
+describe("quickbooksApi authenticated fetch", () => {
+  let fetchCalls: FetchCall[];
+  let originalFetch: typeof fetch;
+
   beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        text: async () => JSON.stringify({ dryRun: true, milestone: "M1" }),
-        json: async () => ({ dryRun: true, milestone: "M1" }),
-      })),
-    );
+    fetchCalls = [];
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      fetchCalls.push({
+        url: String(input),
+        init,
+      });
+      const path = String(input);
+      if (path.includes("/api/quickbooks/invoice/trigger")) {
+        return new Response(JSON.stringify({ dryRun: true, milestone: "M1" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (path.includes("/api/quickbooks/status")) {
+        return new Response(JSON.stringify({ connected: true, environment: "production" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+    }) as typeof fetch;
+
+    __uciApiTestHooks.setScraperBaseUrlOverride("https://example.test");
+    __uciApiTestHooks.setAuthDepsOverride({
+      getSession: async () => ({
+        data: {
+          session: {
+            access_token: buildJwtWithExp(FAR_FUTURE_EXP),
+            expires_at: FAR_FUTURE_EXP,
+          },
+        },
+        error: null,
+      }),
+      refreshSession: async () => ({
+        data: { session: null },
+        error: new Error("refresh unavailable in test"),
+      }),
+    });
+    __uciApiTestHooks.resetRefreshInFlight();
   });
 
-  it("sends Authorization Bearer token on invoice trigger", async () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    __uciApiTestHooks.setScraperBaseUrlOverride(null);
+    __uciApiTestHooks.setAuthDepsOverride(null);
+    __uciApiTestHooks.resetRefreshInFlight();
+  });
+
+  it("postInvoiceTrigger sends Authorization Bearer via uciAuthenticatedFetch", async () => {
     await postInvoiceTrigger({
       projectId: "proj-1",
       milestone: "M1",
@@ -32,11 +75,20 @@ describe("quickbooksApi.postInvoiceTrigger", () => {
       reimbursementAmount: 0,
     });
 
-    const fetchMock = vi.mocked(fetch);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, init] = fetchMock.mock.calls[0];
-    const headers = init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer test-jwt-token");
-    expect(headers["Content-Type"]).toBe("application/json");
+    const triggerCall = fetchCalls.find((c) => c.url.includes("/api/quickbooks/invoice/trigger"));
+    assert.ok(triggerCall);
+    const headers = triggerCall.init?.headers as Record<string, string>;
+    assert.match(headers.Authorization, /^Bearer /);
+    assert.equal(headers["Content-Type"], "application/json");
+  });
+
+  it("getQuickBooksStatus returns authenticated environment metadata", async () => {
+    const status = await getQuickBooksStatus();
+    assert.equal(status.connected, true);
+    assert.equal(status.environment, "production");
+    const statusCall = fetchCalls.find((c) => c.url.includes("/api/quickbooks/status"));
+    assert.ok(statusCall);
+    const headers = statusCall.init?.headers as Record<string, string>;
+    assert.match(headers.Authorization, /^Bearer /);
   });
 });
