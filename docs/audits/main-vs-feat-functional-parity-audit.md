@@ -1,7 +1,7 @@
 # Main vs Feat — Functional Parity Audit (Merge Readiness)
 
 **Date:** 2026-08-05 (revised same day — intentional IA / WIP accepted)  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **SHAs verified:** `main` @ `df541d0` · `feat/lovable-ui-replication` @ `2aea795` (+ nav/UCI WIP committed 2026-08-05)  
 **Scope:** Full product surface relevant to merge readiness (not UCI-only).  
 **Method:** Route diff (`src/App.tsx`), sidebar/nav (`AppSidebar` / `hybridNav` / `UciSidebarNav`), page presence + sample API wiring, scraper/worker set comparison, prior audits under `docs/audits/` re-checked against current tips.  

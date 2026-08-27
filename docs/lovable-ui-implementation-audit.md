@@ -32,7 +32,7 @@ Phases 0–7 were **falsely reported complete** by the implementing agent after 
 | Item | Status |
 |------|--------|
 | Actual Lovable application source available | **Yes** — full Vite/React/shadcn tree with pages, shell, tokens, and routing |
-| Exact reference path | `reference/lovable-ui` → absolute `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui` |
+| Exact reference path | `reference/lovable-ui` → absolute `reference/lovable-ui` |
 | Prior download path | `Insight Layer/` (space in name) at repo root — **moved** (not copied into `src/`) |
 | Zip retained at repo root | `Insight Layer.zip` (unchanged; not required for reference use) |
 
@@ -374,7 +374,7 @@ Token/context limits are plausible contributors but **not documented**; the visi
 | Check | Result |
 |-------|--------|
 | `src/components/permitpilot/` in this repo | **Does not exist** |
-| Lovable `PermitPilotShell.tsx` / page sources on disk under `/Users/javerianaveed` | **Not found** (search for `PermitPilotShell.tsx`, `PortalHarvest.tsx`, `components/permitpilot`) |
+| Lovable `PermitPilotShell.tsx` / page sources on disk under `[local workspace]` | **Not found** (search for `PermitPilotShell.tsx`, `PortalHarvest.tsx`, `components/permitpilot`) |
 | Docs claim | `docs/lovable-ui-audit.md`: “Extracted directly from the current Lovable project source” — **docs exist**; live source tree does **not** accompany this repo |
 | Implementing agent | Stated **“No external Lovable source found — using the design-system docs.”** |
 | Source prep (2026-07-22) | **Resolved** — full tree at `reference/lovable-ui` (see §0). Prior agent statement was accurate *at implementation time*. |

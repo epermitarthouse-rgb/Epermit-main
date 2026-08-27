@@ -26,7 +26,7 @@
 |------|--------|
 | Repository/account inventory | **Done** |
 | In-flight list + "what breaks first" | **Done** |
-| Secret-location documentation (`ENV.md`) | **Done** — vault manually confirmed by Javeria |
+| Secret-location documentation (`ENV.md`) | **Done** — vault manually confirmed (client-side) |
 | Architecture / Deploy / Restore / ENV | **Done** |
 | QuickBooks walkthrough + production E2E docs | **Done** |
 | Replit + Lovable retirement audits | **Done** |

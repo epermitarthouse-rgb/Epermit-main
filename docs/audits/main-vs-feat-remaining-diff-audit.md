@@ -1,7 +1,7 @@
 # Main vs Feat — Remaining Diff Audit (Post-Restore)
 
 **Date:** 2026-08-06  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **SHAs verified (after `git fetch`):**
 
 | Ref | SHA | Tip message |

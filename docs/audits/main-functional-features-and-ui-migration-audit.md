@@ -1,7 +1,7 @@
 # Main Functional Features & UI Migration Audit
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branches compared:** `main` @ `5199937` vs `feat/lovable-ui-replication` @ `7be2588`  
 **Constraints:** Read-only audit. No code changes, push, deploy, merge, or migrations.
 

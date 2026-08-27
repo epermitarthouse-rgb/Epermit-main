@@ -1,7 +1,7 @@
 # UCI / PEPCO Document Download Audit
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branches reviewed:** `main` (behavior source of truth via `git show main:…`) and current `feat/lovable-ui-replication` (UI placement differences only)  
 **Constraints:** Read-only audit. No implementation, deploy, or push. Supabase project `eeqxyjrcldivtpikcpvk` was queried with service-role credentials from local `scraper-service/.env`.
 

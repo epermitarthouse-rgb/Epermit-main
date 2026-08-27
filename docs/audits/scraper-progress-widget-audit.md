@@ -1,7 +1,7 @@
 # Scraper Progress / Poll Widget — Deep Audit
 
 **Date:** 2026-07-30  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branch at audit time:** `feat/lovable-ui-replication`  
 **Scope:** Global floating scrape progress widget (`ScrapeProgressPanel` + `ScrapeContext` + `useScrapeJob`) and related start/completion notification paths  
 **Constraints honored:** No code changes, commits, pushes, or deployments in this task. Creating this audit document is the only write performed.

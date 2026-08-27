@@ -24,7 +24,7 @@
 | Item | Value |
 |---|---|
 | Lovable inventory (input) | `reference/lovable-ui/architecture-inventory.md` (90 rows, columns Area…Notes) |
-| Lovable original | `/Users/javerianaveed/epermit/loveable architecture /architecture-inventory.md` |
+| Lovable original | `[external — Lovable architecture inventory]` |
 | PermitPilot routing audited | `src/App.tsx` |
 | PermitPilot UCI vocabulary audited | `src/lib/uciNavSections.ts`, `src/components/layout/UciSidebarNav.tsx` |
 | PermitPilot backend audited | `supabase/functions/*` (52 functions), `scraper-service/*`, `document-ingestion-worker/*` |

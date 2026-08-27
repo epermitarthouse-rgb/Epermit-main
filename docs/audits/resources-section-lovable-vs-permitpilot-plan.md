@@ -1,7 +1,7 @@
 # Resources Section — Lovable vs PermitPilot Audit & Sidebar Plan
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branches compared:** `main` @ `5199937` · `feat/lovable-ui-replication` @ `a24548e` (working tree)  
 **Lovable reference:** `reference/lovable-ui/` (`src/components/permitpilot/data.ts`, pages, `architecture-inventory.md`)  
 **Constraints:** Read-only audit. No code changes, implement, deploy, push, merge, or migrations.

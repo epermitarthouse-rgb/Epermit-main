@@ -1,7 +1,7 @@
 # UCI Builder — Backend Capability Audit
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branch:** `feat/lovable-ui-replication`  
 **Lovable reference:** `reference/lovable-ui/src/pages/UciApplicationBuilder.tsx`  
 **Type:** Audit + scoped implementation plan. Written **before** Phase 2 code.

@@ -1,7 +1,7 @@
 # DesignCheck vs AI Compliance Analyzer — New UI Audit
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Feat branch:** `feat/lovable-ui-replication` @ `f882f1d`  
 **Main:** `main` @ `5199937`  
 **Lovable reference:** `reference/lovable-ui`  
@@ -432,15 +432,15 @@ Related PP agents (prescreen-adjacent, **not** wired to a DesignCheck UI):
 
 | Role | Path |
 |------|------|
-| Audit (this file) | `/Users/javerianaveed/epermit/Epermit-main/docs/audits/designcheck-vs-ai-compliance-new-ui-audit.md` |
-| PP page | `/Users/javerianaveed/epermit/Epermit-main/src/pages/CodeCompliance.tsx` |
-| PP analyzer | `/Users/javerianaveed/epermit/Epermit-main/src/components/compliance/AIComplianceAnalyzer.tsx` |
-| Railway route | `/Users/javerianaveed/epermit/Epermit-main/scraper-service/app/register-execution-routes.js` |
-| Analysis service | `/Users/javerianaveed/epermit/Epermit-main/scraper-service/app/services/compliance/analyze-drawing.service.js` |
-| Edge (JWT-off) | `/Users/javerianaveed/epermit/Epermit-main/supabase/functions/analyze-drawing/index.ts` |
-| Lovable analyzer | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/pages/ComplianceAnalyzer.tsx` |
-| Lovable overview | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/pages/Compliance.tsx` |
-| Lovable edge | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/supabase/functions/analyze-compliance-drawings/index.ts` |
+| Audit (this file) | `docs/audits/designcheck-vs-ai-compliance-new-ui-audit.md` |
+| PP page | `src/pages/CodeCompliance.tsx` |
+| PP analyzer | `src/components/compliance/AIComplianceAnalyzer.tsx` |
+| Railway route | `scraper-service/app/register-execution-routes.js` |
+| Analysis service | `scraper-service/app/services/compliance/analyze-drawing.service.js` |
+| Edge (JWT-off) | `supabase/functions/analyze-drawing/index.ts` |
+| Lovable analyzer | `reference/lovable-ui/src/pages/ComplianceAnalyzer.tsx` |
+| Lovable overview | `reference/lovable-ui/src/pages/Compliance.tsx` |
+| Lovable edge | `reference/lovable-ui/supabase/functions/analyze-compliance-drawings/index.ts` |
 
 ## Appendix B — Commit refs
 

@@ -1,7 +1,7 @@
 # DesignCheck as a Separate Feature — Implementation Plan
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branch context:** `feat/lovable-ui-replication` @ `f882f1d` · `main` @ `5199937`  
 **Lovable reference:** `reference/lovable-ui`  
 **Type:** Plan-only audit. **No code, migrations, deploy, push, or analyzer changes.**
@@ -317,21 +317,21 @@ Lovable today (`reference/lovable-ui/.../data.ts`): Intelligence › DesignCheck
 
 | Role | Path |
 |------|------|
-| This plan | `/Users/javerianaveed/epermit/Epermit-main/docs/audits/designcheck-separate-feature-plan.md` |
-| Prior audit (superseded in part) | `/Users/javerianaveed/epermit/Epermit-main/docs/audits/designcheck-vs-ai-compliance-new-ui-audit.md` |
-| PD-7 lock | `/Users/javerianaveed/epermit/Epermit-main/docs/lovable-ui-phase0-baseline.md` |
-| Lovable overview | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/pages/Compliance.tsx` |
-| Lovable intelligence | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/pages/ComplianceIntelligence.tsx` |
-| Lovable prescreen | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/pages/InternalPrescreen.tsx` |
-| Lovable analyzer | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/pages/ComplianceAnalyzer.tsx` |
-| Lovable nav agents | `/Users/javerianaveed/epermit/Epermit-main/reference/lovable-ui/src/components/permitpilot/data.ts` |
-| PP analyzer page | `/Users/javerianaveed/epermit/Epermit-main/src/pages/CodeCompliance.tsx` |
-| PP analyzer | `/Users/javerianaveed/epermit/Epermit-main/src/components/compliance/AIComplianceAnalyzer.tsx` |
-| Result types | `/Users/javerianaveed/epermit/Epermit-main/src/lib/complianceBatchProcessor.ts` |
-| PP nav | `/Users/javerianaveed/epermit/Epermit-main/src/components/layout/hybridNav.ts` |
-| Railway service | `/Users/javerianaveed/epermit/Epermit-main/scraper-service/app/services/compliance/analyze-drawing.service.js` |
-| Demo badge helper | `/Users/javerianaveed/epermit/Epermit-main/src/components/permitpilot/DemoDataBadge.tsx` |
-| Demo route taxonomy | `/Users/javerianaveed/epermit/Epermit-main/src/components/permitpilot/demo-routes.ts` |
+| This plan | `docs/audits/designcheck-separate-feature-plan.md` |
+| Prior audit (superseded in part) | `docs/audits/designcheck-vs-ai-compliance-new-ui-audit.md` |
+| PD-7 lock | `docs/lovable-ui-phase0-baseline.md` |
+| Lovable overview | `reference/lovable-ui/src/pages/Compliance.tsx` |
+| Lovable intelligence | `reference/lovable-ui/src/pages/ComplianceIntelligence.tsx` |
+| Lovable prescreen | `reference/lovable-ui/src/pages/InternalPrescreen.tsx` |
+| Lovable analyzer | `reference/lovable-ui/src/pages/ComplianceAnalyzer.tsx` |
+| Lovable nav agents | `reference/lovable-ui/src/components/permitpilot/data.ts` |
+| PP analyzer page | `src/pages/CodeCompliance.tsx` |
+| PP analyzer | `src/components/compliance/AIComplianceAnalyzer.tsx` |
+| Result types | `src/lib/complianceBatchProcessor.ts` |
+| PP nav | `src/components/layout/hybridNav.ts` |
+| Railway service | `scraper-service/app/services/compliance/analyze-drawing.service.js` |
+| Demo badge helper | `src/components/permitpilot/DemoDataBadge.tsx` |
+| Demo route taxonomy | `src/components/permitpilot/demo-routes.ts` |
 
 ## Appendix B — Supersession note
 

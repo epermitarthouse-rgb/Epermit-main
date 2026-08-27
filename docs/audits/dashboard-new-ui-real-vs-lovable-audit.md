@@ -1,7 +1,7 @@
 # Dashboard — New UI Real vs Lovable Audit
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Feat branch:** `feat/lovable-ui-replication` @ `f882f1d`  
 **Main:** `main` @ `5199937`  
 **Lovable reference:** `reference/lovable-ui` (`src/pages/Dashboard.tsx` → `DashboardLayout` + `DashboardOverview`)  

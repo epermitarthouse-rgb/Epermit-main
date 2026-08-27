@@ -12,7 +12,7 @@ Index: [README.md](./README.md)
 |-------|--------|
 | Remote | `git@github.com:epermitarthouse-rgb/Epermit-main.git` |
 | Ownership | **Client confirmed** + **verified** remote URL and Railway repo linkage |
-| Org account ID / owner email | `[PLACEHOLDER — Javeria to insert]` |
+| Org account ID / owner email | `[PLACEHOLDER — operator to insert]` |
 
 ---
 
@@ -62,17 +62,17 @@ Index: [README.md](./README.md)
 | Service | Client confirmed | Live dashboard verified | Manual completion |
 |---------|------------------|-------------------------|-------------------|
 | GitHub org | Yes | Yes (remote) | Account ID placeholder |
-| Railway | Yes | Yes (CLI) | `[PLACEHOLDER — Javeria to insert]` |
+| Railway | Yes | Yes (CLI) | `[PLACEHOLDER — operator to insert]` |
 | Vercel | Private account | **Partial** — env var **names** confirmed | **Yes** — value correctness, team access |
 | Supabase | — | **Partial** — backups verified | **Yes** — full dashboard ownership |
 | Intuit QuickBooks | — | Partial (status HTTP + dry-run) | **Yes** — subscription restoration |
 | Microsoft Graph | — | **No** | **Yes** |
-| Shared password vault | **Manually confirmed by Javeria** | **No** | Per-variable reconciliation |
+| Shared password vault | **Manually confirmed (client-side)** | **No** | Per-variable reconciliation |
 | Resend / Stripe / OpenAI / Mapbox | — | **No** | **Yes** each |
 
-**Accounts/API keys under developer email (not Ian's):** `[PLACEHOLDER — Javeria to insert list]`
+**Accounts/API keys under developer email (not Ian's):** `[PLACEHOLDER — operator to insert list]`
 
-Secrets: **manually confirmed by Javeria** stored in shared vault. Per-variable vault reconciliation: [ENV.md](./ENV.md).
+Secrets: **manually confirmed (client-side)** stored in shared vault. Per-variable vault reconciliation: [ENV.md](./ENV.md).
 
 ---
 

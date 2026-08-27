@@ -3,7 +3,7 @@
 **Purpose:** Decide whether `feat/lovable-ui-replication` is **safe to merge into `main`** for Utility Coordination by proving **main functions still work in the same way** on feat (not merely that “something similar exists somewhere”).
 
 **Date:** 2026-08-05  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Branches / SHAs:** `main` @ `df541d0` · `feat/lovable-ui-replication` @ `2aea795`  
 **Pass rule:** For every **Parity** row, Main and Feat produce the **same functional result** (data, API outcome, persistence). UI location may differ — see **Moved/renamed**.
 

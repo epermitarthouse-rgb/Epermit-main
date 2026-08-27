@@ -13,8 +13,8 @@ Index: [DILIGENCE_RESPONSE_EMAIL_DRAFT.md](./DILIGENCE_RESPONSE_EMAIL_DRAFT.md)
 | In-flight list per platform | §3 What breaks first | `IN_FLIGHT_STATUS.md` | **Yes** |
 | What's deployed but undocumented | §3, §4 | `IN_FLIGHT_STATUS.md`; core four docs | **Yes** |
 | What breaks first if work paused | §3 | `IN_FLIGHT_STATUS.md` §3 (PermitPilot + UCI) | **Yes** |
-| List accounts/keys under developer email | §2 Platform identity | `REPOSITORY_AND_ACCOUNT_INVENTORY.md` §6 — placeholder for IDs | **Partial** — placeholder for Javeria |
-| Move secrets to shared vault | §2 | Vault manually confirmed by Javeria; `ENV.md` | **Yes** — manual confirmation |
+| List accounts/keys under developer email | §2 Platform identity | `REPOSITORY_AND_ACCOUNT_INVENTORY.md` §6 — placeholder for IDs | **Partial** — manual placeholder |
+| Move secrets to shared vault | §2 | Vault manually confirmed (client-side); `ENV.md` | **Yes** — manual confirmation |
 | PermitPilot recorded session (30 min QB) | §11 Availability | Email §5 QB detail; walkthrough in remaining scope | **Partial** — agenda done; session not yet held |
 | QuickBooks/n8n integration explanation | §5 | `QUICKBOOKS_AUDIT_AND_WALKTHROUGH.md` — **no n8n** | **Yes** |
 | n8n JSON export into repo | §5 | Repo search — not applicable | **Yes** — N/A (not used) |
@@ -54,4 +54,4 @@ Index: [DILIGENCE_RESPONSE_EMAIL_DRAFT.md](./DILIGENCE_RESPONSE_EMAIL_DRAFT.md)
 | **Partial** (placeholders / session not held) | 4 |
 | **N/A** (Comprovare) | 2 |
 
-No PermitPilot/UCI ask omitted. Partial items require Javeria manual insert or scheduled sessions.
+No PermitPilot/UCI ask omitted. Partial items require manual insert or scheduled sessions.

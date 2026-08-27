@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-04  
 **Type:** Plan / report only — no code changes, no migrations, no mock seeding, no Lovable fixture copy.  
-**Repo:** `/Users/javerianaveed/epermit/Epermit-main`  
+**Repo:** `epermitarthouse-rgb/Epermit-main`  
 **Lovable reference:** `reference/lovable-ui` (proposed UI only; data is fabricated).
 
 ---

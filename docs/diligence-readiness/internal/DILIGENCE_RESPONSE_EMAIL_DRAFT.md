@@ -2,7 +2,7 @@
 
 **Document date:** 2026-08-27  
 **Scope:** PermitPilot and UCI only — **Comprovare excluded**  
-**Status:** Draft for Javeria review before send
+**Status:** Draft for sender review before send
 
 ---
 
@@ -11,9 +11,9 @@
 | Field | Value |
 |-------|-------|
 | **To** | `[PLACEHOLDER — Ian's email]` |
-| **From** | `[PLACEHOLDER — Javeria's email]` |
+| **From** | `[PLACEHOLDER — sender email]` |
 | **Subject** | PermitPilot & UCI — diligence package, estimates, and session availability |
-| **Attachments** | See §Attachments below (Markdown folder/ZIP — Javeria to attach recordings separately) |
+| **Attachments** | See §Attachments below (Markdown folder/ZIP — sender to attach recordings separately) |
 
 ---
 
@@ -50,9 +50,9 @@ Nothing PermitPilot/UCI-critical remains only on a personal namespace or Replit.
 | Vercel | epermit-main | `[PLACEHOLDER]` | Production frontend |
 | Supabase | InsightDC production | `[PLACEHOLDER]` | Postgres + Auth + Storage + Edge Functions |
 | Intuit QuickBooks | Production company | `[PLACEHOLDER]` | OAuth connection verified; **subscription inactive** blocks live invoices |
-| Shared vault | — | **Manually confirmed by Javeria** | Secrets stored in shared vault |
+| Shared vault | — | **Manually confirmed (client-side)** | Secrets stored in shared vault |
 
-**Accounts/keys under developer email (migration list):** `[PLACEHOLDER — Javeria to insert]`
+**Accounts/keys under developer email (migration list):** `[PLACEHOLDER — operator to insert]`
 
 ---
 
@@ -156,7 +156,7 @@ UCI is **blocked on your documents**, not engineering. Environment confirmation:
 
 #### A. Diligence completed to date
 
-`[MANUAL ENTRY REQUIRED — Javeria to insert from time records]`
+`[MANUAL ENTRY REQUIRED — insert from time records]`
 
 #### B. Remaining diligence / handover
 
@@ -207,7 +207,7 @@ Five 60–90 minute slots (PermitPilot session first):
 
 ### 13. Attachments
 
-Javeria will attach this folder (or ZIP) plus QuickBooks recordings:
+Sender will attach this folder (or ZIP) plus QuickBooks recordings:
 
 1. `REPOSITORY_AND_ACCOUNT_INVENTORY.md`
 2. `IN_FLIGHT_STATUS.md`
@@ -242,7 +242,7 @@ Javeria will attach this folder (or ZIP) plus QuickBooks recordings:
 ---
 
 Best,  
-`[PLACEHOLDER — Javeria signature]`
+`[PLACEHOLDER — sender signature]`
 
 ---
 

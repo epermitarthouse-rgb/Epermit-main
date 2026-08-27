@@ -25,7 +25,7 @@ Index: [README.md](./README.md)
 | Mechanism | Status |
 |-----------|--------|
 | GitHub source | **Verified** — org repo accessible; WIP branches pushed (see inventory) |
-| Shared password vault | **Manually confirmed by Javeria** — secrets stored in shared vault; per-variable reconciliation still recommended |
+| Shared password vault | **Manually confirmed (client-side)** — secrets stored in shared vault; per-variable reconciliation still recommended |
 | Supabase automated **physical** backups | **Verified** — **7 daily backups** dated **2026-08-20 through 2026-08-26** |
 | Supabase **PITR** | **Verified disabled** — paid add-on; **not enabled** on production project |
 | Storage objects in DB backups | **Verified excluded** — Storage requires **separate** recovery path |
