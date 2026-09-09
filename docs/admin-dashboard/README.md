@@ -1,6 +1,6 @@
 # PermitPilot Admin Dashboard — Canonical Architecture (Governance Scope)
 
-**Status:** Architecture for review — documentation only  
+**Status:** Architecture v2.1 — documentation only (final corrections applied)  
 **Scope:** Access, security, and platform governance — **not** operational duplication of the main product  
 **Code reference:** `main` · Repository: `epermitarthouse-rgb/Epermit-main`
 
@@ -35,7 +35,7 @@ Operators continue to use existing product surfaces (`/projects`, `/portal-data`
 |----------|------|
 | [ADMIN_DASHBOARD_CURRENT_STATE_AND_PLAN.md](./ADMIN_DASHBOARD_CURRENT_STATE_AND_PLAN.md) | Pre-architecture audit (2026-09-09) |
 
-The prior 18-module operations architecture (commit `817b796`) is **superseded** by this governance-focused scope.
+The prior 18-module operations architecture (commit `817b796`) is **superseded**. v2.1 finalizes credential grant-only model, deactivation, migration compatibility, and evidence-based estimate (429 h).
 
 ---
 

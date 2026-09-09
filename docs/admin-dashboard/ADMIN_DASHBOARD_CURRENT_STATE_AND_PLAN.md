@@ -1,7 +1,7 @@
 # PermitPilot Admin & Operations Dashboard — Current State and Plan
 
 **Audit date:** 2026-09-09  
-**Status:** **Supporting evidence only** — superseded by governance-scope architecture v2.0 (2026-09-10). See [README.md](./README.md).
+**Status:** **Supporting evidence only** — superseded by governance-scope architecture **v2.1** (2026-09-10). See [README.md](./README.md).
 
 **Auditor mode:** Read-only (no code, DB, deployment, or platform config changes)  
 **Code reference:** `main` @ `8739015`  
@@ -191,7 +191,7 @@ All routes nested under `AdminLayout` → `useRequireAdmin` unless noted.
 
 | Layer | Mechanism | Evidence |
 |-------|-----------|----------|
-| Platform admin | `user_roles.role = 'admin'` (`app_role` enum: admin/moderator/user) | `20260112170034_*.sql`, `useRequireAdmin.ts` |
+| Platform admin | `user_roles.role = 'admin'` only (`moderator` enum exists but unused — see v2.1 FD-02) | `20260112170034_*.sql`, `useRequireAdmin.ts` |
 | Admin route guard | `AdminLayout` → `useRequireAdmin` | `src/components/admin/AdminLayout.tsx` |
 | Nav visibility | `hybridNav.ts` Admin group `requiresAdmin: true` | Hidden for non-admins |
 | Project RBAC | `project_team_members.role`: owner/admin/editor/viewer | `useProjectTeam.ts`, invitation RPCs |

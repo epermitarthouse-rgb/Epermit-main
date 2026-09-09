@@ -1,5 +1,6 @@
 # Admin Role and Permission Matrix — Governance Scope
 
+**Version:** 2.1  
 Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)
 
 ---
@@ -8,95 +9,120 @@ Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOAR
 
 | Role | Maps to | Admin UI access |
 |------|---------|-----------------|
-| **Platform admin** | `user_roles.role = 'admin'` | Full Users & Access, Audit, Platform |
-| **Non-admin** | Everyone else | **No admin routes** — `AdminUnauthorized` |
+| **Platform admin** | `user_roles.role = 'admin'` | Full Overview, Users & Access, Audit, Platform |
+| **Everyone else** | No admin row, or any non-admin value | **No admin routes** |
 
-No separate `operations_manager` / `operator` roles in v2 scope — governance is platform-admin-only. Project roles remain in main product.
+### 1.1 `moderator` — excluded from governance (FD-02)
 
-**Future (optional):** `auditor` read-only on Audit page only — requires BC approval.
+Production evidence (2026-09-10):
+
+| Check | Result |
+|-------|--------|
+| `useRequireAdmin.ts` | Checks `role = 'admin'` only |
+| RLS policies referencing `moderator` | **0** |
+| Admin UI assigning `moderator` | **None** |
+| Product feature gates for `moderator` | **None** |
+
+The `app_role` enum includes `'moderator'` in schema (`20260112170034_*.sql`) but it has **no verified required purpose**. Admin v2:
+
+- Does **not** expose `moderator` in any admin UI
+- Does **not** grant elevated permissions to `moderator` rows
+- Treats holders as ordinary users for all governance decisions
+
+Removing the enum value from Postgres is a **separate optional migration** — not required for admin v2.
 
 ---
 
 ## 2. Project access roles (unchanged semantics)
 
-| Role | Enum / source | Capabilities in product |
-|------|---------------|------------------------|
+| Role | Source | Product capability baseline |
+|------|--------|----------------------------|
 | **none** | Not member | No project data |
-| **viewer** | `project_team_members.viewer` | Read project-scoped data per feature grants |
-| **editor** | `editor` | Read + write where feature grants allow |
-| **admin** | `admin` or project owner | Team management + all feature writes on project unless explicitly denied |
+| **viewer** | `project_team_members.viewer` | Read per feature defaults (§5.2 master doc) |
+| **editor** | `editor` | Read + selective write per defaults |
+| **admin** | `admin` team row | Write on all features unless explicit row lowers |
 | **owner** | `projects.user_id` | Same as project admin |
 
-Existing RPCs: `has_project_access`, `has_project_editor_access`, `has_project_admin_access`.
+Existing RPCs unchanged: `has_project_access`, `has_project_editor_access`, `has_project_admin_access`.
 
 ---
 
 ## 3. Feature access levels
 
-| Level | Code | Meaning |
-|-------|------|---------|
-| **none** | `0` | Feature hidden / API returns 403 |
-| **read** | `1` | View data and status |
-| **write** | `2` | Trigger actions (scrape, filing, invoice, etc.) |
+| Level | Meaning |
+|-------|---------|
+| **none** | Feature hidden; API 403 |
+| **read** | View data and status |
+| **write** | Trigger actions |
 
-Stored in `user_feature_permissions(user_id, project_id, feature_key, access_level)`.
+**Storage:** `user_feature_permissions.access_level TEXT NOT NULL CHECK (access_level IN ('none', 'read', 'write'))`.
 
-**Project_id NULL** = platform-wide default template for new project memberships (optional BC-01).
+**No numeric codes. No deny sentinel.** Use explicit `none` to restrict a project admin/owner on a specific feature.
+
+**Resolution when no row exists:** inherit from project role per [PRODUCTION §5.2](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md#52-legacy-project-role--initial-feature-permissions).
 
 ---
 
 ## 4. Scraped-data scope
 
-Table: `user_scraped_data_scope(user_id, scope_type, scope_ref, granted)`
+Table: `user_scraped_data_scope(user_id, scope_type, scope_ref)`
 
 | scope_type | scope_ref example | Effect |
 |------------|-------------------|--------|
-| `project` | UUID | May view scraped data for that project only |
-| `jurisdiction` | `Arlington County` | Within allowed projects, filter to jurisdiction |
-| `portal_source` | `accela`, `projectdox` | Filter attachment/portal_data by source |
+| `project` | UUID | Data for that project only |
+| `jurisdiction` | `Arlington County` | Filter within allowed projects |
+| `portal_source` | `accela`, `projectdox` | Filter by source |
 
-**Rule:** User must have `has_project_access` for project-scoped data **and** matching scope row **and** `scraper.results` read ≥ read.
+**No tenant-level scope rows.** Tenant membership affects project access via existing `has_project_access` only.
+
+**Rule:** membership + `scraper.results` ≥ read + scope match (or no scope rows = full within project during migration).
 
 ---
 
 ## 5. Portal credential authorization
 
-Table: `user_portal_credential_grants(user_id, credential_id, grant_level, project_id nullable, jurisdiction nullable)`
+Table: `user_portal_credential_grants(user_id, credential_id, grant_level, project_id?, jurisdiction?)`
 
-| grant_level | Code | Allowed |
-|-------------|------|---------|
-| **none** | `0` | Row invisible in UI lists |
-| **use** | `1` | Backend decrypt for scrape/filing on scoped project/jurisdiction |
-| **manage** | `2` | CRUD metadata, rotate password via API, assign grants to others if also project admin |
+| grant_level | Meaning |
+|-------------|---------|
+| **none** | Row invisible; backend rejects |
+| **use** | Backend decrypt for scrape/filing on scoped project/jurisdiction |
+| **manage** | CRUD metadata, rotate password via API body, assign grants |
 
-**Credential owner (`portal_credentials.user_id`)** retains manage on own rows unless revoked by platform admin.
+**Storage:** `grant_level TEXT NOT NULL CHECK (grant_level IN ('none', 'use', 'manage'))`.
 
-**Manage does not return password to browser** — only POST with new password body.
+### 5.1 Grant-only model (FD-01)
+
+- **`portal_credentials.user_id` is not checked for authorization.** It records who created the row.
+- **All access** requires a row in `user_portal_credential_grants`.
+- On credential create, API inserts bootstrap `manage` grant for creator — **revocable by platform admin**.
+- Platform admin may set **any** user's grant to `none`, including the creator.
+- Manage never returns password to browser.
 
 ---
 
 ## 6. Precedence rules (evaluation order)
 
-Evaluate top to bottom; first matching rule wins unless noted:
-
 ```
-1. IF user has user_roles.admin → ALLOW all (platform admin bypass) EXCEPT audit still logs actions
-2. IF user deactivated → DENY all
+1. IF NOT is_user_active(user) → DENY ALL
+2. IF user has user_roles.admin → ALLOW ALL (audit still records)
 3. IF action requires project P:
-   3a. IF NOT has_project_access(user, P) → DENY (stop — feature grants ignored)
-   3b. IF project role = admin OR owner → ALLOW write on all features unless explicit deny row (optional deny table Phase 2+)
-   3c. ELSE resolve user_feature_permissions(user, P, feature_key)
+   3a. IF NOT has_project_access(user, P) → DENY (feature grants ignored)
+   3b. IF explicit user_feature_permissions row exists → use none|read|write from row
+   3c. ELSE apply project-role defaults (§5.2 master doc)
 4. IF action reads scraped data for project P:
-   4a. Apply rule 3
-   4b. IF NOT scope match (project/jurisdiction/portal) → DENY
+   4a. Apply rules 1–3 for scraper.results
+   4b. IF scope rows exist AND no match → DENY
 5. IF action uses credential C:
-   5a. IF grant_level(C) < use → DENY
-   5b. IF credential scoped to project P → require has_project_access(user, P)
-   5c. Backend decrypt only inside Railway service — never FE
+   5a. Lookup user_portal_credential_grants(user, C)
+   5b. IF grant_level = none OR missing → DENY (owner status irrelevant)
+   5c. IF grant_level = use → backend decrypt only; audit credential.use
+   5d. IF grant_level = manage → metadata CRUD; audit credential.manage.*
+   5e. IF credential scoped to project P → require has_project_access(user, P)
 6. DEFAULT → DENY
 ```
 
-**Explicit deny:** Optional `user_feature_permissions.access_level = -1` (deny) overrides inherited admin role for that feature — separation of duties (BC optional).
+**Write implies read** for feature checks: validating `write` also satisfies `read`.
 
 ---
 
@@ -104,12 +130,11 @@ Evaluate top to bottom; first matching rule wins unless noted:
 
 **RPC:** `admin_get_effective_permissions(p_user_id UUID) RETURNS JSONB`
 
-Returns structure:
-
 ```json
 {
   "user_id": "...",
-  "platform_admin": true,
+  "access_status": "active",
+  "platform_admin": false,
   "projects": [{
     "project_id": "...",
     "project_role": "editor",
@@ -121,7 +146,7 @@ Returns structure:
 }
 ```
 
-Computed **server-side only** — Users & Access detail tab displays this JSON formatted.
+Computed server-side only. Values are always `none` | `read` | `write` or `none` | `use` | `manage`.
 
 ---
 
@@ -132,30 +157,28 @@ Computed **server-side only** — Users & Access detail tab displays this JSON f
 | View Overview | ✓ |
 | List all users | ✓ |
 | Activate/deactivate user | ✓ |
-| Grant/revoke platform admin | ✓ (with final-admin guard) |
+| Grant/revoke platform admin | ✓ (final-admin guard) |
 | Assign project team role | ✓ |
 | Set feature permissions | ✓ |
 | Set scraped-data scope | ✓ |
-| Assign credential grants | ✓ |
-| View audit log | ✓ |
-| Export audit CSV | ✓ |
-| Platform jurisdictions CRUD | ✓ |
-| Send jurisdiction notifications | ✓ |
-| Manage drip campaigns | ✓ |
+| Assign/revoke credential grants (any user, incl. creator) | ✓ |
+| View/export audit | ✓ |
+| Platform jurisdictions / notifications / campaigns | ✓ |
 
 ---
 
 ## 9. Enforcement map
 
-| Layer | Mechanism |
-|-------|-----------|
-| Admin UI routes | `useRequireAdmin` |
-| Admin API | `requirePlatformAdmin` middleware |
-| Admin RPCs | `has_role(auth.uid(), 'admin')` at start |
-| Product feature APIs | `assert_feature_access(user, project, feature, level)` NEW |
-| Portal credential API | Check `user_portal_credential_grants` + owner |
-| portal_data reads | RLS or RPC wrapper with scope check NEW |
-| Scrape enqueue | Existing editor check + `scraper.run` write |
+| Layer | Mechanism | Repo evidence |
+|-------|-----------|---------------|
+| Admin UI | `useRequireAdmin` — 13 files | `src/hooks/useRequireAdmin.ts` |
+| Admin API | `requirePlatformAdmin` middleware | New `/api/admin/v1` |
+| Admin RPCs | `has_role(uid, 'admin')` | `admin_list_member_directory` pattern |
+| Session gate | `requireAuthenticatedUser` + `is_user_active` | `uci-access.service.js` (7 route files) |
+| Product features | `assert_feature_access` | Priority: scrape, filing, documents, quickbooks routes |
+| Credentials | `assert_credential_use` / grant check | `portal-credentials.routes.js` (4 routes) + 17 decrypt refs in `register-execution-routes.js` |
+| portal_data | `assert_scraped_data_access` | `PortalDataViewer` ecosystem (34 src files) |
+| RLS | 314 existing policies + new grant/scope functions | `supabase/migrations/` |
 
 ---
 
@@ -163,7 +186,8 @@ Computed **server-side only** — Users & Access detail tab displays this JSON f
 
 | Rule | Implementation |
 |------|----------------|
-| Last admin | RPC `admin_revoke_platform_role` raises if count=1 |
+| Last admin | RPC raises if admin count = 1 |
 | Self-demote last admin | Blocked |
 | Self-deactivate | Blocked if last admin |
-| Audit | All role changes logged before commit |
+| Deactivate user | Ban + `access_status=deactivated` + credential grants → none |
+| Audit | All changes logged before commit |

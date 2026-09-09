@@ -1,5 +1,6 @@
 # Admin Information Architecture — Governance Scope
 
+**Version:** 2.1  
 Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)
 
 ---
@@ -91,7 +92,7 @@ Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOAR
 2. **Project access** — table: project, role (none/viewer/editor/admin), source (owner/team/invitation)
 3. **Feature permissions** — matrix: feature key × read/write/none per project (or global)
 4. **Scraped-data scope** — projects, jurisdictions, portal sources
-5. **Portal credentials** — grants per credential: none/use/manage; scoped project/jurisdiction
+5. **Portal credentials** — grants per credential: `none` / `use` / `manage`; scoped project/jurisdiction; **grant-only** (creator revocable by admin)
 6. **Effective permissions** — read-only computed view (server JSON) — **primary reviewer surface**
 
 **Actions:** Activate/deactivate; grant/revoke platform admin; add/remove project role; edit feature matrix; edit scopes; bulk copy from template user.

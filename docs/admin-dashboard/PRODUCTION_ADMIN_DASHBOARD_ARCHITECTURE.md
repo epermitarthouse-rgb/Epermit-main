@@ -1,8 +1,8 @@
 # Production Admin Dashboard Architecture — Governance Scope
 
-**Version:** 2.0 (focused)  
+**Version:** 2.1 (final corrections)  
 **Date:** 2026-09-10  
-**Supersedes:** 18-module operations architecture (v1.0)
+**Supersedes:** 18-module operations architecture (v1.0); v2.0 draft
 
 ---
 
@@ -16,6 +16,8 @@ PermitPilot Admin is a **governance console** for platform administrators. It an
 - What changed, when, and by whom?
 
 It does **not** host scrape job queues, filing pipelines, document ingestion, billing operations, or UCI workflows. Those remain in the main product with permissions enforced by the model defined here.
+
+**Navigation (final):** Overview · Users & Access · Audit · Platform settings — four areas only.
 
 ---
 
@@ -39,7 +41,7 @@ It does **not** host scrape job queues, filing pipelines, document ingestion, bi
 | Documents, ingestion, RAG | Project document vault, Response Matrix |
 | Billing, QuickBooks | Project Billing tab |
 | UCI | `/uci/*` routes |
-| System ops monitoring (queues, workers) | Future product ops surfaces or external monitoring — **not admin** |
+| System ops monitoring (queues, workers) | External monitoring — **not admin** |
 
 ### 2.3 Developer-only (excluded from production admin nav)
 
@@ -47,181 +49,211 @@ It does **not** host scrape job queues, filing pipelines, document ingestion, bi
 |-------|-------------|
 | `/admin/shadow-mode` | Hidden — internal metrics |
 | `/admin/architecture-replication` | Hidden — internal checklist |
-| `/admin/uci-action-tracker` | **Removed from admin** — UCI status lives in product/docs |
-| `/admin/authorizations` | **Removed** — placeholder; absorbed into Users & Access |
-| `/admin/feature-flags` | **Removed from nav** — browser localStorage only today; not governance |
+| `/admin/uci-action-tracker` | **Removed from admin** |
+| `/admin/authorizations` | **Removed** — absorbed into Users & Access |
+| `/admin/feature-flags` | **Removed from nav** — localStorage dev-only |
 
 ---
 
-## 3. Authorization model (summary)
+## 3. Final decisions (v2.1)
 
-### 3.1 Dimensions
+| ID | Decision |
+|----|----------|
+| **FD-01** | **Portal credentials are grant-only.** `portal_credentials.user_id` records creator metadata only — it is **not** an authorization source. All access flows through `user_portal_credential_grants`. Platform admin may revoke access from **any** user, including the credential creator. On create, the API inserts an initial `manage` grant for the creator (bootstrap, revocable). |
+| **FD-02** | **`moderator` removed from governance model.** The `app_role` enum value exists in production schema but has **no verified purpose**: zero route gates, zero RLS policies, `useRequireAdmin` checks only `admin`. Admin v2 treats non-`admin` platform roles as ordinary users. No UI to assign `moderator`. Existing DB rows are inert until migrated manually. |
+| **FD-03** | **No tenant-level permission grants.** `tenant_memberships` continues to participate in `has_project_access` for project-scoped data (existing Row 2 behavior). Admin governs **per-user** project, feature, scraped-data, and credential grants only — not tenant-wide templates. |
+| **FD-04** | **Consistent permission values only.** Feature access: `none` \| `read` \| `write`. Portal credentials: `none` \| `use` \| `manage`. No numeric codes, no `access_level = -1`. Explicit `none` on a feature row restricts even project admin/owner for that feature (separation of duties). |
+| **FD-05** | **User deactivation finalized** (see §4). Dual mechanism: `profiles.access_status` + Supabase Auth ban. Sessions rejected server-side. Audit preserved. Grants revoked to `none`; rows retained. Audited reactivation. |
+| **FD-06** | **Migration preserves legacy behavior** (see §5). No enforcement until backfill verified. Project-role defaults match current product access. |
+| **FD-07** | **Default feature template (BC-01 resolved):** new project members inherit role-based defaults from §5.2 until platform admin sets explicit rows. |
 
-| Dimension | Levels | Storage (proposed) |
-|-----------|--------|-------------------|
-| **Platform admin** | none / manage | Existing `user_roles.admin` |
-| **Project access** | none / viewer / editor / admin | Existing `project_team_members` + owner |
-| **Feature access** | none / read / write | New `user_feature_permissions` |
-| **Scraped-data scope** | projects, jurisdictions, portal sources | New `user_scraped_data_scope` |
-| **Portal credentials** | none / use / manage | New `user_portal_credential_grants` |
+---
 
-### 3.2 Core rules
+## 4. User deactivation (FD-05)
 
-1. **Deny by default** — no implicit access from authentication alone (except platform admin manage-all).
-2. **Project membership first** — feature permissions on a project require `has_project_access` (existing RPC).
-3. **Server-side enforcement** — RLS policies and RPCs updated; Railway credential/scrape paths call `assert_*` helpers; admin UI is not security boundary.
-4. **No secrets in browser** — passwords/tokens never returned; `use` invokes backend-only decrypt.
-5. **Final platform admin protection** — cannot remove last `user_roles.admin`.
-6. **Complete audit** — every grant/revoke and credential use/manage writes `platform_audit_events`.
+### 4.1 Requirements
+
+| Requirement | Mechanism |
+|-------------|-----------|
+| Block new access | Supabase Auth ban via Admin API |
+| Reject existing sessions | Banned users fail JWT refresh; Railway middleware rejects active requests |
+| Preserve audit history | `platform_audit_events` and legacy `admin_activity_log` never deleted on deactivate |
+| Revoke effective access | Set all `user_portal_credential_grants` → `none`; `is_user_active()` returns false — feature/scope/project rows **retained** but ignored |
+| Audited reactivation | ACC-001 via admin API; unban + `access_status = active` |
+
+### 4.2 Storage
+
+| Layer | Object | Change |
+|-------|--------|--------|
+| **New column** | `profiles.access_status` | `TEXT NOT NULL DEFAULT 'active' CHECK (access_status IN ('active', 'deactivated'))` |
+| **Existing** | `auth.users` | Ban via service-role Admin API (`ban_duration` on deactivate; `ban_duration: 'none'` on activate) |
+| **Existing** | `user_portal_credential_grants` | Bulk update to `none` on deactivate |
+| **New function** | `is_user_active(uid UUID)` | Returns false when `profiles.access_status = 'deactivated'` |
+| **Audit** | `platform_audit_events` | `user.deactivated` / `user.activated` with actor, target, reason |
+
+### 4.3 Enforcement points
+
+| Layer | File / object | Behavior |
+|-------|---------------|----------|
+| Railway middleware | `scraper-service/app/services/uci/uci-access.service.js` → `requireAuthenticatedUser` | After JWT verify, query `profiles.access_status`; return 403 if deactivated |
+| Supabase RLS / RPCs | `is_user_active(auth.uid())` prepended to `assert_feature_access`, `assert_credential_use`, `has_project_access` wrappers | Deny when deactivated |
+| Admin API | `POST /api/admin/v1/access/users/:id/deactivate` | Service-role: ban user, update profile, revoke credential grants, append audit |
+| Admin API | `POST /api/admin/v1/access/users/:id/activate` | Service-role: unban, set active, append audit (does not auto-restore grants) |
+| Frontend | `useAuth` / session handler | Surface deactivated state; redirect to support message |
+
+**Self-deactivate and last-admin deactivate:** blocked (existing final-admin guards).
+
+---
+
+## 5. Migration compatibility (FD-06)
+
+### 5.1 Phased rollout
+
+| Phase | Name | Behavior |
+|-------|------|----------|
+| **A** | Schema only | New tables + `profiles.access_status`; zero enforcement |
+| **B** | Backfill + read UI | Effective-permissions RPC runs in **legacy mode**; admin shows computed view |
+| **C** | Shadow enforce | Railway/RLS logs WOULD-BLOCK without rejecting (1 week) |
+| **D** | Enforce | `assert_*` helpers reject; feature flag `GOVERNANCE_ENFORCE=true` |
+
+**Rollback:** Phase D → C → B by flag; schema retained.
+
+### 5.2 Legacy project role → initial feature permissions
+
+When **no explicit** `user_feature_permissions` row exists for `(user, project, feature_key)`, resolve from project role:
+
+| Project role | Source | Default feature level |
+|--------------|--------|----------------------|
+| **owner** | `projects.user_id` | `write` on all feature keys |
+| **admin** | `project_team_members.role = admin` | `write` on all feature keys |
+| **editor** | `project_team_members.role = editor` | `read` on all keys; `write` on `scraper.run`, `filing.submit`, `documents.vault`, `ingestion.rag`, `code.analyzer`, `credentials.self` |
+| **viewer** | `project_team_members.role = viewer` | `read` on all keys |
+| **none** | Not member | `none` on all keys (feature grants ignored per precedence) |
+
+Explicit row with `none`, `read`, or `write` **overrides** the role default for that feature (including restricting admin/owner to `read` or `none`).
+
+### 5.3 Scraped-data scope migration
+
+| State | Behavior |
+|-------|----------|
+| **No scope rows** for user | Full scraped-data visibility within projects where user has `scraper.results` ≥ read (preserves current behavior) |
+| **Scope rows present** | Enforce project / jurisdiction / portal_source filters |
+
+### 5.4 Portal credential migration
+
+| Step | Action |
+|------|--------|
+| Backfill | For each `portal_credentials` row, insert `user_portal_credential_grants(user_id=creator, credential_id, grant_level='manage')` |
+| Post-migration | Creator access is grant-based only; admin may revoke |
+| RLS update | Replace owner-only policies with grant-check policies |
+
+### 5.5 Unchanged during migration
+
+- `has_project_access`, `has_project_editor_access`, `has_project_admin_access` RPC semantics
+- `project_team_members` roles and invitation flow
+- Tenant membership path inside `has_project_access` (Row 2)
+- Platform admin gate: `user_roles.role = 'admin'` only
+
+---
+
+## 6. Authorization model (summary)
+
+### 6.1 Dimensions
+
+| Dimension | Levels | Storage |
+|-----------|--------|---------|
+| **Platform admin** | none / manage | `user_roles.admin` only |
+| **Project access** | none / viewer / editor / admin | `project_team_members` + owner |
+| **Feature access** | none / read / write | `user_feature_permissions.access_level` (TEXT) |
+| **Scraped-data scope** | project, jurisdiction, portal_source | `user_scraped_data_scope` |
+| **Portal credentials** | none / use / manage | `user_portal_credential_grants.grant_level` (TEXT) |
+
+### 6.2 Core rules
+
+1. **Deny by default** — no implicit access from authentication alone (except platform admin).
+2. **Project membership first** — feature permissions require `has_project_access`.
+3. **Deactivated users denied** — `is_user_active` checked before all grants.
+4. **Server-side enforcement** — RLS/RPC + Railway `assert_*`; UI is not the security boundary.
+5. **No secrets in browser** — passwords/tokens never returned.
+6. **Final platform admin protection** — cannot remove last admin.
+7. **Complete audit** — every grant/revoke, use, manage, activate/deactivate.
+8. **Credential access is grant-only** — creator has no permanent privilege.
 
 Full precedence: [ADMIN_ROLE_AND_PERMISSION_MATRIX.md](./ADMIN_ROLE_AND_PERMISSION_MATRIX.md).
 
 ---
 
-## 4. Architecture diagram
-
-```mermaid
-flowchart TB
-  subgraph admin [Admin Dashboard - Governance Only]
-    O[Overview]
-    U[Users and Access]
-    A[Audit]
-    P[Platform Settings]
-  end
-
-  subgraph product [Main PermitPilot Product]
-    PR[Projects / Scrapers / Filing / Docs / Billing / UCI]
-  end
-
-  subgraph enforce [Enforcement Layer]
-    RLS[Supabase RLS + RPCs]
-    API[Railway API assert helpers]
-  end
-
-  subgraph data [Data]
-    UR[user_roles]
-    PTM[project_team_members]
-    UFP[user_feature_permissions NEW]
-    UDS[user_scraped_data_scope NEW]
-    UPC[user_portal_credential_grants NEW]
-    PC[portal_credentials]
-    AUD[platform_audit_events NEW]
-  end
-
-  O --> U
-  U --> RLS
-  U --> API
-  A --> AUD
-  P --> UR
-  PR --> enforce
-  enforce --> data
-```
-
----
-
-## 5. Existing assets to reuse
-
-| Asset | Reuse |
-|-------|-------|
-| `user_roles`, `has_role()` | Platform admin |
-| `project_team_members`, invitation RPCs | Project roles |
-| `has_project_access`, `has_project_editor_access`, `has_project_admin_access` | Membership gates |
-| `admin_list_member_directory()` | Users directory seed |
-| `AdminMembers.tsx` | Extend → Users & Access |
-| `AdminAudit.tsx` + `admin_activity_log` | Migrate/import → Audit |
-| `AdminPanel.tsx` | Split: Overview widgets + Platform Settings |
-| `JurisdictionAdmin.tsx` | Retain under Platform Settings |
-| `portal_credentials` + crypto service | Credential storage; add grant table |
-| `portal-credentials.routes.js` | Add grant checks before list/use |
-
-**No feature-permission tables exist today** — new schema required (see data contracts doc).
-
----
-
-## 6. Portal credential security
+## 7. Portal credential security
 
 | Level | Meaning | Browser sees |
 |-------|---------|--------------|
-| **none** | Cannot use or manage | Credential row hidden or metadata-only |
-| **use** | Backend may decrypt for approved scrape/filing action on scoped project/jurisdiction | `password_configured: true`, username, jurisdiction — **no password** |
-| **manage** | Create, replace, test connection, disable, reassign grants | Same — never plaintext password |
+| **none** | Cannot use or manage | Row hidden |
+| **use** | Backend decrypt for approved scrape/filing | Metadata only — **no password** |
+| **manage** | Create, replace, test, disable, assign grants | Metadata only — **no password** |
 
-Every **use**: audit `{ action: credential.use, credential_id, project_id, purpose: scrape|filing }`  
-Every **manage**: audit `{ action: credential.manage.*, before/after metadata only }`
+**Authorization source:** `user_portal_credential_grants` only. Creator metadata on `portal_credentials.user_id` is not checked for access.
+
+Every **use**: audit `credential.use`. Every **manage**: audit `credential.manage.*`. Platform admin may set any user's grant to `none`, including the creator.
 
 ---
 
-## 7. Scraped-data visibility
-
-Controls which `portal_data`, scrape results, and attachment metadata a user sees **within projects they belong to**.
+## 8. Scraped-data visibility
 
 | Scope type | Example |
 |------------|---------|
-| `project` | User sees scraped data only for listed project IDs |
-| `jurisdiction` | User sees data for permits in Arlington only |
-| `portal_source` | User sees Accela-sourced vs ProjectDox-sourced subsets |
+| `project` | Scraped data for listed project IDs only |
+| `jurisdiction` | Filter to jurisdiction within allowed projects |
+| `portal_source` | Filter by `accela`, `projectdox`, etc. |
 
-**Default for new project members:** inherit project team's default template (configurable by platform admin). **Deny** jurisdictions/portals not granted even if project member.
-
-Enforcement: RLS on `projects.portal_data` JSON access paths or RPC wrapper for portal-data reads; align with `PortalDataViewer` fetches.
+Requires project membership + `scraper.results` ≥ read + matching scope (or no scope rows during legacy mode).
 
 ---
 
-## 8. Feature keys (initial set)
+## 9. Feature keys (initial set)
 
-| Feature key | Product surface | read | write |
-|-------------|-----------------|------|-------|
-| `project.core` | Project detail basics | view project | edit project fields |
-| `scraper.run` | Scrape triggers | view jobs/results | enqueue scrape |
-| `scraper.results` | Portal data / attachments | view scraped data | — |
-| `filing.submit` | Permit wizard | view filing status | submit |
-| `documents.vault` | Document list/upload | view | upload/delete |
-| `ingestion.rag` | Ingestion / Response Matrix | view | trigger ingest/generate |
-| `billing.quickbooks` | Billing tab | view | trigger invoice |
-| `code.analyzer` | Code Mod / analyzer | view | run analysis |
-| `uci.workspace` | UCI routes | view | stage actions (when enabled) |
-| `credentials.self` | Settings own credentials | manage own | manage own |
+| Feature key | Product surface |
+|-------------|-----------------|
+| `project.core` | Project detail |
+| `scraper.run` | Scrape triggers |
+| `scraper.results` | Portal data / attachments |
+| `filing.submit` | Permit wizard |
+| `documents.vault` | Document vault |
+| `ingestion.rag` | Ingestion / Response Matrix |
+| `billing.quickbooks` | Billing tab |
+| `code.analyzer` | Code Mod |
+| `uci.workspace` | UCI routes |
+| `credentials.self` | Settings credentials |
 
-Platform admin `manage` bypasses explicit feature rows.
+Platform admin bypasses explicit feature rows.
 
 ---
 
-## 9. Acceptance criteria (governance)
+## 10. Acceptance criteria
 
 ### Functional
-- [ ] Overview shows user count, open permission risks, last 20 admin events
-- [ ] Users & Access shows **effective permissions** per user (computed server-side)
-- [ ] Bulk access review exports CSV without secrets
-- [ ] Audit filters: user, action, project, feature, date range
-- [ ] Retained platform settings (jurisdictions, notifications) still work
+- [ ] Four-area nav only: Overview, Users & Access, Audit, Platform
+- [ ] Effective permissions computed server-side
+- [ ] Platform admin can revoke credential access from creator
+- [ ] Deactivated user cannot authenticate or call APIs
+- [ ] Reactivation audited; grants not auto-restored
 
 ### Security
-- [ ] Non-admin cannot call admin API or admin RPCs
-- [ ] Credential password never in API response or audit JSON
-- [ ] Feature write denied when project membership missing
+- [ ] Non-admin blocked from admin API/RPCs
+- [ ] Credential password never in response or audit
+- [ ] Feature write denied without membership
 - [ ] Final-admin protection tested
+- [ ] Legacy users retain access through Phase B–C migration
 
 ### Quality
-- [ ] Authorization integration tests per RPC
-- [ ] Effective-permission golden tests for sample users
-- [ ] Audit completeness test on grant/revoke flows
-
----
-
-## 10. Business decisions required
-
-| ID | Question |
-|----|----------|
-| BC-01 | Default feature template for new project members |
-| BC-02 | Whether `moderator` app_role retains meaning |
-| BC-03 | Tenant-level grants vs per-user only (tenant tables exist) |
-| BC-04 | User deactivation: Supabase ban vs soft flag |
+- [ ] Authorization tests per RPC and priority Railway route
+- [ ] Effective-permission golden tests for each project role
+- [ ] Deactivate/reactivate integration test
 
 ---
 
 ## 11. References
 
-- [ADMIN_INFORMATION_ARCHITECTURE.md](./ADMIN_INFORMATION_ARCHITECTURE.md)
+- [ADMIN_ROLE_AND_PERMISSION_MATRIX.md](./ADMIN_ROLE_AND_PERMISSION_MATRIX.md)
 - [ADMIN_DATA_AND_API_CONTRACTS.md](./ADMIN_DATA_AND_API_CONTRACTS.md)
 - [ADMIN_IMPLEMENTATION_ROADMAP.md](./ADMIN_IMPLEMENTATION_ROADMAP.md)
-- `docs/diligence-readiness/ARCHITECTURE.md`
+- [ADMIN_INFORMATION_ARCHITECTURE.md](./ADMIN_INFORMATION_ARCHITECTURE.md)
