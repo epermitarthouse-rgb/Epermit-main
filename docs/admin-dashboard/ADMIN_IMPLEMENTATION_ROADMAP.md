@@ -1,276 +1,165 @@
-# Admin Dashboard Implementation Roadmap
+# Admin Dashboard Implementation Roadmap — Governance Scope
 
-**Target:** Complete architecture in [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)  
-**Method:** AI-assisted engineering with human review of security, portals, and production verification
-
-Parent documents: all `ADMIN_*.md` in this folder.
+**Target:** Complete governance architecture in [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)  
+**Explicitly excludes:** 18-module product operations dashboard (superseded)
 
 ---
 
-## 1. Shared foundations (Phase 0) — build first
+## Phase 0 — Foundations (week 1–2)
 
 | Deliverable | Description |
 |-------------|-------------|
-| F-01 | `platform_operator_roles`, `platform_audit_events`, `platform_feature_flags` migrations |
-| F-02 | Railway `admin.routes.js` + `requirePlatformRole` middleware |
-| F-03 | `AdminShell` layout, nav tree, environment banner |
-| F-04 | Admin API client + TanStack Query hooks pattern |
-| F-05 | Operational SQL views (`admin_v_*`) |
-| F-06 | Liveness route `/api/admin/v1/health/live` |
-| F-07 | Heartbeat writer in workers |
-| F-08 | Authorization integration test harness |
+| Migrations | `platform_audit_events`, `user_feature_permissions`, `user_scraped_data_scope`, `user_portal_credential_grants` |
+| RPCs | `admin_append_audit_event`, `has_role` guards, skeleton `admin_get_effective_permissions` |
+| Admin API | `/api/admin/v1` router + `requirePlatformAdmin` |
+| Shell | Nav restructure: Overview, Access, Audit, Platform |
+| Redirects | Legacy `/admin/members`, `/admin/jurisdictions` paths |
 
-**Phase 0 AI-assisted estimate**
-
-| Task | Build | Test/UAT | Deploy/docs | Total h | Confidence |
-|------|------:|---------:|------------:|--------:|------------|
-| DB migrations + RPCs | 16 | 8 | 4 | 28 | Medium |
-| Admin API middleware + skeleton | 20 | 12 | 4 | 36 | Medium |
-| AdminShell + routing | 24 | 8 | 4 | 36 | High |
-| Views + overview endpoint | 16 | 8 | 4 | 28 | Medium |
-| Heartbeats + health | 12 | 6 | 4 | 22 | Medium |
-| **Phase 0 total** | **88** | **42** | **20** | **150** | **Medium** |
-
-Calendar: **4–5 weeks** at 30–40 h/wk · **8–10 weeks** at 15–20 h/wk
+| Task | Build h | Test h | Deploy/docs h | Total h |
+|------|--------:|-------:|--------------:|--------:|
+| Schema + RPCs | 16 | 8 | 4 | 28 |
+| Admin API skeleton | 12 | 6 | 2 | 20 |
+| Nav + redirects | 12 | 4 | 2 | 18 |
+| **Phase 0** | **40** | **18** | **8** | **66** |
 
 ---
 
-## 2. Phase 1 — Command Center + read-only ops visibility
+## Phase 1 — Overview + Users directory (week 3–4)
 
-**Modules:** A Command Center, O System Health (read-only), E Scraper jobs (read-only), H Ingestion (read-only), N Integrations (status cards)
+| Deliverable | Description |
+|-------------|-------------|
+| Overview page | Metrics, risks, recent audit |
+| Users directory | Extend AdminMembers → `/admin/access/users` |
+| Effective permissions read | RPC returns JSON; read-only tab |
+| Audit page v1 | Unified `platform_audit_events` + legacy log |
 
-| Module | Delivered |
-|--------|-----------|
-| A | Overview page, incident ack (basic), activity feed |
-| O | Service health table, queue depth |
-| E | Cross-project job list, filters, detail drawer (events) |
-| H | Ingestion queue list |
-| N | Integration status from snapshots |
+| Task | Build h | Test h | Deploy/docs h | Total h |
+|------|--------:|-------:|--------------:|--------:|
+| Overview | 10 | 4 | 2 | 16 |
+| Directory polish | 12 | 6 | 2 | 20 |
+| Effective permissions (read) | 14 | 8 | 2 | 24 |
+| Audit expansion | 10 | 6 | 2 | 18 |
+| **Phase 1** | **46** | **24** | **8** | **78** |
 
-Redirects: link Dashboard scrape widget → E
-
-**Phase 1 incremental hours:** 120 (build 70, test 30, deploy/docs 20)
-
-**Cumulative after Phase 1:** ~270 h
-
----
-
-## 3. Phase 2 — Controlled scraper and ingestion operations
-
-**Modules:** E (write: retry, cancel, ack), H (enqueue, retry, reindex), D maintenance mode, Q Audit (read new events)
-
-| Control IDs | SCR-002–005, ING-001–004, SCR-007 |
-|-------------|-------------------------------------|
-| Feature flags | Migrate localStorage → server (CFG-001/002) |
-| Audit viewer | Replace old admin audit page |
-
-**Phase 2 incremental hours:** 100
-
-**Cumulative:** ~370 h
+**Cumulative:** 144 h
 
 ---
 
-## 4. Phase 3 — Users, access, projects
+## Phase 2 — Access writes + enforcement (week 5–7)
 
-**Modules:** C Users and Access (full), B Projects directory + timeline
+| Deliverable | Description |
+|-------------|-------------|
+| User detail editor | Project roles, feature matrix, scopes |
+| Activate/deactivate | Supabase admin API wrapper |
+| Platform role grant/revoke | Final-admin guard |
+| Product enforcement | `assert_feature_access` in key Railway routes |
+| Bulk review + export | ACC-012, ACC-013 |
 
-| Migrations | Final-admin RPC guards |
-|------------|------------------------|
-| Merge | `/admin/members`, remove authorizations placeholder |
+| Task | Build h | Test h | Deploy/docs h | Total h |
+|------|--------:|-------:|--------------:|--------:|
+| Access write UI | 20 | 10 | 4 | 34 |
+| Feature permission RPCs | 16 | 12 | 4 | 32 |
+| Product route asserts (scrape, portal-data) | 18 | 12 | 4 | 34 |
+| Bulk review/export | 8 | 4 | 2 | 14 |
+| **Phase 2** | **62** | **38** | **14** | **114** |
 
-**Phase 3 incremental hours:** 80
-
-**Cumulative:** ~450 h
-
----
-
-## 5. Phase 4 — Documents, filing, billing ops
-
-**Modules:** G Documents, F Filing queue, K QuickBooks ops (status, uncertain reconcile, safe retry UI)
-
-| Deprecate | `/operations` mock panels → redirect |
-|-----------|--------------------------------------|
-| Integrate | Existing QB dry-run/live trigger with admin wrapper |
-
-**Phase 4 incremental hours:** 110
-
-**Cumulative:** ~560 h
+**Cumulative:** 258 h
 
 ---
 
-## 6. Phase 5 — Communications, response matrix, code analyzer
+## Phase 3 — Portal credentials + scraped-data scope (week 8–9)
 
-**Modules:** L Communications, J Response Matrix, I Code Analyzer admin views
+| Deliverable | Description |
+|-------------|-------------|
+| Credential grant UI | none/use/manage per user |
+| Railway grant checks | `portal-credentials.routes.js`, scrape login paths |
+| Scraped-data scope UI + RLS/RPC | PortalDataViewer enforcement |
+| Credential use audit | Every decrypt path logs event |
 
-| Replace | `/permit-queue`, `/messages` placeholders |
+| Task | Build h | Test h | Deploy/docs h | Total h |
+|------|--------:|-------:|--------------:|--------:|
+| Grant UI + RPCs | 14 | 8 | 2 | 24 |
+| Backend credential enforcement | 16 | 12 | 4 | 32 |
+| Scraped-data scope enforcement | 18 | 10 | 4 | 32 |
+| **Phase 3** | **48** | **30** | **10** | **88** |
 
-**Phase 5 incremental hours:** 90
-
-**Cumulative:** ~650 h
-
----
-
-## 7. Phase 6 — UCI admin, config, capacity
-
-**Modules:** M UCI (with readiness banner), P Configuration (notifications merge from AdminPanel), R Backups/capacity informational
-
-| Merge | uci-action-tracker, AdminPanel notification tools |
-
-**Phase 6 incremental hours:** 70
-
-**Cumulative:** ~720 h
+**Cumulative:** 346 h
 
 ---
 
-## 8. Phase 7 — Schedules, metrics, alerting automation
+## Phase 4 — Platform polish + cleanup (week 10)
 
-**Modules:** E schedules (SCR-006), daily metrics aggregates, email alerts (ALT Phase 2)
+| Deliverable | Description |
+|-------------|-------------|
+| Platform sub-routes | Split AdminPanel → notifications, branding, campaigns |
+| Remove dev routes from nav | uci-action-tracker, authorizations, feature-flags |
+| Authorization test suite | Full matrix coverage |
+| Operator runbook | `docs/admin-dashboard/RUNBOOK.md` |
 
-| Optional | Scraper schedule cron runner on Railway |
+| Task | Build h | Test h | Deploy/docs h | Total h |
+|------|--------:|-------:|--------------:|--------:|
+| Platform route split | 12 | 4 | 4 | 20 |
+| Cleanup + redirects | 6 | 4 | 2 | 12 |
+| Auth test suite | 10 | 16 | 4 | 30 |
+| Runbook | 4 | — | 8 | 12 |
+| **Phase 4** | **32** | **24** | **18** | **74** |
 
-**Phase 7 incremental hours:** 80
-
-**Cumulative:** ~800 h
-
----
-
-## 9. Complete architecture totals
-
-| Metric | Optimistic | Realistic | Upper bound |
-|--------|----------:|----------:|------------:|
-| AI-assisted engineering | 620 h | **780 h** | 960 h |
-| Calendar @ 30–40 h/wk | 16 wk | **20–22 wk** | 28 wk |
-| Calendar @ 15–20 h/wk | 31 wk | **39–44 wk** | 56 wk |
-
-**Note:** External portal UAT and Edge Function security audit (PP-004) add parallel calendar time, not all engineering hours.
+**Cumulative:** 420 h
 
 ---
 
-## 10. Critical path
+## Total AI-assisted estimate
 
-```mermaid
-gantt
-  title Admin Dashboard Critical Path
-  dateFormat YYYY-MM-DD
-  section Foundations
-  Phase 0 migrations and API     :p0, 2026-09-15, 28d
-  section Visibility
-  Phase 1 read-only ops            :p1, after p0, 21d
-  section Operations
-  Phase 2 job controls             :p2, after p1, 18d
-  section Access
-  Phase 3 users projects         :p3, after p2, 14d
-  section Domain
-  Phase 4-6 filing billing uci   :p4, after p3, 42d
-  section Maturity
-  Phase 7 schedules alerts       :p7, after p4, 18d
+| Metric | Hours |
+|--------|------:|
+| **Optimistic** | 320 |
+| **Realistic** | **420** |
+| **Upper bound** | 520 |
+
+| Capacity | Calendar |
+|----------|----------|
+| 30–40 h/week | **10–12 weeks** |
+| 15–20 h/week | **21–26 weeks** |
+
+**Removed from v1 estimate:** ~360 h of operations modules (scrapers, ingestion, billing ops, UCI admin, system health).
+
+---
+
+## Critical path
+
+```
+Phase 0 (schema + API) → Phase 1 (read UI) → Phase 2 (writes + product asserts) → Phase 3 (credentials + scope) → Phase 4 (polish)
 ```
 
-**Blockers:** PP-001 Supabase env fix merge (affects all admin Supabase reads); PP-004 Edge auth review.
+**Blockers:** PP-001 Supabase env fix (frontend reads); product route touch requires regression on scrape/filing paths.
 
 ---
 
-## 11. Parallel workstreams (after Phase 0)
+## First implementation slice (after approval)
 
-| Stream | Can parallelize with |
-|--------|---------------------|
-| Frontend module UI | Backend endpoints per module |
-| SQL views | RPC implementation |
-| Integration probes | N module cards |
-| UCI admin (Phase 6) | Phases 4–5 if separate developer |
+**Phase 0 + Phase 1** (~144 h realistic): New nav, Overview, Users directory with read-only effective permissions, expanded Audit — **no product enforcement yet**.
 
 ---
 
-## 12. Recommended first implementation slice
+## Security and acceptance tests
 
-**After architecture approval, start Phase 0 then immediately Phase 1:**
+| Phase | Required tests |
+|-------|----------------|
+| 0 | Admin API rejects non-admin JWT |
+| 1 | Overview metrics match DB counts; audit lists merge legacy + new |
+| 2 | Feature write denied without membership; final-admin guard |
+| 3 | Credential password never in response; use audited; scope denies portal_data |
+| 4 | E2E: grant editor scrape.run write → user can enqueue; revoke → 403 |
 
-1. Phase 0 weeks 1–3: migrations, admin API skeleton, AdminShell
-2. Phase 1 weeks 4–6: Command Center + read-only scrape/ingestion/health
-
-**First user-visible outcome:** Platform operator opens `/admin`, sees production health, all active scrape and ingestion jobs across projects, integration status — without SQL or Railway CLI.
-
-**Not in first slice:** Role management writes, live QB retry, UCI live gate, filing submit.
-
----
-
-## 13. Testing plan per phase
-
-| Phase | Tests |
-|-------|-------|
-| 0 | Auth middleware unit; RPC role guards; migration rollback dry-run |
-| 1 | Integration: overview API; pagination; Realtime subscription |
-| 2 | Idempotency retry/cancel; audit event inserted |
-| 3 | Final-admin protection; invitation flow |
-| 4 | QB reconcile; filing list accuracy |
-| 5 | RAG regenerate proxy auth |
-| 6 | UCI banner; flag toggle audit |
-| 7 | Alert trigger simulation |
-
-**Production smoke:** platform_admin → Command Center → filter failed scrape jobs → open detail → verify events load.
+**Production smoke:** Platform admin → Users → open test user → effective permissions load → change feature → audit row appears.
 
 ---
 
-## 14. Production acceptance checklist
-
-### Functional
-- [ ] All 18 nav modules reachable (developer routes excluded)
-- [ ] Zero mock data badges in admin modules
-- [ ] Every control in registry has working backend
-- [ ] Pagination on all tables >50 rows
-
-### Security
-- [ ] Pen test: non-admin JWT rejected on all admin API routes
-- [ ] RLS: project user cannot call admin RPCs
-- [ ] No secret in network responses (verified by scan)
-- [ ] Final-admin protection tested
-
-### Operational
-- [ ] Stale job appears within 15min test
-- [ ] Heartbeat loss surfaces ALT-004
-- [ ] Environment banner on all pages
-
-### Quality
-- [ ] ≥80% route coverage on admin API auth tests
-- [ ] Rollback plan documented per migration
-- [ ] Operator runbook in `docs/admin-dashboard/RUNBOOK.md` (create at Phase 1)
-
----
-
-## 15. Documentation deliverables per phase
+## Documentation per phase
 
 | Phase | Docs |
 |-------|------|
-| 0 | API OpenAPI fragment; migration notes |
-| 1 | Operator runbook draft |
-| 2 | Scraper ops procedures |
-| 3 | Access management guide |
-| 4 | Billing ops + QB reconciliation |
-| 6 | UCI admin limitations |
-| 7 | Alert response playbook |
-
-Update `docs/diligence-readiness/ARCHITECTURE.md` admin section at Phase 1 completion.
-
----
-
-## 16. Business decisions still required
-
-| ID | Decision |
-|----|----------|
-| BC-01 | Approve five platform roles or reduce set |
-| BC-02 | Email alert recipients for P0/P1 |
-| BC-03 | Scraper schedule cron: in-process vs external scheduler |
-| BC-04 | Metrics retention period (90d default) |
-| BC-05 | Whether auditors get production access or read-replica |
-
----
-
-## 17. Dependencies on existing backlog
-
-| Backlog ID | Relationship |
-|------------|--------------|
-| PP-005 | **This architecture resolves** |
-| PP-004 | Must complete in parallel with Phase 0–2 |
-| PP-001 | Should merge before Phase 1 production UAT |
-| PP-014 | Permit queue replaced Phase 5 |
-| PP-015 | Operations board de-mocked Phase 4 |
+| 0 | Migration notes |
+| 2 | Feature key reference for operators |
+| 3 | Credential grant runbook |
+| 4 | RUNBOOK.md + update ARCHITECTURE.md admin section |

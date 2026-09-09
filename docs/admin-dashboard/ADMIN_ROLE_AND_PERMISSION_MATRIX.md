@@ -1,123 +1,169 @@
-# Admin Role and Permission Matrix
+# Admin Role and Permission Matrix — Governance Scope
 
 Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)
 
 ---
 
-## 1. Role model
+## 1. Platform roles (admin dashboard access)
 
-### 1.1 Platform roles (new table `platform_operator_roles`)
+| Role | Maps to | Admin UI access |
+|------|---------|-----------------|
+| **Platform admin** | `user_roles.role = 'admin'` | Full Users & Access, Audit, Platform |
+| **Non-admin** | Everyone else | **No admin routes** — `AdminUnauthorized` |
 
-Extends existing `user_roles.admin` without breaking current checks.
+No separate `operations_manager` / `operator` roles in v2 scope — governance is platform-admin-only. Project roles remain in main product.
 
-| Role key | Maps from today | Purpose |
-|----------|-------------------|---------|
-| `platform_admin` | `user_roles.role = 'admin'` | Full platform control |
-| `operations_manager` | New assignment | Ops + most config; cannot remove final admin |
-| `operator` | New assignment | Job/integration operations |
-| `support` | New assignment | User/project access assistance |
-| `auditor` | New assignment | Read-only compliance view |
-
-**Migration strategy:** Existing `user_roles.admin` rows auto-grant `platform_admin`. Additional roles stored in `platform_operator_roles(user_id, role_key)` with CHECK constraint on allowed keys.
-
-**Deprecated:** `app_role` values `moderator` and `user` — verify usage; if unused, document as legacy only.
-
-### 1.2 Project roles (unchanged)
-
-| Role | Table | Capabilities |
-|------|-------|--------------|
-| `owner` | `projects.owner_id` | Full project control |
-| `admin` | `project_team_members` | Team + settings |
-| `editor` | `project_team_members` | Edit + trigger scrape/QB dry-run |
-| `viewer` | `project_team_members` | Read only |
-
-RPCs: `has_project_access`, `has_project_admin_access`, `has_project_editor_access` (verified in migrations).
+**Future (optional):** `auditor` read-only on Audit page only — requires BC approval.
 
 ---
 
-## 2. Authorization enforcement layers
+## 2. Project access roles (unchanged semantics)
 
-| Layer | Mechanism | Applies to |
-|-------|-----------|------------|
-| L1 Frontend | `usePlatformRole(minRole)` | Hide nav/actions |
-| L2 Railway | `requirePlatformRole` middleware | All `/api/admin/v1/*` |
-| L3 Supabase RPC | `assert_platform_role()` inside SECURITY DEFINER | Direct RPC calls |
-| L4 RLS | Existing policies | Project-scoped user queries |
-| L5 Audit | `platform_audit_events` insert on mutation | All write actions |
+| Role | Enum / source | Capabilities in product |
+|------|---------------|------------------------|
+| **none** | Not member | No project data |
+| **viewer** | `project_team_members.viewer` | Read project-scoped data per feature grants |
+| **editor** | `editor` | Read + write where feature grants allow |
+| **admin** | `admin` or project owner | Team management + all feature writes on project unless explicitly denied |
+| **owner** | `projects.user_id` | Same as project admin |
 
-**Rule:** L2/L3 mandatory; L1 is UX only. Project-scoped admin actions (e.g. retry scrape on project X) also call `has_project_editor_access` or admin access as appropriate.
-
----
-
-## 3. Protections
-
-| Protection | Implementation |
-|------------|----------------|
-| Final platform admin | RPC `admin_revoke_platform_role` rejects if count(`platform_admin`) = 1 |
-| Self-lockout | Cannot demote self if last `platform_admin` |
-| Separation of duties | `auditor` cannot mutate; `support` cannot change platform roles |
-| Billing retry | `platform_admin` or `operations_manager` only |
-| UCI live gate | `platform_admin` + typed confirm + audit reason |
-| Credential secrets | Never returned — any role |
+Existing RPCs: `has_project_access`, `has_project_editor_access`, `has_project_admin_access`.
 
 ---
 
-## 4. Permissions matrix
+## 3. Feature access levels
 
-Legend: ✓ allowed · R read · W write · — denied · P project-scoped
+| Level | Code | Meaning |
+|-------|------|---------|
+| **none** | `0` | Feature hidden / API returns 403 |
+| **read** | `1` | View data and status |
+| **write** | `2` | Trigger actions (scrape, filing, invoice, etc.) |
 
-| Module / action | platform_admin | operations_manager | operator | support | auditor | Project admin |
-|-----------------|:--------------:|:------------------:|:--------:|:-------:|:-------:|:-------------:|
-| **A Command Center** | R/W ack | R/W ack | R | R | R | — |
-| **B Projects directory** | R/W | R/W | R | R | R | P own projects |
-| **B Archive project** | W | W | — | — | R | P admin |
-| **C List users** | R | R | R | R | R | — |
-| **C Invite user** | W | W | — | W | R | P team invite |
-| **C Assign platform role** | W | — | — | — | R | — |
-| **C Deactivate user** | W | W | — | — | R | — |
-| **D Jurisdiction CRUD** | W | W | R | R | R | — |
-| **D Maintenance mode** | W | W | — | — | R | — |
-| **E List all scrape jobs** | R | R | R | R | R | P project jobs |
-| **E Retry/cancel job** | W | W | W | — | R | P editor+ |
-| **E Manage schedules** | W | W | R | — | R | — |
-| **F Filing queue** | R/W | R/W | R | R | R | P |
-| **F Manual filing intervention** | W | W | — | — | R | P admin |
-| **G Document inventory** | R | R | R | R | R | P |
-| **G Archive document** | W | W | — | — | R | P admin |
-| **H Ingestion queue** | R/W | R/W | W | R | R | P |
-| **H Re-index document** | W | W | W | — | R | P editor+ |
-| **I Code analyzer runs** | R/W | R/W | W | R | R | P |
-| **J Response matrix** | R/W | R/W | W | R | R | P |
-| **K QB connection status** | R | R | R | R | R | — |
-| **K QB safe retry invoice** | W | W | — | — | R | P editor+ |
-| **K QB reconcile uncertain** | W | W | — | — | R | — |
-| **L Graph reconnect** | W | W | — | — | R | User own mailbox |
-| **L Send jurisdiction notification** | W | W | — | — | R | — |
-| **M UCI admin view** | R | R | R | R | R | — |
-| **M UCI live gate toggle** | W | — | — | — | R | — |
-| **N Integration test ping** | W | W | W | — | R | — |
-| **O System health** | R | R | R | R | R | — |
-| **P Feature flags** | W | W | R | R | R | — |
-| **Q Audit log** | R | R | R | R | R | — |
-| **R Backups/capacity** | R | R | R | R | R | — |
+Stored in `user_feature_permissions(user_id, project_id, feature_key, access_level)`.
+
+**Project_id NULL** = platform-wide default template for new project memberships (optional BC-01).
 
 ---
 
-## 5. Session and access revocation
+## 4. Scraped-data scope
 
-| Capability | Supported today | Dashboard target |
-|------------|-----------------|------------------|
-| Supabase Auth user ban | Dashboard manual | Expose via C Users (admin API wrapper) |
-| Revoke project invitation | RPC exists | C Invitations |
-| Remove team member | RPC/UI exists | C + project Team tab |
-| Invalidate all sessions | Supabase admin API | platform_admin only, audited |
+Table: `user_scraped_data_scope(user_id, scope_type, scope_ref, granted)`
+
+| scope_type | scope_ref example | Effect |
+|------------|-------------------|--------|
+| `project` | UUID | May view scraped data for that project only |
+| `jurisdiction` | `Arlington County` | Within allowed projects, filter to jurisdiction |
+| `portal_source` | `accela`, `projectdox` | Filter attachment/portal_data by source |
+
+**Rule:** User must have `has_project_access` for project-scoped data **and** matching scope row **and** `scraper.results` read ≥ read.
 
 ---
 
-## 6. Audit requirements for role changes
+## 5. Portal credential authorization
 
-Every platform role grant/revoke records:
+Table: `user_portal_credential_grants(user_id, credential_id, grant_level, project_id nullable, jurisdiction nullable)`
 
-- `actor_id`, `target_user_id`, `before_roles[]`, `after_roles[]`, `reason` (optional text), `correlation_id`
+| grant_level | Code | Allowed |
+|-------------|------|---------|
+| **none** | `0` | Row invisible in UI lists |
+| **use** | `1` | Backend decrypt for scrape/filing on scoped project/jurisdiction |
+| **manage** | `2` | CRUD metadata, rotate password via API, assign grants to others if also project admin |
 
-Existing `AdminMembers.tsx` grant/revoke must migrate to audited RPC (already partial via manual log — consolidate to `platform_audit_events`).
+**Credential owner (`portal_credentials.user_id`)** retains manage on own rows unless revoked by platform admin.
+
+**Manage does not return password to browser** — only POST with new password body.
+
+---
+
+## 6. Precedence rules (evaluation order)
+
+Evaluate top to bottom; first matching rule wins unless noted:
+
+```
+1. IF user has user_roles.admin → ALLOW all (platform admin bypass) EXCEPT audit still logs actions
+2. IF user deactivated → DENY all
+3. IF action requires project P:
+   3a. IF NOT has_project_access(user, P) → DENY (stop — feature grants ignored)
+   3b. IF project role = admin OR owner → ALLOW write on all features unless explicit deny row (optional deny table Phase 2+)
+   3c. ELSE resolve user_feature_permissions(user, P, feature_key)
+4. IF action reads scraped data for project P:
+   4a. Apply rule 3
+   4b. IF NOT scope match (project/jurisdiction/portal) → DENY
+5. IF action uses credential C:
+   5a. IF grant_level(C) < use → DENY
+   5b. IF credential scoped to project P → require has_project_access(user, P)
+   5c. Backend decrypt only inside Railway service — never FE
+6. DEFAULT → DENY
+```
+
+**Explicit deny:** Optional `user_feature_permissions.access_level = -1` (deny) overrides inherited admin role for that feature — separation of duties (BC optional).
+
+---
+
+## 7. Effective permission computation
+
+**RPC:** `admin_get_effective_permissions(p_user_id UUID) RETURNS JSONB`
+
+Returns structure:
+
+```json
+{
+  "user_id": "...",
+  "platform_admin": true,
+  "projects": [{
+    "project_id": "...",
+    "project_role": "editor",
+    "features": { "scraper.run": "write", "billing.quickbooks": "read" },
+    "scraped_data_scopes": ["jurisdiction:Arlington"],
+    "credentials": [{ "credential_id": "...", "grant": "use" }]
+  }],
+  "risks": ["orphan_feature_grant", "sole_platform_admin"]
+}
+```
+
+Computed **server-side only** — Users & Access detail tab displays this JSON formatted.
+
+---
+
+## 8. Admin dashboard permission matrix
+
+| Action | Platform admin |
+|--------|:--------------:|
+| View Overview | ✓ |
+| List all users | ✓ |
+| Activate/deactivate user | ✓ |
+| Grant/revoke platform admin | ✓ (with final-admin guard) |
+| Assign project team role | ✓ |
+| Set feature permissions | ✓ |
+| Set scraped-data scope | ✓ |
+| Assign credential grants | ✓ |
+| View audit log | ✓ |
+| Export audit CSV | ✓ |
+| Platform jurisdictions CRUD | ✓ |
+| Send jurisdiction notifications | ✓ |
+| Manage drip campaigns | ✓ |
+
+---
+
+## 9. Enforcement map
+
+| Layer | Mechanism |
+|-------|-----------|
+| Admin UI routes | `useRequireAdmin` |
+| Admin API | `requirePlatformAdmin` middleware |
+| Admin RPCs | `has_role(auth.uid(), 'admin')` at start |
+| Product feature APIs | `assert_feature_access(user, project, feature, level)` NEW |
+| Portal credential API | Check `user_portal_credential_grants` + owner |
+| portal_data reads | RLS or RPC wrapper with scope check NEW |
+| Scrape enqueue | Existing editor check + `scraper.run` write |
+
+---
+
+## 10. Final-admin and self-lockout
+
+| Rule | Implementation |
+|------|----------------|
+| Last admin | RPC `admin_revoke_platform_role` raises if count=1 |
+| Self-demote last admin | Blocked |
+| Self-deactivate | Blocked if last admin |
+| Audit | All role changes logged before commit |

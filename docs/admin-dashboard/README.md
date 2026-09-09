@@ -1,54 +1,44 @@
-# PermitPilot Admin and Operations Dashboard — Canonical Architecture
+# PermitPilot Admin Dashboard — Canonical Architecture (Governance Scope)
 
-**Status:** Architecture approved for review (documentation only — no implementation yet)  
-**Code reference:** `main` (PermitPilot stack verified 2026-09-09)  
-**Repository:** `epermitarthouse-rgb/Epermit-main`
+**Status:** Architecture for review — documentation only  
+**Scope:** Access, security, and platform governance — **not** operational duplication of the main product  
+**Code reference:** `main` · Repository: `epermitarthouse-rgb/Epermit-main`
 
 ---
 
-## Purpose of this folder
+## Purpose
 
-This folder contains the **single canonical, production-grade architecture** for the PermitPilot Admin and Operations Dashboard. Implementation must follow these documents exactly. Phased delivery is allowed for safety; phases must not introduce throwaway UI or APIs that diverge from this target.
+The Admin Dashboard governs **who can access what** across PermitPilot. It does **not** recreate Projects, Scrapers, Filing, Documents, RAG, Billing, UCI, or other operational workflows that belong in the main application.
+
+Operators continue to use existing product surfaces (`/projects`, `/portal-data`, `/settings`, etc.). Admin provides centralized **Users & Access**, **Audit**, and **platform configuration** that is already under `/admin/*`.
 
 ---
 
 ## Document set
 
-| Document | Role |
-|----------|------|
-| [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md) | Master architecture: purpose, boundaries, decisions, data/API overview, acceptance criteria |
-| [ADMIN_INFORMATION_ARCHITECTURE.md](./ADMIN_INFORMATION_ARCHITECTURE.md) | Complete `/admin` navigation, modules A–R, page-level UX specifications |
-| [ADMIN_ROLE_AND_PERMISSION_MATRIX.md](./ADMIN_ROLE_AND_PERMISSION_MATRIX.md) | Platform and project roles, permissions matrix, authorization enforcement |
-| [ADMIN_CONTROL_REGISTRY.md](./ADMIN_CONTROL_REGISTRY.md) | Every major control: label, role, backend action, audit, risk |
-| [ADMIN_DATA_AND_API_CONTRACTS.md](./ADMIN_DATA_AND_API_CONTRACTS.md) | Tables, views, RPCs, Railway admin API contract |
-| [ADMIN_STATE_MACHINES.md](./ADMIN_STATE_MACHINES.md) | Canonical operational state models aligned to current DB values |
-| [ADMIN_MONITORING_AND_ALERTS.md](./ADMIN_MONITORING_AND_ALERTS.md) | Health, heartbeats, alerts, incident model |
-| [ADMIN_IMPLEMENTATION_ROADMAP.md](./ADMIN_IMPLEMENTATION_ROADMAP.md) | Phased build sequence, AI-assisted estimates, dependencies |
+| Document | Contents |
+|----------|----------|
+| [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md) | Master architecture, boundaries, permission model summary, acceptance criteria |
+| [ADMIN_INFORMATION_ARCHITECTURE.md](./ADMIN_INFORMATION_ARCHITECTURE.md) | Navigation (4 areas), page specs, existing screen disposition |
+| [ADMIN_ROLE_AND_PERMISSION_MATRIX.md](./ADMIN_ROLE_AND_PERMISSION_MATRIX.md) | Roles, feature keys, precedence rules, effective-permission computation |
+| [ADMIN_CONTROL_REGISTRY.md](./ADMIN_CONTROL_REGISTRY.md) | Governance controls only |
+| [ADMIN_DATA_AND_API_CONTRACTS.md](./ADMIN_DATA_AND_API_CONTRACTS.md) | Schema reuse, new tables, RPCs, admin API |
+| [ADMIN_STATE_MACHINES.md](./ADMIN_STATE_MACHINES.md) | Access grant, credential grant, and audit event lifecycles |
+| [ADMIN_MONITORING_AND_ALERTS.md](./ADMIN_MONITORING_AND_ALERTS.md) | Permission-risk and audit alerts (not product ops monitoring) |
+| [ADMIN_IMPLEMENTATION_ROADMAP.md](./ADMIN_IMPLEMENTATION_ROADMAP.md) | Focused phased plan and AI-assisted estimates |
 
 ---
 
-## Supporting evidence (not the final architecture)
+## Supporting evidence (not the target architecture)
 
 | Document | Role |
 |----------|------|
-| [ADMIN_DASHBOARD_CURRENT_STATE_AND_PLAN.md](./ADMIN_DASHBOARD_CURRENT_STATE_AND_PLAN.md) | Read-only audit of existing `/admin/*` surfaces, platform verification, and pre-architecture gap analysis (2026-09-09) |
+| [ADMIN_DASHBOARD_CURRENT_STATE_AND_PLAN.md](./ADMIN_DASHBOARD_CURRENT_STATE_AND_PLAN.md) | Pre-architecture audit (2026-09-09) |
 
-Prior diligence (`docs/diligence-readiness/PERMITPILOT_360_PRODUCTION_AUDIT.md`, `PERMITPILOT_UPCOMING_WORK_AND_ESTIMATE.md`) informs backlog items **PP-005** (unified ops dashboard) and related P0/P1 work.
-
----
-
-## Canonical production endpoints
-
-| Surface | URL |
-|---------|-----|
-| Frontend | `https://epermit-main-nine.vercel.app` |
-| Railway API | `https://epermit-main-production.up.railway.app` |
-| Supabase | `https://eeqxyjrcldivtpikcpvk.supabase.co` (InsightDC) |
+The prior 18-module operations architecture (commit `817b796`) is **superseded** by this governance-focused scope.
 
 ---
 
 ## Implementation gate
 
-**Do not begin dashboard implementation until this architecture set is reviewed and explicitly approved.**
-
-After approval, start with **Phase 0** in [ADMIN_IMPLEMENTATION_ROADMAP.md](./ADMIN_IMPLEMENTATION_ROADMAP.md) (shared foundations: admin auth middleware, audit model, operational views, dashboard shell).
+Do not implement until this document set is reviewed and approved. Start with [ADMIN_IMPLEMENTATION_ROADMAP.md](./ADMIN_IMPLEMENTATION_ROADMAP.md) Phase 0.

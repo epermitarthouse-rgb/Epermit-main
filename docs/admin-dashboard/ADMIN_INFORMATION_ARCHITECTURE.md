@@ -1,358 +1,164 @@
-# Admin Information Architecture
-
-**Canonical navigation and page specifications for the complete PermitPilot Admin Dashboard.**
+# Admin Information Architecture — Governance Scope
 
 Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)
 
 ---
 
-## 1. Global UX conventions
-
-### 1.1 Layout
-
-| Element | Specification |
-|---------|---------------|
-| Desktop | Fixed left nav (240px), top bar with environment banner + global search, content area max-width 1440px |
-| Tablet | Collapsible nav drawer |
-| Mobile | Read-only health acceptable; destructive actions require desktop (warn if viewport <768px) |
-| Environment banner | Red-tinted strip: `PRODUCTION — InsightDC — actions affect live data` |
-| Status colors | `success` green, `warning` amber, `error` red, `neutral` gray, `info` blue |
-| Severity | P0 incident, P1 degraded, P2 warning, P3 info |
-| Loading | Skeleton rows for tables; spinner only for full-page first load |
-| Empty states | Actionable copy + link to relevant module or runbook |
-| Partial success | Amber badge + expandable failure list (attachments, pages, chunks) |
-| Stale data | Gray clock icon if `updated_at` > refresh SLA (60s command center, 30s job tables) |
-
-### 1.2 Global features
-
-| Feature | Behavior |
-|---------|----------|
-| Global search | Cmd+K: projects by name/id, users by email, jobs by id, permit numbers |
-| Global filters | Persist in URL query params (`?env=production&status=failed`) |
-| Pagination | Server-side default 25 rows; options 25/50/100 |
-| Bulk actions | Checkbox column where registry marks bulk-safe; confirm modal with count |
-| Drawers | Right 480px detail drawer for job/user/project row |
-| Modals | Destructive actions: title + consequence + typed confirm for high risk |
-| Notification badges | Nav item badge = count of actionable items in module |
-| Accessibility | WCAG 2.1 AA: focus order, aria labels on status badges, table headers |
-
----
-
-## 2. Navigation tree
+## 1. Final navigation tree
 
 ```
 /admin
-├── (A) Command Center                    /admin
-├── (B) Projects                          /admin/projects
-│   └── Project detail                    /admin/projects/:projectId
-├── (C) Users and Access                  /admin/access
-│   ├── Users                             /admin/access/users
-│   ├── Invitations                       /admin/access/invitations
-│   └── Platform roles                    /admin/access/roles
-├── (D) Jurisdictions and Portals         /admin/jurisdictions
-│   └── Portal health                     /admin/jurisdictions/health
-├── (E) Scraper Operations                /admin/scrapers
-│   ├── All jobs                          /admin/scrapers/jobs
-│   ├── Schedules                         /admin/scrapers/schedules
-│   └── By jurisdiction                   /admin/scrapers/jurisdictions/:slug
-├── (F) Permit Filing                     /admin/filing
-│   └── Filing detail                     /admin/filing/:filingId
-├── (G) Documents and Storage             /admin/documents
-│   └── Storage recovery                  /admin/documents/storage
-├── (H) Ingestion and RAG                 /admin/ingestion
-│   └── Document detail                   /admin/ingestion/documents/:documentId
-├── (I) AI Code Analyzer                  /admin/code-analyzer
-├── (J) Response Matrix                   /admin/response-matrix
-├── (K) QuickBooks and Billing            /admin/billing
-├── (L) Communications                    /admin/communications
-├── (M) UCI Administration                /admin/uci
-├── (N) Integrations                      /admin/integrations
-├── (O) System Health                     /admin/health
-├── (P) Configuration                     /admin/config
-│   ├── Feature flags                     /admin/config/flags
-│   └── Branding and notifications        /admin/config/notifications
-├── (Q) Audit and Security                /admin/audit
-└── (R) Backups and Capacity              /admin/capacity
+├── Overview                          /admin
+├── Users & Access                    /admin/access
+│   ├── Directory                     /admin/access/users
+│   ├── User detail                   /admin/access/users/:userId
+│   └── Bulk review                   /admin/access/review
+├── Audit                             /admin/audit
+└── Platform                          /admin/platform
+    ├── Jurisdictions                 /admin/platform/jurisdictions
+    ├── Notifications & branding      /admin/platform/notifications
+    └── Email campaigns               /admin/platform/campaigns
 ```
 
-**Developer-only (retained, not in ops nav):**
+**Redirects from legacy routes:**
 
-- `/admin/shadow-mode`
-- `/admin/architecture-replication`
+| Legacy | Redirect |
+|--------|----------|
+| `/admin/members` | `/admin/access/users` |
+| `/admin/jurisdictions` | `/admin/platform/jurisdictions` |
+| `/admin` (old AdminPanel tabs) | Overview + Platform sub-routes |
+| `/admin/authorizations` | `/admin/access/users` |
+| `/admin/feature-flags` | Removed (localStorage dev-only) |
+| `/admin/uci-action-tracker` | Removed from admin |
+| `/admin/shadow-mode` | Direct URL only (dev) |
+| `/admin/architecture-replication` | Direct URL only (dev) |
+
+---
+
+## 2. Existing screen disposition
+
+| Screen | Route today | Decision | Rationale |
+|--------|-------------|----------|-----------|
+| **AdminPanel** | `/admin` | **Merge → split** | Overview metrics + move notifications/branding/drip to Platform |
+| **AdminMembers** | `/admin/members` | **Merge → polish** | Core of Users & Access directory; extend with feature/scopes |
+| **AdminAudit** | `/admin/audit` | **Polish + expand** | Keep route; add filters and unified audit table |
+| **JurisdictionAdmin** | `/admin/jurisdictions` | **Retain** | Working CRUD; move under Platform |
+| **FeatureFlagsAdmin** | `/admin/feature-flags` | **Remove from nav** | localStorage-only; not governance |
+| **ShadowModeDashboard** | `/admin/shadow-mode` | **Exclude** | Internal dev metrics |
+| **ArchitectureReplicationChecklist** | `/admin/architecture-replication` | **Exclude** | Internal dev checklist |
+| **UciActionTracker** | `/admin/uci-action-tracker` | **Remove** | Product/docs track UCI; not admin governance |
+| **AdminAuthorizationsPlaceholder** | `/admin/authorizations` | **Remove** | Empty placeholder |
 
 ---
 
 ## 3. Module specifications
 
-### A. Command Center — `/admin`
+### 3.1 Overview — `/admin`
 
-| Field | Value |
-|-------|-------|
-| **Roles** | All platform roles (read); actions per registry |
-| **Purpose** | Single-pane operational situational awareness |
-
-**Summary cards:** System health score, active incidents, failed jobs (24h), stuck jobs, integration degraded count, pending operator actions, ingestion queue depth, scrape success rate (24h).
-
-**Main table:** Recent critical activity (from `platform_audit_events` + job state changes).
-
-**Filters:** Time range, severity, module.
-
-**Actions:** Acknowledge incident, jump to job, jump to integration.
-
-**Alerts strip:** P0/P1 items with dismiss (audited).
-
-**Data sources:** `GET /api/admin/v1/overview`, Realtime subscriptions on job tables.
-
-```mermaid
-flowchart LR
-  subgraph cards [Summary cards]
-    H[Health]
-    J[Jobs]
-    I[Integrations]
-  end
-  subgraph feed [Activity feed]
-    A[Audit events]
-    E[Job events]
-  end
-  cards --> feed
-```
-
----
-
-### B. Projects — `/admin/projects`
-
-| Page | Primary purpose | Summary cards | Main table | Key filters | Row detail | Actions |
-|------|-----------------|---------------|------------|-------------|------------|---------|
-| Directory | Cross-project ops view | Total active, stale scrape, ingest backlog, filing blocked | Projects with ops columns | Jurisdiction, status, owner, has failures | Drawer: timeline | Open project, archive |
-| Detail | Single-project ops | Scrape, ingest, filing, billing, UCI flags | Unified event timeline | Event type | Full timeline | Trigger scrape, enqueue ingest |
-
-**Warnings:** Project with failed job >24h; missing billing data; UCI synthetic-only badge.
-
----
-
-### C. Users and Access — `/admin/access`
-
-| Page | Purpose | Table | Actions |
-|------|---------|-------|---------|
-| Users | Directory | Email, platform role, last sign-in, project count | Invite, deactivate, assign role |
-| Invitations | Pending invites | Project, email, role, status, expires | Resend, revoke |
-| Platform roles | Admin roster | User, roles, granted by | Promote/demote (with final-admin guard) |
-
-**Replaces:** `/admin/members`, `/admin/authorizations` placeholder.
-
----
-
-### D. Jurisdictions and Portals — `/admin/jurisdictions`
-
-**Retains existing** `JurisdictionManager` functionality; adds:
-
-| Addition | Purpose |
-|----------|---------|
-| Portal health table | Last successful scrape per jurisdiction, credential readiness % |
-| Maintenance mode toggle | Per-jurisdiction scrape pause (server flag) |
-| Portal incident log | Manual notes + auto-detected failure spikes |
-
----
-
-### E. Scraper Operations — `/admin/scrapers`
-
-| Page | Purpose | Table columns | Actions |
-|------|---------|---------------|---------|
-| All jobs | Cross-project queue | id, project, jurisdiction, mode, status, progress, started, heartbeat, attachments | Retry, cancel, view events |
-| Schedules | Future: cron definitions | jurisdiction, cron, enabled, next run | Enable/disable schedule |
-| Jurisdiction | Per-portal health | success rate, avg duration, last failure | Drill to jobs |
-
-**Architecture note:** Arlington + UCI use durable `scrape_jobs`; other jurisdictions may be session-only — UI shows `execution_model: durable | session` column.
-
-**Wireframe (jobs list):**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [Failed: 3] [Running: 2] [Stuck: 1]          [Refresh 30s] │
-├─────────────────────────────────────────────────────────────┤
-│ Status ▼  Jurisdiction ▼  Project ▼  Date ▼                  │
-│ ☐  job_id   Arlington   test_project   running   45/120  ⋮  │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-### F. Permit Filing — `/admin/filing`
-
-| Page | Purpose | Data |
-|------|---------|------|
-| Queue | Cross-project filings | `permit_filings` + `agent_runs` |
-| Detail | Pre-flight → submit trail | Status history, missing requirements, credentials readiness |
-
-**States:** Align to `filing_status` in DB (see state machines doc).
-
----
-
-### G. Documents and Storage — `/admin/documents`
-
-| Page | Purpose |
-|------|---------|
-| Inventory | Cross-project documents: source (scrape/manual), size, ingestion status |
-| Storage | Bucket usage, orphan detection, recovery status (informational) |
-
-**Actions:** Safe archive (soft delete), re-enqueue ingestion — not hard delete without typed confirm.
-
----
-
-### H. Ingestion and RAG — `/admin/ingestion`
-
-| Page | Purpose |
-|------|---------|
-| Queue | `document_ingestion_jobs` all projects |
-| RAG readiness | Projects with chunks vs documents missing ingestion |
-| Document detail | Chunk count, embedding status, OCR flag, re-index |
-
-**Gap addressed:** Manual ingest trigger today — admin exposes bulk enqueue for scraped-not-ingested.
-
----
-
-### I. AI Code Analyzer — `/admin/code-analyzer`
-
-| Page | Purpose |
-|------|---------|
-| Runs | Analysis runs, sheet findings, failures |
-| Quality | Evaluation status (when tests exist) |
-
-**Scope:** Standard Compliance + Code Modification paths; links to project Code Mod UI.
-
----
-
-### J. Response Matrix — `/admin/response-matrix`
-
-| Page | Purpose |
-|------|---------|
-| Pipeline | Comment intake → classification → RAG → draft → review |
-| Failures | Generation failures with evidence gaps |
-
----
-
-### K. QuickBooks and Billing — `/admin/billing`
-
-| Page | Purpose |
-|------|---------|
-| Connection | Status, environment — no tokens |
-| Milestones | Projects with M1/M2/M3 state, `qb_uncertain` queue |
-| Test visibility | Labelled test projects only |
-
-**Actions:** Preview (existing), safe retry, reconcile uncertain — per control registry.
-
----
-
-### L. Communications — `/admin/communications`
-
-| Page | Purpose |
-|------|---------|
-| Graph | Mailbox connection, last poll, unmatched count |
-| Notifications | Jurisdiction notifications (from existing AdminPanel) |
-| Delivery | Failed email log |
-
----
-
-### M. UCI Administration — `/admin/uci`
-
-| Element | Requirement |
+| Element | Specification |
 |---------|---------------|
-| Banner | `UCI PROTOTYPE — NOT CLIENT-READY — synthetic/mock validation only` |
-| Coverage | Provider readiness, live-submit gate, coordination records, Graph ingestion |
-| Data | Show `synthetic_test` vs production checklist mode |
-
-**Merge:** `/admin/uci-action-tracker` into this module.
-
----
-
-### N. Integrations — `/admin/integrations`
-
-Card per integration: Supabase, Railway API, ingestion worker, QuickBooks, Graph, OpenAI, Resend, Mapbox, Stripe, portals.
-
-Each card: configured, connected, last success, last error (sanitized), reconnect/test action.
+| **Purpose** | At-a-glance governance health |
+| **Roles** | Platform admin only |
+| **Summary cards** | Total users; active users; platform admins count; users with permission risks; pending invitations |
+| **Permission risks panel** | Users with: no project access but feature grants (orphan); credential manage without project; expired invitations; sole platform admin |
+| **Recent activity** | Last 15 `platform_audit_events` (admin actions) |
+| **Useful widgets retained** | Scheduled notification count (from AdminPanel); jurisdiction subscriber summary (link to Platform) |
+| **Actions** | Jump to Users & Access, Audit, Platform |
+| **Empty state** | "No risks detected" with last scan time |
 
 ---
 
-### O. System Health — `/admin/health`
+### 3.2 Users & Access — `/admin/access`
 
-| Section | Content |
-|---------|---------|
-| Services | Epermit-main, ingestion-worker, Edge probe results |
-| Queues | Depth, oldest pending, stuck count |
-| Deploy | Git SHA, deployed at (from Railway metadata API) |
+#### Directory — `/admin/access/users`
 
----
+| Column | Source |
+|--------|--------|
+| Email / name | `profiles` via `admin_list_member_directory` |
+| Status | active / deactivated |
+| Platform role | `user_roles` |
+| Project count | directory RPC |
+| Risk flags | computed |
+| Last activity | profile / auth metadata if available |
 
-### P. Configuration — `/admin/config`
+**Filters:** status, platform role, has risks, search email/name.
 
-| Page | Purpose |
-|------|---------|
-| Feature flags | Server `platform_feature_flags` — replaces localStorage |
-| Notifications/branding | Existing drip + jurisdiction notification tools |
+#### User detail — `/admin/access/users/:userId`
 
----
+**Tabs:**
 
-### Q. Audit and Security — `/admin/audit`
+1. **Summary** — identity, status, platform role
+2. **Project access** — table: project, role (none/viewer/editor/admin), source (owner/team/invitation)
+3. **Feature permissions** — matrix: feature key × read/write/none per project (or global)
+4. **Scraped-data scope** — projects, jurisdictions, portal sources
+5. **Portal credentials** — grants per credential: none/use/manage; scoped project/jurisdiction
+6. **Effective permissions** — read-only computed view (server JSON) — **primary reviewer surface**
 
-| Page | Purpose |
-|------|---------|
-| Event log | `platform_audit_events` searchable |
-| Access changes | Filter action types: role, invite, credential metadata |
+**Actions:** Activate/deactivate; grant/revoke platform admin; add/remove project role; edit feature matrix; edit scopes; bulk copy from template user.
 
-**Replaces:** narrow `admin_activity_log` viewer.
+#### Bulk review — `/admin/access/review`
 
----
-
-### R. Backups and Capacity — `/admin/capacity`
-
-**Informational only** — no restore button.
-
-| Card | Source |
-|------|--------|
-| DB backups | Last physical backup date, PITR status |
-| Storage | Size, recovery gap warning |
-| Egress | Supabase quota (when API available) |
-| Last restore drill | Manual entry / runbook link |
+| Feature | Specification |
+|---------|---------------|
+| Purpose | Quarterly access review |
+| Table | All users with effective permission hash + last reviewed date |
+| Actions | Mark reviewed; export CSV; filter users with credential manage |
 
 ---
 
-## 4. Page specification template (all modules)
+### 3.3 Audit — `/admin/audit`
 
-Every page implements:
-
-| Aspect | Requirement |
-|--------|-------------|
-| Primary purpose | One sentence in page header |
-| Summary cards | 3–6 KPIs above fold |
-| Main table | Sortable, filterable, paginated |
-| Row details | Drawer with tabs: Overview, Events, Related |
-| Actions | Role-gated per registry |
-| Warnings | Inline alerts for stale, partial, blocked-by-provider |
-| Error state | Retry fetch + correlation ID |
-| Empty state | Explain prerequisite (e.g. no jobs in filter) |
+| Element | Specification |
+|---------|---------------|
+| **Table columns** | timestamp, actor, action, target type/id, project, feature, result, correlation id |
+| **Filters** | user, action category, project, feature key, date range |
+| **Categories** | role_change, project_access, feature_permission, scraped_data_scope, credential_use, credential_manage, platform_notification, user_lifecycle |
+| **Detail drawer** | Safe before/after JSON — **no secrets** |
+| **Export** | CSV for date range (auditor role future) |
+| **Historical import** | Read-only display of legacy `admin_activity_log` rows |
 
 ---
 
-## 5. Existing surface migration map
+### 3.4 Platform — `/admin/platform`
 
-| Existing surface | Decision | New destination | Data preserved | Redirect | Timing |
-|------------------|----------|-----------------|----------------|----------|--------|
-| `/admin` AdminPanel | Merge | `/admin` Command Center + `/admin/config/notifications` | Notifications, branding | Yes | Phase 1 |
-| `/admin/jurisdictions` | Keep | `/admin/jurisdictions` | Full | No | Phase 1 |
-| `/admin/feature-flags` | Replace | `/admin/config/flags` | None (localStorage abandoned) | Yes | Phase 2 |
-| `/admin/shadow-mode` | Keep dev | Hidden from ops nav | Full | No | N/A |
-| `/admin/architecture-replication` | Keep dev | Hidden from ops nav | Full | No | N/A |
-| `/admin/uci-action-tracker` | Merge | `/admin/uci` | Tracker data | Yes | Phase 6 |
-| `/admin/authorizations` | Remove | `/admin/access` | N/A | Yes | Phase 3 |
-| `/admin/members` | Merge | `/admin/access/roles` | Full | Yes | Phase 3 |
-| `/admin/audit` | Replace | `/admin/audit` expanded | Historical log read-only import | No | Phase 2 |
-| `/operations` | Deprecate | `/admin/projects/:id` | Real finance scalars | Yes | Phase 4 |
-| `/portal-data` | Keep link | Linked from E job detail | Full | No | N/A |
-| `/settings` | Keep user | User-scoped settings | Full | No | N/A |
-| Dashboard scrape widget | Link | E Scrapers | Full | No | Phase 1 |
-| `/permit-queue` | Replace | `/admin/filing` | N/A | Yes | Phase 5 |
-| `/messages` | Replace | `/admin/communications` | N/A | Yes | Phase 5 |
-| Baltimore mock routes | Remove nav | Archive | Reference only | 404 or archive | Phase 7 |
-| `/demo/*` | Keep | Outside admin | Demo | No | N/A |
+Retained working admin features — **not** product operations.
 
-**Source of truth rule:** Each operational metric has exactly one primary module; other surfaces link rather than duplicate controls.
+| Sub-route | Retained from | Content |
+|-----------|---------------|---------|
+| Jurisdictions | `JurisdictionAdmin` | CRUD, CSV import |
+| Notifications & branding | `AdminPanel` tabs | Send/schedule jurisdiction notifications, email branding |
+| Email campaigns | `DripCampaignManager` | Drip campaigns via edge function |
+
+---
+
+## 4. Page specification table
+
+| Page | Primary purpose | Summary cards | Main table | Filters | Row details | Actions | Warnings |
+|------|-----------------|---------------|------------|---------|-------------|---------|----------|
+| Overview | Governance health | 5 KPIs | Recent audit | — | Event drawer | Navigate | Risk list |
+| Users directory | Find users | — | Users | role, risk, search | → detail | Add user | Orphan grants |
+| User detail | Manage one user | Effective summary | Project/feature matrices | — | Tabs | All ACC-* controls | Deny conflicts |
+| Bulk review | Access certification | Pending review count | All users | unreviewed | — | Mark reviewed | — |
+| Audit | Compliance trail | Event count 24h | Events | user, action, project, date | Drawer | Export | — |
+| Platform jurisdictions | Catalog | — | Jurisdictions | state | Form | CRUD | — |
+| Platform notifications | Comms | Subscribers | Scheduled | jurisdiction | Preview | Send/schedule | — |
+
+---
+
+## 5. Global UX
+
+| Convention | Value |
+|------------|-------|
+| Layout | Same `AdminPageShell` + `AdminLayout` + `useRequireAdmin` |
+| Environment banner | `PRODUCTION — governance changes affect live access` |
+| Effective permissions | Always show computed badge: e.g. `scraper.run: write @ Project X` |
+| Destructive | Remove admin role, deactivate user → typed confirm |
+| Accessibility | WCAG 2.1 AA on tables and forms |
+
+---
+
+## 6. What admin explicitly does not include
+
+No pages for: scrape job queue, ingestion queue, filing queue, document inventory, QB invoice list, UCI coordination list, integration health cards, system health/workers, backup status, feature flags (until server-backed governance flags are in scope).
+
+Those remain in the main product or external runbooks.

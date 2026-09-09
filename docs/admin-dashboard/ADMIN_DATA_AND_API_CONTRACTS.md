@@ -1,253 +1,201 @@
-# Admin Data and API Contracts
+# Admin Data and API Contracts — Governance Scope
 
 Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)
 
 ---
 
-## 1. Data architecture principles
+## 1. Existing structures (reuse)
 
-| Principle | Implementation |
-|-----------|----------------|
-| Server-side aggregation | SQL views + RPCs; Railway admin API composes |
-| Pagination | Keyset on `(created_at, id)` for job tables |
-| Project scoping | All queries filter `tenant_id` / project access unless platform_admin |
-| No browser service-role | Frontend uses user JWT only |
-| Realtime | Subscribe to `scrape_jobs`, `document_ingestion_jobs` for ops tables |
-| Retention | Job rows 90d hot; archive to `scrape_jobs_archive` (future) |
-
----
-
-## 2. Entity relationship (operational core)
-
-```mermaid
-erDiagram
-  projects ||--o{ scrape_jobs : has
-  projects ||--o{ document_ingestion_jobs : has
-  projects ||--o{ project_documents : has
-  projects ||--o{ permit_filings : has
-  projects ||--o{ project_team_members : has
-  scrape_jobs ||--o{ scrape_events : emits
-  project_documents ||--o{ document_ingestion_jobs : ingests
-  project_documents ||--o{ project_document_chunks : chunks
-  user_roles ||--|| profiles : platform_role
-  platform_operator_roles ||--|| profiles : extended_role
-  platform_audit_events }o--|| profiles : actor
-```
+| Object | Use |
+|--------|-----|
+| `user_roles`, `has_role()` | Platform admin |
+| `profiles` | User directory |
+| `project_team_members`, `project_invitations` | Project access |
+| `has_project_access`, `has_project_editor_access`, `has_project_admin_access` | Membership gates |
+| `admin_list_member_directory()` | Directory listing |
+| `portal_credentials` | Credential storage (encrypted password column) |
+| `portal-credentials.routes.js` | Extend with grant checks |
+| `admin_activity_log` | Legacy read-only in Audit |
 
 ---
 
-## 3. Existing tables (reuse)
+## 2. New tables (migrations required)
 
-| Table | Admin use |
-|-------|-----------|
-| `scrape_jobs`, `scrape_events` | E Scraper ops |
-| `document_ingestion_jobs` | H Ingestion |
-| `project_documents`, `project_document_chunks` | G, H, J |
-| `permit_filings`, `agent_runs` | F Filing |
-| `projects`, `project_team_members`, `project_invitations` | B, C |
-| `user_roles`, `profiles` | C Access |
-| `admin_activity_log` | Historical import to Q |
-| `portal_credentials` | D, G — metadata only |
-| `jurisdictions` | D |
-| `microsoft_mailbox_connections` | L — status only |
-| QuickBooks connection table (encrypted) | K — status via API |
-| UCI coordination tables | M |
+### 2.1 `platform_audit_events`
 
----
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `correlation_id` | TEXT | |
+| `actor_id` | UUID | |
+| `action` | TEXT | e.g. `feature_permission.changed` |
+| `target_type` | TEXT | user, project, credential, … |
+| `target_id` | TEXT | |
+| `project_id` | UUID nullable | |
+| `feature_key` | TEXT nullable | |
+| `before_json` | JSONB | No secrets |
+| `after_json` | JSONB | No secrets |
+| `result` | TEXT | success/failure |
+| `created_at` | TIMESTAMPTZ | |
 
-## 4. New database objects (migrations)
+Index: `(created_at DESC, action)`, `(actor_id, created_at DESC)`.
 
-| Object | Type | Purpose |
-|--------|------|---------|
-| `platform_operator_roles` | table | Extended platform roles |
-| `platform_feature_flags` | table | Server feature flags |
-| `platform_audit_events` | table | Unified audit |
-| `integration_health_snapshots` | table | Integration module |
-| `platform_health_heartbeats` | table | Worker/API heartbeats |
-| `jurisdiction_maintenance` | table | D maintenance mode |
-| `scraper_schedules` | table | E cron definitions (future cron runner) |
-| `admin_v_scrape_jobs_list` | view | Paginated scrape list with project name |
-| `admin_v_ingestion_jobs_list` | view | Paginated ingestion list |
-| `admin_v_project_ops_summary` | view | B project directory KPIs |
-| `admin_v_integration_status` | view | N card data |
+RLS: platform admin SELECT; inserts via SECURITY DEFINER only.
 
-### `platform_audit_events` (canonical)
+### 2.2 `user_feature_permissions`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `user_id` | UUID FK | |
+| `project_id` | UUID FK nullable | NULL = global template |
+| `feature_key` | TEXT | |
+| `access_level` | SMALLINT | 0 none, 1 read, 2 write, -1 deny optional |
+| `granted_by` | UUID | |
+| `created_at`, `updated_at` | TIMESTAMPTZ | |
+
+UNIQUE `(user_id, project_id, feature_key)`.
+
+### 2.3 `user_scraped_data_scope`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `user_id` | UUID FK | |
+| `scope_type` | TEXT | project, jurisdiction, portal_source |
+| `scope_ref` | TEXT | UUID or slug |
+| `granted_by` | UUID | |
+| `created_at` | TIMESTAMPTZ | |
+
+### 2.4 `user_portal_credential_grants`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `user_id` | UUID FK | |
+| `credential_id` | UUID FK → portal_credentials | |
+| `grant_level` | SMALLINT | 0 none, 1 use, 2 manage |
+| `project_id` | UUID nullable | Scope |
+| `jurisdiction` | TEXT nullable | Scope |
+| `granted_by` | UUID | |
+| `created_at`, `updated_at` | TIMESTAMPTZ | |
+
+UNIQUE `(user_id, credential_id)`.
+
+### 2.5 `user_access_reviews` (optional Phase 2)
 
 | Column | Type |
 |--------|------|
-| `id` | UUID PK |
-| `correlation_id` | TEXT |
-| `actor_id` | UUID FK |
-| `actor_role` | TEXT |
-| `environment` | TEXT default `production` |
-| `project_id` | UUID nullable |
-| `module` | TEXT |
-| `action` | TEXT |
-| `target_type` | TEXT |
-| `target_id` | TEXT |
-| `before_json` | JSONB nullable — no secrets |
-| `after_json` | JSONB nullable |
-| `result` | TEXT — success/failure |
-| `failure_code` | TEXT nullable |
-| `ip_address` | INET nullable |
-| `created_at` | TIMESTAMPTZ |
-
-**Reuse:** Migrate new writes from `admin_activity_log` pattern; keep old table read-only.
+| `user_id` | UUID |
+| `reviewed_by` | UUID |
+| `reviewed_at` | TIMESTAMPTZ |
 
 ---
 
-## 5. RPC catalog (Supabase)
+## 3. New RPCs
 
-| RPC | Purpose | Auth |
-|-----|---------|------|
-| `admin_list_scrape_jobs(p_filter, p_cursor, p_limit)` | E job list | platform role |
-| `admin_list_ingestion_jobs(...)` | H queue | platform role |
-| `admin_project_ops_summary(...)` | B directory | platform role |
-| `admin_grant_platform_role(...)` | C | platform_admin |
-| `admin_revoke_platform_role(...)` | C | platform_admin + final-admin guard |
-| `admin_append_audit_event(...)` | All mutations | SECURITY DEFINER internal |
-| `admin_list_audit_events(...)` | Q | auditor+ |
-| Existing `admin_list_member_directory()` | C | admin — **keep** |
+| RPC | Purpose |
+|-----|---------|
+| `admin_get_effective_permissions(p_user_id)` | JSON effective view |
+| `admin_set_feature_permission(...)` | Upsert with audit |
+| `admin_set_scraped_data_scope(...)` | Upsert with audit |
+| `admin_set_credential_grant(...)` | Upsert with audit |
+| `admin_copy_permissions(p_from, p_to)` | Bulk template |
+| `admin_list_audit_events(filters, cursor)` | Paginated audit |
+| `admin_overview_metrics()` | Overview KPIs |
+| `assert_feature_access(p_user, p_project, p_feature, p_level)` | Product enforcement |
+| `assert_credential_use(p_user, p_credential, p_purpose)` | Railway helper |
 
 ---
 
-## 6. Railway Admin API `/api/admin/v1`
+## 4. RLS changes (product tables)
 
-**Auth header:** `Authorization: Bearer <supabase_jwt>`  
-**Middleware:** `requirePlatformRole(minRole)`  
-**Rate limit:** 120 req/min per user (configurable)
+| Table | Change |
+|-------|--------|
+| `portal_credentials` | SELECT: owner OR grant use/manage OR platform admin via RPC |
+| `projects` | portal_data read via RPC wrapper or policy using scope function |
+| `scrape_jobs` | Existing project access + `scraper.results` feature check |
 
-### 6.1 Overview and health
+**Pattern:** Add `SECURITY DEFINER` functions rather than complex RLS on JSON columns where possible.
 
-| Method | Path | Purpose | Response highlights |
-|--------|------|---------|---------------------|
-| GET | `/overview` | Command center | `{ healthScore, incidents[], jobCounts, integrationSummary, recentActivity[] }` |
-| GET | `/health/services` | O module | `{ services: [{ name, status, lastHeartbeat, version }] }` |
-| GET | `/health/queues` | Queue depth | `{ scrape: { pending, oldestAge }, ingestion: {...} }` |
+---
 
-### 6.2 Projects
+## 5. Railway Admin API `/api/admin/v1`
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/projects` | Paginated directory with ops columns |
-| GET | `/projects/:id/timeline` | Unified event stream |
-| PATCH | `/projects/:id/archive` | Soft archive |
-
-### 6.3 Access
+**Auth:** Bearer Supabase JWT + `requirePlatformAdmin`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/access/users` | User directory |
-| POST | `/access/invites` | Platform invite |
-| POST | `/access/users/:id/roles` | Grant platform role |
-| DELETE | `/access/users/:id/roles/:role` | Revoke |
+| GET | `/overview` | Overview metrics + risks |
+| GET | `/access/users` | Paginated directory |
+| GET | `/access/users/:id/effective` | Effective permissions JSON |
+| POST | `/access/users/:id/activate` | Activate |
 | POST | `/access/users/:id/deactivate` | Deactivate |
-
-### 6.4 Scrapers
-
-| Method | Path | Purpose | Idempotent |
-|--------|------|---------|------------|
-| GET | `/scrapers/jobs` | List/filter | — |
-| GET | `/scrapers/jobs/:id` | Detail + events | — |
-| POST | `/scrapers/jobs/:id/retry` | Retry | Yes |
-| POST | `/scrapers/jobs/:id/cancel` | Cancel | Yes |
-| POST | `/scrapers/jobs/:id/acknowledge` | Ack partial | Yes |
-| POST | `/scrapers/run` | Manual enqueue | No |
-| GET | `/scrapers/schedules` | List schedules | — |
-| PATCH | `/scrapers/schedules/:id` | Enable/disable | — |
-
-### 6.5 Ingestion
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/ingestion/jobs` | Queue list |
-| POST | `/ingestion/enqueue` | `{ documentId }` |
-| POST | `/ingestion/jobs/:id/retry` | Retry |
-| POST | `/ingestion/documents/:id/reindex` | Re-index |
-
-### 6.6 Filing, documents, billing, integrations
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/filing` | Filing queue |
-| GET | `/documents` | Cross-project inventory |
-| GET | `/billing/summary` | QB + milestone summary (no secrets) |
-| POST | `/billing/projects/:id/reconcile-uncertain` | QB reconcile |
-| GET | `/integrations` | All integration cards |
-| POST | `/integrations/:key/test` | Probe |
-
-### 6.7 Config and audit
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/config/flags` | List server flags |
-| PATCH | `/config/flags/:key` | Toggle with reason |
+| POST | `/access/users/:id/platform-role` | Grant/revoke admin |
+| PUT | `/access/users/:id/projects/:projectId/role` | Project role |
+| PUT | `/access/users/:id/features` | Batch feature permissions |
+| PUT | `/access/users/:id/scraped-data-scope` | Scope rows |
+| PUT | `/access/users/:id/credential-grants` | Grant rows |
+| POST | `/access/users/:id/copy-from/:sourceId` | Template copy |
+| GET | `/access/export` | CSV |
 | GET | `/audit/events` | Paginated audit |
-| GET | `/audit/export` | CSV export |
+| GET | `/audit/export` | CSV |
 
-### 6.8 Error codes
-
-| Code | HTTP | Meaning |
-|------|------|---------|
-| `ADMIN_FORBIDDEN` | 403 | Insufficient platform role |
-| `ADMIN_NOT_FOUND` | 404 | Resource missing |
-| `ADMIN_CONFLICT` | 409 | Idempotency / state conflict |
-| `ADMIN_FINAL_ADMIN` | 409 | Last admin protection |
-| `ADMIN_PROVIDER_BLOCKED` | 502 | External provider blocked |
-| `ADMIN_RETRY_NOT_ALLOWED` | 422 | State not retryable |
+Platform settings (jurisdictions, notifications) continue using **existing Supabase direct calls** from retained components until migrated.
 
 ---
 
-## 7. Edge Functions (admin-related)
-
-| Function | Admin use | Change |
-|----------|-----------|--------|
-| `admin-drip-campaigns` | P notifications | Add platform role check in code |
-| `shadow-metrics` | Dev only | No change |
-| `ingest-project-document` | H enqueue target | Called by admin API |
-| `generate-grounded-response` | J regenerate | Called via admin proxy |
-
-**Security backlog PP-004:** Audit all Edge Functions `verify_jwt = false` — admin must not bypass.
-
----
-
-## 8. Refresh and realtime strategy
-
-| Module | Strategy |
-|--------|----------|
-| Command Center | Poll 60s + Realtime on job inserts |
-| Scraper jobs | Realtime on `scrape_jobs` UPDATE + poll fallback 30s |
-| Ingestion | Realtime on `document_ingestion_jobs` |
-| Integrations | Poll 5min + manual test |
-| Audit | Poll on filter change only |
-
----
-
-## 9. Indexes required
-
-| Index | Table | Columns |
-|-------|-------|---------|
-| `idx_scrape_jobs_admin_list` | scrape_jobs | `(created_at DESC, id)` WHERE status != completed |
-| `idx_scrape_jobs_stale` | scrape_jobs | `(last_heartbeat_at)` WHERE status IN (running, resuming) |
-| `idx_ingestion_jobs_admin` | document_ingestion_jobs | `(created_at DESC, status)` |
-| `idx_audit_events_admin` | platform_audit_events | `(created_at DESC, module, action)` |
-
----
-
-## 10. Data flow: scrape retry
+## 6. Credential use flow (backend only)
 
 ```mermaid
 sequenceDiagram
-  participant UI as Admin UI
-  participant API as Railway admin API
-  participant RPC as Supabase RPC
-  participant Worker as Arlington worker
+  participant Product as Main product UI
+  participant API as Railway API
+  participant Assert as assert_credential_use
+  participant Crypto as portal-credentials-crypto
+  participant DB as portal_credentials
 
-  UI->>API: POST /scrapers/jobs/:id/retry
-  API->>API: requirePlatformRole(operator)
-  API->>RPC: admin_retry_scrape_job(id)
-  RPC->>RPC: audit event
-  RPC-->>Worker: status=queued
-  API-->>UI: 200 job state
-  Worker->>RPC: claim job
+  Product->>API: POST /api/scrape (credentialId)
+  API->>Assert: user, credential, purpose=scrape
+  Assert-->>API: allowed
+  API->>DB: fetch row service role
+  API->>Crypto: decrypt password
+  Note over Product: Password never returned
+  API->>API: run scrape
+  API->>DB: insert platform_audit_events credential.use
 ```
+
+---
+
+## 7. Scraped-data read flow
+
+```mermaid
+sequenceDiagram
+  participant UI as PortalDataViewer
+  participant SB as Supabase
+  participant Fn as assert_scraped_data_access
+
+  UI->>SB: fetch portal_data / scrape results
+  SB->>Fn: RLS or RPC checks membership + scope + feature read
+  Fn-->>SB: allow/deny
+  SB-->>UI: filtered data or 403
+```
+
+---
+
+## 8. Indexes
+
+| Index | Table |
+|-------|-------|
+| `(user_id, project_id)` | user_feature_permissions |
+| `(user_id, scope_type)` | user_scraped_data_scope |
+| `(credential_id)` | user_portal_credential_grants |
+| `(created_at DESC)` | platform_audit_events |
+
+---
+
+## 9. What we are not building
+
+- Admin endpoints for scrape jobs, ingestion, filing, billing operations
+- Service-role key in frontend
+- Credential password in audit JSON or API responses

@@ -1,162 +1,97 @@
-# Admin Operational State Machines
+# Admin State Machines — Governance Scope
 
-States align with **current database values** where they exist. UI labels may simplify display but must map 1:1 to stored values. New states require migrations.
+Operational job state machines (scraper, ingestion, filing) are **out of scope** for admin v2. This document covers **access and credential governance** lifecycles only.
 
 Parent: [PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md](./PRODUCTION_ADMIN_DASHBOARD_ARCHITECTURE.md)
 
 ---
 
-## 1. Scraper jobs (`scrape_jobs.status`)
+## 1. User lifecycle
 
-**Verified values** (migration `20260730120000_scrape_job_cancelling_status.sql`):
+| State | Meaning | Transitions |
+|-------|---------|-------------|
+| `active` | Normal login | → `deactivated` (ACC-002) |
+| `deactivated` | Access blocked | → `active` (ACC-001) |
 
-`queued`, `running`, `resuming`, `rate_limited`, `partial`, `waiting_user`, `cancelling`, `completed`, `completed_with_warnings`, `partial_external_blocker`, `failed`, `failed_unrecoverable`, `cancelled`
-
-### UI grouping
-
-| UI group | DB statuses | Color | Severity |
-|----------|-------------|-------|----------|
-| Pending | `queued` | gray | info |
-| Active | `running`, `resuming`, `paginating`* , `downloading`* | blue | info |
-| Waiting | `waiting_user`, `rate_limited` | amber | warning |
-| Cancelling | `cancelling` | amber | warning |
-| Success | `completed`, `completed_with_warnings` | green | success |
-| Partial | `partial`, `partial_external_blocker` | amber | warning |
-| Failed | `failed`, `failed_unrecoverable` | red | error |
-| Cancelled | `cancelled` | gray | neutral |
-
-\*Sub-states tracked in `current_stage` / `metadata` — not separate DB status (display only).
-
-### Transitions (operator actions)
-
-| From | Action | To | Owner | Retry | Audit event |
-|------|--------|-----|-------|-------|-------------|
-| `failed`, `failed_unrecoverable` | Retry (if retryable) | `queued` | operator+ | Yes idempotent | `scraper.job.retry` |
-| `running`, `queued`, `resuming` | Cancel | `cancelling` → `cancelled` | operator+ | N/A | `scraper.job.cancel` |
-| `*` | Stale (no heartbeat > threshold) | UI flag `stale` | system | Auto-suggest retry | `scraper.job.stale_detected` |
-| `partial*` | Acknowledge | no status change | operator+ | Optional retry | `scraper.job.ack_partial` |
-
-**Timeout:** `last_heartbeat_at` stale threshold — Arlington: env `ARLINGTON_WORKER_POLL_MS` × 6 (configurable in admin P module).
-
-**Irreversible:** `cancelled`, `failed_unrecoverable` (retry creates new job row per dedup rules).
+**Audit:** `user.activated`, `user.deactivated`
 
 ---
 
-## 2. Attachment processing (derived — not single column)
+## 2. Platform admin role
 
-Tracked in scrape job `attachments_state` JSON + `scrape_file_results` patterns.
-
-| State | Meaning | UI label |
-|-------|---------|----------|
-| `discovered` | Listed in portal, not queued | Discovered |
-| `pending` | Queued for download | Pending |
-| `downloading` | In progress | Downloading |
-| `downloaded` | In Storage + DB record | Downloaded |
-| `failed` | Error recorded | Failed |
-| `skipped` | Policy skip (size/type) | Skipped |
-| `duplicate` | Fingerprint match | Duplicate |
-| `ingested` | Linked to ingestion job completed | Ingested |
-
-**Action:** `attachment.retry_download` — operator+ — preconditions: parent job not terminal cancelled.
+| State | Transitions |
+|-------|-------------|
+| `not_admin` | → `admin` via ACC-003 |
+| `admin` | → `not_admin` via ACC-004 (blocked if last admin) |
 
 ---
 
-## 3. Document ingestion (`document_ingestion_jobs.status`)
+## 3. Project membership
 
-**Verified CHECK:** `pending`, `processing`, `completed`, `failed`, `partial`, `cancelled`
+| State | Source | Transitions |
+|-------|--------|-------------|
+| `none` | — | → viewer/editor/admin via invite or ACC-005 |
+| `viewer` | team row | → editor/admin or → none |
+| `editor` | team row | → admin or → none |
+| `admin` | team row or owner | → lower role or → none |
 
-| From | Action | To | Audit |
-|------|--------|-----|-------|
-| `failed`, `partial` | Retry | `pending` | `ingestion.job.retry` |
-| `processing` | Stale (worker timeout) | UI `stale` | `ingestion.job.stale` |
-| `pending` | Cancel | `cancelled` | `ingestion.job.cancel` |
-
-**Related:** `project_documents.ai_ingestion_status` — keep in sync on job completion (existing worker behavior).
-
-**OCR:** Not implemented — UI shows `ocr_required: unknown` until PP backlog OCR work lands.
+**Invitation parallel:** pending → accepted | declined | expired | revoked (existing RPCs).
 
 ---
 
-## 4. Permit filing (`permit_filings.filing_status`)
+## 4. Feature permission row
 
-**Verified CHECK** (migration `20260307000003`): `preflight`, `awaiting_approval`, `approved`, `filing`, `submitted`, `failed`, `cancelled`
+| access_level | Label | Transitions |
+|--------------|-------|-------------|
+| `0` none | No access | → 1 or 2 via ACC-007 |
+| `1` read | Read-only | → 2 or 0 |
+| `2` write | Read+write | → 1 or 0 |
+| `-1` deny (optional) | Explicit deny | → 0 |
 
-**Extended UI states** (mapped from agent_runs + UI, not all separate DB columns):
-
-| UI state | DB / source |
-|----------|-------------|
-| `draft` | pre-preflight (no row or early) |
-| `needs_information` | preflight gaps |
-| `ready_for_review` | `awaiting_approval` |
-| `submitting` | `filing` |
-| `confirmation_received` | post-submit agent success |
-| `corrections_received` | external — manual flag |
-| `resubmission_required` | operator flag |
-| `closed` | terminal success |
-
-**Actions:** `filing.approve`, `filing.submit` — project admin+ or operator with project scope.
+**Invariant:** Upsert requires project membership when `project_id` NOT NULL.
 
 ---
 
-## 5. QuickBooks milestone invoices (project columns)
+## 5. Portal credential grant
 
-**Verified columns:** `m1_triggered`, `m1_invoice_trigger_status`, `qb_invoice_id_m1`, `m1_qb_pending_invoice_id`, etc.
+| grant_level | Label | Allowed actions |
+|-------------|-------|-----------------|
+| `0` none | Hidden | — |
+| `1` use | Use | Backend scrape/filing only |
+| `2` manage | Manage | API CRUD except password export |
 
-### Canonical UI states
+Transitions: ACC-009/010 only by platform admin (or manage holder reassigning if policy allows — **default: platform admin only**).
 
-| UI state | DB condition |
-|----------|--------------|
-| `not_started` | `m1_triggered = false` AND status NULL |
-| `previewed` | dry-run success (client-side log / audit) |
-| `processing` | `m1_invoice_trigger_status = 'processing'` |
-| `completed` | `m1_invoice_trigger_status = 'completed'` AND invoice id set |
-| `failed_before_creation` | failed, no invoice id, no customer created |
-| `uncertain_external_result` | `qb_uncertain` or timeout rule (see QB E2E doc) |
-| `reconciled` | operator marked after manual QB lookup |
-| `voided_external` | informational — QB void not synced (webhooks out of scope) |
-
-**Blocked by provider:** subscription inactive → UI `blocked_by_provider` overlay on retry action.
+**Credential record lifecycle** (existing): created → updated (password rotated) → disabled (soft flag future) → deleted.
 
 ---
 
-## 6. Integration health (`integration_health_snapshots.status` — new)
+## 6. Audit event lifecycle
 
 | State | Meaning |
 |-------|---------|
-| `not_configured` | Required env missing |
-| `connected` | Last op success within SLA |
-| `degraded` | Intermittent failures |
-| `disconnected` | Auth expired / revoked |
-| `expired` | Token past refresh window |
-| `blocked_by_provider` | External billing/subscription |
-| `unknown` | Probe not run |
+| `recorded` | Insert into `platform_audit_events` |
+| `exported` | Included in CSV export (metadata only) |
 
-**Probe SLA:** 5 minutes for Command Center; manual refresh on Integrations page.
+**Immutable** — no update/delete except retention policy (future, ≥1 year default).
 
 ---
 
-## 7. State machine diagram (scraper + ingestion)
+## 7. Access review (bulk)
 
-```mermaid
-stateDiagram-v2
-  [*] --> queued: enqueue
-  queued --> running: worker claim
-  running --> completed: success
-  running --> partial: partial success
-  running --> failed: error
-  running --> cancelling: user cancel
-  cancelling --> cancelled
-  failed --> queued: retry
-  partial --> queued: retry scope
-```
+| State | Transition |
+|-------|------------|
+| `pending_review` | → `reviewed` via ACC-012 |
 
 ---
 
-## 8. Migrations required
+## 8. Permission risk flags (computed, not stored)
 
-| Change | Reason |
-|--------|--------|
-| `integration_health_snapshots` table | Integration module |
-| Optional `scrape_jobs.admin_ack_at` | Partial acknowledge timestamp |
-| `platform_audit_events` | Unified audit |
-| No change to `scrape_jobs.status` enum | Already comprehensive |
+| Flag | Trigger |
+|------|---------|
+| `orphan_feature_grant` | Feature grant without project membership |
+| `credential_manage_without_project` | Manage grant but no project access |
+| `sole_platform_admin` | Only one admin in system |
+| `expired_invitation_pending` | Invitation past expires_at |
+
+Displayed on Overview and user directory; cleared when underlying data fixed.

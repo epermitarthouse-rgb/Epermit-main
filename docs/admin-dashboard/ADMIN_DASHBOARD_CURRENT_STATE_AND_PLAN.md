@@ -1,8 +1,10 @@
 # PermitPilot Admin & Operations Dashboard — Current State and Plan
 
 **Audit date:** 2026-09-09  
+**Status:** **Supporting evidence only** — superseded by governance-scope architecture v2.0 (2026-09-10). See [README.md](./README.md).
+
 **Auditor mode:** Read-only (no code, DB, deployment, or platform config changes)  
-**Code reference:** `main` @ `8739015` (`Remove duplicate diligence docs and prune merged worktrees.`)  
+**Code reference:** `main` @ `8739015`  
 **Repository:** `epermitarthouse-rgb/Epermit-main`  
 **Parent diligence package:** `docs/diligence-readiness/` (Aug 2026)
 
@@ -10,7 +12,7 @@
 
 ## 1. Executive Summary
 
-PermitPilot already has a **fragmented admin surface** under `/admin/*` (platform role gate via `user_roles.admin`) plus **operator surfaces outside admin** (Dashboard scrape widget, `/operations`, `/portal-data`, `/settings` credentials, project Team tab). There is **no unified Operations Dashboard** that aggregates scrape jobs, ingestion queues, integration health, and cross-project ops in one place — the exact gap called out as **PP-005** in diligence backlog.
+PermitPilot already has a **fragmented admin surface** under `/admin/*` (platform role gate via `user_roles.admin`) plus **operator surfaces outside admin** (Dashboard scrape widget, `/operations`, `/portal-data`, `/settings` credentials, project Team tab). The **canonical target** is now **governance-only** (access, audit, platform settings) — not a unified operations dashboard duplicating the main product.
 
 **Environment verdict:** All five platforms point at the correct PermitPilot stack. One caution: GitHub CLI active account is `DM1404`, not `epermitarthouse-rgb`; git SSH remote and repo access still work. Supabase CLI is linked to InsightDC (`eeqxyjrcldivtpikcpvk`) but remote migration diff could not be read (account privilege 403). Vercel CLI is not authenticated locally; production URL verified via HTTP.
 
