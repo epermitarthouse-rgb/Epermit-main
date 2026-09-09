@@ -18,10 +18,200 @@ const { emitUciEvent } = require("./uci-events.service.js");
 const {
   persistGraphAttachmentsForCommunication,
 } = require("./uci-graph-attachment-persist.service.js");
+const {
+  DEFAULT_LEASE_TTL_SECONDS,
+  DEFAULT_LOOKBACK_HOURS,
+  claimMailboxLease,
+  releaseMailboxLease,
+  computeGraphReceivedAfter,
+  computeNextWatermark,
+  emptyInboundMetrics,
+} = require("./uci-graph-inbound-mailbox-state.service.js");
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
 const OWN_PACKAGE_SUBJECT_RE = /utility\s+coordination\s+application\s+package/i;
+
+const UNMATCHED_REMATCH_BACKOFF_MS = Math.min(
+  Math.max(Number(process.env.UCI_UNMATCHED_REMATCH_BACKOFF_MS || 6 * 60 * 60 * 1000), 60_000),
+  7 * 24 * 60 * 60 * 1000,
+);
+
+const EXISTING_COMM_SELECT = [
+  "id",
+  "coordination_record_id",
+  "project_id",
+  "direction",
+  "classification",
+  "raw_attachments",
+  "needs_human_attention",
+  "idempotency_key",
+  "external_message_id",
+  "sender",
+  "raw_subject",
+  "thread_id",
+  "message_timestamp",
+  "agent_processed_metadata",
+].join(",");
+
+const EXISTING_UNMATCHED_SELECT = [
+  "id",
+  "idempotency_key",
+  "match_status",
+  "project_id",
+  "tenant_id",
+  "provider_slug",
+  "mailbox_user_id",
+  "external_message_id",
+  "internet_message_id",
+  "conversation_id",
+  "sender",
+  "recipient",
+  "raw_subject",
+  "raw_body",
+  "raw_attachments",
+  "message_timestamp",
+  "last_match_attempted_at",
+  "next_rematch_at",
+  "updated_at",
+  "created_at",
+  "agent_processed_metadata",
+].join(",");
+
+const OUTBOUND_ECHO_SELECT = EXISTING_COMM_SELECT;
+
+/**
+ * @param {Record<string, number> | null | undefined} metrics
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ * @template T
+ */
+async function timedQuery(metrics, fn) {
+  const started = Date.now();
+  try {
+    return await fn();
+  } finally {
+    if (metrics) {
+      metrics.query_duration_ms = (metrics.query_duration_ms || 0) + (Date.now() - started);
+    }
+  }
+}
+
+/**
+ * Controlled rematch only: manual retry, relevant data change, or backoff.
+ *
+ * @param {Record<string, unknown>} unmatched
+ * @param {object} [opts]
+ */
+function shouldRematchUnmatched(unmatched, opts = {}) {
+  if (!unmatched) return { rematch: true, reason: "missing" };
+  if (String(unmatched.match_status || "") === "matched") {
+    return { rematch: false, reason: "already_matched" };
+  }
+  if (opts.forceRematch) return { rematch: true, reason: "manual_retry" };
+
+  const now = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+  const lastAttempt =
+    unmatched.last_match_attempted_at || unmatched.updated_at || unmatched.created_at;
+  const lastMs = lastAttempt ? new Date(String(lastAttempt)).getTime() : NaN;
+
+  if (opts.latestCoordinationUpdatedAt) {
+    const changedMs = new Date(String(opts.latestCoordinationUpdatedAt)).getTime();
+    if (Number.isFinite(changedMs) && Number.isFinite(lastMs) && changedMs > lastMs) {
+      return { rematch: true, reason: "data_change" };
+    }
+  }
+
+  if (unmatched.next_rematch_at) {
+    const nextMs = new Date(String(unmatched.next_rematch_at)).getTime();
+    if (Number.isFinite(nextMs) && now >= nextMs) {
+      return { rematch: true, reason: "backoff" };
+    }
+    return { rematch: false, reason: "backoff_pending" };
+  }
+
+  return { rematch: false, reason: "awaiting_backoff_schedule" };
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} unmatched
+ */
+async function scheduleUnmatchedBackoff(supabase, unmatched) {
+  if (!unmatched?.id) return;
+  const now = new Date();
+  const next = new Date(now.getTime() + UNMATCHED_REMATCH_BACKOFF_MS).toISOString();
+  try {
+    await supabase
+      .from("uci_unmatched_inbound_messages")
+      .update({
+        last_match_attempted_at:
+          unmatched.last_match_attempted_at || unmatched.updated_at || now.toISOString(),
+        next_rematch_at: next,
+      })
+      .eq("id", String(unmatched.id));
+  } catch {
+    // best-effort schedule
+  }
+}
+
+/**
+ * Cheap duplicate detection before echo lookup or matching.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} normalized
+ * @param {Record<string, number> | null} [metrics]
+ */
+async function findExistingInboundState(supabase, normalized, metrics) {
+  const key = String(normalized?.idempotency_key || "");
+  if (!key) return { communication: null, unmatched: null, echo: null };
+
+  const communication = await timedQuery(metrics, async () => {
+    const { data } = await supabase
+      .from("coordination_communications")
+      .select(EXISTING_COMM_SELECT)
+      .eq("idempotency_key", key)
+      .maybeSingle();
+    return data || null;
+  });
+
+  const unmatched = await timedQuery(metrics, async () => {
+    const first = await supabase
+      .from("uci_unmatched_inbound_messages")
+      .select(EXISTING_UNMATCHED_SELECT)
+      .eq("idempotency_key", key)
+      .maybeSingle();
+    if (first.error && /last_match_attempted_at|next_rematch_at/i.test(String(first.error.message))) {
+      const fallback = await supabase
+        .from("uci_unmatched_inbound_messages")
+        .select("id, idempotency_key, match_status, project_id, updated_at, created_at")
+        .eq("idempotency_key", key)
+        .maybeSingle();
+      return fallback.data || null;
+    }
+    return first.data || null;
+  });
+
+  /** @type {Record<string, unknown> | null} */
+  let echo = null;
+  if (!communication) {
+    echo = await timedQuery(metrics, async () => {
+      try {
+        const query = supabase.from("coordination_communications").select(OUTBOUND_ECHO_SELECT);
+        if (typeof query.filter !== "function") return null;
+        const { data } = await query
+          .filter("agent_processed_metadata->inbound_echo->>idempotency_key", "eq", key)
+          .limit(1)
+          .maybeSingle();
+        return data || null;
+      } catch {
+        return null;
+      }
+    });
+  }
+
+  return { communication, unmatched, echo };
+}
 
 /**
  * @param {string | null | undefined} a
@@ -61,7 +251,7 @@ async function findLinkedOutboundEcho(supabase, normalized) {
   if (conversationId) {
     const { data } = await supabase
       .from("coordination_communications")
-      .select("*")
+      .select(OUTBOUND_ECHO_SELECT)
       .eq("direction", "outbound")
       .eq("thread_id", String(conversationId))
       .order("message_timestamp", { ascending: false })
@@ -72,7 +262,7 @@ async function findLinkedOutboundEcho(supabase, normalized) {
   if (graphId) {
     const { data } = await supabase
       .from("coordination_communications")
-      .select("*")
+      .select(OUTBOUND_ECHO_SELECT)
       .eq("direction", "outbound")
       .eq("external_message_id", graphId)
       .limit(4);
@@ -82,7 +272,7 @@ async function findLinkedOutboundEcho(supabase, normalized) {
   if (subject && candidates.length === 0) {
     const { data } = await supabase
       .from("coordination_communications")
-      .select("*")
+      .select(OUTBOUND_ECHO_SELECT)
       .eq("direction", "outbound")
       .eq("raw_subject", subject)
       .order("message_timestamp", { ascending: false })
@@ -181,7 +371,7 @@ async function linkOutboundEcho(supabase, outbound, normalized) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", String(outbound.id))
-    .select("*")
+    .select(OUTBOUND_ECHO_SELECT)
     .maybeSingle();
 
   return data || { ...outbound, agent_processed_metadata: patchMeta, needs_human_attention: false };
@@ -275,27 +465,49 @@ function normalizeGraphMessage(message) {
  * @param {object} row
  */
 async function upsertUnmatchedInbound(supabase, row) {
+  const now = new Date();
+  const attemptAt = now.toISOString();
+  const nextRematch = new Date(now.getTime() + UNMATCHED_REMATCH_BACKOFF_MS).toISOString();
+
   const { data: existing } = await supabase
     .from("uci_unmatched_inbound_messages")
-    .select("*")
+    .select(EXISTING_UNMATCHED_SELECT)
     .eq("idempotency_key", row.idempotency_key)
     .maybeSingle();
 
   if (existing) {
-    return { row: existing, inserted: false };
+    const { data: updated } = await supabase
+      .from("uci_unmatched_inbound_messages")
+      .update({
+        match_candidates: row.match_candidates ?? existing.match_candidates,
+        agent_processed_metadata: row.agent_processed_metadata ?? existing.agent_processed_metadata,
+        last_match_attempted_at: attemptAt,
+        next_rematch_at: nextRematch,
+        updated_at: attemptAt,
+      })
+      .eq("id", String(existing.id))
+      .select(EXISTING_UNMATCHED_SELECT)
+      .maybeSingle();
+    return { row: updated || existing, inserted: false, rematched: true };
   }
+
+  const insertRow = {
+    ...row,
+    last_match_attempted_at: attemptAt,
+    next_rematch_at: nextRematch,
+  };
 
   const { data, error } = await supabase
     .from("uci_unmatched_inbound_messages")
-    .insert(row)
-    .select("*")
+    .insert(insertRow)
+    .select(EXISTING_UNMATCHED_SELECT)
     .single();
 
   if (error) {
     if (String(error.code) === "23505" || /duplicate/i.test(String(error.message))) {
       const { data: again } = await supabase
         .from("uci_unmatched_inbound_messages")
-        .select("*")
+        .select(EXISTING_UNMATCHED_SELECT)
         .eq("idempotency_key", row.idempotency_key)
         .maybeSingle();
       return { row: again, inserted: false };
@@ -321,7 +533,7 @@ async function upsertMatchedCommunication(supabase, params) {
 
   const { data: existing } = await supabase
     .from("coordination_communications")
-    .select("*")
+    .select(EXISTING_COMM_SELECT)
     .eq("coordination_record_id", coordinationRecordId)
     .eq("idempotency_key", normalized.idempotency_key)
     .maybeSingle();
@@ -365,14 +577,14 @@ async function upsertMatchedCommunication(supabase, params) {
   const { data, error } = await supabase
     .from("coordination_communications")
     .insert(row)
-    .select("*")
+    .select(EXISTING_COMM_SELECT)
     .single();
 
   if (error) {
     if (String(error.code) === "23505" || /duplicate/i.test(String(error.message))) {
       const { data: again } = await supabase
         .from("coordination_communications")
-        .select("*")
+        .select(EXISTING_COMM_SELECT)
         .eq("coordination_record_id", coordinationRecordId)
         .eq("idempotency_key", normalized.idempotency_key)
         .maybeSingle();
@@ -403,6 +615,9 @@ async function ingestInboundEmailMessage(supabase, params) {
     providerSlug = null,
     accessToken = null,
     deps = {},
+    metrics: metricsArg = null,
+    forceRematch: forceRematchArg = false,
+    latestCoordinationUpdatedAt = null,
   } = params;
 
   if (!normalized?.idempotency_key) {
@@ -410,6 +625,85 @@ async function ingestInboundEmailMessage(supabase, params) {
     err.statusCode = 400;
     err.code = "IDEMPOTENCY_REQUIRED";
     throw err;
+  }
+
+  const metrics = metricsArg || deps.metrics || null;
+  const forceRematch = forceRematchArg === true || deps.forceRematch === true;
+  const latestUpdatedAt =
+    latestCoordinationUpdatedAt || deps.latestCoordinationUpdatedAt || null;
+  const matchFn =
+    typeof deps.matchInboundToCoordination === "function"
+      ? deps.matchInboundToCoordination
+      : matchInboundToCoordination;
+
+  const existing = await findExistingInboundState(supabase, normalized, metrics);
+
+  if (existing.communication && existing.communication.direction !== "outbound" && !forceRematch) {
+    if (metrics) {
+      metrics.messages_skipped_duplicate = (metrics.messages_skipped_duplicate || 0) + 1;
+    }
+    return {
+      status: "skipped_duplicate",
+      skipped_reason: "already_matched",
+      unmatched: null,
+      inserted: false,
+      match: {
+        matched: true,
+        coordination_record_id: existing.communication.coordination_record_id,
+        reason: "already_matched",
+      },
+      communication: existing.communication,
+      classification: null,
+    };
+  }
+
+  if (existing.echo && !forceRematch) {
+    if (metrics) {
+      metrics.messages_skipped_duplicate = (metrics.messages_skipped_duplicate || 0) + 1;
+    }
+    return {
+      status: "skipped_duplicate",
+      skipped_reason: "already_linked_echo",
+      unmatched: null,
+      inserted: false,
+      match: {
+        matched: true,
+        coordination_record_id: existing.echo.coordination_record_id,
+        reason: "already_linked_echo",
+      },
+      communication: existing.echo,
+      classification: null,
+    };
+  }
+
+  if (existing.unmatched && String(existing.unmatched.match_status || "") !== "matched") {
+    const decision = shouldRematchUnmatched(existing.unmatched, {
+      forceRematch,
+      latestCoordinationUpdatedAt: latestUpdatedAt,
+      nowMs: deps.nowMs,
+    });
+    if (!decision.rematch) {
+      if (!existing.unmatched.next_rematch_at) {
+        await scheduleUnmatchedBackoff(supabase, existing.unmatched);
+      }
+      if (metrics) {
+        metrics.messages_skipped_duplicate = (metrics.messages_skipped_duplicate || 0) + 1;
+      }
+      return {
+        status: "skipped_unmatched",
+        skipped_reason: decision.reason,
+        unmatched: existing.unmatched,
+        inserted: false,
+        match: { matched: false, unmatched: true, reason: decision.reason },
+        communication: null,
+        classification: null,
+      };
+    }
+    if (metrics) {
+      metrics.messages_rematched = (metrics.messages_rematched || 0) + 1;
+    }
+  } else if (metrics) {
+    metrics.messages_new = (metrics.messages_new || 0) + 1;
   }
 
   // Link self-send / Sent Items echoes to existing outbound transmission — do not create
@@ -440,16 +734,19 @@ async function ingestInboundEmailMessage(supabase, params) {
     };
   }
 
-  const match = await matchInboundToCoordination(
-    supabase,
-    {
-      raw_subject: normalized.raw_subject,
-      raw_body: normalized.raw_body,
-      sender: normalized.sender,
-      thread_id: normalized.thread_id || normalized.conversation_id,
-      provider_slug: providerSlug,
-    },
-    { projectId: projectId || undefined, tenantId: tenantId || undefined },
+  const match = await timedQuery(metrics, () =>
+    matchFn(
+      supabase,
+      {
+        raw_subject: normalized.raw_subject,
+        raw_body: normalized.raw_body,
+        sender: normalized.sender,
+        thread_id: normalized.thread_id || normalized.conversation_id,
+        provider_slug: providerSlug,
+        message_timestamp: normalized.message_timestamp,
+      },
+      { projectId: projectId || undefined, tenantId: tenantId || undefined },
+    ),
   );
 
   if (!match.matched || !match.coordination_record_id) {
@@ -689,7 +986,8 @@ async function reprocessUnmatchedInboundMessage(supabase, params) {
     tenantId,
     providerSlug: providerSlug || row.provider_slug || null,
     accessToken,
-    deps,
+    forceRematch: true,
+    deps: { ...deps, forceRematch: true },
   });
 
   if (result.status === "matched" || result.status === "linked_outbound_echo") {
@@ -727,43 +1025,29 @@ async function reprocessUnmatchedInboundMessage(supabase, params) {
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
  */
-async function pollGraphInboundForUser(supabase, params) {
-  const {
-    userId,
-    projectId = null,
-    tenantId = null,
-    providerSlug = null,
-    top = 25,
-    receivedAfterIso = null,
-    deps = {},
-  } = params;
-
-  const fetchFn = typeof deps.fetchFn === "function" ? deps.fetchFn : fetch;
-  const tokenFn =
-    typeof deps.getAccessTokenFn === "function"
-      ? deps.getAccessTokenFn
-      : getValidAccessTokenForUser;
-
-  const accessToken = await tokenFn(supabase, userId);
-  if (!accessToken) {
-    const err = new Error("Microsoft mailbox not connected for user");
-    err.statusCode = 409;
-    err.code = "MAILBOX_NOT_CONNECTED";
-    throw err;
-  }
-
+/**
+ * @param {string} accessToken
+ * @param {object} params
+ */
+async function listInboundGraphMessages(accessToken, params) {
+  const { top, receivedAfterIso, fetchFn } = params;
   const select =
     "id,receivedDateTime,subject,bodyPreview,body,from,internetMessageId,conversationId,hasAttachments";
-  let url =
-    `${GRAPH_BASE}/me/messages?$top=${encodeURIComponent(String(Math.min(top, 50)))}` +
-    `&$orderby=${encodeURIComponent("receivedDateTime desc")}` +
-    `&$select=${encodeURIComponent(select)}`;
+  const buildUrl = (order) => {
+    let url =
+      `${GRAPH_BASE}/me/messages?$top=${encodeURIComponent(String(Math.min(top, 50)))}` +
+      `&$orderby=${encodeURIComponent(`receivedDateTime ${order}`)}` +
+      `&$select=${encodeURIComponent(select)}`;
+    if (receivedAfterIso) {
+      url += `&$filter=${encodeURIComponent(`receivedDateTime ge ${receivedAfterIso}`)}`;
+    }
+    return url;
+  };
 
-  if (receivedAfterIso) {
-    url += `&$filter=${encodeURIComponent(`receivedDateTime ge ${receivedAfterIso}`)}`;
+  let listed = await graphGet(accessToken, buildUrl("asc"), fetchFn);
+  if (!listed.ok) {
+    listed = await graphGet(accessToken, buildUrl("desc"), fetchFn);
   }
-
-  const listed = await graphGet(accessToken, url, fetchFn);
   if (!listed.ok) {
     const err = new Error("Graph mailbox list failed");
     err.statusCode = 502;
@@ -776,57 +1060,283 @@ async function pollGraphInboundForUser(supabase, params) {
     ? /** @type {{ value: Array<Record<string, unknown>> }} */ (listed.json).value
     : [];
 
+  values.sort((a, b) => {
+    const ta = new Date(String(a.receivedDateTime || 0)).getTime();
+    const tb = new Date(String(b.receivedDateTime || 0)).getTime();
+    return ta - tb;
+  });
+  return values;
+}
+
+/**
+ * Bounded rematch of unmatched rows that are due (backoff or data change).
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function rematchDueUnmatchedForMailbox(supabase, params) {
+  const {
+    userId,
+    limit = 5,
+    latestCoordinationUpdatedAt = null,
+    deps = {},
+    metrics = null,
+  } = params;
+  if (!userId) return { rematched: 0, ids: [] };
+
+  const nowIso = new Date(Number.isFinite(deps.nowMs) ? deps.nowMs : Date.now()).toISOString();
+  const ids = new Set();
+
+  const dueBackoff = await timedQuery(metrics, async () => {
+    const { data } = await supabase
+      .from("uci_unmatched_inbound_messages")
+      .select("id")
+      .eq("mailbox_user_id", userId)
+      .eq("match_status", "unmatched")
+      .lte("next_rematch_at", nowIso)
+      .order("next_rematch_at", { ascending: true })
+      .limit(limit);
+    return Array.isArray(data) ? data : [];
+  });
+  for (const row of dueBackoff) {
+    if (row?.id) ids.add(String(row.id));
+  }
+
+  if (latestCoordinationUpdatedAt && ids.size < limit) {
+    const dueChange = await timedQuery(metrics, async () => {
+      const { data } = await supabase
+        .from("uci_unmatched_inbound_messages")
+        .select("id")
+        .eq("mailbox_user_id", userId)
+        .eq("match_status", "unmatched")
+        .lt("last_match_attempted_at", latestCoordinationUpdatedAt)
+        .limit(limit - ids.size);
+      return Array.isArray(data) ? data : [];
+    });
+    for (const row of dueChange) {
+      if (row?.id) ids.add(String(row.id));
+    }
+  }
+
+  let rematched = 0;
+  for (const unmatchedId of ids) {
+    await reprocessUnmatchedInboundMessage(supabase, {
+      unmatchedId,
+      mailboxUserId: userId,
+      accessToken: params.accessToken || null,
+      deps: { ...deps, forceRematch: true, metrics },
+    });
+    rematched += 1;
+  }
+  return { rematched, ids: [...ids] };
+}
+
+/**
+ * Poll connected user mailbox for recent inbound messages and ingest.
+ *
+ * Automatic polls use a failure-safe Graph cursor and a mailbox lease.
+ * Manual polls may pass receivedAfterIso to rescan a window without moving
+ * the cursor. Already-processed messages skip matching.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {object} params
+ */
+async function pollGraphInboundForUser(supabase, params) {
+  const {
+    userId,
+    projectId = null,
+    tenantId = null,
+    providerSlug = null,
+    top = 25,
+    receivedAfterIso = null,
+    deps = {},
+    leaseOwner = null,
+    skipLease = false,
+    lookbackHours = DEFAULT_LOOKBACK_HOURS,
+  } = params;
+
+  const useCursor = params.useCursor != null ? params.useCursor === true : receivedAfterIso == null;
+  const fetchFn = typeof deps.fetchFn === "function" ? deps.fetchFn : fetch;
+  const tokenFn =
+    typeof deps.getAccessTokenFn === "function"
+      ? deps.getAccessTokenFn
+      : getValidAccessTokenForUser;
+  const claimFn =
+    typeof deps.claimMailboxLeaseFn === "function" ? deps.claimMailboxLeaseFn : claimMailboxLease;
+  const releaseFn =
+    typeof deps.releaseMailboxLeaseFn === "function" ? deps.releaseMailboxLeaseFn : releaseMailboxLease;
+  const metrics = deps.metrics || emptyInboundMetrics();
+  const cycleStarted = Date.now();
+  const owner = String(leaseOwner || deps.leaseOwner || `graph-inbound-${process.pid}`).trim();
+
+  let claimed = { claimed: true, fallback: true, row: null };
+  if (!skipLease) {
+    claimed = await claimFn(supabase, {
+      userId,
+      owner,
+      ttlSeconds: deps.leaseTtlSeconds || DEFAULT_LEASE_TTL_SECONDS,
+    });
+    if (!claimed?.claimed) {
+      metrics.lease_skipped = 1;
+      metrics.cycle_duration_ms = Date.now() - cycleStarted;
+      return {
+        skipped: true,
+        reason: "mailbox_lease_held",
+        polled: 0,
+        ingested: 0,
+        matched: 0,
+        unmatched: 0,
+        results: [],
+        metrics,
+      };
+    }
+  }
+
+  const previousWatermark = useCursor ? claimed.row?.watermark_received_at || null : null;
+  let nextWatermark = previousWatermark;
+  const successfulReceivedAts = [];
   /** @type {Array<Record<string, unknown>>} */
   const results = [];
-  for (const message of values) {
-    const normalized = normalizeGraphMessage(message);
-    if (!normalized.external_message_id) continue;
+  let values = [];
+  let hadFailure = false;
+  let graphError = null;
 
-    // Optionally fetch attachments metadata
-    if (message.hasAttachments === true && normalized.external_message_id) {
-      try {
-        const attUrl = `${GRAPH_BASE}/me/messages/${encodeURIComponent(normalized.external_message_id)}/attachments?$select=id,name,contentType,size`;
-        const att = await graphGet(accessToken, attUrl, fetchFn);
-        if (att.ok && att.json && typeof att.json === "object") {
-          const attValues = /** @type {{ value?: unknown }} */ (att.json).value;
-          if (Array.isArray(attValues)) {
-            normalized.raw_attachments = attValues.map((a) => ({
-              id: a.id,
-              name: a.name,
-              contentType: a.contentType,
-              size: a.size,
-            }));
+  try {
+    const accessToken = await tokenFn(supabase, userId);
+    if (!accessToken) {
+      const err = new Error("Microsoft mailbox not connected for user");
+      err.statusCode = 409;
+      err.code = "MAILBOX_NOT_CONNECTED";
+      throw err;
+    }
+
+    const filterAfter =
+      receivedAfterIso ||
+      (useCursor
+        ? computeGraphReceivedAfter({
+            watermarkReceivedAt: previousWatermark,
+            lookbackHours,
+            nowMs: deps.nowMs,
+            skewMs: deps.cursorSkewMs,
+          })
+        : null);
+
+    const graphStarted = Date.now();
+    values = await listInboundGraphMessages(accessToken, {
+      top,
+      receivedAfterIso: filterAfter,
+      fetchFn,
+    });
+    metrics.graph_duration_ms = (metrics.graph_duration_ms || 0) + (Date.now() - graphStarted);
+    metrics.messages_fetched = (metrics.messages_fetched || 0) + values.length;
+
+    for (const message of values) {
+      const normalized = normalizeGraphMessage(message);
+      if (!normalized.external_message_id) continue;
+
+      if (message.hasAttachments === true && normalized.external_message_id) {
+        try {
+          const attUrl = `${GRAPH_BASE}/me/messages/${encodeURIComponent(normalized.external_message_id)}/attachments?$select=id,name,contentType,size`;
+          const att = await graphGet(accessToken, attUrl, fetchFn);
+          if (att.ok && att.json && typeof att.json === "object") {
+            const attValues = /** @type {{ value?: unknown }} */ (att.json).value;
+            if (Array.isArray(attValues)) {
+              normalized.raw_attachments = attValues.map((a) => ({
+                id: a.id,
+                name: a.name,
+                contentType: a.contentType,
+                size: a.size,
+              }));
+            }
           }
+        } catch {
+          // Non-fatal — message body still ingested
         }
-      } catch {
-        // Non-fatal — message body still ingested
+      }
+
+      try {
+        const ingestFn =
+          typeof deps.ingestInboundEmailMessage === "function"
+            ? deps.ingestInboundEmailMessage
+            : ingestInboundEmailMessage;
+        const result = await ingestFn(supabase, {
+          normalized,
+          mailboxUserId: userId,
+          projectId,
+          tenantId,
+          providerSlug,
+          accessToken,
+          latestCoordinationUpdatedAt: deps.latestCoordinationUpdatedAt || null,
+          deps,
+          metrics,
+        });
+        results.push(result);
+        successfulReceivedAts.push(normalized.message_timestamp);
+      } catch (err) {
+        hadFailure = true;
+        graphError = err;
+        break;
       }
     }
 
-    const result = await ingestInboundEmailMessage(supabase, {
-      normalized,
-      mailboxUserId: userId,
-      projectId,
-      tenantId,
-      providerSlug,
-      accessToken,
-      deps,
-    });
-    results.push(result);
+    if (useCursor) {
+      nextWatermark = computeNextWatermark({
+        previousWatermark,
+        successfulReceivedAts,
+      });
+    }
+
+    if (!hadFailure) {
+      try {
+        await rematchDueUnmatchedForMailbox(supabase, {
+          userId,
+          accessToken,
+          latestCoordinationUpdatedAt: deps.latestCoordinationUpdatedAt || null,
+          deps,
+          metrics,
+        });
+      } catch {
+        // rematch sweep is best-effort
+      }
+
+      try {
+        await touchMailboxLastCheckedAt(supabase, userId);
+      } catch {
+        // non-fatal
+      }
+    }
+  } finally {
+    metrics.cycle_duration_ms = Date.now() - cycleStarted;
+    if (!skipLease && !claimed.fallback) {
+      try {
+        await releaseFn(supabase, {
+          userId,
+          owner,
+          watermarkReceivedAt: useCursor ? nextWatermark : null,
+          metrics: { ...metrics },
+        });
+      } catch {
+        // non-fatal
+      }
+    }
   }
 
-  try {
-    await touchMailboxLastCheckedAt(supabase, userId);
-  } catch {
-    // non-fatal
+  if (graphError && results.length === 0 && values.length === 0) {
+    throw graphError;
   }
 
   return {
+    skipped: false,
+    reason: hadFailure ? "partial_failure" : null,
     polled: values.length,
     ingested: results.length,
     matched: results.filter((r) => r.status === "matched").length,
     unmatched: results.filter((r) => r.status === "unmatched").length,
+    inserted: results.filter((r) => r && r.inserted === true).length,
+    watermark_received_at: useCursor ? nextWatermark : null,
+    had_failure: hadFailure,
     results,
+    metrics,
   };
 }
 
@@ -889,10 +1399,18 @@ module.exports = {
   normalizeGraphMessage,
   ingestInboundEmailMessage,
   reprocessUnmatchedInboundMessage,
+  rematchDueUnmatchedForMailbox,
   pollGraphInboundForUser,
   ingestEmailInboundWebhook,
   upsertUnmatchedInbound,
   upsertMatchedCommunication,
   findLinkedOutboundEcho,
   linkOutboundEcho,
+  findExistingInboundState,
+  shouldRematchUnmatched,
+  scheduleUnmatchedBackoff,
+  UNMATCHED_REMATCH_BACKOFF_MS,
+  EXISTING_COMM_SELECT,
+  EXISTING_UNMATCHED_SELECT,
+  OUTBOUND_ECHO_SELECT,
 };

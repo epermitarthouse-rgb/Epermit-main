@@ -15,6 +15,10 @@ const {
 const {
   markMailboxConnectionError,
 } = require("../microsoft/microsoft-graph-auth.service.js");
+const {
+  formatInboundMetricsLog,
+  emptyInboundMetrics,
+} = require("./uci-graph-inbound-mailbox-state.service.js");
 
 const DEFAULT_INTERVAL_MS = 45_000;
 const GRAPH_INBOUND_POLL_INTERVAL_MS = Number(
@@ -63,16 +67,34 @@ async function listConnectedMailboxesForInboundPoll(supabase) {
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} [opts]
  */
+async function loadLatestCoordinationUpdatedAt(supabase) {
+  try {
+    const { data } = await supabase
+      .from("coordination_records")
+      .select("updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data?.updated_at ? String(data.updated_at) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function runGraphInboundPollCycle(supabase, opts = {}) {
   const pollerId = opts.pollerId || "graph-inbound-cycle";
-  const receivedAfterIso =
-    opts.receivedAfterIso ||
-    new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
   const top = opts.top != null ? Number(opts.top) : TOP_PER_MAILBOX;
   const pollFn =
     typeof opts.pollGraphInboundForUser === "function"
       ? opts.pollGraphInboundForUser
       : pollGraphInboundForUser;
+  const cycleStarted = Date.now();
+  const cycleMetrics = emptyInboundMetrics();
+
+  const latestCoordinationUpdatedAt =
+    opts.latestCoordinationUpdatedAt !== undefined
+      ? opts.latestCoordinationUpdatedAt
+      : await loadLatestCoordinationUpdatedAt(supabase);
 
   const mailboxes = await listConnectedMailboxesForInboundPoll(supabase);
   /** @type {Array<Record<string, unknown>>} */
@@ -86,21 +108,36 @@ async function runGraphInboundPollCycle(supabase, opts = {}) {
       const poll = await pollFn(supabase, {
         userId,
         top,
-        receivedAfterIso,
-        deps: opts.deps || {},
+        lookbackHours: LOOKBACK_HOURS,
+        leaseOwner: pollerId,
+        useCursor: opts.useCursor !== false,
+        deps: {
+          ...(opts.deps || {}),
+          leaseOwner: pollerId,
+          latestCoordinationUpdatedAt,
+        },
       });
+      const pollMetrics = poll.metrics && typeof poll.metrics === "object" ? poll.metrics : {};
+      for (const key of Object.keys(cycleMetrics)) {
+        if (typeof pollMetrics[key] === "number") {
+          cycleMetrics[key] += pollMetrics[key];
+        }
+      }
       results.push({
-        user_id: userId,
-        mailbox_email: row.mailbox_email || null,
         ok: true,
         polled: poll.polled ?? null,
         matched: poll.matched ?? null,
         unmatched: poll.unmatched ?? null,
         ingested: poll.ingested ?? null,
-        inserted: Array.isArray(poll.results)
-          ? poll.results.filter((r) => r && r.inserted === true).length
-          : null,
+        skipped: poll.skipped === true,
+        inserted:
+          typeof poll.inserted === "number"
+            ? poll.inserted
+            : Array.isArray(poll.results)
+              ? poll.results.filter((r) => r && r.inserted === true).length
+              : null,
         duration_ms: Date.now() - started,
+        metrics: pollMetrics,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -122,6 +159,8 @@ async function runGraphInboundPollCycle(supabase, opts = {}) {
     }
   }
 
+  cycleMetrics.cycle_duration_ms = Date.now() - cycleStarted;
+
   const summary = {
     poller_id: pollerId,
     mailbox_count: mailboxes.length,
@@ -131,13 +170,14 @@ async function runGraphInboundPollCycle(supabase, opts = {}) {
       (n, r) => n + (typeof r.inserted === "number" ? r.inserted : 0),
       0,
     ),
+    metrics: cycleMetrics,
     results,
     at: new Date().toISOString(),
   };
 
   if (mailboxes.length > 0) {
     console.log(
-      `[UCI][GraphInbound] cycle mailboxes=${summary.mailbox_count} ok=${summary.ok_count} errors=${summary.error_count} inserted=${summary.inserted_total}`,
+      `[UCI][GraphInbound] cycle mailboxes=${summary.mailbox_count} ok=${summary.ok_count} errors=${summary.error_count} inserted=${summary.inserted_total} ${formatInboundMetricsLog(cycleMetrics)}`,
     );
   }
 

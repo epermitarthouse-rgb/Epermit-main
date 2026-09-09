@@ -13,6 +13,23 @@ const {
 function createListMock(rows) {
   return {
     from(table) {
+      if (table === "coordination_records") {
+        const api = {
+          select() {
+            return api;
+          },
+          order() {
+            return api;
+          },
+          limit() {
+            return api;
+          },
+          maybeSingle() {
+            return Promise.resolve({ data: null, error: null });
+          },
+        };
+        return api;
+      }
       assert.equal(table, "microsoft_mailbox_connections");
       const api = {
         select() {

@@ -148,6 +148,86 @@ function scoreMatch(inbound, candidate) {
 }
 
 /**
+ * Verified metadata keys actually read by matching + contact resolution.
+ * Full coordination_records.metadata and applications.agent_draft_metadata
+ * are not required and must not be selected.
+ */
+const MATCHER_METADATA_KEYS = Object.freeze([
+  "project_address",
+  "site_address",
+  "address",
+  "lc_number",
+  "load_control_number",
+  "LC",
+  "job_id",
+  "uci_clean_slate",
+  "stage_5_acknowledgment",
+]);
+
+const MATCHER_RECORD_SELECT = [
+  "id",
+  "project_id",
+  "tenant_id",
+  "utility_provider_id",
+  "utility_account_number",
+  "utility_contact_email",
+  "utility_contact_name",
+  "current_stage",
+  "current_stage_state",
+  "acknowledgment_received_at",
+  "project_address:metadata->project_address",
+  "site_address:metadata->site_address",
+  "address:metadata->address",
+  "lc_number:metadata->lc_number",
+  "load_control_number:metadata->load_control_number",
+  "lc_number_alt:metadata->LC",
+  "job_id:metadata->job_id",
+  "uci_clean_slate:metadata->uci_clean_slate",
+  "stage_5_acknowledgment:metadata->stage_5_acknowledgment",
+].join(",");
+
+const MATCHER_APPLICATION_SELECT =
+  "id, coordination_record_id, utility_ticket_number, external_application_id, provider_slug";
+
+const MATCHER_OUTBOUND_SELECT =
+  "coordination_record_id, thread_id, external_message_id, raw_subject, message_timestamp";
+
+/**
+ * @param {Record<string, unknown>} source
+ */
+function pickMatcherMetadata(source) {
+  /** @type {Record<string, unknown>} */
+  const picked = {};
+  for (const key of MATCHER_METADATA_KEYS) {
+    if (source && source[key] != null) picked[key] = source[key];
+  }
+  return picked;
+}
+
+/**
+ * Rebuild the slim metadata object matching uses. Mocks that ignore select
+ * strings and return a full `metadata` blob still produce identical scores.
+ *
+ * @param {Record<string, unknown>} row
+ */
+function metadataFromMatcherRow(row) {
+  if (row?.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)) {
+    return pickMatcherMetadata(/** @type {Record<string, unknown>} */ (row.metadata));
+  }
+  return pickMatcherMetadata({
+    project_address: row?.project_address,
+    site_address: row?.site_address,
+    address: row?.address,
+    lc_number: row?.lc_number,
+    load_control_number: row?.load_control_number,
+    LC: row?.lc_number_alt ?? row?.LC,
+    job_id: row?.job_id,
+    uci_clean_slate: row?.uci_clean_slate,
+    stage_5_acknowledgment: row?.stage_5_acknowledgment,
+  });
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} inbound
  * @param {{ projectId?: string, tenantId?: string, limit?: number }} [opts]
@@ -157,9 +237,7 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
 
   let query = supabase
     .from("coordination_records")
-    .select(
-      "id, project_id, tenant_id, utility_provider_id, utility_account_number, utility_contact_email, utility_contact_name, metadata, current_stage, current_stage_state, acknowledgment_received_at",
-    )
+    .select(MATCHER_RECORD_SELECT)
     .order("updated_at", { ascending: false })
     .limit(limit);
 
@@ -191,9 +269,7 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
   const recordIds = rows.map((r) => String(r.id));
   const { data: apps } = await supabase
     .from("coordination_applications")
-    .select(
-      "id, coordination_record_id, utility_ticket_number, external_application_id, provider_slug, agent_draft_metadata",
-    )
+    .select(MATCHER_APPLICATION_SELECT)
     .in("coordination_record_id", recordIds);
 
   const { data: providers } = await supabase
@@ -218,7 +294,7 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
 
   const { data: outbound } = await supabase
     .from("coordination_communications")
-    .select("coordination_record_id, thread_id, external_message_id, raw_subject, message_timestamp")
+    .select(MATCHER_OUTBOUND_SELECT)
     .in("coordination_record_id", recordIds)
     .eq("direction", "outbound")
     .order("message_timestamp", { ascending: false })
@@ -243,10 +319,7 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
     inbound.message_timestamp || inbound.received_at || inbound.created_at || null;
 
   for (const record of rows) {
-    const meta =
-      record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
-        ? /** @type {Record<string, unknown>} */ (record.metadata)
-        : {};
+    const meta = metadataFromMatcherRow(record);
     if (isMessageBeforeCleanSlate(meta, inboundTimestamp)) {
       continue;
     }
@@ -256,7 +329,7 @@ async function matchInboundToCoordination(supabase, inbound, opts = {}) {
     const recordApps = appsByRecord.get(String(record.id)) || [];
     const primaryApp = recordApps[0] || {};
 
-    const resolvedContact = resolveUtilityContact(record);
+    const resolvedContact = resolveUtilityContact({ ...record, metadata: meta });
     const candidate = {
       utility_ticket_number: primaryApp.utility_ticket_number,
       utility_account_number: record.utility_account_number,
@@ -311,4 +384,10 @@ module.exports = {
   extractDomain,
   scoreMatch,
   matchInboundToCoordination,
+  MATCHER_METADATA_KEYS,
+  MATCHER_RECORD_SELECT,
+  MATCHER_APPLICATION_SELECT,
+  MATCHER_OUTBOUND_SELECT,
+  pickMatcherMetadata,
+  metadataFromMatcherRow,
 };
