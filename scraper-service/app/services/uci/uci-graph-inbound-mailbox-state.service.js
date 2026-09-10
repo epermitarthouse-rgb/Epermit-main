@@ -142,6 +142,29 @@ function isMissingRelationError(error) {
 }
 
 /**
+ * PostgREST may return null, [], or {} when RETURNING is empty.
+ * Only a real row with matching user_id + lease_owner is a claim.
+ *
+ * @param {unknown} data
+ * @param {string} userId
+ * @param {string} owner
+ */
+function claimedMailboxRow(data, userId, owner) {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const rowUser = row.user_id != null ? String(row.user_id) : "";
+  const rowOwner = row.lease_owner != null ? String(row.lease_owner).trim() : "";
+  if (!rowUser || rowUser !== String(userId) || !rowOwner || rowOwner !== owner) {
+    return null;
+  }
+  if (row.lease_expires_at) {
+    const expires = new Date(String(row.lease_expires_at)).getTime();
+    if (Number.isFinite(expires) && expires <= Date.now()) return null;
+  }
+  return row;
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {object} params
  */
@@ -164,10 +187,11 @@ async function claimMailboxLease(supabase, params) {
     return { claimed: false, reason: "claim_failed", row: null, fallback: false, error };
   }
 
-  if (!data) {
+  const row = claimedMailboxRow(data, userId, owner);
+  if (!row) {
     return { claimed: false, reason: "lease_held", row: null, fallback: false };
   }
-  return { claimed: true, reason: "claimed", row: data, fallback: false };
+  return { claimed: true, reason: "claimed", row, fallback: false };
 }
 
 /**
@@ -236,4 +260,5 @@ module.exports = {
   releaseMailboxLease,
   emptyInboundMetrics,
   formatInboundMetricsLog,
+  claimedMailboxRow,
 };

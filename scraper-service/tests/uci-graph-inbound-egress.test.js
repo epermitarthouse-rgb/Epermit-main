@@ -23,6 +23,8 @@ const {
   computeGraphReceivedAfter,
   computeNextWatermark,
   DEFAULT_SKEW_MS,
+  claimMailboxLease,
+  claimedMailboxRow,
 } = require("../app/services/uci/uci-graph-inbound-mailbox-state.service.js");
 
 function createEgressMock(tables) {
@@ -523,6 +525,67 @@ describe("UCI Graph inbound egress — cursor and lease", () => {
           throw new Error("should not fetch token while lease is held");
         },
         claimMailboxLeaseFn: async () => ({ claimed: false, reason: "lease_held", row: null }),
+      },
+    });
+    assert.equal(held.skipped, true);
+    assert.equal(held.reason, "mailbox_lease_held");
+    assert.equal(held.polled, 0);
+  });
+
+  it("does not treat an empty RPC payload as a successful claim", async () => {
+    assert.equal(claimedMailboxRow({}, "user-1", "poller-a"), null);
+    assert.equal(claimedMailboxRow([], "user-1", "poller-a"), null);
+    assert.equal(claimedMailboxRow(null, "user-1", "poller-a"), null);
+    assert.equal(
+      claimedMailboxRow({ user_id: "user-1", lease_owner: null }, "user-1", "poller-a"),
+      null,
+    );
+    assert.equal(
+      claimedMailboxRow({ user_id: "user-1", lease_owner: "other" }, "user-1", "poller-a"),
+      null,
+    );
+    assert.ok(
+      claimedMailboxRow(
+        {
+          user_id: "user-1",
+          lease_owner: "poller-a",
+          lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        },
+        "user-1",
+        "poller-a",
+      ),
+    );
+
+    const emptyPayloads = [null, {}, [], { user_id: "user-1" }];
+    for (const payload of emptyPayloads) {
+      const result = await claimMailboxLease(
+        {
+          async rpc() {
+            return { data: payload, error: null };
+          },
+        },
+        { userId: "user-1", owner: "poller-a" },
+      );
+      assert.equal(result.claimed, false, `payload=${JSON.stringify(payload)}`);
+      assert.equal(result.reason, "lease_held");
+      assert.equal(result.row, null);
+    }
+
+    const held = await pollGraphInboundForUser(createEgressMock({}), {
+      userId: "user-1",
+      deps: {
+        getAccessTokenFn: async () => {
+          throw new Error("should not fetch token for empty claim payload");
+        },
+        claimMailboxLeaseFn: async (supabase, args) =>
+          claimMailboxLease(
+            {
+              async rpc() {
+                return { data: {}, error: null };
+              },
+            },
+            args,
+          ),
       },
     });
     assert.equal(held.skipped, true);
