@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
+import { shouldForcePasswordChange } from "@/lib/profileSecurity";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -58,7 +59,7 @@ export default function Auth() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const { user, signIn, signUp } = useAuth();
+  const { user, profileSecurity, signIn, signUp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -78,10 +79,13 @@ export default function Auth() {
   }, [locationState.authView]);
 
   useEffect(() => {
-    if (user) {
-      navigate(from, { replace: true });
+    if (!user || profileSecurity.loading) return;
+    if (shouldForcePasswordChange(profileSecurity)) {
+      navigate("/auth/change-password-required", { replace: true });
+      return;
     }
-  }, [user, navigate, from]);
+    navigate(from, { replace: true });
+  }, [user, profileSecurity, navigate, from]);
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),

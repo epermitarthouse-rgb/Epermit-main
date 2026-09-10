@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import {
+  DEFAULT_PROFILE_SECURITY,
+  type ProfileSecurityState,
+} from "@/lib/profileSecurity";
 
 /** Max wait for initial getSession before unblocking route guards. */
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 9000;
@@ -25,12 +29,15 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  profileSecurity: ProfileSecurityState;
   subscription: SubscriptionStatus;
   subscriptionLoading: boolean;
   signUp: (email: string, password: string, metadata?: Record<string, string>) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   checkSubscription: () => Promise<void>;
+  refreshProfileSecurity: () => Promise<void>;
+  completeRequiredPasswordChange: () => Promise<{ error: Error | null }>;
 }
 
 // 2. Create Context
@@ -48,6 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileSecurity, setProfileSecurity] = useState<ProfileSecurityState>({
+    ...DEFAULT_PROFILE_SECURITY,
+    loading: true,
+  });
   const [subscription, setSubscription] = useState<SubscriptionStatus>(defaultSubscription);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
@@ -91,6 +102,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const bootstrapFinishedRef = useRef(false);
 
+  const refreshProfileSecurity = useCallback(async () => {
+    const currentUserId = session?.user?.id;
+    if (!currentUserId) {
+      setProfileSecurity(DEFAULT_PROFILE_SECURITY);
+      return;
+    }
+
+    setProfileSecurity((prev) => ({ ...prev, loading: true }));
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("must_change_password, access_status")
+        .eq("user_id", currentUserId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("[AuthProvider] profile security fetch failed", safeAuthErrorMessage(error));
+        setProfileSecurity({
+          mustChangePassword: false,
+          accessStatus: "active",
+          loading: false,
+        });
+        return;
+      }
+
+      setProfileSecurity({
+        mustChangePassword: Boolean(data?.must_change_password),
+        accessStatus: String(data?.access_status || "active"),
+        loading: false,
+      });
+    } catch (err) {
+      console.error("[AuthProvider] profile security fetch failed", safeAuthErrorMessage(err));
+      setProfileSecurity({
+        mustChangePassword: false,
+        accessStatus: "active",
+        loading: false,
+      });
+    }
+  }, [session?.user?.id]);
+
+  const completeRequiredPasswordChange = useCallback(async () => {
+    const currentUserId = session?.user?.id;
+    if (!currentUserId) {
+      return { error: new Error("Not signed in") };
+    }
+
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        must_change_password: false,
+        password_changed_at: now,
+      })
+      .eq("user_id", currentUserId);
+
+    if (error) {
+      return { error: error as Error };
+    }
+
+    setProfileSecurity({
+      mustChangePassword: false,
+      accessStatus: "active",
+      loading: false,
+    });
+    return { error: null };
+  }, [session?.user?.id]);
+
   useEffect(() => {
     console.log("[AuthProvider] init start");
 
@@ -117,11 +195,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth
       .getSession()
-      .then(({ data: { session: nextSession }, error }) => {
+      .then(async ({ data: { session: nextSession }, error }) => {
         if (error) throw error;
-        setSession(nextSession);
-        setUser(nextSession?.user ?? null);
-        console.log(`[AuthProvider] getSession success hasSession=${!!nextSession}`);
+
+        if (nextSession) {
+          const { data: validated, error: validateError } = await supabase.auth.getUser();
+          if (validateError || !validated.user) {
+            console.warn(
+              `[AuthProvider] stale or invalid session cleared ${safeAuthErrorMessage(validateError)}`,
+            );
+            await supabase.auth.signOut();
+            setSession(null);
+            setUser(null);
+            return;
+          }
+
+          setSession(nextSession);
+          setUser(validated.user);
+          console.log(`[AuthProvider] getSession success hasSession=true userId=${validated.user.id}`);
+          return;
+        }
+
+        setSession(null);
+        setUser(null);
+        console.log("[AuthProvider] getSession success hasSession=false");
       })
       .catch((err) => {
         console.error(`[AuthProvider] getSession failed ${safeAuthErrorMessage(err)}`);
@@ -141,11 +238,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (session?.user?.id) {
+      void refreshProfileSecurity();
       checkSubscription();
     } else {
+      setProfileSecurity(DEFAULT_PROFILE_SECURITY);
       setSubscription(defaultSubscription);
     }
-  }, [session?.user?.id, checkSubscription]);
+  }, [session?.user?.id, checkSubscription, refreshProfileSecurity]);
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -177,6 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // onAuthStateChange event is delayed — keeps header/sidebar in sync.
     setSession(null);
     setUser(null);
+    setProfileSecurity(DEFAULT_PROFILE_SECURITY);
     setSubscription(defaultSubscription);
   };
 
@@ -186,12 +286,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         loading,
+        profileSecurity,
         subscription,
         subscriptionLoading,
         signUp,
         signIn,
         signOut,
         checkSubscription,
+        refreshProfileSecurity,
+        completeRequiredPasswordChange,
       }}
     >
       {children}
@@ -207,12 +310,15 @@ export function useAuth() {
       user: null,
       session: null,
       loading: true,
+      profileSecurity: { ...DEFAULT_PROFILE_SECURITY, loading: true },
       subscription: defaultSubscription,
       subscriptionLoading: false,
       signUp: async () => ({ error: new Error("Not initialized") }),
       signIn: async () => ({ error: new Error("Not initialized") }),
       signOut: async () => {},
       checkSubscription: async () => {},
+      refreshProfileSecurity: async () => {},
+      completeRequiredPasswordChange: async () => ({ error: new Error("Not initialized") }),
     };
   }
   return context;

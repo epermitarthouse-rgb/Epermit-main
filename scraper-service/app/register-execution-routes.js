@@ -3121,6 +3121,7 @@ const GENERIC_PROJECTDOX_TARGET_FOLDER_KEYS = new Set([
 ]);
 
 const { createPortalCredentialsRouter } = require("./routes/portal-credentials.routes.js");
+const { createAdminRouter } = require("./routes/admin.routes.js");
 
 const { createExportApiRouter } = require("./routes/export-api.routes.js");
 app.use(
@@ -3132,6 +3133,7 @@ app.use(
 );
 
 app.use(createPortalCredentialsRouter({ supabase }));
+app.use(createAdminRouter({ supabase }));
 
 const { createQuickBooksRouter } = require("./routes/quickbooks.routes.js");
 app.use("/api/quickbooks", createQuickBooksRouter({ supabase }));

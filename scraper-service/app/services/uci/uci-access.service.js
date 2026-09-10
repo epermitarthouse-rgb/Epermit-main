@@ -158,6 +158,41 @@ async function requireAuthenticatedUser(req, supabaseAdmin) {
     e.code = out.error?.code ?? "UNAUTHENTICATED";
     throw err;
   }
+
+  const userId = out.user.id;
+  let active = true;
+
+  try {
+    const { data, error } = await supabaseAdmin.rpc("is_user_active", {
+      p_user_id: userId,
+    });
+
+    if (!error && typeof data === "boolean") {
+      active = data;
+    } else {
+      const { data: profile, error: profileErr } = await supabaseAdmin
+        .from("profiles")
+        .select("access_status")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (!profileErr && profile) {
+        active = String(profile.access_status || "active") !== "deactivated";
+      }
+    }
+  } catch {
+    // If profile lookup fails, allow auth to proceed (legacy compatibility).
+  }
+
+  if (!active) {
+    const err = new Error("User access is deactivated");
+    /** @type {Error & { statusCode?: number, code?: string }} */
+    const e = err;
+    e.statusCode = 403;
+    e.code = "USER_DEACTIVATED";
+    throw err;
+  }
+
   return /** @type {SupabaseAuthUserLike} */ (out.user);
 }
 

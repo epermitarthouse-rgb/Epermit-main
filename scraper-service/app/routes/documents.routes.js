@@ -5,6 +5,7 @@ const {
   requireAuthenticatedUser,
   requireProjectAccess,
 } = require("../services/uci/uci-access.service.js");
+const { assertFeatureAccess } = require("../services/governance/governance.service.js");
 const {
   convertLegacyDocBuffer,
   isLegacyDocFileName,
@@ -33,6 +34,14 @@ function createDocumentsRouter(supabaseAdmin) {
       ) {
         return res.status(400).json({ error: "projectId and sourceDocumentId are required" });
       }
+
+      await assertFeatureAccess({
+        supabase: supabaseAdmin,
+        userId: user.id,
+        projectId,
+        featureKey: "documents.vault",
+        requiredLevel: "write",
+      });
 
       await requireProjectAccess({
         supabase: supabaseAdmin,

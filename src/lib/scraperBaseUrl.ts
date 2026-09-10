@@ -8,6 +8,9 @@
 
 const DEFAULT_SCRAPER_BASE_URL = "https://epermit-main-production.up.railway.app";
 
+/** @internal Test-only override for Node test runners without Vite import.meta.env */
+let scraperBaseUrlTestOverride: string | null = null;
+
 /**
  * Known-dead/misconfigured Railway hosts that have previously been baked into
  * VITE_API_BASE_URL (e.g. via a stale Vercel env var). Any of these resolve to
@@ -26,6 +29,9 @@ function isKnownDeadScraperHost(raw: string): boolean {
 }
 
 export function getScraperBaseUrl(): string {
+  if (scraperBaseUrlTestOverride != null) {
+    return scraperBaseUrlTestOverride;
+  }
   if (import.meta.env.VITE_SCRAPER_USE_SAME_ORIGIN === "true") {
     return "";
   }
@@ -38,3 +44,9 @@ export function getScraperBaseUrl(): string {
   if (/localhost|127\.0\.0\.1/i.test(raw)) return `http://${raw}`;
   return `https://${raw}`;
 }
+
+export const __scraperBaseUrlTestHooks = {
+  setOverride(url: string | null) {
+    scraperBaseUrlTestOverride = url;
+  },
+};

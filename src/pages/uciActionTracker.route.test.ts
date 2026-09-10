@@ -1,28 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-describe("UCI Action Tracker route wiring", () => {
-  it("mounts under AdminLayout at /admin/uci-action-tracker", () => {
+describe("UCI Action Tracker admin wiring", () => {
+  it("is not mounted under AdminLayout", () => {
     const app = readFileSync(resolve(__dirname, "../App.tsx"), "utf8");
-    expect(app).toContain('path="uci-action-tracker"');
-    expect(app).toContain("UciActionTracker");
-    expect(app).toContain("<Route path=\"/admin\" element={<AdminLayout />}>");
+    assert.doesNotMatch(app, /path="uci-action-tracker"/);
+    assert.doesNotMatch(app, /UciActionTracker/);
   });
 
-  it("is listed in admin-only hybrid nav (requiresAdmin group)", () => {
+  it("is not listed in admin-only hybrid nav", () => {
     const nav = readFileSync(resolve(__dirname, "../components/layout/hybridNav.ts"), "utf8");
-    expect(nav).toContain('href: "/admin/uci-action-tracker"');
-    expect(nav).toContain("UCI Action Tracker");
-    expect(nav).toContain("requiresAdmin: true");
-    // Must not appear in client UCI nav
+    assert.doesNotMatch(nav, /href: "\/admin\/uci-action-tracker"/);
+    assert.doesNotMatch(nav, /UCI Action Tracker/);
     const uciNav = readFileSync(resolve(__dirname, "../lib/uciNavSections.ts"), "utf8");
-    expect(uciNav).not.toContain("uci-action-tracker");
-  });
-
-  it("page documents AdminLayout / useRequireAdmin gate", () => {
-    const page = readFileSync(resolve(__dirname, "./UciActionTracker.tsx"), "utf8");
-    expect(page).toContain("AdminLayout");
-    expect(page).toContain("useRequireAdmin");
+    assert.doesNotMatch(uciNav, /uci-action-tracker/);
   });
 });

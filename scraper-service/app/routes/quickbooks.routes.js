@@ -34,6 +34,7 @@ const {
   requireAuthenticatedUser,
   sanitizeUciError,
 } = require("../services/uci/uci-access.service.js");
+const { assertFeatureAccess } = require("../services/governance/governance.service.js");
 
 /** Offline payload preview only (no Intuit calls). */
 function isDevPayloadPreviewEnabled() {
@@ -314,7 +315,25 @@ function createQuickBooksRouter(opts) {
     }
 
     try {
-      const result = await executeInvoiceTrigger(supabase, req.body || {}, {
+      const body = req.body || {};
+      const projectId =
+        body.project_id != null
+          ? String(body.project_id).trim()
+          : body.projectId != null
+            ? String(body.projectId).trim()
+            : "";
+
+      if (projectId) {
+        await assertFeatureAccess({
+          supabase,
+          userId: String(auth.user.id),
+          projectId,
+          featureKey: "billing.quickbooks",
+          requiredLevel: "write",
+        });
+      }
+
+      const result = await executeInvoiceTrigger(supabase, body, {
         userId: String(auth.user.id),
       });
       return res.status(200).json(result);
@@ -326,6 +345,19 @@ function createQuickBooksRouter(opts) {
         };
         if (err.details) body.details = err.details;
         return res.status(err.httpStatus).json(body);
+      }
+      const statusCode =
+        err && typeof err === "object" && "statusCode" in err
+          ? Number(/** @type {{ statusCode?: number }} */ (err).statusCode)
+          : 0;
+      if (statusCode === 403) {
+        return res.status(403).json({
+          error:
+            err && typeof err === "object" && "code" in err
+              ? String(/** @type {{ code?: string }} */ (err).code)
+              : "FORBIDDEN",
+          message: err instanceof Error ? err.message : "Forbidden",
+        });
       }
       console.error("[invoice/trigger]", err.message || err);
       return res.status(500).json({

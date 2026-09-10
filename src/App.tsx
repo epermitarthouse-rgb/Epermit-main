@@ -21,6 +21,8 @@ import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import FAQ from "./pages/FAQ";
 import Auth from "./pages/Auth";
+import ChangePasswordRequired from "./pages/ChangePasswordRequired";
+import { PasswordChangeRequiredRoute } from "@/components/auth/PasswordChangeRequiredRoute";
 import Install from "./pages/Install";
 import ClientPortal from "./pages/ClientPortal";
 import EmbedWidget from "./pages/EmbedWidget";
@@ -30,13 +32,15 @@ import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import InviteAcceptPage from "./pages/InviteAccept";
 import Analytics from "./pages/Analytics";
-import AdminPanel from "./pages/AdminPanel";
-import AdminMembers from "./pages/AdminMembers";
 import AdminAudit from "./pages/AdminAudit";
+import AdminOverview from "./pages/admin/AdminOverview";
+import AdminAccessUsers from "./pages/admin/AdminAccessUsers";
+import AdminAccessUserDetail from "./pages/admin/AdminAccessUserDetail";
+import AdminPlatformNotifications from "./pages/admin/AdminPlatformNotifications";
+import AdminPlatformCampaigns from "./pages/admin/AdminPlatformCampaigns";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
 import ArchitectureReplicationChecklist from "./pages/ArchitectureReplicationChecklist";
-import UciActionTracker from "./pages/UciActionTracker";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
@@ -85,7 +89,6 @@ import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder"
 import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
 import UtilityCoveragePlaceholder from "./pages/placeholders/UtilityCoveragePlaceholder";
 import MessagesPlaceholder from "./pages/placeholders/MessagesPlaceholder";
-import AdminAuthorizationsPlaceholder from "./pages/placeholders/AdminPreviewPlaceholders";
 
 const queryClient = new QueryClient();
 
@@ -104,6 +107,14 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<HomeRoute />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route
+                  path="/auth/change-password-required"
+                  element={
+                    <PasswordChangeRequiredRoute>
+                      <ChangePasswordRequired />
+                    </PasswordChangeRequiredRoute>
+                  }
+                />
                 <Route path="/login" element={<Navigate to="/auth" replace />} />
                 <Route path="/signup" element={<Navigate to="/auth" state={{ authView: "signup" }} replace />} />
                 <Route
@@ -175,18 +186,30 @@ const App = () => (
                   <Route path="/roi-calculator" element={<ROICalculator />} />
                   <Route path="/consolidation-calculator" element={<ConsolidationCalculator />} />
                   <Route path="/admin" element={<AdminLayout />}>
-                    <Route index element={<AdminPanel />} />
-                    <Route path="jurisdictions" element={<JurisdictionAdmin />} />
+                    <Route index element={<AdminOverview />} />
+                    <Route path="access/users" element={<AdminAccessUsers />} />
+                    <Route path="access/users/:userId" element={<AdminAccessUserDetail />} />
+                    <Route path="audit" element={<AdminAudit />} />
+                    <Route path="platform/jurisdictions" element={<JurisdictionAdmin />} />
+                    <Route path="platform/notifications" element={<AdminPlatformNotifications />} />
+                    <Route path="platform/campaigns" element={<AdminPlatformCampaigns />} />
+                    {/* Legacy redirects */}
+                    <Route path="members" element={<Navigate to="/admin/access/users" replace />} />
+                    <Route
+                      path="authorizations"
+                      element={<Navigate to="/admin/access/users" replace />}
+                    />
+                    <Route
+                      path="jurisdictions"
+                      element={<Navigate to="/admin/platform/jurisdictions" replace />}
+                    />
+                    {/* Dev-only routes (not in nav) */}
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
                     <Route
                       path="architecture-replication"
                       element={<ArchitectureReplicationChecklist />}
                     />
-                    <Route path="uci-action-tracker" element={<UciActionTracker />} />
-                    <Route path="authorizations" element={<AdminAuthorizationsPlaceholder />} />
-                    <Route path="members" element={<AdminMembers />} />
-                    <Route path="audit" element={<AdminAudit />} />
                   </Route>
                   <Route path="/mvp-documentation" element={<MVPDocumentation />} />
                   <Route path="/api-docs" element={<APIDocumentation />} />

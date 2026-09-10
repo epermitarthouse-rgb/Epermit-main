@@ -1,6 +1,6 @@
 # PermitPilot Admin Dashboard — Canonical Architecture (Governance Scope)
 
-**Status:** Architecture v2.1 — documentation only (final corrections applied)  
+**Status:** Architecture v2.1 — **implemented locally** (see [IMPLEMENTATION.md](./IMPLEMENTATION.md)); migration not applied to production  
 **Scope:** Access, security, and platform governance — **not** operational duplication of the main product  
 **Code reference:** `main` · Repository: `epermitarthouse-rgb/Epermit-main`
 

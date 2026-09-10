@@ -1,6 +1,8 @@
 import { Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { useRequireAdmin } from "@/hooks/useRequireAdmin";
+import { AdminSubNav } from "@/components/admin/AdminSubNav";
 import { AdminUnauthorized } from "./AdminUnauthorized";
 
 /**
@@ -8,6 +10,7 @@ import { AdminUnauthorized } from "./AdminUnauthorized";
  * Renders: loading spinner → unauthorized state → <Outlet /> (admin content).
  */
 export function AdminLayout() {
+  const { user } = useAuth();
   const { loading, unauthorized } = useRequireAdmin();
 
   if (loading) {
@@ -22,8 +25,19 @@ export function AdminLayout() {
   }
 
   if (unauthorized) {
-    return <AdminUnauthorized context="the admin panel" showBack />;
+    return (
+      <AdminUnauthorized
+        context="the admin panel"
+        showBack
+        signedInEmail={user?.email}
+      />
+    );
   }
 
-  return <Outlet />;
+  return (
+    <div className="min-h-screen bg-background px-4 py-6 md:px-8">
+      <AdminSubNav />
+      <Outlet />
+    </div>
+  );
 }
