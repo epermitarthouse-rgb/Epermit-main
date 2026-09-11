@@ -81,10 +81,10 @@ export default function AdminAccessUsers() {
   return (
     <AdminPageShell
       variant="editorial"
-      title="User directory"
+      title="Authorization"
       description="Paginated platform user directory with access status and platform roles."
       breadcrumbs={[
-        { label: "Users & Access", href: "/admin/access/users" },
+        { label: "Authorization", href: "/admin/access/users" },
         { label: "Directory" },
       ]}
       actions={

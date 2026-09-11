@@ -92,7 +92,7 @@ export default function AdminOverview() {
           <Button asChild variant="outline" size="sm">
             <Link to="/admin/access/users">
               <Users className="mr-2 h-4 w-4" />
-              Users & Access
+              Authorization
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">

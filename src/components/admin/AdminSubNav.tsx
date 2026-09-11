@@ -51,7 +51,7 @@ export function AdminSubNav() {
   const { pathname } = useLocation();
 
   if (pathname.startsWith("/admin/access")) {
-    return <SubNavBar title="Users & Access" items={ACCESS_ITEMS} />;
+    return <SubNavBar title="Authorization" items={ACCESS_ITEMS} />;
   }
 
   if (pathname.startsWith("/admin/platform")) {

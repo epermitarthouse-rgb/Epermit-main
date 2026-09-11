@@ -17,7 +17,7 @@ const REAL_OR_REFERENCE_EXACT = new Set<string>([
   "/contact",
   "/onboarding/authorization",
   "/delivery/authorization",
-  "/admin/authorizations",
+  "/admin/access/users",
   "/admin/members",
   "/admin/audit",
   "/compliance/analyzer",

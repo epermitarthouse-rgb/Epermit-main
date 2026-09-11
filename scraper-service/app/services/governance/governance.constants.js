@@ -1,6 +1,9 @@
 "use strict";
 
 /** @typedef {"none"|"read"|"write"} FeatureAccessLevel */
+/** @typedef {"none"|"read"|"write"|"owner"} ProjectAccessLevel */
+/** @typedef {"default"|"none"|"read"|"write"} ProjectAccessControl */
+/** @typedef {"default"|"none"|"use"|"manage"} CredentialGrantControl */
 /** @typedef {"owner"|"admin"|"editor"|"viewer"|"none"} ProjectRole */
 
 const FEATURE_KEYS = Object.freeze([
@@ -120,6 +123,34 @@ function combineFeatureAccessLevels(a, b) {
   return "none";
 }
 
+/** Default project access for active non-admin users. */
+const DEFAULT_PROJECT_ACCESS_LEVEL = "write";
+
+/**
+ * @param {ProjectAccessLevel} level
+ * @returns {ProjectRole}
+ */
+function projectAccessToSyntheticRole(level) {
+  if (level === "owner" || level === "write") {
+    return "admin";
+  }
+  if (level === "read") {
+    return "viewer";
+  }
+  return "none";
+}
+
+/**
+ * @param {boolean} platformAdmin
+ * @returns {"use"|"manage"|"none"}
+ */
+function resolveDefaultCredentialGrantLevel(platformAdmin) {
+  if (platformAdmin) {
+    return "manage";
+  }
+  return "use";
+}
+
 module.exports = {
   FEATURE_KEYS,
   EDITOR_WRITE_FEATURES,
@@ -130,4 +161,7 @@ module.exports = {
   resolveRoleDefaultFeatureAccess,
   resolveActiveUserDefaultFeatureAccess,
   combineFeatureAccessLevels,
+  DEFAULT_PROJECT_ACCESS_LEVEL,
+  projectAccessToSyntheticRole,
+  resolveDefaultCredentialGrantLevel,
 };

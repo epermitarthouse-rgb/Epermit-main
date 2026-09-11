@@ -118,11 +118,21 @@ function makeSupabase(opts = {}) {
                       ]
                     : table === "user_feature_permissions"
                       ? featurePermissions
-                      : table === "user_scraped_data_scope"
-                        ? []
-                        : table === "platform_audit_events"
-                          ? []
-                          : [];
+                      : table === "user_project_access_overrides"
+                        ? opts.projectAccessOverrides || []
+                        : table === "portal_credentials"
+                          ? opts.portalCredentials || [
+                              {
+                                id: CREDENTIAL_A,
+                                jurisdiction: "Test Jurisdiction",
+                                portal_username: "test@example.com",
+                              },
+                            ]
+                          : table === "user_scraped_data_scope"
+                            ? []
+                            : table === "platform_audit_events"
+                              ? []
+                              : [];
 
       const chain = {
         _filters: {},
@@ -442,9 +452,31 @@ describe("credential grant-only access", () => {
     });
   });
 
-  it("denies when no grant row in enforce mode", async () => {
+  it("allows default use when no grant row in enforce mode", async () => {
     process.env.GOVERNANCE_ENFORCE = "enforce";
     const supabase = makeSupabase({ grants: [] });
+
+    await assertCredentialGrant({
+      supabase,
+      userId: USER_NON_ADMIN,
+      credentialId: CREDENTIAL_A,
+      requiredLevel: "use",
+    });
+  });
+
+  it("denies when explicit none override is set", async () => {
+    process.env.GOVERNANCE_ENFORCE = "enforce";
+    const supabase = makeSupabase({
+      grants: [
+        {
+          user_id: USER_NON_ADMIN,
+          credential_id: CREDENTIAL_A,
+          grant_level: "none",
+          project_id: null,
+          jurisdiction: null,
+        },
+      ],
+    });
 
     await assert.rejects(
       () =>
@@ -577,6 +609,14 @@ function makeEffectivePermissionsSupabase(opts = {}) {
   const featurePermissions = opts.featurePermissions || [];
   const scrapedScopes = opts.scrapedScopes || [];
   const credentialGrants = opts.credentialGrants || [];
+  const projectAccessOverrides = opts.projectAccessOverrides || [];
+  const portalCredentials = opts.portalCredentials || [
+    {
+      id: CREDENTIAL_A,
+      jurisdiction: "Test Jurisdiction",
+      portal_username: "test@example.com",
+    },
+  ];
 
   return {
     from(table) {
@@ -595,9 +635,13 @@ function makeEffectivePermissionsSupabase(opts = {}) {
                     ? scrapedScopes
                     : table === "user_portal_credential_grants"
                       ? credentialGrants
-                      : table === "user_access_reviews"
-                        ? []
-                        : [];
+                      : table === "user_project_access_overrides"
+                        ? projectAccessOverrides
+                        : table === "portal_credentials"
+                          ? portalCredentials
+                          : table === "user_access_reviews"
+                            ? []
+                            : [];
 
       const chain = {
         _filters: {},
@@ -607,6 +651,9 @@ function makeEffectivePermissionsSupabase(opts = {}) {
         },
         eq(col, val) {
           chain._filters[col] = val;
+          return chain;
+        },
+        order() {
           return chain;
         },
         maybeSingle: async () => {
@@ -647,7 +694,118 @@ function makeEffectivePermissionsSupabase(opts = {}) {
         );
         return { data: isAdmin, error: null };
       }
+      if (name === "_resolve_project_access_level") {
+        return { data: "write", error: null };
+      }
+      if (name === "has_project_access") {
+        return { data: true, error: null };
+      }
       return { data: null, error: new Error(`unknown rpc ${name}`) };
+    },
+  };
+}
+
+/**
+ * Minimal supabase stub for RPC-success paths that still enrich access views.
+ * @param {object} rpcPayload
+ */
+function makeRpcEffectivePermissionsSupabase(rpcPayload) {
+  const userId = String(rpcPayload.user_id || USER_VIEWER);
+  const projectsList = Array.isArray(rpcPayload.projects) ? rpcPayload.projects : [];
+  const allProjects = projectsList.map((project) => ({
+    id: String(project.project_id),
+    name: project.project_name ? String(project.project_name) : null,
+    user_id: "00000000-0000-0000-0000-000000000099",
+  }));
+  const profiles = [
+    {
+      user_id: userId,
+      access_status: rpcPayload.access_status || "active",
+    },
+  ];
+
+  return {
+    async rpc(name, args) {
+      if (name === "admin_get_effective_permissions") {
+        return { data: rpcPayload, error: null };
+      }
+      if (name === "_resolve_project_access_level") {
+        return { data: "write", error: null };
+      }
+      if (name === "has_project_access") {
+        return { data: true, error: null };
+      }
+      if (name === "is_user_active") {
+        const profile = profiles.find((row) => row.user_id === args.p_user_id);
+        return {
+          data: profile ? profile.access_status === "active" : true,
+          error: null,
+        };
+      }
+      return { data: null, error: new Error(`unknown rpc ${name}`) };
+    },
+    from(table) {
+      const rows =
+        table === "profiles"
+          ? profiles
+          : table === "user_roles"
+            ? []
+            : table === "projects"
+              ? allProjects
+              : table === "portal_credentials"
+                ? [
+                    {
+                      id: CREDENTIAL_A,
+                      jurisdiction: "Test Jurisdiction",
+                      portal_username: "test@example.com",
+                    },
+                  ]
+                : table === "user_project_access_overrides"
+                  ? []
+                  : table === "project_team_members"
+                    ? [
+                        {
+                          project_id: PROJECT_A,
+                          user_id: userId,
+                          role: "viewer",
+                        },
+                      ]
+                    : [];
+
+      const chain = {
+        _filters: {},
+        _limit: null,
+        select() {
+          return chain;
+        },
+        eq(col, val) {
+          chain._filters[col] = val;
+          return chain;
+        },
+        order() {
+          return chain;
+        },
+        limit(n) {
+          chain._limit = n;
+          return chain;
+        },
+        maybeSingle: async () => {
+          const match = rows.find((row) =>
+            Object.entries(chain._filters).every(([k, v]) => row[k] === v),
+          );
+          return { data: match ?? null, error: null };
+        },
+        then(resolve) {
+          let filtered = rows.filter((row) =>
+            Object.entries(chain._filters).every(([k, v]) => row[k] === v),
+          );
+          if (chain._limit != null) {
+            filtered = filtered.slice(0, chain._limit);
+          }
+          return Promise.resolve(resolve({ data: filtered, error: null }));
+        },
+      };
+      return chain;
     },
   };
 }
@@ -687,6 +845,9 @@ describe("computeEffectivePermissions", () => {
     assert.equal(result.projects.length, 3);
     assert.ok(Array.isArray(result.risks));
     assert.equal(result.projects[0].features["scraper.run"], "write");
+    assert.ok(Array.isArray(result.project_access));
+    assert.ok(Array.isArray(result.credential_access));
+    assert.ok(result.access_summaries);
   });
 
   it("computes many projects without per-feature DB round trips", async () => {
@@ -707,81 +868,57 @@ describe("computeEffectivePermissions", () => {
 
   it("enriches RPC payload in memory when RPC succeeds", async () => {
     const userId = USER_VIEWER;
-    const supabase = {
-      async rpc(name) {
-        if (name !== "admin_get_effective_permissions") {
-          return { data: null, error: new Error("unknown") };
-        }
-        return {
-          data: {
-            user_id: userId,
-            access_status: "active",
-            platform_admin: false,
-            platform_roles: [],
-            feature_permissions: [],
-            scraped_data_scope: [],
-            credential_grants: [],
-            projects: [
-              {
-                project_id: PROJECT_A,
-                project_name: "Project A",
-                project_role: "viewer",
-              },
-            ],
-            risks: [],
-          },
-          error: null,
-        };
-      },
-      from() {
-        throw new Error("fallback DB should not be called when RPC succeeds");
-      },
-    };
+    const supabase = makeRpcEffectivePermissionsSupabase({
+      user_id: userId,
+      access_status: "active",
+      platform_admin: false,
+      platform_roles: [],
+      feature_permissions: [],
+      scraped_data_scope: [],
+      credential_grants: [],
+      projects: [
+        {
+          project_id: PROJECT_A,
+          project_name: "Project A",
+          project_role: "viewer",
+        },
+      ],
+      risks: [],
+    });
 
     const result = await computeEffectivePermissions(supabase, userId);
     assert.equal(result.projects.length, 1);
     assert.equal(result.projects[0].features["billing.quickbooks"], "read");
     assert.ok(Array.isArray(result.projects[0].scraped_data_scopes));
+    assert.ok(Array.isArray(result.project_access));
+    assert.ok(result.access_summaries);
   });
 
   it("applies global feature overrides when enriching RPC payload", async () => {
     const userId = USER_VIEWER;
-    const supabase = {
-      async rpc(name) {
-        if (name !== "admin_get_effective_permissions") {
-          return { data: null, error: new Error("unknown") };
-        }
-        return {
-          data: {
-            user_id: userId,
-            access_status: "active",
-            platform_admin: false,
-            platform_roles: [],
-            feature_permissions: [
-              {
-                project_id: null,
-                feature_key: "code.analyzer",
-                access_level: "none",
-              },
-            ],
-            scraped_data_scope: [],
-            credential_grants: [],
-            projects: [
-              {
-                project_id: PROJECT_A,
-                project_name: "Project A",
-                project_role: "admin",
-              },
-            ],
-            risks: [],
-          },
-          error: null,
-        };
-      },
-      from() {
-        throw new Error("fallback DB should not be called when RPC succeeds");
-      },
-    };
+    const supabase = makeRpcEffectivePermissionsSupabase({
+      user_id: userId,
+      access_status: "active",
+      platform_admin: false,
+      platform_roles: [],
+      feature_permissions: [
+        {
+          project_id: null,
+          feature_key: "code.analyzer",
+          access_level: "none",
+        },
+      ],
+      scraped_data_scope: [],
+      credential_grants: [],
+      projects: [
+        {
+          project_id: PROJECT_A,
+          project_name: "Project A",
+          project_role: "admin",
+        },
+      ],
+      risks: [],
+    });
 
     const result = await computeEffectivePermissions(supabase, userId);
     assert.equal(result.projects[0].features["code.analyzer"], "none");
@@ -802,6 +939,8 @@ describe("computeEffectivePermissions", () => {
     assert.equal(result.projects.length, 0);
     assert.equal(result.global_features["code.analyzer"], "write");
     assert.equal(result.global_features["billing.quickbooks"], "write");
+    assert.ok(Array.isArray(result.project_access));
+    assert.ok(Array.isArray(result.credential_access));
   });
 });
 

@@ -7,6 +7,9 @@ const {
   resolveRoleDefaultFeatureAccess,
   resolveActiveUserDefaultFeatureAccess,
   combineFeatureAccessLevels,
+  DEFAULT_PROJECT_ACCESS_LEVEL,
+  projectAccessToSyntheticRole,
+  resolveDefaultCredentialGrantLevel,
 } = require("./governance.constants.js");
 
 /** @typedef {"legacy"|"shadow"|"enforce"} EnforceMode */
@@ -201,8 +204,79 @@ async function resolveProjectRole(supabase, userId, projectId) {
  * @returns {Promise<boolean>}
  */
 async function hasProjectMembership(supabase, userId, projectId) {
-  const role = await resolveProjectRole(supabase, userId, projectId);
-  return role !== "none";
+  const level = await resolveProjectAccessLevel(supabase, userId, projectId);
+  return level !== "none";
+}
+
+/**
+ * Effective project access: default Write for active users; explicit overrides are exceptions.
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} userId
+ * @param {string} projectId
+ * @returns {Promise<import("./governance.constants.js").ProjectAccessLevel>}
+ */
+async function resolveProjectAccessLevel(supabase, userId, projectId) {
+  if (!userId || !projectId) {
+    return "none";
+  }
+
+  if (!(await isUserActive(supabase, userId))) {
+    return "none";
+  }
+
+  if (await isPlatformAdmin(supabase, userId)) {
+    return "write";
+  }
+
+  try {
+    const { data, error } = await supabase.rpc("_resolve_project_access_level", {
+      p_user_id: userId,
+      p_project_id: projectId,
+    });
+
+    if (!error && typeof data === "string") {
+      const level = data;
+      if (level === "owner" || level === "none" || level === "read" || level === "write") {
+        return /** @type {import("./governance.constants.js").ProjectAccessLevel} */ (level);
+      }
+    }
+  } catch {
+    // RPC may not exist before migration is applied.
+  }
+
+  const { data: project, error: projectErr } = await supabase
+    .from("projects")
+    .select("user_id")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (!projectErr && project && String(project.user_id) === String(userId)) {
+    return "owner";
+  }
+
+  const { data: override, error: overrideErr } = await supabase
+    .from("user_project_access_overrides")
+    .select("access_level")
+    .eq("user_id", userId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  if (!overrideErr && override?.access_level) {
+    const level = String(override.access_level);
+    if (level === "none" || level === "read" || level === "write") {
+      return /** @type {import("./governance.constants.js").ProjectAccessLevel} */ (level);
+    }
+  }
+
+  const teamRole = await resolveProjectRole(supabase, userId, projectId);
+  if (teamRole === "viewer") {
+    return "read";
+  }
+  if (teamRole === "editor" || teamRole === "admin" || teamRole === "owner") {
+    return teamRole === "owner" ? "owner" : "write";
+  }
+
+  return DEFAULT_PROJECT_ACCESS_LEVEL;
 }
 
 /**
@@ -258,10 +332,12 @@ async function resolveFeatureAccess(supabase, userId, projectId, featureKey) {
     return globalLevel;
   }
 
-  const projectRole = await resolveProjectRole(supabase, userId, projectId);
-  if (projectRole === "none") {
-    return globalLevel;
+  const projectAccessLevel = await resolveProjectAccessLevel(supabase, userId, projectId);
+  if (projectAccessLevel === "none") {
+    return "none";
   }
+
+  const syntheticRole = projectAccessToSyntheticRole(projectAccessLevel);
 
   const { data: explicit, error } = await supabase
     .from("user_feature_permissions")
@@ -271,7 +347,7 @@ async function resolveFeatureAccess(supabase, userId, projectId, featureKey) {
     .eq("feature_key", featureKey)
     .maybeSingle();
 
-  let projectBaseline = resolveRoleDefaultFeatureAccess(projectRole, featureKey);
+  let projectBaseline = resolveRoleDefaultFeatureAccess(syntheticRole, featureKey);
   if (!error && explicit?.access_level) {
     const level = String(explicit.access_level);
     if (level === "none" || level === "read" || level === "write") {
@@ -370,9 +446,11 @@ async function assertFeatureAccess({
  * @returns {Promise<{ grantLevel: CredentialGrantLevel, projectId: string | null, jurisdiction: string | null }>}
  */
 async function resolveCredentialGrant(supabase, userId, credentialId) {
-  if (await isPlatformAdmin(supabase, userId)) {
-    return { grantLevel: "manage", projectId: null, jurisdiction: null };
+  if (!(await isUserActive(supabase, userId))) {
+    return { grantLevel: "none", projectId: null, jurisdiction: null };
   }
+
+  const platformAdmin = await isPlatformAdmin(supabase, userId);
 
   const { data, error } = await supabase
     .from("user_portal_credential_grants")
@@ -381,11 +459,35 @@ async function resolveCredentialGrant(supabase, userId, credentialId) {
     .eq("credential_id", credentialId)
     .maybeSingle();
 
-  if (error || !data) {
-    return { grantLevel: "none", projectId: null, jurisdiction: null };
+  if (error) {
+    return {
+      grantLevel: /** @type {CredentialGrantLevel} */ (
+        resolveDefaultCredentialGrantLevel(platformAdmin)
+      ),
+      projectId: null,
+      jurisdiction: null,
+    };
+  }
+
+  if (!data) {
+    return {
+      grantLevel: /** @type {CredentialGrantLevel} */ (
+        resolveDefaultCredentialGrantLevel(platformAdmin)
+      ),
+      projectId: null,
+      jurisdiction: null,
+    };
   }
 
   const grantLevel = String(data.grant_level || "none");
+  if (grantLevel === "none") {
+    return {
+      grantLevel: "none",
+      projectId: data.project_id ? String(data.project_id) : null,
+      jurisdiction: data.jurisdiction ? String(data.jurisdiction) : null,
+    };
+  }
+
   const normalized =
     grantLevel === "use" || grantLevel === "manage" ? grantLevel : "none";
 
@@ -938,26 +1040,221 @@ function enrichRpcEffectivePermissionsPayload(payload) {
 }
 
 /**
+ * Build default+override effective views for admin UI (all projects / all credentials).
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {Record<string, unknown>} payload
+ */
+async function assembleEffectiveAccessViews(supabase, payload) {
+  const userId = String(payload.user_id || "");
+  if (!userId) {
+    return;
+  }
+
+  const accessStatus = String(payload.access_status || "active");
+  const active = accessStatus === "active";
+  const platformAdmin = Boolean(payload.platform_admin);
+
+  const explicitGrants = Array.isArray(payload.credential_grants)
+    ? payload.credential_grants
+    : [];
+  /** @type {Map<string, Record<string, unknown>>} */
+  const grantByCredential = new Map();
+  for (const row of explicitGrants) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+    const record = /** @type {Record<string, unknown>} */ (row);
+    grantByCredential.set(String(record.credential_id), record);
+  }
+
+  const explicitFeatures = Array.isArray(payload.feature_permissions)
+    ? payload.feature_permissions.filter(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          /** @type {Record<string, unknown>} */ (row).project_id == null,
+      )
+    : [];
+
+  const [
+    allProjectsRes,
+    allCredentialsRes,
+    overridesRes,
+  ] = await Promise.all([
+    supabase.from("projects").select("id, name, user_id").order("name"),
+    supabase
+      .from("portal_credentials")
+      .select("id, jurisdiction, portal_username")
+      .order("jurisdiction")
+      .order("portal_username"),
+    supabase
+      .from("user_project_access_overrides")
+      .select("project_id, access_level")
+      .eq("user_id", userId),
+  ]);
+
+  /** @type {Map<string, string>} */
+  const overrideByProject = new Map();
+  for (const row of overridesRes.data || []) {
+    overrideByProject.set(String(row.project_id), String(row.access_level));
+  }
+
+  /** @type {Array<Record<string, unknown>>} */
+  const projectAccess = [];
+  let projectExceptionCount = 0;
+
+  for (const project of allProjectsRes.data || []) {
+    const projectId = String(project.id);
+    const isOwner = String(project.user_id) === userId;
+    let effectiveAccess = "write";
+    let source = "Default";
+    let control = "default";
+
+    if (!active) {
+      effectiveAccess = "none";
+      source = "Inactive user";
+      control = "none";
+    } else if (isOwner) {
+      effectiveAccess = "owner";
+      source = "Project ownership";
+      control = "default";
+    } else if (platformAdmin) {
+      effectiveAccess = "write";
+      source = "Platform admin";
+      control = "default";
+    } else {
+      const override = overrideByProject.get(projectId);
+      if (override) {
+        effectiveAccess = override;
+        source = override === "none" ? "Admin restriction" : "Admin override";
+        control = override;
+        projectExceptionCount += 1;
+      } else {
+        const level = await resolveProjectAccessLevel(supabase, userId, projectId);
+        if (level === "owner") {
+          effectiveAccess = "owner";
+          source = "Project ownership";
+        } else if (level !== DEFAULT_PROJECT_ACCESS_LEVEL) {
+          effectiveAccess = level;
+          source = level === "none" ? "Admin restriction" : "Admin override";
+          control = level;
+          projectExceptionCount += 1;
+        }
+      }
+    }
+
+    projectAccess.push({
+      project_id: projectId,
+      project_name: project.name ? String(project.name) : null,
+      effective_access: effectiveAccess,
+      source,
+      control,
+      is_owner: isOwner,
+    });
+  }
+
+  const defaultCredentialGrant = resolveDefaultCredentialGrantLevel(platformAdmin);
+  /** @type {Array<Record<string, unknown>>} */
+  const credentialAccess = [];
+  let credentialExceptionCount = 0;
+
+  for (const credential of allCredentialsRes.data || []) {
+    const credentialId = String(credential.id);
+    const explicit = grantByCredential.get(credentialId);
+    const explicitLevel = explicit ? String(explicit.grant_level || "none") : null;
+
+    let effectiveGrant = defaultCredentialGrant;
+    let source = "Default";
+    let control = "default";
+
+    if (!active) {
+      effectiveGrant = "none";
+      source = "Inactive user";
+      control = "none";
+    } else if (explicitLevel) {
+      effectiveGrant =
+        explicitLevel === "use" || explicitLevel === "manage" || explicitLevel === "none"
+          ? explicitLevel
+          : "none";
+      if (effectiveGrant === defaultCredentialGrant) {
+        source = "Default";
+        control = "default";
+      } else {
+        source = effectiveGrant === "none" ? "Admin restriction" : "Admin override";
+        control = effectiveGrant;
+        credentialExceptionCount += 1;
+      }
+    }
+
+    credentialAccess.push({
+      credential_id: credentialId,
+      jurisdiction: credential.jurisdiction ?? null,
+      portal_username: credential.portal_username ?? null,
+      effective_access: effectiveGrant,
+      source,
+      control,
+    });
+  }
+
+  let featureExceptionCount = 0;
+  if (active && !platformAdmin) {
+    featureExceptionCount = explicitFeatures.length;
+  }
+
+  payload.project_access = projectAccess;
+  payload.credential_access = credentialAccess;
+  payload.access_summaries = {
+    projects:
+      !active
+        ? "No project access"
+        : platformAdmin
+          ? "All projects — Write"
+          : `All projects — Write`,
+    projects_exception_count: projectExceptionCount,
+    features:
+      !active
+        ? "No feature access"
+        : platformAdmin
+          ? "All standard features — Write"
+          : "All standard features — Write",
+    features_exception_count: featureExceptionCount,
+    credentials:
+      !active
+        ? "No credential access"
+        : platformAdmin
+          ? "All credentials — Manage"
+          : "All credentials — Use",
+    credentials_exception_count: credentialExceptionCount,
+  };
+}
+
+/**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {string} userId
  * @returns {Promise<Record<string, unknown>>}
  */
 async function computeEffectivePermissions(supabase, userId) {
+  let payload;
+
   try {
     const { data, error } = await supabase.rpc("admin_get_effective_permissions", {
       p_user_id: userId,
     });
 
     if (!error && data && typeof data === "object") {
-      const payload = /** @type {Record<string, unknown>} */ (data);
+      payload = /** @type {Record<string, unknown>} */ (data);
       enrichRpcEffectivePermissionsPayload(payload);
-      return payload;
     }
   } catch {
     // Fall through to batched JS computation.
   }
 
-  return computeEffectivePermissionsFast(supabase, userId);
+  if (!payload) {
+    payload = await computeEffectivePermissionsFast(supabase, userId);
+  }
+
+  await assembleEffectiveAccessViews(supabase, payload);
+  return payload;
 }
 
 /**
@@ -1054,6 +1351,7 @@ module.exports = {
   isUserActive,
   isPlatformAdmin,
   resolveProjectRole,
+  resolveProjectAccessLevel,
   hasProjectMembership,
   resolveGlobalFeatureAccess,
   resolveFeatureAccess,
@@ -1063,6 +1361,7 @@ module.exports = {
   assertCredentialGrant,
   assertScrapedDataAccess,
   computeEffectivePermissions,
+  assembleEffectiveAccessViews,
   sanitizeAuditJson,
   appendAuditEvent,
 };

@@ -541,7 +541,6 @@ function createAdminRouter(opts) {
         const actor = req.platformAdminUser;
         const userId = String(req.params.id || "").trim();
         const projectId = String(req.params.projectId || "").trim();
-        const role = String(req.body?.role || "").trim().toLowerCase();
 
         if (!userId || !projectId) {
           return res.status(400).json({
@@ -550,17 +549,47 @@ function createAdminRouter(opts) {
           });
         }
 
-        const allowedRoles = new Set(["none", "viewer", "editor", "admin"]);
-        if (!allowedRoles.has(role)) {
+        const accessLevelRaw = String(req.body?.access_level || "").trim().toLowerCase();
+        const role = String(req.body?.role || "").trim().toLowerCase();
+
+        /** @type {"default"|"none"|"read"|"write"} */
+        let accessLevel = "default";
+
+        if (accessLevelRaw) {
+          const allowed = new Set(["default", "none", "read", "write"]);
+          if (!allowed.has(accessLevelRaw)) {
+            return res.status(400).json({
+              error: "INVALID_ACCESS_LEVEL",
+              message: "access_level must be default, none, read, or write",
+            });
+          }
+          accessLevel = /** @type {"default"|"none"|"read"|"write"} */ (accessLevelRaw);
+        } else if (role) {
+          const legacyMap = {
+            none: "none",
+            viewer: "read",
+            editor: "write",
+            admin: "write",
+            default: "default",
+            inherit: "default",
+          };
+          if (!(role in legacyMap)) {
+            return res.status(400).json({
+              error: "INVALID_ROLE",
+              message: "role must be none, viewer, editor, admin, default, or inherit",
+            });
+          }
+          accessLevel = /** @type {"default"|"none"|"read"|"write"} */ (legacyMap[role]);
+        } else {
           return res.status(400).json({
-            error: "INVALID_ROLE",
-            message: "role must be none, viewer, editor, or admin",
+            error: "INVALID_BODY",
+            message: "access_level or role required",
           });
         }
 
-        if (role === "none") {
+        if (accessLevel === "default") {
           const { error } = await supabase
-            .from("project_team_members")
+            .from("user_project_access_overrides")
             .delete()
             .eq("user_id", userId)
             .eq("project_id", projectId);
@@ -569,13 +598,15 @@ function createAdminRouter(opts) {
             throw Object.assign(new Error(error.message), { statusCode: 500 });
           }
         } else {
-          const { error } = await supabase.from("project_team_members").upsert(
+          const { error } = await supabase.from("user_project_access_overrides").upsert(
             {
               user_id: userId,
               project_id: projectId,
-              role,
+              access_level: accessLevel,
+              granted_by: actor.id,
+              updated_at: new Date().toISOString(),
             },
-            { onConflict: "project_id,user_id" },
+            { onConflict: "user_id,project_id" },
           );
 
           if (error) {
@@ -589,10 +620,10 @@ function createAdminRouter(opts) {
           target_type: "user",
           target_id: userId,
           project_id: projectId,
-          after_json: { role },
+          after_json: { access_level: accessLevel },
         });
 
-        res.json({ ok: true, user_id: userId, project_id: projectId, role });
+        res.json({ ok: true, user_id: userId, project_id: projectId, access_level: accessLevel });
       } catch (err) {
         const s = sanitizeUciError(err);
         res.status(s.httpStatus).json(s.body);
@@ -828,12 +859,44 @@ function createAdminRouter(opts) {
         for (const item of grants) {
           const row = item && typeof item === "object" ? item : {};
           const credentialId = String(row.credential_id || "").trim();
-          const grantLevel = String(row.grant_level || "").trim();
+          const grantLevelRaw = String(row.grant_level || "").trim().toLowerCase();
+          const reset =
+            row.reset === true ||
+            grantLevelRaw === "default" ||
+            grantLevelRaw === "inherit";
 
-          if (
-            !credentialId ||
-            !["none", "use", "manage"].includes(grantLevel)
-          ) {
+          if (!credentialId) {
+            results.push({ credential_id: credentialId, ok: false });
+            continue;
+          }
+
+          if (reset) {
+            const { error } = await supabase
+              .from("user_portal_credential_grants")
+              .delete()
+              .eq("user_id", userId)
+              .eq("credential_id", credentialId);
+
+            if (error) {
+              results.push({ credential_id: credentialId, ok: false, error: error.message });
+              continue;
+            }
+
+            await appendAuditEvent(supabase, {
+              actor_id: actor.id,
+              action: "credential_grant.revoked",
+              target_type: "user",
+              target_id: userId,
+              after_json: { credential_id: credentialId, grant_level: "default" },
+            });
+
+            results.push({ credential_id: credentialId, ok: true, grant_level: "default" });
+            continue;
+          }
+
+          const grantLevel = grantLevelRaw;
+
+          if (!["none", "use", "manage"].includes(grantLevel)) {
             results.push({ credential_id: credentialId, ok: false });
             continue;
           }

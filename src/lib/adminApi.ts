@@ -85,6 +85,33 @@ export type AdminEffectiveProject = {
   credentials?: Array<{ credential_id: string; grant: string }>;
 };
 
+export type AdminProjectAccessRow = {
+  project_id: string;
+  project_name: string | null;
+  effective_access: string;
+  source: string;
+  control: string;
+  is_owner: boolean;
+};
+
+export type AdminCredentialAccessRow = {
+  credential_id: string;
+  jurisdiction: string | null;
+  portal_username: string | null;
+  effective_access: string;
+  source: string;
+  control: string;
+};
+
+export type AdminAccessSummaries = {
+  projects: string;
+  projects_exception_count: number;
+  features: string;
+  features_exception_count: number;
+  credentials: string;
+  credentials_exception_count: number;
+};
+
 export type AdminEffectivePermissions = {
   user_id: string;
   email?: string | null;
@@ -96,6 +123,11 @@ export type AdminEffectivePermissions = {
   platform_roles?: string[];
   /** User-level feature access independent of project membership. */
   global_features?: Record<string, FeatureAccessLevel>;
+  /** All projects with effective access (default+override model). */
+  project_access?: AdminProjectAccessRow[];
+  /** All portal credentials with effective access. */
+  credential_access?: AdminCredentialAccessRow[];
+  access_summaries?: AdminAccessSummaries;
   projects?: AdminEffectiveProject[];
   feature_permissions?: AdminFeaturePermissionRow[];
   scraped_data_scope?: AdminScrapedDataScopeRow[];
@@ -191,9 +223,10 @@ export type AdminFeatureUpdateItem = {
 
 export type AdminCredentialGrantUpdateItem = {
   credential_id: string;
-  grant_level: CredentialGrantLevel;
+  grant_level: CredentialGrantLevel | "default";
   project_id?: string | null;
   jurisdiction?: string | null;
+  reset?: boolean;
 };
 
 export type AdminFetchFn = (
@@ -384,18 +417,37 @@ export async function setAdminPlatformRole(
   );
 }
 
+export type ProjectAccessControl = "default" | "none" | "read" | "write";
+
 export async function setAdminProjectRole(
   userId: string,
   projectId: string,
   role: ProjectRole,
   fetchFn?: AdminFetchFn,
-): Promise<AdminMutationOk & { user_id: string; project_id: string; role: string }> {
+): Promise<AdminMutationOk & { user_id: string; project_id: string; access_level?: string; role?: string }> {
   return adminFetchJson(
     `${ADMIN_API_PREFIX}/access/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(projectId)}/role`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role }),
+    },
+    fetchFn,
+  );
+}
+
+export async function setAdminProjectAccess(
+  userId: string,
+  projectId: string,
+  accessLevel: ProjectAccessControl,
+  fetchFn?: AdminFetchFn,
+): Promise<AdminMutationOk & { user_id: string; project_id: string; access_level: string }> {
+  return adminFetchJson(
+    `${ADMIN_API_PREFIX}/access/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(projectId)}/role`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_level: accessLevel }),
     },
     fetchFn,
   );

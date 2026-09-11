@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Copy, Loader2, Plus, Shield, UserCog } from "lucide-react";
+import { Copy, Loader2, Shield } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { AdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AlertBanner, Panel } from "@/components/design/ProductPrimitives";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,27 +28,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminApi } from "@/hooks/useAdminApi";
-import { useProjects } from "@/hooks/useProjects";
-import type {
-  AdminEffectivePermissions,
-  AdminPortalCredential,
-} from "@/lib/adminApi";
+import type { AdminEffectivePermissions } from "@/lib/adminApi";
 import {
-  activeCredentialGrants,
+  buildCredentialAccessRows,
   buildProjectAccessRows,
   credentialAccessSummaryText,
   credentialDisplayLabel,
-  credentialGrantSummary,
-  credentialsAvailableForGrant,
-  CREDENTIAL_GRANT_DISPLAY,
+  CREDENTIAL_GRANT_CONTROL_LABELS,
   dataRestrictionsSummary,
   featureAccessSummary,
   formatAccessLevel,
+  formatCredentialGrantLevel,
+  formatProjectAccessLevel,
   globalFeatureAccessRow,
   humanRiskLabel,
-  portalCredentialLabel,
-  projectAccessSummary,
-  projectsForBulkAccess,
+  projectAccessSummaryText,
   userIdentityMeta,
   userIdentitySubtitle,
   userIdentityTitle,
@@ -64,45 +50,43 @@ import {
 import {
   FEATURE_CONTROL_LABELS,
   FEATURE_KEYS,
-  PROJECT_ROLE_LABELS,
+  PROJECT_ACCESS_CONTROL_LABELS,
   featureKeyLabel,
-  type CredentialGrantLevel,
+  type CredentialGrantControl,
   type FeatureAccessControl,
-  type ProjectRole,
+  type ProjectAccessControl,
 } from "@/lib/governanceConstants";
 
-type ConfirmAction =
-  | { type: "deactivate" }
-  | { type: "revoke_admin" }
-  | { type: "revoke_credential"; credentialId: string };
+type ConfirmAction = { type: "deactivate" } | { type: "revoke_admin" };
 
-const ASSIGNABLE_TEAM_ROLES: ProjectRole[] = ["viewer", "editor", "admin"];
+const PROJECT_ACCESS_CONTROLS: ProjectAccessControl[] = [
+  "default",
+  "none",
+  "read",
+  "write",
+];
+
+const CREDENTIAL_ACCESS_CONTROLS: CredentialGrantControl[] = [
+  "default",
+  "none",
+  "use",
+  "manage",
+];
 
 export default function AdminAccessUserDetail() {
   const { userId = "" } = useParams();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const adminApi = useAdminApi();
-  const { projects: adminProjects, loading: adminProjectsLoading } = useProjects();
-
   const [effective, setEffective] = useState<AdminEffectivePermissions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [customizingFeature, setCustomizingFeature] = useState<string | null>(null);
-  const [addProjectOpen, setAddProjectOpen] = useState(false);
-  const [bulkProjectSearch, setBulkProjectSearch] = useState("");
-  const [bulkSelectedProjectIds, setBulkSelectedProjectIds] = useState<string[]>([]);
-  const [bulkProjectRole, setBulkProjectRole] = useState<ProjectRole>("viewer");
-  const [selectedTeamProjectIds, setSelectedTeamProjectIds] = useState<string[]>([]);
-  const [bulkTableRole, setBulkTableRole] = useState<ProjectRole>("viewer");
-  const [portalCredentials, setPortalCredentials] = useState<AdminPortalCredential[]>([]);
-  const [portalCredentialsLoading, setPortalCredentialsLoading] = useState(false);
-  const [addCredentialOpen, setAddCredentialOpen] = useState(false);
-  const [addCredentialId, setAddCredentialId] = useState("");
-  const [addCredentialLevel, setAddCredentialLevel] = useState<CredentialGrantLevel>("use");
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [bulkTableAccess, setBulkTableAccess] = useState<ProjectAccessControl>("write");
+  const [projectSearch, setProjectSearch] = useState("");
   const [credentialSearch, setCredentialSearch] = useState("");
 
   const load = useCallback(async () => {
@@ -112,8 +96,10 @@ export default function AdminAccessUserDetail() {
     try {
       const perm = await adminApi.getEffectivePermissions(userId);
       setEffective(perm);
-      setSelectedTeamProjectIds((prev) =>
-        prev.filter((id) => perm.projects?.some((project) => project.project_id === id)),
+      setSelectedProjectIds((prev) =>
+        prev.filter((id) =>
+          perm.project_access?.some((project) => project.project_id === id),
+        ),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load user");
@@ -127,68 +113,39 @@ export default function AdminAccessUserDetail() {
     void load();
   }, [load]);
 
-  const loadPortalCredentials = useCallback(async () => {
-    setPortalCredentialsLoading(true);
-    try {
-      const rows = await adminApi.listPortalCredentials();
-      setPortalCredentials(rows);
-    } catch (err) {
-      toast({
-        title: "Could not load portal credentials",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "destructive",
-      });
-      setPortalCredentials([]);
-    } finally {
-      setPortalCredentialsLoading(false);
-    }
-  }, [adminApi, toast]);
-
-  useEffect(() => {
-    if (effective && !effective.platform_admin) {
-      void loadPortalCredentials();
-    }
-  }, [effective?.platform_admin, loadPortalCredentials]);
-
   const projectAccessRows = useMemo(
     () => (effective ? buildProjectAccessRows(effective) : []),
     [effective],
   );
 
-  const bulkProjectOptions = useMemo(() => {
-    if (!effective) return [];
-    return projectsForBulkAccess(
-      adminProjects.map((project) => ({ id: project.id, name: project.name })),
-      effective,
-    );
-  }, [adminProjects, effective]);
+  const credentialAccessRows = useMemo(
+    () => (effective ? buildCredentialAccessRows(effective) : []),
+    [effective],
+  );
 
-  const filteredBulkProjectOptions = useMemo(() => {
-    const query = bulkProjectSearch.trim().toLowerCase();
-    if (!query) return bulkProjectOptions;
-    return bulkProjectOptions.filter((project) =>
-      project.name.toLowerCase().includes(query),
+  const filteredProjectRows = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    if (!query) return projectAccessRows;
+    return projectAccessRows.filter((row) =>
+      (row.project_name ?? row.project_id).toLowerCase().includes(query),
     );
-  }, [bulkProjectOptions, bulkProjectSearch]);
+  }, [projectAccessRows, projectSearch]);
 
-  const selectableTeamProjectIds = useMemo(
-    () => projectAccessRows.filter((row) => !row.isOwner).map((row) => row.project_id),
+  const filteredCredentialRows = useMemo(() => {
+    const query = credentialSearch.trim().toLowerCase();
+    if (!query) return credentialAccessRows;
+    return credentialAccessRows.filter((row) =>
+      credentialDisplayLabel(row).toLowerCase().includes(query),
+    );
+  }, [credentialAccessRows, credentialSearch]);
+
+  const selectableProjectIds = useMemo(
+    () => projectAccessRows.filter((row) => !row.is_owner).map((row) => row.project_id),
     [projectAccessRows],
   );
 
-  const resetAddProjectForm = () => {
-    setBulkProjectSearch("");
-    setBulkSelectedProjectIds([]);
-    setBulkProjectRole("viewer");
-  };
-
-  const openAddProjectDialog = () => {
-    resetAddProjectForm();
-    setAddProjectOpen(true);
-  };
-
-  const toggleBulkProject = (projectId: string, checked: boolean) => {
-    setBulkSelectedProjectIds((prev) => {
+  const toggleProjectSelection = (projectId: string, checked: boolean) => {
+    setSelectedProjectIds((prev) => {
       if (checked) {
         return prev.includes(projectId) ? prev : [...prev, projectId];
       }
@@ -196,29 +153,12 @@ export default function AdminAccessUserDetail() {
     });
   };
 
-  const selectAllBulkProjects = () => {
-    setBulkSelectedProjectIds(filteredBulkProjectOptions.map((project) => project.id));
+  const selectAllProjects = () => {
+    setSelectedProjectIds([...selectableProjectIds]);
   };
 
-  const clearAllBulkProjects = () => {
-    setBulkSelectedProjectIds([]);
-  };
-
-  const toggleTeamProjectSelection = (projectId: string, checked: boolean) => {
-    setSelectedTeamProjectIds((prev) => {
-      if (checked) {
-        return prev.includes(projectId) ? prev : [...prev, projectId];
-      }
-      return prev.filter((id) => id !== projectId);
-    });
-  };
-
-  const selectAllTeamProjects = () => {
-    setSelectedTeamProjectIds([...selectableTeamProjectIds]);
-  };
-
-  const clearTeamProjectSelection = () => {
-    setSelectedTeamProjectIds([]);
+  const clearProjectSelection = () => {
+    setSelectedProjectIds([]);
   };
 
   const copyUserId = async () => {
@@ -256,11 +196,6 @@ export default function AdminAccessUserDetail() {
     } else if (confirmAction.type === "revoke_admin") {
       await adminApi.setPlatformRole(userId, "revoke");
       toast({ title: "Platform admin revoked" });
-    } else if (confirmAction.type === "revoke_credential") {
-      await adminApi.setCredentialGrants(userId, [
-        { credential_id: confirmAction.credentialId, grant_level: "none" },
-      ]);
-      toast({ title: "Credential access removed" });
     }
     await load();
   };
@@ -282,13 +217,14 @@ export default function AdminAccessUserDetail() {
     }
   };
 
-  const handleProjectRoleChange = async (projectId: string, role: ProjectRole) => {
+  const handleProjectAccessChange = async (
+    projectId: string,
+    accessLevel: ProjectAccessControl,
+  ) => {
     setBusy(true);
     try {
-      await adminApi.setProjectRole(userId, projectId, role);
-      toast({
-        title: role === "none" ? "Project access removed" : "Project role updated",
-      });
+      await adminApi.setProjectAccess(userId, projectId, accessLevel);
+      toast({ title: "Project access updated" });
       await load();
     } catch (err) {
       toast({
@@ -301,71 +237,22 @@ export default function AdminAccessUserDetail() {
     }
   };
 
-  const handleBulkProjectAccessSave = async () => {
-    if (bulkSelectedProjectIds.length === 0) return;
+  const handleBulkProjectAccessApply = async () => {
+    if (selectedProjectIds.length === 0) return;
     setBusy(true);
     try {
-      for (const projectId of bulkSelectedProjectIds) {
-        await adminApi.setProjectRole(userId, projectId, bulkProjectRole);
+      for (const projectId of selectedProjectIds) {
+        await adminApi.setProjectAccess(userId, projectId, bulkTableAccess);
       }
       toast({
         title: "Project access updated",
-        description: `${bulkSelectedProjectIds.length} project${bulkSelectedProjectIds.length === 1 ? "" : "s"} assigned ${PROJECT_ROLE_LABELS[bulkProjectRole]}.`,
+        description: `${selectedProjectIds.length} project${selectedProjectIds.length === 1 ? "" : "s"} updated.`,
       });
-      setAddProjectOpen(false);
-      resetAddProjectForm();
-      await load();
-    } catch (err) {
-      toast({
-        title: "Could not update project access",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "destructive",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleBulkTeamProjectRoleChange = async () => {
-    if (selectedTeamProjectIds.length === 0) return;
-    setBusy(true);
-    try {
-      for (const projectId of selectedTeamProjectIds) {
-        await adminApi.setProjectRole(userId, projectId, bulkTableRole);
-      }
-      toast({
-        title: "Project roles updated",
-        description: `${selectedTeamProjectIds.length} project${selectedTeamProjectIds.length === 1 ? "" : "s"} set to ${PROJECT_ROLE_LABELS[bulkTableRole]}.`,
-      });
-      setSelectedTeamProjectIds([]);
+      setSelectedProjectIds([]);
       await load();
     } catch (err) {
       toast({
         title: "Bulk update failed",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "destructive",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleBulkTeamProjectRemove = async () => {
-    if (selectedTeamProjectIds.length === 0) return;
-    setBusy(true);
-    try {
-      for (const projectId of selectedTeamProjectIds) {
-        await adminApi.setProjectRole(userId, projectId, "none");
-      }
-      toast({
-        title: "Project access removed",
-        description: `${selectedTeamProjectIds.length} team membership${selectedTeamProjectIds.length === 1 ? "" : "s"} removed.`,
-      });
-      setSelectedTeamProjectIds([]);
-      await load();
-    } catch (err) {
-      toast({
-        title: "Bulk remove failed",
         description: err instanceof Error ? err.message : undefined,
         variant: "destructive",
       });
@@ -389,7 +276,6 @@ export default function AdminAccessUserDetail() {
         ]);
         toast({ title: "Feature access updated" });
       }
-      setCustomizingFeature(null);
       await load();
     } catch (err) {
       toast({
@@ -402,60 +288,26 @@ export default function AdminAccessUserDetail() {
     }
   };
 
-  const handleCredentialGrantChange = async (
+  const handleCredentialAccessChange = async (
     credentialId: string,
-    grantLevel: CredentialGrantLevel,
+    control: CredentialGrantControl,
   ) => {
-    const existing = effective?.credential_grants?.find(
-      (grant) => grant.credential_id === credentialId,
-    );
     setBusy(true);
     try {
-      await adminApi.setCredentialGrants(userId, [
-        {
-          credential_id: credentialId,
-          grant_level: grantLevel,
-          project_id: existing?.project_id ?? null,
-          jurisdiction: existing?.jurisdiction ?? null,
-        },
-      ]);
-      toast({
-        title: grantLevel === "none" ? "Credential access removed" : "Credential access updated",
-      });
+      if (control === "default") {
+        await adminApi.setCredentialGrants(userId, [
+          { credential_id: credentialId, grant_level: "default", reset: true },
+        ]);
+      } else {
+        await adminApi.setCredentialGrants(userId, [
+          { credential_id: credentialId, grant_level: control },
+        ]);
+      }
+      toast({ title: "Credential access updated" });
       await load();
     } catch (err) {
       toast({
         title: "Update failed",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "destructive",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleAddCredentialAccess = async () => {
-    if (!addCredentialId) return;
-    const selected = portalCredentials.find((credential) => credential.id === addCredentialId);
-    setBusy(true);
-    try {
-      await adminApi.setCredentialGrants(userId, [
-        {
-          credential_id: addCredentialId,
-          grant_level: addCredentialLevel,
-          project_id: selected?.project_id ?? null,
-          jurisdiction: selected?.jurisdiction ?? null,
-        },
-      ]);
-      toast({ title: "Credential access granted" });
-      setAddCredentialOpen(false);
-      setAddCredentialId("");
-      setAddCredentialLevel("use");
-      setCredentialSearch("");
-      await load();
-    } catch (err) {
-      toast({
-        title: "Could not add credential access",
         description: err instanceof Error ? err.message : undefined,
         variant: "destructive",
       });
@@ -469,36 +321,12 @@ export default function AdminAccessUserDetail() {
   const identityMeta = effective ? userIdentityMeta(effective) : null;
   const breadcrumbLabel = effective ? userIdentityTitle(effective) : "User";
 
-  const accessSummary = effective
-    ? {
-        projects: projectAccessSummary(effective),
-        credentials: credentialGrantSummary(effective),
-      }
-    : null;
-
-  const credentialGrants = effective ? activeCredentialGrants(effective) : [];
-
-  const grantableCredentials = useMemo(() => {
-    if (!effective) return [];
-    const available = credentialsAvailableForGrant(portalCredentials, effective);
-    const query = credentialSearch.trim().toLowerCase();
-    if (!query) return available;
-    return available.filter((credential) =>
-      portalCredentialLabel(credential).toLowerCase().includes(query),
-    );
-  }, [portalCredentials, effective, credentialSearch]);
-
   return (
     <AdminPageShell
       variant="editorial"
       title={identityTitle}
-      description={
-        effective
-          ? identitySubtitle ?? identityMeta ?? "Manage platform access and permissions."
-          : "Manage platform access and permissions."
-      }
       breadcrumbs={[
-        { label: "Users & Access", href: "/admin/access/users" },
+        { label: "Authorization", href: "/admin/access/users" },
         { label: "Directory", href: "/admin/access/users" },
         { label: breadcrumbLabel },
       ]}
@@ -513,14 +341,13 @@ export default function AdminAccessUserDetail() {
       ) : effective ? (
         <>
           <div className="mb-6 space-y-1 text-sm">
-            {identitySubtitle ? (
-              <p className="text-muted-foreground">{identitySubtitle}</p>
-            ) : null}
-            {identityMeta && identitySubtitle ? (
-              <p className="text-muted-foreground">{identityMeta}</p>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="font-mono text-xs text-muted-foreground">{effective.user_id}</span>
+            {identitySubtitle ? <p>{identitySubtitle}</p> : null}
+            {identityMeta ? <p className="text-muted-foreground">{identityMeta}</p> : null}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-muted-foreground">
+              <span>
+                User ID:{" "}
+                <span className="font-mono text-xs">{effective.user_id}</span>
+              </span>
               <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => void copyUserId()}>
                 <Copy className="mr-1 h-3 w-3" />
                 Copy ID
@@ -549,16 +376,7 @@ export default function AdminAccessUserDetail() {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Projects</dt>
-                    <dd>
-                      {accessSummary?.projects.total ?? 0} accessible
-                      {(accessSummary?.projects.total ?? 0) > 0 ? (
-                        <span className="text-muted-foreground">
-                          {" "}
-                          ({accessSummary?.projects.owned} owner, {accessSummary?.projects.team}{" "}
-                          team)
-                        </span>
-                      ) : null}
-                    </dd>
+                    <dd>{projectAccessSummaryText(effective)}</dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Feature access</dt>
@@ -570,16 +388,7 @@ export default function AdminAccessUserDetail() {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Portal credentials</dt>
-                    <dd>
-                      {effective ? credentialAccessSummaryText(effective) : "—"}
-                      {effective?.platform_admin &&
-                      (accessSummary?.credentials.explicitTotal ?? 0) > 0 ? (
-                        <span className="block text-xs text-muted-foreground">
-                          {accessSummary?.credentials.explicitTotal} explicit grant row
-                          {(accessSummary?.credentials.explicitTotal ?? 0) === 1 ? "" : "s"} stored
-                        </span>
-                      ) : null}
-                    </dd>
+                    <dd>{credentialAccessSummaryText(effective)}</dd>
                   </div>
                   {effective.access_review?.reviewed_at ? (
                     <div>
@@ -633,308 +442,134 @@ export default function AdminAccessUserDetail() {
             </TabsContent>
 
             <TabsContent value="projects">
-              {effective.platform_admin ? (
-                <AlertBanner
-                  tone="info"
-                  title="Platform admin"
-                  detail="Global feature access applies. Project rows below show ownership and team membership only."
-                />
-              ) : null}
-              <Panel title="Project access" eyebrow="membership">
+              <Panel title="Project access" eyebrow="effective">
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Access comes from project ownership or team membership. Grant Viewer, Editor, or
-                  Admin team roles below, or remove team access. Ownership cannot be changed here.
+                  {projectAccessSummaryText(effective)}. Customize individual projects below to
+                  restrict or override the default.
                 </p>
-                {projectAccessRows.length > 0 ? (
-                  <div className="mb-4 flex justify-end">
-                    <Button
-                      disabled={busy || adminProjectsLoading || bulkProjectOptions.length === 0}
-                      onClick={openAddProjectDialog}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Manage project access
-                    </Button>
+                <div className="mb-4 flex flex-wrap items-end gap-3">
+                  <div className="min-w-[220px] flex-1 space-y-2">
+                    <Label htmlFor="project-search">Search projects</Label>
+                    <Input
+                      id="project-search"
+                      placeholder="Search by name…"
+                      value={projectSearch}
+                      onChange={(event) => setProjectSearch(event.target.value)}
+                      disabled={busy}
+                    />
                   </div>
-                ) : null}
-                {selectedTeamProjectIds.length > 0 ? (
+                </div>
+                {selectedProjectIds.length > 0 ? (
                   <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-3">
                     <span className="text-sm text-muted-foreground">
-                      {selectedTeamProjectIds.length} selected
+                      {selectedProjectIds.length} selected
                     </span>
                     <Select
-                      value={bulkTableRole}
-                      onValueChange={(value) => setBulkTableRole(value as ProjectRole)}
+                      value={bulkTableAccess}
+                      onValueChange={(value) =>
+                        setBulkTableAccess(value as ProjectAccessControl)
+                      }
                       disabled={busy}
                     >
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-[160px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {ASSIGNABLE_TEAM_ROLES.map((value) => (
+                        {PROJECT_ACCESS_CONTROLS.map((value) => (
                           <SelectItem key={value} value={value}>
-                            {PROJECT_ROLE_LABELS[value]}
+                            {PROJECT_ACCESS_CONTROL_LABELS[value]}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void handleBulkTeamProjectRoleChange()}
-                    >
-                      Apply role
+                    <Button size="sm" disabled={busy} onClick={() => void handleBulkProjectAccessApply()}>
+                      Apply access
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive"
-                      disabled={busy}
-                      onClick={() => void handleBulkTeamProjectRemove()}
-                    >
-                      Remove access
+                    <Button size="sm" variant="outline" disabled={busy} onClick={selectAllProjects}>
+                      Select all
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={clearTeamProjectSelection}
-                    >
+                    <Button size="sm" variant="ghost" disabled={busy} onClick={clearProjectSelection}>
                       Clear selection
                     </Button>
                   </div>
                 ) : null}
-                {projectAccessRows.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-8 text-center">
-                    <p className="text-sm text-muted-foreground">No project access assigned.</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Grant team membership to give this user access to a project.
-                    </p>
-                    <Button
-                      className="mt-4"
-                      disabled={busy || adminProjectsLoading || bulkProjectOptions.length === 0}
-                      onClick={openAddProjectDialog}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Manage project access
-                    </Button>
-                    {!adminProjectsLoading && bulkProjectOptions.length === 0 ? (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        No projects are available to assign (ownership rows are read-only).
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-10">
-                            {selectableTeamProjectIds.length > 0 ? (
-                              <Checkbox
-                                checked={
-                                  selectableTeamProjectIds.length > 0 &&
-                                  selectedTeamProjectIds.length === selectableTeamProjectIds.length
-                                }
-                                onCheckedChange={(checked) => {
-                                  if (checked) selectAllTeamProjects();
-                                  else clearTeamProjectSelection();
-                                }}
-                                disabled={busy}
-                                aria-label="Select all team projects"
-                              />
-                            ) : null}
-                          </TableHead>
-                          <TableHead>Project</TableHead>
-                          <TableHead>Access</TableHead>
-                          <TableHead>Source</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {projectAccessRows.map((row) => (
-                          <TableRow key={row.project_id}>
-                            <TableCell>
-                              {row.isOwner ? null : (
-                                <Checkbox
-                                  checked={selectedTeamProjectIds.includes(row.project_id)}
-                                  onCheckedChange={(checked) =>
-                                    toggleTeamProjectSelection(row.project_id, checked === true)
-                                  }
-                                  disabled={busy}
-                                  aria-label={`Select ${row.project_name}`}
-                                />
-                              )}
-                            </TableCell>
-                            <TableCell>{row.project_name}</TableCell>
-                            <TableCell>{row.access}</TableCell>
-                            <TableCell className="text-muted-foreground">{row.source}</TableCell>
-                            <TableCell className="text-right">
-                              {row.isOwner ? (
-                                <span className="text-sm text-muted-foreground">—</span>
-                              ) : (
-                                <div className="flex flex-wrap items-center justify-end gap-2">
-                                  <Select
-                                    value={row.project_role as ProjectRole}
-                                    disabled={busy}
-                                    onValueChange={(value) =>
-                                      void handleProjectRoleChange(
-                                        row.project_id,
-                                        value as ProjectRole,
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger className="w-[140px]">
-                                      <SelectValue placeholder="Change role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {ASSIGNABLE_TEAM_ROLES.map((value) => (
-                                        <SelectItem key={value} value={value}>
-                                          {PROJECT_ROLE_LABELS[value]}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      void handleProjectRoleChange(row.project_id, "none")
-                                    }
-                                  >
-                                    Remove access
-                                  </Button>
-                                </div>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </Panel>
-
-              <Dialog
-                open={addProjectOpen}
-                onOpenChange={(open) => {
-                  setAddProjectOpen(open);
-                  if (!open) resetAddProjectForm();
-                }}
-              >
-                <DialogContent className="sm:max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Manage project access</DialogTitle>
-                    <DialogDescription>
-                      Select one or more projects, then assign a team role. Owned projects are
-                      excluded and cannot be changed here.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="bulk-project-search">Search projects</Label>
-                      <Input
-                        id="bulk-project-search"
-                        placeholder="Search by name…"
-                        value={bulkProjectSearch}
-                        onChange={(event) => setBulkProjectSearch(event.target.value)}
-                        disabled={busy}
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={busy || filteredBulkProjectOptions.length === 0}
-                        onClick={selectAllBulkProjects}
-                      >
-                        Select all
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={busy || bulkSelectedProjectIds.length === 0}
-                        onClick={clearAllBulkProjects}
-                      >
-                        Clear all
-                      </Button>
-                      <span className="text-muted-foreground">
-                        {bulkSelectedProjectIds.length} selected
-                      </span>
-                    </div>
-                    <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
-                      {filteredBulkProjectOptions.length === 0 ? (
-                        <p className="px-2 py-4 text-sm text-muted-foreground">
-                          No assignable projects match your search.
-                        </p>
-                      ) : (
-                        filteredBulkProjectOptions.map((project) => (
-                          <label
-                            key={project.id}
-                            className="flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
-                          >
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">
+                          {selectableProjectIds.length > 0 ? (
                             <Checkbox
-                              checked={bulkSelectedProjectIds.includes(project.id)}
-                              onCheckedChange={(checked) =>
-                                toggleBulkProject(project.id, checked === true)
+                              checked={
+                                selectableProjectIds.length > 0 &&
+                                selectedProjectIds.length === selectableProjectIds.length
                               }
+                              onCheckedChange={(checked) => {
+                                if (checked) selectAllProjects();
+                                else clearProjectSelection();
+                              }}
                               disabled={busy}
+                              aria-label="Select all projects"
                             />
-                            <span className="flex-1 text-sm">
-                              <span className="font-medium">{project.name}</span>
-                              {project.currentTeamRole ? (
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  Current: {PROJECT_ROLE_LABELS[project.currentTeamRole]}
-                                </span>
-                              ) : (
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  No team access
-                                </span>
-                              )}
-                            </span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="bulk-project-role">Team role for selected projects</Label>
-                      <Select
-                        value={bulkProjectRole}
-                        onValueChange={(value) => setBulkProjectRole(value as ProjectRole)}
-                        disabled={busy}
-                      >
-                        <SelectTrigger id="bulk-project-role">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ASSIGNABLE_TEAM_ROLES.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              {PROJECT_ROLE_LABELS[value]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => setAddProjectOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      disabled={busy || bulkSelectedProjectIds.length === 0}
-                      onClick={() => void handleBulkProjectAccessSave()}
-                    >
-                      Save access
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                          ) : null}
+                        </TableHead>
+                        <TableHead>Project</TableHead>
+                        <TableHead>Effective access</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead className="text-right">Control</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProjectRows.map((row) => (
+                        <TableRow key={row.project_id}>
+                          <TableCell>
+                            {row.is_owner ? null : (
+                              <Checkbox
+                                checked={selectedProjectIds.includes(row.project_id)}
+                                onCheckedChange={(checked) =>
+                                  toggleProjectSelection(row.project_id, checked === true)
+                                }
+                                disabled={busy}
+                                aria-label={`Select ${row.project_name}`}
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>{row.project_name ?? row.project_id.slice(0, 8) + "…"}</TableCell>
+                          <TableCell>{formatProjectAccessLevel(row.effective_access)}</TableCell>
+                          <TableCell className="text-muted-foreground">{row.source}</TableCell>
+                          <TableCell className="text-right">
+                            {row.is_owner ? (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            ) : (
+                              <Select
+                                value={(row.control as ProjectAccessControl) || "default"}
+                                disabled={busy || effective.platform_admin}
+                                onValueChange={(value) =>
+                                  void handleProjectAccessChange(
+                                    row.project_id,
+                                    value as ProjectAccessControl,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="ml-auto w-[160px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PROJECT_ACCESS_CONTROLS.map((value) => (
+                                    <SelectItem key={value} value={value}>
+                                      {PROJECT_ACCESS_CONTROL_LABELS[value]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Panel>
             </TabsContent>
 
             <TabsContent value="features" className="space-y-4">
@@ -947,8 +582,8 @@ export default function AdminAccessUserDetail() {
               ) : null}
               <Panel title="Feature access" eyebrow="effective">
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Feature access applies globally for this user. Effective use in a project still
-                  requires project membership — both dimensions must allow access.
+                  {featureAccessSummary(effective)}. Admin-only dashboard tools remain gated by
+                  platform admin — they are not listed here.
                 </p>
                 <div className="overflow-x-auto">
                   <Table>
@@ -963,7 +598,6 @@ export default function AdminAccessUserDetail() {
                     <TableBody>
                       {FEATURE_KEYS.map((featureKey) => {
                         const row = globalFeatureAccessRow(effective, featureKey);
-                        const isCustomizing = customizingFeature === featureKey;
 
                         return (
                           <TableRow key={featureKey}>
@@ -973,9 +607,10 @@ export default function AdminAccessUserDetail() {
                             <TableCell className="text-right">
                               {effective.platform_admin ? (
                                 <span className="text-sm text-muted-foreground">—</span>
-                              ) : isCustomizing ? (
+                              ) : (
                                 <Select
-                                  defaultValue={row.controlValue}
+                                  value={row.controlValue}
+                                  disabled={busy}
                                   onValueChange={(value) =>
                                     void handleFeatureCustomize(
                                       featureKey,
@@ -1001,15 +636,6 @@ export default function AdminAccessUserDetail() {
                                     </SelectItem>
                                   </SelectContent>
                                 </Select>
-                              ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={busy}
-                                  onClick={() => setCustomizingFeature(featureKey)}
-                                >
-                                  Customize
-                                </Button>
                               )}
                             </TableCell>
                           </TableRow>
@@ -1019,9 +645,8 @@ export default function AdminAccessUserDetail() {
                   </Table>
                 </div>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Default / Inherited uses standard product defaults for active users. Per-project
-                  legacy overrides still cap access inside assigned projects when no global override
-                  is set.
+                  Default uses standard product defaults for active users. Set an explicit level to
+                  create an exception for this user.
                 </p>
               </Panel>
             </TabsContent>
@@ -1031,235 +656,82 @@ export default function AdminAccessUserDetail() {
                 <AlertBanner
                   tone="info"
                   title="Platform admin"
-                  detail="Effective Manage access to all portal credentials. Explicit grant rows are not required while this role is active."
+                  detail="Effective Manage access to all portal credentials. Overrides below apply if platform admin is revoked."
                 />
               ) : null}
 
-              <Panel title="Portal credential access" eyebrow="grants">
-                {effective.platform_admin ? (
-                  credentialGrants.length > 0 ? (
-                    <>
-                      <p className="mb-4 text-sm text-muted-foreground">
-                        Explicit grants below apply if platform admin is revoked. They do not
-                        change effective access while platform admin is active.
-                      </p>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Credential</TableHead>
-                              <TableHead>Explicit access</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {credentialGrants.map((row) => (
-                              <TableRow key={row.credential_id}>
-                                <TableCell>{credentialDisplayLabel(row)}</TableCell>
-                                <TableCell>{CREDENTIAL_GRANT_DISPLAY[row.grant_level]}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No explicit credential grant rows. Effective access is Manage for all portal
-                      credentials.
-                    </p>
-                  )
+              <Panel title="Portal credential access" eyebrow="effective">
+                <p className="mb-4 text-sm text-muted-foreground">
+                  {credentialAccessSummaryText(effective)}. Customize individual credentials below
+                  to restrict or elevate access.
+                </p>
+                <div className="mb-4 flex flex-wrap items-end gap-3">
+                  <div className="min-w-[220px] flex-1 space-y-2">
+                    <Label htmlFor="credential-search">Search credentials</Label>
+                    <Input
+                      id="credential-search"
+                      placeholder="Search jurisdiction or username…"
+                      value={credentialSearch}
+                      onChange={(event) => setCredentialSearch(event.target.value)}
+                      disabled={busy}
+                    />
+                  </div>
+                </div>
+                {filteredCredentialRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No portal credentials are configured in this environment.
+                  </p>
                 ) : (
-                  <>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      Portal login access is grant-based. Users need explicit Use or Manage grants
-                      unless they are platform admins.
-                    </p>
-                    {credentialGrants.length > 0 ? (
-                      <div className="mb-4 flex justify-end">
-                        <Button
-                          disabled={busy || portalCredentialsLoading || grantableCredentials.length === 0}
-                          onClick={() => {
-                            setAddCredentialId("");
-                            setAddCredentialLevel("use");
-                            setCredentialSearch("");
-                            setAddCredentialOpen(true);
-                          }}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add credential access
-                        </Button>
-                      </div>
-                    ) : null}
-                    {credentialGrants.length === 0 ? (
-                      <div className="rounded-lg border border-dashed p-8 text-center">
-                        <p className="text-sm text-muted-foreground">No credential access assigned.</p>
-                        <Button
-                          className="mt-4"
-                          disabled={busy || portalCredentialsLoading || grantableCredentials.length === 0}
-                          onClick={() => {
-                            setAddCredentialId("");
-                            setAddCredentialLevel("use");
-                            setCredentialSearch("");
-                            setAddCredentialOpen(true);
-                          }}
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add credential access
-                        </Button>
-                        {!portalCredentialsLoading && grantableCredentials.length === 0 ? (
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            No additional portal credentials are available to assign.
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Credential</TableHead>
-                              <TableHead>Access</TableHead>
-                              <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {credentialGrants.map((row) => (
-                              <TableRow key={row.credential_id}>
-                                <TableCell>{credentialDisplayLabel(row)}</TableCell>
-                                <TableCell>
-                                  <Select
-                                    value={row.grant_level}
-                                    disabled={busy}
-                                    onValueChange={(value) =>
-                                      void handleCredentialGrantChange(
-                                        row.credential_id,
-                                        value as CredentialGrantLevel,
-                                      )
-                                    }
-                                  >
-                                    <SelectTrigger className="w-[220px]">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="manage">
-                                        {CREDENTIAL_GRANT_DISPLAY.manage}
-                                      </SelectItem>
-                                      <SelectItem value="use">
-                                        {CREDENTIAL_GRANT_DISPLAY.use}
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      setConfirmAction({
-                                        type: "revoke_credential",
-                                        credentialId: row.credential_id,
-                                      })
-                                    }
-                                  >
-                                    Remove access
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Credential</TableHead>
+                          <TableHead>Portal / jurisdiction</TableHead>
+                          <TableHead>Effective access</TableHead>
+                          <TableHead>Source</TableHead>
+                          <TableHead className="text-right">Control</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredCredentialRows.map((row) => (
+                          <TableRow key={row.credential_id}>
+                            <TableCell>{credentialDisplayLabel(row)}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {row.jurisdiction?.trim() || "—"}
+                            </TableCell>
+                            <TableCell>{formatCredentialGrantLevel(row.effective_access)}</TableCell>
+                            <TableCell className="text-muted-foreground">{row.source}</TableCell>
+                            <TableCell className="text-right">
+                              <Select
+                                value={(row.control as CredentialGrantControl) || "default"}
+                                disabled={busy}
+                                onValueChange={(value) =>
+                                  void handleCredentialAccessChange(
+                                    row.credential_id,
+                                    value as CredentialGrantControl,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="ml-auto w-[160px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {CREDENTIAL_ACCESS_CONTROLS.map((value) => (
+                                    <SelectItem key={value} value={value}>
+                                      {CREDENTIAL_GRANT_CONTROL_LABELS[value]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </Panel>
-
-              {!effective.platform_admin ? (
-                <Dialog
-                  open={addCredentialOpen}
-                  onOpenChange={(open) => {
-                    setAddCredentialOpen(open);
-                    if (!open) {
-                      setAddCredentialId("");
-                      setAddCredentialLevel("use");
-                      setCredentialSearch("");
-                    }
-                  }}
-                >
-                  <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                      <DialogTitle>Add credential access</DialogTitle>
-                      <DialogDescription>
-                        Select an existing portal credential and assign Use or Manage access.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="credential-search">Search credentials</Label>
-                        <Input
-                          id="credential-search"
-                          placeholder="Search jurisdiction or username…"
-                          value={credentialSearch}
-                          onChange={(event) => setCredentialSearch(event.target.value)}
-                          disabled={busy}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="credential-id">Credential</Label>
-                        <Select
-                          value={addCredentialId}
-                          onValueChange={setAddCredentialId}
-                          disabled={busy || grantableCredentials.length === 0}
-                        >
-                          <SelectTrigger id="credential-id">
-                            <SelectValue placeholder="Select credential…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {grantableCredentials.map((credential) => (
-                              <SelectItem key={credential.id} value={credential.id}>
-                                {portalCredentialLabel(credential)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="credential-level">Access level</Label>
-                        <Select
-                          value={addCredentialLevel}
-                          onValueChange={(value) =>
-                            setAddCredentialLevel(value as CredentialGrantLevel)
-                          }
-                          disabled={busy}
-                        >
-                          <SelectTrigger id="credential-level">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="use">{CREDENTIAL_GRANT_DISPLAY.use}</SelectItem>
-                            <SelectItem value="manage">
-                              {CREDENTIAL_GRANT_DISPLAY.manage}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" disabled={busy} onClick={() => setAddCredentialOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button
-                        disabled={busy || !addCredentialId}
-                        onClick={() => void handleAddCredentialAccess()}
-                      >
-                        Add access
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              ) : null}
             </TabsContent>
           </Tabs>
         </>
@@ -1271,31 +743,13 @@ export default function AdminAccessUserDetail() {
           if (!open) setConfirmAction(null);
         }}
         title={
-          confirmAction?.type === "deactivate"
-            ? "Deactivate user"
-            : confirmAction?.type === "revoke_admin"
-              ? "Revoke platform admin"
-              : "Remove credential access"
+          confirmAction?.type === "deactivate" ? "Deactivate user" : "Revoke platform admin"
         }
-        description="This is a high-risk governance action. All credential grants will be set to none when deactivating."
-        confirmLabel={
-          confirmAction?.type === "deactivate"
-            ? "Deactivate"
-            : confirmAction?.type === "revoke_admin"
-              ? "Revoke admin"
-              : "Remove access"
-        }
+        description="This is a high-risk governance action."
+        confirmLabel={confirmAction?.type === "deactivate" ? "Deactivate" : "Revoke admin"}
         onConfirm={handleConfirmDestructive}
       />
 
-      <div className="mt-6">
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/admin/access/users">
-            <UserCog className="mr-2 h-4 w-4" />
-            Back to directory
-          </Link>
-        </Button>
-      </div>
     </AdminPageShell>
   );
 }

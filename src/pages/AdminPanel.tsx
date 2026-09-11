@@ -531,15 +531,9 @@ export default function AdminPanel() {
         <Flag className="mr-2 h-4 w-4" />
         Feature Flags
       </Button>
-      <Button variant="outline" size="sm" onClick={() => navigate('/admin/authorizations')}>
-        <History className="mr-2 h-4 w-4" />
-        Authorizations
-        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => navigate('/admin/members')}>
+      <Button variant="outline" size="sm" onClick={() => navigate('/admin/access/users')}>
         <Users className="mr-2 h-4 w-4" />
-        Members
-        <Badge variant="outline" className="ml-1 text-[9px] uppercase">Preview</Badge>
+        Authorization
       </Button>
       <Button variant="outline" size="sm" onClick={() => navigate('/admin/audit')}>
         <History className="mr-2 h-4 w-4" />

@@ -40,7 +40,6 @@ import AdminPlatformNotifications from "./pages/admin/AdminPlatformNotifications
 import AdminPlatformCampaigns from "./pages/admin/AdminPlatformCampaigns";
 import JurisdictionAdmin from "./pages/JurisdictionAdmin";
 import FeatureFlagsAdmin from "./pages/FeatureFlagsAdmin";
-import ArchitectureReplicationChecklist from "./pages/ArchitectureReplicationChecklist";
 import ShadowModeDashboard from "./pages/ShadowModeDashboard";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
@@ -206,10 +205,6 @@ const App = () => (
                     {/* Dev-only routes (not in nav) */}
                     <Route path="feature-flags" element={<FeatureFlagsAdmin />} />
                     <Route path="shadow-mode" element={<ShadowModeDashboard />} />
-                    <Route
-                      path="architecture-replication"
-                      element={<ArchitectureReplicationChecklist />}
-                    />
                   </Route>
                   <Route path="/mvp-documentation" element={<MVPDocumentation />} />
                   <Route path="/api-docs" element={<APIDocumentation />} />

@@ -23,6 +23,13 @@ export type ProjectRole = "none" | "viewer" | "editor" | "admin";
 /** Includes owner resolved from projects.user_id (not stored on team table). */
 export type EffectiveProjectRole = ProjectRole | "owner";
 
+/** Effective project access level for default+override model. */
+export type ProjectAccessLevel = "none" | "read" | "write" | "owner";
+
+export type ProjectAccessControl = "default" | "none" | "read" | "write";
+
+export type CredentialGrantControl = "default" | CredentialGrantLevel;
+
 const EDITOR_WRITE_FEATURES: readonly FeatureKey[] = [
   "scraper.run",
   "filing.submit",
@@ -55,11 +62,34 @@ export const ACCESS_LEVEL_LABELS: Record<FeatureAccessLevel, string> = {
 export type FeatureAccessControl = "inherit" | FeatureAccessLevel;
 
 export const FEATURE_CONTROL_LABELS: Record<FeatureAccessControl, string> = {
-  inherit: "Default / Inherited",
+  inherit: "Default",
   none: "No access",
   read: "Read",
   write: "Write",
 };
+
+export const PROJECT_ACCESS_LEVEL_LABELS: Record<ProjectAccessLevel, string> = {
+  none: "No access",
+  read: "Read",
+  write: "Write",
+  owner: "Owner",
+};
+
+export const PROJECT_ACCESS_CONTROL_LABELS: Record<ProjectAccessControl, string> = {
+  default: "Default",
+  none: "No access",
+  read: "Read",
+  write: "Write",
+};
+
+export const CREDENTIAL_GRANT_CONTROL_LABELS: Record<CredentialGrantControl, string> = {
+  default: "Default",
+  none: "No access",
+  use: "Can use",
+  manage: "Can manage",
+};
+
+export const DEFAULT_PROJECT_ACCESS_LEVEL: ProjectAccessLevel = "write";
 
 export const CREDENTIAL_GRANT_LABELS: Record<CredentialGrantLevel, string> = {
   none: "None",

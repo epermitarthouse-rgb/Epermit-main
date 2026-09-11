@@ -1,15 +1,23 @@
 import type {
-  AdminCredentialGrantRow,
+  AdminCredentialAccessRow,
   AdminEffectivePermissions,
   AdminFeaturePermissionRow,
+  AdminProjectAccessRow,
 } from "@/lib/adminApi";
 import {
   ACCESS_LEVEL_LABELS,
+  CREDENTIAL_GRANT_CONTROL_LABELS,
   CREDENTIAL_GRANT_DISPLAY,
+  PROJECT_ACCESS_CONTROL_LABELS,
+  PROJECT_ACCESS_LEVEL_LABELS,
   resolveActiveUserDefaultFeatureAccess,
+  type CredentialGrantControl,
+  type CredentialGrantLevel,
   type EffectiveProjectRole,
   type FeatureAccessControl,
   type FeatureAccessLevel,
+  type ProjectAccessControl,
+  type ProjectAccessLevel,
   type ProjectRole,
 } from "@/lib/governanceConstants";
 
@@ -22,12 +30,7 @@ export function userIdentityTitle(effective: AdminEffectivePermissions): string 
 }
 
 export function userIdentitySubtitle(effective: AdminEffectivePermissions): string | null {
-  const title = userIdentityTitle(effective);
-  const email = effective.email?.trim();
-  if (email && email !== title) {
-    return email;
-  }
-  return null;
+  return effective.email?.trim() || null;
 }
 
 export function userIdentityMeta(effective: AdminEffectivePermissions): string | null {
@@ -43,138 +46,89 @@ export function humanRiskLabel(risk: string): string {
   return RISK_LABELS[risk] ?? risk.replace(/_/g, " ");
 }
 
-export type ProjectAccessRow = {
-  project_id: string;
-  project_name: string;
-  access: string;
-  source: string;
-  isOwner: boolean;
-  project_role: EffectiveProjectRole;
-};
-
-export function existingProjectAccessIds(effective: AdminEffectivePermissions): Set<string> {
-  return new Set((effective.projects ?? []).map((project) => project.project_id));
-}
-
-export type GrantableProject = {
-  id: string;
-  name: string;
-};
-
-export function projectsAvailableForGrant(
-  adminProjects: Array<{ id: string; name: string }>,
-  effective: AdminEffectivePermissions,
-): GrantableProject[] {
-  const existing = existingProjectAccessIds(effective);
-  return adminProjects
-    .filter((project) => !existing.has(project.id))
-    .map((project) => ({ id: project.id, name: project.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-export type BulkProjectOption = {
-  id: string;
-  name: string;
-  /** Team role when user already has team membership; null if not yet assigned. */
-  currentTeamRole: ProjectRole | null;
-  isOwner: boolean;
-};
-
-export function projectsForBulkAccess(
-  adminProjects: Array<{ id: string; name: string }>,
-  effective: AdminEffectivePermissions,
-): BulkProjectOption[] {
-  const accessById = new Map(
-    (effective.projects ?? []).map((project) => [project.project_id, project.project_role]),
-  );
-
-  return adminProjects
-    .map((project) => {
-      const role = accessById.get(project.id);
-      const isOwner = role === "owner";
-      return {
-        id: project.id,
-        name: project.name,
-        currentTeamRole:
-          role && role !== "owner" ? (String(role) as ProjectRole) : null,
-        isOwner,
-      };
-    })
-    .filter((project) => !project.isOwner)
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-const PROJECT_ROLE_RANK: Record<EffectiveProjectRole, number> = {
-  none: 0,
-  viewer: 1,
-  editor: 2,
-  admin: 3,
-  owner: 4,
-};
-
-export function highestProjectRole(
-  effective: AdminEffectivePermissions,
-): EffectiveProjectRole {
-  let best: EffectiveProjectRole = "none";
-  for (const project of effective.projects ?? []) {
-    const role = String(project.project_role || "none") as EffectiveProjectRole;
-    if ((PROJECT_ROLE_RANK[role] ?? 0) > (PROJECT_ROLE_RANK[best] ?? 0)) {
-      best = role;
-    }
+function summariesFromPayload(effective: AdminEffectivePermissions) {
+  if (effective.access_summaries) {
+    return effective.access_summaries;
   }
-  return best;
-}
 
-export function buildProjectAccessRows(
-  effective: AdminEffectivePermissions,
-): ProjectAccessRow[] {
-  return (effective.projects ?? []).map((project) => {
-    const role = String(project.project_role || "none") as EffectiveProjectRole;
-    const isOwner = role === "owner";
-    return {
-      project_id: project.project_id,
-      project_name: project.project_name ?? project.project_id.slice(0, 8) + "…",
-      access: isOwner ? "Owner" : role.charAt(0).toUpperCase() + role.slice(1),
-      source: isOwner ? "Project ownership" : "Team membership",
-      isOwner,
-      project_role: role,
-    };
-  });
-}
+  const featureExceptions = explicitOverrideCount(effective);
+  const projectExceptions = (effective.project_access ?? []).filter(
+    (row) => row.control !== "default" && !row.is_owner,
+  ).length;
+  const credentialExceptions = (effective.credential_access ?? []).filter(
+    (row) => row.control !== "default",
+  ).length;
 
-export function projectAccessSummary(effective: AdminEffectivePermissions): {
-  total: number;
-  owned: number;
-  team: number;
-} {
-  const rows = effective.projects ?? [];
-  const owned = rows.filter((p) => p.project_role === "owner").length;
+  const inactive = effective.access_status !== "active";
+
   return {
-    total: rows.length,
-    owned,
-    team: rows.length - owned,
+    projects: inactive
+      ? "No project access"
+      : "All projects — Write",
+    projects_exception_count: projectExceptions,
+    features: inactive
+      ? "No feature access"
+      : effective.platform_admin
+        ? "All standard features — Write"
+        : "All standard features — Write",
+    features_exception_count: featureExceptions,
+    credentials: inactive
+      ? "No credential access"
+      : effective.platform_admin
+        ? "All credentials — Manage"
+        : "All credentials — Use",
+    credentials_exception_count: credentialExceptions,
   };
+}
+
+export function projectAccessSummaryText(effective: AdminEffectivePermissions): string {
+  const s = summariesFromPayload(effective);
+  if (s.projects_exception_count === 0) {
+    return s.projects;
+  }
+  return `${s.projects} · Exceptions: ${s.projects_exception_count}`;
+}
+
+export function featureAccessSummary(effective: AdminEffectivePermissions): string {
+  const s = summariesFromPayload(effective);
+  if (s.features_exception_count === 0) {
+    return s.features;
+  }
+  return `${s.features} · Exceptions: ${s.features_exception_count}`;
+}
+
+export function credentialAccessSummaryText(effective: AdminEffectivePermissions): string {
+  const s = summariesFromPayload(effective);
+  if (s.credentials_exception_count === 0) {
+    return s.credentials;
+  }
+  return `${s.credentials} · Exceptions: ${s.credentials_exception_count}`;
+}
+
+/** @deprecated Use credentialAccessSummaryText */
+export function credentialGrantSummary(effective: AdminEffectivePermissions) {
+  const text = credentialAccessSummaryText(effective);
+  const s = summariesFromPayload(effective);
+  return {
+    explicitTotal: s.credentials_exception_count,
+    manage: 0,
+    use: 0,
+    explicitDetail: s.credentials_exception_count === 0 ? "None" : String(s.credentials_exception_count),
+    summaryText: text,
+  };
+}
+
+export function explicitOverrideCount(effective: AdminEffectivePermissions): number {
+  if (effective.platform_admin || effective.access_status !== "active") {
+    return 0;
+  }
+  return globalFeatureOverrides(effective).length;
 }
 
 export function globalFeatureOverrides(
   effective: AdminEffectivePermissions,
 ): AdminFeaturePermissionRow[] {
   return (effective.feature_permissions ?? []).filter((row) => row.project_id == null);
-}
-
-export function explicitOverrideCount(effective: AdminEffectivePermissions): number {
-  return globalFeatureOverrides(effective).length;
-}
-
-export function featureAccessSummary(effective: AdminEffectivePermissions): string {
-  if (effective.platform_admin) {
-    return "All features — Write";
-  }
-  const overrides = explicitOverrideCount(effective);
-  if (overrides === 0) {
-    return "Standard product defaults";
-  }
-  return `${overrides} global feature override${overrides === 1 ? "" : "s"}`;
 }
 
 export function dataRestrictionsSummary(effective: AdminEffectivePermissions): string {
@@ -185,93 +139,66 @@ export function dataRestrictionsSummary(effective: AdminEffectivePermissions): s
   return `${count} restriction${count === 1 ? "" : "s"} configured`;
 }
 
-export function activeCredentialGrants(
+export type ProjectAccessRow = AdminProjectAccessRow;
+
+export function buildProjectAccessRows(
   effective: AdminEffectivePermissions,
-): AdminCredentialGrantRow[] {
-  return (effective.credential_grants ?? []).filter((grant) => grant.grant_level !== "none");
-}
+): ProjectAccessRow[] {
+  if (effective.project_access?.length) {
+    return [...effective.project_access].sort((a, b) =>
+      (a.project_name ?? a.project_id).localeCompare(b.project_name ?? b.project_id),
+    );
+  }
 
-export function credentialGrantSummary(effective: AdminEffectivePermissions): {
-  /** Explicit non-none grant rows stored in user_portal_credential_grants */
-  explicitTotal: number;
-  manage: number;
-  use: number;
-  /** Detail string for explicit grants only */
-  explicitDetail: string;
-  /** Primary summary text reflecting effective access */
-  summaryText: string;
-} {
-  const grants = activeCredentialGrants(effective);
-  const manage = grants.filter((g) => g.grant_level === "manage").length;
-  const use = grants.filter((g) => g.grant_level === "use").length;
-  const parts: string[] = [];
-  if (manage) parts.push(`${manage} Manage`);
-  if (use) parts.push(`${use} Use`);
-
-  if (effective.platform_admin) {
+  return (effective.projects ?? []).map((project) => {
+    const role = String(project.project_role || "none") as EffectiveProjectRole;
+    const isOwner = role === "owner";
+    let effectiveAccess: string = isOwner ? "owner" : role === "viewer" ? "read" : "write";
+    if (role === "none") {
+      effectiveAccess = effective.access_status === "active" ? "write" : "none";
+    }
     return {
-      explicitTotal: grants.length,
-      manage,
-      use,
-      explicitDetail: grants.length === 0 ? "None" : parts.join(" · "),
-      summaryText: "All credentials — Manage",
+      project_id: project.project_id,
+      project_name: project.project_name,
+      effective_access: effectiveAccess,
+      source: isOwner ? "Project ownership" : effectiveAccess === "write" ? "Default" : "Admin override",
+      control: effectiveAccess === "write" && !isOwner ? "default" : effectiveAccess,
+      is_owner: isOwner,
     };
-  }
-
-  if (grants.length === 0) {
-    return {
-      explicitTotal: 0,
-      manage: 0,
-      use: 0,
-      explicitDetail: "None",
-      summaryText: "No credential access",
-    };
-  }
-
-  const countLabel = `${grants.length} credential${grants.length === 1 ? "" : "s"}`;
-  return {
-    explicitTotal: grants.length,
-    manage,
-    use,
-    explicitDetail: parts.join(" · "),
-    summaryText: parts.length ? `${countLabel} · ${parts.join(" · ")}` : countLabel,
-  };
+  });
 }
 
-export function credentialAccessSummaryText(effective: AdminEffectivePermissions): string {
-  return credentialGrantSummary(effective).summaryText;
-}
+export type CredentialAccessRow = AdminCredentialAccessRow;
 
-export type PortalCredentialOption = {
-  id: string;
-  jurisdiction: string | null;
-  portal_username: string | null;
-  login_url?: string | null;
-};
-
-export function portalCredentialLabel(credential: PortalCredentialOption): string {
-  const jurisdiction = credential.jurisdiction?.trim();
-  const username = credential.portal_username?.trim();
-  if (jurisdiction && username) {
-    return `${jurisdiction} · ${username}`;
-  }
-  if (jurisdiction) {
-    return jurisdiction;
-  }
-  if (username) {
-    return username;
-  }
-  return credential.id.slice(0, 8) + "…";
-}
-
-export function credentialsAvailableForGrant(
-  allCredentials: PortalCredentialOption[],
+export function buildCredentialAccessRows(
   effective: AdminEffectivePermissions,
-): PortalCredentialOption[] {
-  const grantedIds = new Set(activeCredentialGrants(effective).map((grant) => grant.credential_id));
-  return allCredentials
-    .filter((credential) => !grantedIds.has(credential.id))
-    .sort((a, b) => portalCredentialLabel(a).localeCompare(portalCredentialLabel(b)));
+): CredentialAccessRow[] {
+  if (effective.credential_access?.length) {
+    return [...effective.credential_access].sort((a, b) =>
+      credentialDisplayLabel(a).localeCompare(credentialDisplayLabel(b)),
+    );
+  }
+  return [];
+}
+
+export function formatProjectAccessLevel(level: string): string {
+  if (level === "owner") {
+    return PROJECT_ACCESS_LEVEL_LABELS.owner;
+  }
+  if (level in PROJECT_ACCESS_LEVEL_LABELS) {
+    return PROJECT_ACCESS_LEVEL_LABELS[level as ProjectAccessLevel];
+  }
+  if (level in ACCESS_LEVEL_LABELS) {
+    return ACCESS_LEVEL_LABELS[level as FeatureAccessLevel];
+  }
+  return level.charAt(0).toUpperCase() + level.slice(1);
+}
+
+export function formatCredentialGrantLevel(level: string): string {
+  if (level in CREDENTIAL_GRANT_DISPLAY) {
+    return CREDENTIAL_GRANT_DISPLAY[level as CredentialGrantLevel];
+  }
+  return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
 export function findGlobalFeatureOverride(
@@ -300,6 +227,15 @@ export function globalFeatureAccessRow(
       effectiveLevel: "write",
       source: "Platform admin",
       controlValue: "write",
+    };
+  }
+
+  if (effective.access_status !== "active") {
+    return {
+      featureKey,
+      effectiveLevel: "none",
+      source: "Inactive user",
+      controlValue: "none",
     };
   }
 
@@ -354,4 +290,50 @@ export function credentialDisplayLabel(grant: {
   return grant.credential_id.slice(0, 8) + "…";
 }
 
-export { CREDENTIAL_GRANT_DISPLAY };
+export type PortalCredentialOption = {
+  id: string;
+  jurisdiction: string | null;
+  portal_username: string | null;
+  login_url?: string | null;
+};
+
+export function portalCredentialLabel(credential: PortalCredentialOption): string {
+  return credentialDisplayLabel(credential);
+}
+
+/** Legacy helpers kept for compatibility with directory list views. */
+export function projectAccessSummary(effective: AdminEffectivePermissions) {
+  const rows = buildProjectAccessRows(effective);
+  const owned = rows.filter((p) => p.is_owner).length;
+  return {
+    total: rows.length,
+    owned,
+    team: rows.length - owned,
+  };
+}
+
+export function projectsForBulkAccess(
+  adminProjects: Array<{ id: string; name: string }>,
+  effective: AdminEffectivePermissions,
+): Array<{ id: string; name: string; currentControl: ProjectAccessControl; isOwner: boolean }> {
+  const rowById = new Map(
+    buildProjectAccessRows(effective).map((row) => [row.project_id, row]),
+  );
+
+  return adminProjects
+    .map((project) => {
+      const row = rowById.get(project.id);
+      const isOwner = row?.is_owner ?? false;
+      const control = (row?.control ?? "default") as ProjectAccessControl;
+      return {
+        id: project.id,
+        name: project.name,
+        currentControl: isOwner ? "default" : control,
+        isOwner,
+      };
+    })
+    .filter((project) => !project.isOwner)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export { CREDENTIAL_GRANT_DISPLAY, PROJECT_ACCESS_CONTROL_LABELS, CREDENTIAL_GRANT_CONTROL_LABELS };

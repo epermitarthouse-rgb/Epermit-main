@@ -16,8 +16,10 @@ import {
   setAdminFeaturePermissions,
   setAdminPlatformRole,
   setAdminProjectRole,
+  setAdminProjectAccess,
   setAdminScrapedDataScope,
   type AdminAuditQuery,
+  type ProjectAccessControl,
   type AdminCreateUserRequest,
   type AdminCredentialGrantUpdateItem,
   type AdminFeatureUpdateItem,
@@ -52,6 +54,8 @@ export function useAdminApi() {
         setAdminPlatformRole(userId, action, fetchFn),
       setProjectRole: (userId: string, projectId: string, role: ProjectRole) =>
         setAdminProjectRole(userId, projectId, role, fetchFn),
+      setProjectAccess: (userId: string, projectId: string, accessLevel: ProjectAccessControl) =>
+        setAdminProjectAccess(userId, projectId, accessLevel, fetchFn),
       setFeaturePermissions: (userId: string, features: AdminFeatureUpdateItem[]) =>
         setAdminFeaturePermissions(userId, features, fetchFn),
       resetFeaturePermission: (

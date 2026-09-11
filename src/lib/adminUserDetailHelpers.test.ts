@@ -2,14 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AdminEffectivePermissions } from "./adminApi.ts";
 import {
+  buildCredentialAccessRows,
   buildProjectAccessRows,
   credentialAccessSummaryText,
   credentialGrantSummary,
-  credentialsAvailableForGrant,
   featureAccessSummary,
   globalFeatureAccessRow,
   projectAccessSummary,
-  projectsAvailableForGrant,
   projectsForBulkAccess,
   userIdentityTitle,
 } from "./adminUserDetailHelpers.ts";
@@ -42,48 +41,41 @@ describe("adminUserDetailHelpers", () => {
       access_status: "active",
       platform_admin: true,
     };
-    assert.equal(featureAccessSummary(effective), "All features — Write");
+    assert.equal(featureAccessSummary(effective), "All standard features — Write");
   });
 
-  it("builds owner vs team project rows", () => {
-    const effective: AdminEffectivePermissions = {
-      user_id: "u2",
-      access_status: "active",
-      platform_admin: true,
-      projects: [
-        { project_id: "p1", project_name: "A", project_role: "owner" },
-        { project_id: "p2", project_name: "B", project_role: "editor" },
-      ],
-    };
-    const rows = buildProjectAccessRows(effective);
-    assert.equal(rows[0].isOwner, true);
-    assert.equal(rows[0].source, "Project ownership");
-    assert.equal(rows[1].source, "Team membership");
-    const summary = projectAccessSummary(effective);
-    assert.equal(summary.total, 2);
-    assert.equal(summary.owned, 1);
-    assert.equal(summary.team, 1);
-  });
-
-  it("excludes projects the user already has access to from grant picker", () => {
+  it("builds owner vs default project rows from project_access payload", () => {
     const effective: AdminEffectivePermissions = {
       user_id: "u2",
       access_status: "active",
       platform_admin: false,
-      projects: [{ project_id: "p1", project_name: "Alpha", project_role: "viewer" }],
-    };
-    const available = projectsAvailableForGrant(
-      [
-        { id: "p1", name: "Alpha" },
-        { id: "p2", name: "Beta" },
-        { id: "p3", name: "Gamma" },
+      project_access: [
+        {
+          project_id: "p1",
+          project_name: "A",
+          effective_access: "owner",
+          source: "Project ownership",
+          control: "default",
+          is_owner: true,
+        },
+        {
+          project_id: "p2",
+          project_name: "B",
+          effective_access: "write",
+          source: "Default",
+          control: "default",
+          is_owner: false,
+        },
       ],
-      effective,
-    );
-    assert.deepEqual(
-      available.map((project) => project.id),
-      ["p2", "p3"],
-    );
+    };
+    const rows = buildProjectAccessRows(effective);
+    assert.equal(rows[0].is_owner, true);
+    assert.equal(rows[0].source, "Project ownership");
+    assert.equal(rows[1].source, "Default");
+    const summary = projectAccessSummary(effective);
+    assert.equal(summary.total, 2);
+    assert.equal(summary.owned, 1);
+    assert.equal(summary.team, 1);
   });
 
   it("summarizes platform admin credential access as effective manage", () => {
@@ -99,27 +91,43 @@ describe("adminUserDetailHelpers", () => {
     assert.equal(summary.summaryText, "All credentials — Manage");
   });
 
-  it("summarizes normal user credential grants with counts", () => {
+  it("summarizes normal user default credential access with exception counts", () => {
     const effective: AdminEffectivePermissions = {
       user_id: "u4",
       access_status: "active",
       platform_admin: false,
-      credential_grants: [
+      access_summaries: {
+        projects: "All projects — Write",
+        projects_exception_count: 0,
+        features: "All standard features — Write",
+        features_exception_count: 0,
+        credentials: "All credentials — Use",
+        credentials_exception_count: 2,
+      },
+      credential_access: [
         {
           credential_id: "c1",
-          grant_level: "manage",
           jurisdiction: "DC DOB",
           portal_username: "user@example.com",
+          effective_access: "manage",
+          source: "Admin override",
+          control: "manage",
         },
         {
           credential_id: "c2",
-          grant_level: "use",
           jurisdiction: "Arlington",
           portal_username: "permitbot",
+          effective_access: "none",
+          source: "Admin restriction",
+          control: "none",
         },
       ],
     };
-    assert.equal(credentialAccessSummaryText(effective), "2 credentials · 1 Manage · 1 Use");
+    assert.equal(
+      credentialAccessSummaryText(effective),
+      "All credentials — Use · Exceptions: 2",
+    );
+    assert.equal(buildCredentialAccessRows(effective).length, 2);
   });
 
   it("includes all non-owner projects in bulk access picker", () => {
@@ -127,9 +135,23 @@ describe("adminUserDetailHelpers", () => {
       user_id: "u2",
       access_status: "active",
       platform_admin: false,
-      projects: [
-        { project_id: "p1", project_name: "Alpha", project_role: "viewer" },
-        { project_id: "p2", project_name: "Owned", project_role: "owner" },
+      project_access: [
+        {
+          project_id: "p1",
+          project_name: "Alpha",
+          effective_access: "read",
+          source: "Admin override",
+          control: "read",
+          is_owner: false,
+        },
+        {
+          project_id: "p2",
+          project_name: "Owned",
+          effective_access: "owner",
+          source: "Project ownership",
+          control: "default",
+          is_owner: true,
+        },
       ],
     };
     const bulk = projectsForBulkAccess(
@@ -144,8 +166,8 @@ describe("adminUserDetailHelpers", () => {
       bulk.map((project) => project.id),
       ["p1", "p3"],
     );
-    assert.equal(bulk[0].currentTeamRole, "viewer");
-    assert.equal(bulk[1].currentTeamRole, null);
+    assert.equal(bulk[0].currentControl, "read");
+    assert.equal(bulk[1].currentControl, "default");
   });
 
   it("shows global feature override source and control", () => {
@@ -202,23 +224,10 @@ describe("adminUserDetailHelpers", () => {
         { project_id: "p1", feature_key: "scraper.run", access_level: "read" },
       ],
     };
-    assert.equal(featureAccessSummary(effective), "1 global feature override");
+    assert.equal(
+      featureAccessSummary(effective),
+      "All standard features — Write · Exceptions: 1",
+    );
   });
 
-  it("excludes already-granted credentials from picker", () => {
-    const effective: AdminEffectivePermissions = {
-      user_id: "u4",
-      access_status: "active",
-      platform_admin: false,
-      credential_grants: [{ credential_id: "c1", grant_level: "use" }],
-    };
-    const available = credentialsAvailableForGrant(
-      [
-        { id: "c1", jurisdiction: "DC", portal_username: "a" },
-        { id: "c2", jurisdiction: "Arlington", portal_username: "b" },
-      ],
-      effective,
-    );
-    assert.deepEqual(available.map((credential) => credential.id), ["c2"]);
-  });
 });
