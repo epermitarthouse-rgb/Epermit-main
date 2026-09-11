@@ -6,10 +6,18 @@ const { createRequirePlatformAdmin } = require("../services/governance/require-p
 const {
   computeEffectivePermissions,
   appendAuditEvent,
-  isPlatformAdmin,
   groupPortalCredentialsByCanonical,
   pickCanonicalPortalCredential,
 } = require("../services/governance/governance.service.js");
+const {
+  getActorPlatformRoleLevel,
+  getUserPlatformRoleLevel,
+  countActiveSuperAdmins,
+  countPlatformAdminRoles,
+  assertCanManageUserLifecycle,
+  assertSuperAdminActor,
+  resolvePrimaryPlatformRole,
+} = require("../services/governance/admin-role.service.js");
 const {
   fetchEmailsForUserIds,
   fetchEmailForUserId,
@@ -41,18 +49,19 @@ function toCsv(rows, columns) {
 
 /**
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
- * @returns {Promise<number>}
+ * @param {string} userId
+ * @returns {Promise<string[]>}
  */
-async function countPlatformAdmins(supabase) {
-  const { count, error } = await supabase
+async function fetchUserRoleNames(supabase, userId) {
+  const { data, error } = await supabase
     .from("user_roles")
-    .select("*", { count: "exact", head: true })
-    .eq("role", "admin");
+    .select("role")
+    .eq("user_id", userId);
 
-  if (error) {
-    return 0;
+  if (error || !Array.isArray(data)) {
+    return [];
   }
-  return count ?? 0;
+  return data.map((row) => String(row.role));
 }
 
 /**
@@ -81,12 +90,15 @@ function createAdminRouter(opts) {
         .select("*", { count: "exact", head: true })
         .eq("access_status", "active");
 
-      const adminCount = await countPlatformAdmins(supabase);
+      const adminCount = await countPlatformAdminRoles(supabase);
+      const superAdminCount = await countActiveSuperAdmins(supabase);
 
       res.json({
         total_users: totalUsers ?? 0,
         active_users: activeUsers ?? 0,
-        platform_admins: adminCount,
+        platform_admins: adminCount + superAdminCount,
+        platform_admin_roles: adminCount,
+        super_admins: superAdminCount,
         permission_risks: [],
         pending_invitations: 0,
       });
@@ -248,6 +260,8 @@ function createAdminRouter(opts) {
 
       const users = profiles.map((p) => {
         const uid = String(p.user_id);
+        const platformRoles = rolesByUser.get(uid) || [];
+        const primaryRole = resolvePrimaryPlatformRole(platformRoles);
         return {
           user_id: uid,
           email: emailById.get(uid) ?? null,
@@ -256,8 +270,11 @@ function createAdminRouter(opts) {
           job_title: p.job_title ?? null,
           access_status: p.access_status ?? "active",
           created_at: p.created_at,
-          platform_roles: rolesByUser.get(uid) || [],
-          platform_admin: (rolesByUser.get(uid) || []).includes("admin"),
+          platform_roles: platformRoles,
+          platform_role: primaryRole,
+          platform_admin:
+            primaryRole === "admin" || primaryRole === "super_admin",
+          super_admin: primaryRole === "super_admin",
         };
       });
 
@@ -355,6 +372,23 @@ function createAdminRouter(opts) {
         return res.status(400).json({ error: "INVALID_ID", message: "User id required" });
       }
 
+      const [actorRole, targetRole] = await Promise.all([
+        getActorPlatformRoleLevel(supabase, actor.id),
+        getUserPlatformRoleLevel(supabase, userId),
+      ]);
+      const lifecycle = assertCanManageUserLifecycle({
+        actorRole,
+        targetRole,
+        actorId: actor.id,
+        targetId: userId,
+      });
+      if (!lifecycle.allowed) {
+        return res.status(403).json({
+          error: lifecycle.code,
+          message: lifecycle.message,
+        });
+      }
+
       const { error: authErr } = await supabase.auth.admin.updateUserById(userId, {
         ban_duration: "none",
       });
@@ -382,7 +416,7 @@ function createAdminRouter(opts) {
 
         await appendAuditEvent(supabase, {
           actor_id: actor.id,
-          action: "user.activated",
+          action: "admin.user.reactivated",
           target_type: "user",
           target_id: userId,
           after_json: { access_status: "active", reason },
@@ -406,20 +440,31 @@ function createAdminRouter(opts) {
         return res.status(400).json({ error: "INVALID_ID", message: "User id required" });
       }
 
-      if (String(actor.id) === userId) {
-        return res.status(400).json({
-          error: "SELF_DEACTIVATE_BLOCKED",
-          message: "Cannot deactivate your own account",
+      const [actorRole, targetRole] = await Promise.all([
+        getActorPlatformRoleLevel(supabase, actor.id),
+        getUserPlatformRoleLevel(supabase, userId),
+      ]);
+      const lifecycle = assertCanManageUserLifecycle({
+        actorRole,
+        targetRole,
+        actorId: actor.id,
+        targetId: userId,
+      });
+      if (!lifecycle.allowed) {
+        const statusCode =
+          lifecycle.code === "SELF_ACTION_BLOCKED" ? 400 : 403;
+        return res.status(statusCode).json({
+          error: lifecycle.code,
+          message: lifecycle.message,
         });
       }
 
-      const targetIsAdmin = await isPlatformAdmin(supabase, userId);
-      if (targetIsAdmin) {
-        const adminCount = await countPlatformAdmins(supabase);
-        if (adminCount <= 1) {
-          return res.status(400).json({
-            error: "LAST_ADMIN_BLOCKED",
-            message: "Cannot deactivate the last platform admin",
+      if (targetRole === "super_admin") {
+        const superCount = await countActiveSuperAdmins(supabase);
+        if (superCount <= 1) {
+          return res.status(409).json({
+            error: "LAST_SUPER_ADMIN_BLOCKED",
+            message: "Cannot deactivate the last super admin",
           });
         }
       }
@@ -450,7 +495,7 @@ function createAdminRouter(opts) {
 
         await appendAuditEvent(supabase, {
           actor_id: actor.id,
-          action: "user.deactivated",
+          action: "admin.user.deactivated",
           target_type: "user",
           target_id: userId,
           after_json: { access_status: "deactivated", reason },
@@ -474,27 +519,130 @@ function createAdminRouter(opts) {
         return res.status(400).json({ error: "INVALID_ID", message: "User id required" });
       }
 
-      if (action !== "grant" && action !== "revoke") {
+      const allowedActions = new Set([
+        "grant",
+        "revoke",
+        "revoke-admin",
+        "promote-to-admin",
+        "promote-to-super-admin",
+        "demote-super-admin",
+      ]);
+      if (!allowedActions.has(action)) {
         return res.status(400).json({
           error: "INVALID_ACTION",
-          message: "action must be grant or revoke",
+          message:
+            "action must be grant, revoke, revoke-admin, promote-to-admin, promote-to-super-admin, or demote-super-admin",
         });
       }
 
-      if (action === "revoke") {
-        if (String(actor.id) === userId) {
+      const normalizedAction =
+        action === "grant" || action === "promote-to-admin"
+          ? "promote-to-admin"
+          : action === "revoke" || action === "revoke-admin"
+            ? "revoke-admin"
+            : action;
+
+      const [actorRole, targetRoles] = await Promise.all([
+        getActorPlatformRoleLevel(supabase, actor.id),
+        fetchUserRoleNames(supabase, userId),
+      ]);
+      const previousRole = resolvePrimaryPlatformRole(targetRoles);
+
+      if (String(actor.id) === userId) {
+        return res.status(400).json({
+          error: "SELF_ROLE_CHANGE_BLOCKED",
+          message: "Cannot change your own admin role",
+        });
+      }
+
+      const superRequired = assertSuperAdminActor({ actorRole });
+      if (!superRequired.allowed) {
+        return res.status(403).json({
+          error: superRequired.code,
+          message: superRequired.message,
+        });
+      }
+
+      if (normalizedAction === "promote-to-admin") {
+        if (previousRole !== "user") {
           return res.status(400).json({
-            error: "SELF_DEMOTE_BLOCKED",
-            message: "Cannot revoke your own platform admin role",
+            error: "INVALID_TARGET_ROLE",
+            message: "Target user is already an admin",
           });
         }
 
-        const adminCount = await countPlatformAdmins(supabase);
-        const targetIsAdmin = await isPlatformAdmin(supabase, userId);
-        if (targetIsAdmin && adminCount <= 1) {
+        const { error } = await supabase.from("user_roles").upsert(
+          { user_id: userId, role: "admin" },
+          { onConflict: "user_id,role" },
+        );
+        if (error) {
+          throw Object.assign(new Error(error.message), { statusCode: 500 });
+        }
+
+        await appendAuditEvent(supabase, {
+          actor_id: actor.id,
+          action: "admin.role.granted",
+          target_type: "user",
+          target_id: userId,
+          before_json: { previous_role: previousRole },
+          after_json: { new_role: "admin" },
+        });
+
+        return res.json({
+          ok: true,
+          user_id: userId,
+          platform_role: "admin",
+          platform_admin: true,
+        });
+      }
+
+      if (normalizedAction === "promote-to-super-admin") {
+        if (previousRole === "super_admin") {
           return res.status(400).json({
-            error: "LAST_ADMIN_BLOCKED",
-            message: "Cannot revoke the last platform admin",
+            error: "INVALID_TARGET_ROLE",
+            message: "Target user is already a super admin",
+          });
+        }
+
+        const { error } = await supabase.from("user_roles").upsert(
+          { user_id: userId, role: "super_admin" },
+          { onConflict: "user_id,role" },
+        );
+        if (error) {
+          throw Object.assign(new Error(error.message), { statusCode: 500 });
+        }
+
+        await appendAuditEvent(supabase, {
+          actor_id: actor.id,
+          action: "super_admin.granted",
+          target_type: "user",
+          target_id: userId,
+          before_json: { previous_role: previousRole },
+          after_json: { new_role: "super_admin" },
+        });
+
+        return res.json({
+          ok: true,
+          user_id: userId,
+          platform_role: "super_admin",
+          platform_admin: true,
+          super_admin: true,
+        });
+      }
+
+      if (normalizedAction === "demote-super-admin") {
+        if (previousRole !== "super_admin") {
+          return res.status(400).json({
+            error: "INVALID_TARGET_ROLE",
+            message: "Target user is not a super admin",
+          });
+        }
+
+        const superCount = await countActiveSuperAdmins(supabase);
+        if (superCount <= 1) {
+          return res.status(409).json({
+            error: "LAST_SUPER_ADMIN_BLOCKED",
+            message: "Cannot demote the last super admin",
           });
         }
 
@@ -502,26 +650,52 @@ function createAdminRouter(opts) {
           .from("user_roles")
           .delete()
           .eq("user_id", userId)
-          .eq("role", "admin");
+          .eq("role", "super_admin");
 
         if (error) {
           throw Object.assign(new Error(error.message), { statusCode: 500 });
         }
 
+        const newRole = targetRoles.includes("admin") ? "admin" : "user";
+
         await appendAuditEvent(supabase, {
           actor_id: actor.id,
-          action: "platform_role.revoked",
+          action: "super_admin.revoked",
           target_type: "user",
           target_id: userId,
+          before_json: { previous_role: "super_admin" },
+          after_json: { new_role: newRole },
         });
 
-        return res.json({ ok: true, user_id: userId, platform_admin: false });
+        return res.json({
+          ok: true,
+          user_id: userId,
+          platform_role: newRole,
+          platform_admin: newRole !== "user",
+          super_admin: false,
+        });
       }
 
-      const { error } = await supabase.from("user_roles").upsert(
-        { user_id: userId, role: "admin" },
-        { onConflict: "user_id,role" },
-      );
+      // revoke-admin
+      if (previousRole === "user") {
+        return res.status(400).json({
+          error: "INVALID_TARGET_ROLE",
+          message: "Target user is not a platform admin",
+        });
+      }
+
+      if (previousRole === "super_admin") {
+        return res.status(400).json({
+          error: "INVALID_TARGET_ROLE",
+          message: "Use demote-super-admin for super admins",
+        });
+      }
+
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("role", "admin");
 
       if (error) {
         throw Object.assign(new Error(error.message), { statusCode: 500 });
@@ -529,12 +703,19 @@ function createAdminRouter(opts) {
 
       await appendAuditEvent(supabase, {
         actor_id: actor.id,
-        action: "platform_role.granted",
+        action: "admin.role.revoked",
         target_type: "user",
         target_id: userId,
+        before_json: { previous_role: "admin" },
+        after_json: { new_role: "user" },
       });
 
-      res.json({ ok: true, user_id: userId, platform_admin: true });
+      return res.json({
+        ok: true,
+        user_id: userId,
+        platform_role: "user",
+        platform_admin: false,
+      });
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

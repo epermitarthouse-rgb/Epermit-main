@@ -548,6 +548,23 @@ describe("requirePlatformAdmin middleware", () => {
     const out = await invokeMiddleware(middleware, "admin");
     assert.equal(/** @type {{ passed?: boolean }} */ (out).passed, true);
   });
+
+  it("allows super admin", async () => {
+    const SUPER = "99999999-9999-9999-9999-999999999999";
+    const supabase = makeSupabase({
+      userRoles: [{ user_id: SUPER, role: "super_admin" }],
+      profiles: [{ user_id: SUPER, access_status: "active" }],
+    });
+    supabase.auth.getUser = async (token) => {
+      if (token === "super") {
+        return { data: { user: { id: SUPER, email: "super@test" } }, error: null };
+      }
+      return { data: { user: null }, error: new Error("invalid") };
+    };
+    const middleware = createRequirePlatformAdmin({ supabase });
+    const out = await invokeMiddleware(middleware, "super");
+    assert.equal(/** @type {{ passed?: boolean }} */ (out).passed, true);
+  });
 });
 
 describe("requireAuthenticatedUser access_status gate", () => {

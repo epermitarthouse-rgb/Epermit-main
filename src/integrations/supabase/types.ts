@@ -1887,7 +1887,7 @@ export type Database = {
         | "punch_item_resolved"
         | "punch_item_verified"
         | "comment_added"
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "super_admin" | "user"
       document_type:
         | "permit_drawing"
         | "submittal_package"
@@ -2095,7 +2095,7 @@ export const Constants = {
         "punch_item_verified",
         "comment_added",
       ],
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "super_admin", "user"],
       document_type: [
         "permit_drawing",
         "submittal_package",

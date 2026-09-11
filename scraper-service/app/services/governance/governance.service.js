@@ -121,8 +121,48 @@ async function isUserActive(supabase, userId) {
  * @param {string} userId
  * @returns {Promise<boolean>}
  */
+async function isSuperAdmin(supabase, userId) {
+  if (!userId) return false;
+
+  try {
+    const { data, error } = await supabase.rpc("has_role", {
+      _user_id: userId,
+      _role: "super_admin",
+    });
+
+    if (!error && typeof data === "boolean") {
+      return data;
+    }
+  } catch {
+    // RPC may not be callable with service role args.
+  }
+
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "super_admin")
+    .limit(1);
+
+  if (error) {
+    return false;
+  }
+
+  return Array.isArray(data) && data.length > 0;
+}
+
+/**
+ * Platform admin access: admin OR super_admin.
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} userId
+ * @returns {Promise<boolean>}
+ */
 async function isPlatformAdmin(supabase, userId) {
   if (!userId) return false;
+
+  if (await isSuperAdmin(supabase, userId)) {
+    return true;
+  }
 
   try {
     const { data, error } = await supabase.rpc("has_role", {
@@ -750,6 +790,7 @@ async function computeEffectivePermissionsFast(supabase, userId) {
     grantRowsRes,
     reviewRes,
     adminCountRes,
+    superAdminCountRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -787,13 +828,18 @@ async function computeEffectivePermissionsFast(supabase, userId) {
       .from("user_roles")
       .select("*", { count: "exact", head: true })
       .eq("role", "admin"),
+    supabase
+      .from("user_roles")
+      .select("*", { count: "exact", head: true })
+      .eq("role", "super_admin"),
   ]);
 
   const accessStatus =
     profileRes.data?.access_status === "deactivated" ? "deactivated" : "active";
   const active = accessStatus === "active";
   const platformRoles = (rolesRes.data || []).map((row) => String(row.role));
-  const platformAdmin = platformRoles.includes("admin");
+  const platformAdmin =
+    platformRoles.includes("admin") || platformRoles.includes("super_admin");
 
   /** @type {Map<string, { project_id: string, project_name: string | null, project_role: import("./governance.constants.js").ProjectRole }>} */
   const projectMap = new Map();
@@ -881,8 +927,16 @@ async function computeEffectivePermissionsFast(supabase, userId) {
 
   /** @type {string[]} */
   const risks = [];
-  if (platformAdmin && (adminCountRes.count ?? 0) <= 1) {
+  if (
+    platformAdmin &&
+    platformRoles.includes("admin") &&
+    !platformRoles.includes("super_admin") &&
+    (adminCountRes.count ?? 0) <= 1
+  ) {
     risks.push("sole_platform_admin");
+  }
+  if (platformRoles.includes("super_admin") && (superAdminCountRes.count ?? 0) <= 1) {
+    risks.push("sole_super_admin");
   }
 
   return {
@@ -935,6 +989,9 @@ async function computeEffectivePermissionsFast(supabase, userId) {
  * @param {Record<string, unknown>} payload
  */
 function enrichRpcEffectivePermissionsPayload(payload) {
+  const { attachPlatformRoleFields } = require("./admin-role.service.js");
+  attachPlatformRoleFields(payload);
+
   const accessStatus = String(payload.access_status || "active");
   const active = accessStatus === "active";
   const platformAdmin = Boolean(payload.platform_admin);
@@ -1340,7 +1397,8 @@ async function computeEffectivePermissions(supabase, userId) {
   }
 
   await assembleEffectiveAccessViews(supabase, payload);
-  return payload;
+  const { attachPlatformRoleFields } = require("./admin-role.service.js");
+  return attachPlatformRoleFields(payload);
 }
 
 /**
@@ -1435,6 +1493,7 @@ module.exports = {
   enforceModeFromEnv,
   getEnforceMode,
   isUserActive,
+  isSuperAdmin,
   isPlatformAdmin,
   resolveProjectRole,
   resolveProjectAccessLevel,

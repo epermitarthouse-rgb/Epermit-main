@@ -60,15 +60,14 @@ serve(async (req) => {
 
     const userId = claimsData.claims.sub;
 
-    // Check if user is admin
-    const { data: roleData, error: roleError } = await supabase
+    // Check if user is platform admin or super admin
+    const { data: roleRows, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
-      .eq("role", "admin")
-      .single();
+      .in("role", ["admin", "super_admin"]);
 
-    if (roleError || !roleData) {
+    if (roleError || !roleRows?.length) {
       return new Response(JSON.stringify({ error: "Admin access required" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

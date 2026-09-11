@@ -43,15 +43,14 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Check if user is admin
-    const { data: roleData, error: roleError } = await userClient
+    // Check if user is platform admin or super admin
+    const { data: roleRows, error: roleError } = await userClient
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
+      .in("role", ["admin", "super_admin"]);
 
-    if (roleError || !roleData) {
+    if (roleError || !roleRows?.length) {
       console.error("Role check error:", roleError);
       return new Response(
         JSON.stringify({ error: "Admin access required" }),
