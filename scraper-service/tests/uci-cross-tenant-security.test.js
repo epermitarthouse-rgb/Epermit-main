@@ -313,6 +313,11 @@ function makeTenantSupabase(opts = {}) {
         return { data: !userDemoOnly, error: null };
       }
 
+      if (name === "is_demo_tenant") {
+        const tenant = tenants.find((t) => t.id === tid);
+        return { data: Boolean(tenant?.is_demo), error: null };
+      }
+
       return { data: null, error: null };
     },
   };

@@ -233,6 +233,29 @@ describe("default+override project access (governance JS)", () => {
     assert.equal(await resolveProjectAccessLevel(supabase, USER_TARGET, PROJECT_B), "write");
   });
 
+  it("honors explicit write override and grants editor access via RPC", async () => {
+    const supabase = makeProjectAccessSupabase({
+      overrides: [
+        {
+          user_id: USER_TARGET,
+          project_id: PROJECT_C,
+          access_level: "write",
+        },
+      ],
+    });
+    assert.equal(await resolveProjectAccessLevel(supabase, USER_TARGET, PROJECT_C), "write");
+    const readOk = await supabase.rpc("has_project_access", {
+      _user_id: USER_TARGET,
+      _project_id: PROJECT_C,
+    });
+    const writeOk = await supabase.rpc("has_project_editor_access", {
+      _user_id: USER_TARGET,
+      _project_id: PROJECT_C,
+    });
+    assert.equal(readOk.data, true);
+    assert.equal(writeOk.data, true);
+  });
+
   it("honors explicit read override and denies editor access via RPC", async () => {
     const supabase = makeProjectAccessSupabase({
       overrides: [

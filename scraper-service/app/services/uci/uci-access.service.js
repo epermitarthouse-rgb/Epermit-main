@@ -7,8 +7,8 @@ const { getCoordinationRecordById } = require("./uci-records.service.js");
  * Uses Supabase service-role client only for `.auth.getUser(jwt)` and DB checks —
  * callers must enforce project ownership / team membership explicitly.
  *
- * Ownership model (Row 2): tenants + tenant_memberships + projects.tenant_id +
- * project_team_members via has_tenant_project_access / has_uci_row_* RPCs.
+ * Access model: has_project_access / has_project_editor_access (default Write +
+ * overrides) with demo-tenant isolation via can_access_tenant on demo rows only.
  */
 
 /**
@@ -75,6 +75,32 @@ async function requireTenantAccess({ supabase, userId, tenantId }) {
 }
 
 /**
+ * Demo tenants still require tenant membership; production tenants rely on project access.
+ * @param {object} p
+ * @param {import("@supabase/supabase-js").SupabaseClient} p.supabase
+ * @param {string} p.userId
+ * @param {string} p.tenantId
+ * @returns {Promise<boolean>}
+ */
+async function isDemoTenant({ supabase, tenantId }) {
+  if (!tenantId) return false;
+
+  const { data, error } = await supabase.rpc("is_demo_tenant", {
+    _tenant_id: tenantId,
+  });
+
+  if (error) {
+    const rpcErr = new Error(
+      `Demo tenant check failed: ${error.message || "rpc_error"}`,
+    );
+    rpcErr.code = "DEMO_TENANT_RPC_ERROR";
+    throw rpcErr;
+  }
+
+  return Boolean(data);
+}
+
+/**
  * @param {object} p
  * @param {import("@supabase/supabase-js").SupabaseClient} p.supabase
  * @param {string} p.userId
@@ -83,9 +109,11 @@ async function requireTenantAccess({ supabase, userId, tenantId }) {
  */
 async function requireTenantProjectAccess({ supabase, userId, projectId, write = false }) {
   const project = await getProjectTenantId(supabase, projectId);
-  const tenantCheck = project?.tenant_id
-    ? requireTenantAccess({ supabase, userId, tenantId: project.tenant_id })
-    : Promise.resolve();
+  const tenantCheck =
+    project?.tenant_id &&
+    (await isDemoTenant({ supabase, tenantId: project.tenant_id }))
+      ? requireTenantAccess({ supabase, userId, tenantId: project.tenant_id })
+      : Promise.resolve();
   const projectCheck = write
     ? requireProjectEditorAccess({ supabase, userId, projectId })
     : assertProjectAccess({ supabase, userId, projectId }).then((ok) => {
