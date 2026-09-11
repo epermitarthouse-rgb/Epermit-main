@@ -1040,6 +1040,83 @@ function enrichRpcEffectivePermissionsPayload(payload) {
 }
 
 /**
+ * Canonical identity for portal credentials (case-insensitive jurisdiction + username).
+ * @param {unknown} jurisdiction
+ * @param {unknown} portalUsername
+ * @returns {string}
+ */
+function portalCredentialCanonicalKey(jurisdiction, portalUsername) {
+  return `${String(jurisdiction || "").trim().toLowerCase()}\0${String(portalUsername || "").trim().toLowerCase()}`;
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} credentials
+ * @returns {Map<string, Array<Record<string, unknown>>>}
+ */
+function groupPortalCredentialsByCanonical(credentials) {
+  /** @type {Map<string, Array<Record<string, unknown>>>} */
+  const groups = new Map();
+  for (const credential of credentials) {
+    const key = portalCredentialCanonicalKey(
+      credential.jurisdiction,
+      credential.portal_username,
+    );
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(credential);
+  }
+  return groups;
+}
+
+/**
+ * Prefer oldest credential in a duplicate group as the canonical row.
+ * @param {Array<Record<string, unknown>>} group
+ * @returns {Record<string, unknown>}
+ */
+function pickCanonicalPortalCredential(group) {
+  return [...group].sort((a, b) => {
+    const ta = new Date(String(a.created_at || 0)).getTime();
+    const tb = new Date(String(b.created_at || 0)).getTime();
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    return String(a.id).localeCompare(String(b.id));
+  })[0];
+}
+
+/**
+ * Resolve an explicit grant when duplicate credential rows share one logical identity.
+ * @param {string[]} groupIds
+ * @param {Map<string, Record<string, unknown>>} grantByCredential
+ * @returns {Record<string, unknown> | undefined}
+ */
+function resolveExplicitGrantForCredentialGroup(groupIds, grantByCredential) {
+  /** @type {Array<Record<string, unknown>>} */
+  const grants = [];
+  for (const id of groupIds) {
+    const grant = grantByCredential.get(id);
+    if (grant) {
+      grants.push(grant);
+    }
+  }
+  if (grants.length === 0) {
+    return undefined;
+  }
+  if (grants.length === 1) {
+    return grants[0];
+  }
+
+  /** @type {Record<string, number>} */
+  const priority = { none: 0, use: 1, manage: 2 };
+  return grants.sort(
+    (a, b) =>
+      (priority[String(b.grant_level)] ?? -1) -
+      (priority[String(a.grant_level)] ?? -1),
+  )[0];
+}
+
+/**
  * Build default+override effective views for admin UI (all projects / all credentials).
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  * @param {Record<string, unknown>} payload
@@ -1084,7 +1161,7 @@ async function assembleEffectiveAccessViews(supabase, payload) {
     supabase.from("projects").select("id, name, user_id").order("name"),
     supabase
       .from("portal_credentials")
-      .select("id, jurisdiction, portal_username")
+      .select("id, jurisdiction, portal_username, created_at")
       .order("jurisdiction")
       .order("portal_username"),
     supabase
@@ -1158,9 +1235,18 @@ async function assembleEffectiveAccessViews(supabase, payload) {
   const credentialAccess = [];
   let credentialExceptionCount = 0;
 
-  for (const credential of allCredentialsRes.data || []) {
+  const credentialGroups = groupPortalCredentialsByCanonical(
+    allCredentialsRes.data || [],
+  );
+
+  for (const group of credentialGroups.values()) {
+    const credential = pickCanonicalPortalCredential(group);
     const credentialId = String(credential.id);
-    const explicit = grantByCredential.get(credentialId);
+    const groupIds = group.map((row) => String(row.id));
+    const explicit = resolveExplicitGrantForCredentialGroup(
+      groupIds,
+      grantByCredential,
+    );
     const explicitLevel = explicit ? String(explicit.grant_level || "none") : null;
 
     let effectiveGrant = defaultCredentialGrant;
@@ -1362,6 +1448,10 @@ module.exports = {
   assertScrapedDataAccess,
   computeEffectivePermissions,
   assembleEffectiveAccessViews,
+  portalCredentialCanonicalKey,
+  groupPortalCredentialsByCanonical,
+  pickCanonicalPortalCredential,
+  resolveExplicitGrantForCredentialGroup,
   sanitizeAuditJson,
   appendAuditEvent,
 };

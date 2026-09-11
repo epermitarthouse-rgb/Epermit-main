@@ -17,6 +17,39 @@ const {
 /** DB requires permit_number NOT NULL — Settings-created rows use this sentinel. */
 const SETTINGS_PERMIT_SENTINEL = "SETTINGS";
 
+const {
+  portalCredentialCanonicalKey,
+  pickCanonicalPortalCredential,
+  groupPortalCredentialsByCanonical,
+} = require("../services/governance/governance.service.js");
+
+/**
+ * Find an existing credential matching jurisdiction + username (case-insensitive).
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} jurisdiction
+ * @param {string} portalUsername
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+async function findExistingPortalCredential(supabase, jurisdiction, portalUsername) {
+  const canonicalKey = portalCredentialCanonicalKey(jurisdiction, portalUsername);
+  const { data, error } = await supabase
+    .from("portal_credentials")
+    .select("id, jurisdiction, portal_username, created_at, user_id, login_url, permit_number, project_id")
+    .order("created_at", { ascending: true });
+
+  if (error || !Array.isArray(data)) {
+    return null;
+  }
+
+  const groups = groupPortalCredentialsByCanonical(data);
+  const group = groups.get(canonicalKey);
+  if (!group || group.length === 0) {
+    return null;
+  }
+
+  return pickCanonicalPortalCredential(group);
+}
+
 function sanitizeRow(row) {
   const r = row && typeof row === "object" ? row : {};
   return {
@@ -110,30 +143,64 @@ function createPortalCredentialsRouter(opts) {
         portalPassword.trim(),
       );
 
-      const insertPayload = {
-        user_id: user.id,
+      const existing = await findExistingPortalCredential(
+        supabase,
         jurisdiction,
-        portal_username: portalUsername,
-        portal_password: encryptedOrPlain,
-        login_url: loginUrl,
-        permit_number,
-      };
+        portalUsername,
+      );
 
-      if (body.project_id != null && String(body.project_id).trim() !== "") {
-        insertPayload.project_id = String(body.project_id).trim();
-      }
+      let data;
+      let created = false;
 
-      const { data, error } = await supabase
-        .from("portal_credentials")
-        .insert(insertPayload)
-        .select("*")
-        .single();
+      if (existing) {
+        const { data: updated, error: updateErr } = await supabase
+          .from("portal_credentials")
+          .update({
+            portal_password: encryptedOrPlain,
+            login_url: loginUrl,
+            permit_number,
+          })
+          .eq("id", String(existing.id))
+          .select("*")
+          .single();
 
-      if (error) {
-        throw Object.assign(new Error(error.message), {
-          cause: error,
-          statusCode: 500,
-        });
+        if (updateErr) {
+          throw Object.assign(new Error(updateErr.message), {
+            cause: updateErr,
+            statusCode: 500,
+          });
+        }
+
+        data = updated;
+      } else {
+        const insertPayload = {
+          user_id: user.id,
+          jurisdiction,
+          portal_username: portalUsername,
+          portal_password: encryptedOrPlain,
+          login_url: loginUrl,
+          permit_number,
+        };
+
+        if (body.project_id != null && String(body.project_id).trim() !== "") {
+          insertPayload.project_id = String(body.project_id).trim();
+        }
+
+        const { data: inserted, error } = await supabase
+          .from("portal_credentials")
+          .insert(insertPayload)
+          .select("*")
+          .single();
+
+        if (error) {
+          throw Object.assign(new Error(error.message), {
+            cause: error,
+            statusCode: 500,
+          });
+        }
+
+        data = inserted;
+        created = true;
       }
 
       const { error: grantErr } = await supabase
@@ -159,16 +226,17 @@ function createPortalCredentialsRouter(opts) {
 
       await appendAuditEvent(supabase, {
         actor_id: user.id,
-        action: "credential.manage.created",
+        action: created ? "credential.manage.created" : "credential.manage.reused",
         target_type: "credential",
         target_id: String(data.id),
         after_json: {
           jurisdiction: data.jurisdiction,
           portal_username: data.portal_username,
+          reused_existing: !created,
         },
       });
 
-      res.status(201).json(sanitizeRow({ ...data, grant_level: "manage" }));
+      res.status(created ? 201 : 200).json(sanitizeRow({ ...data, grant_level: "manage" }));
     } catch (err) {
       const s = sanitizeUciError(err);
       res.status(s.httpStatus).json(s.body);

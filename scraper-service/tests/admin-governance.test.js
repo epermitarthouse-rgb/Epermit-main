@@ -20,6 +20,7 @@ const {
   resolveGlobalFeatureAccess,
   resolveFeatureAccess,
   computeEffectivePermissions,
+  portalCredentialCanonicalKey,
   sanitizeAuditJson,
 } = require("../app/services/governance/governance.service.js");
 const {
@@ -941,6 +942,64 @@ describe("computeEffectivePermissions", () => {
     assert.equal(result.global_features["billing.quickbooks"], "write");
     assert.ok(Array.isArray(result.project_access));
     assert.ok(Array.isArray(result.credential_access));
+  });
+
+  it("dedupes credential_access by canonical jurisdiction + username", async () => {
+    const userId = USER_NON_ADMIN;
+    const duplicateA = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    const duplicateB = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+    const supabase = makeEffectivePermissionsSupabase({
+      userId,
+      projectCount: 0,
+      platformAdmin: false,
+      portalCredentials: [
+        {
+          id: duplicateA,
+          jurisdiction: "Arlington County VA",
+          portal_username: "permitting@commun-et.com",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+        {
+          id: duplicateB,
+          jurisdiction: "Arlington County VA",
+          portal_username: "Permitting@commun-et.com",
+          created_at: "2026-02-01T00:00:00Z",
+        },
+        {
+          id: CREDENTIAL_A,
+          jurisdiction: "Fairfax County VA",
+          portal_username: "permitting@commun-et.com",
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      credentialGrants: [
+        {
+          id: "grant-dup",
+          user_id: userId,
+          credential_id: duplicateB,
+          grant_level: "none",
+          project_id: null,
+          jurisdiction: null,
+          granted_by: USER_ADMIN,
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+    });
+
+    const result = await computeEffectivePermissions(supabase, userId);
+    assert.equal(result.credential_access.length, 2);
+
+    const arlington = result.credential_access.find(
+      (row) => row.jurisdiction === "Arlington County VA",
+    );
+    assert.ok(arlington);
+    assert.equal(arlington.credential_id, duplicateA);
+    assert.equal(arlington.effective_access, "none");
+    assert.equal(arlington.source, "Admin restriction");
+    assert.equal(
+      portalCredentialCanonicalKey("Arlington County VA", "Permitting@commun-et.com"),
+      portalCredentialCanonicalKey("Arlington County VA", "permitting@commun-et.com"),
+    );
   });
 });
 

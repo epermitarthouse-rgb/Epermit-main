@@ -7,6 +7,8 @@ const {
   computeEffectivePermissions,
   appendAuditEvent,
   isPlatformAdmin,
+  groupPortalCredentialsByCanonical,
+  pickCanonicalPortalCredential,
 } = require("../services/governance/governance.service.js");
 const {
   fetchEmailsForUserIds,
@@ -106,15 +108,20 @@ function createAdminRouter(opts) {
         throw Object.assign(new Error(error.message), { statusCode: 500 });
       }
 
-      const credentials = (data || []).map((row) => ({
-        id: String(row.id),
-        jurisdiction: row.jurisdiction ?? null,
-        portal_username: row.portal_username ?? null,
-        login_url: row.login_url ?? null,
-        project_id: row.project_id ?? null,
-        user_id: row.user_id ? String(row.user_id) : null,
-        created_at: row.created_at ?? null,
-      }));
+      const credentials = [...groupPortalCredentialsByCanonical(data || []).values()].map(
+        (group) => {
+          const row = pickCanonicalPortalCredential(group);
+          return {
+            id: String(row.id),
+            jurisdiction: row.jurisdiction ?? null,
+            portal_username: row.portal_username ?? null,
+            login_url: row.login_url ?? null,
+            project_id: row.project_id ?? null,
+            user_id: row.user_id ? String(row.user_id) : null,
+            created_at: row.created_at ?? null,
+          };
+        },
+      );
 
       res.json({ credentials });
     } catch (err) {
