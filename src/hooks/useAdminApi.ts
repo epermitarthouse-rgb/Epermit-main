@@ -50,7 +50,7 @@ export function useAdminApi() {
         activateAdminUser(userId, reason, fetchFn),
       deactivateUser: (userId: string, reason?: string) =>
         deactivateAdminUser(userId, reason, fetchFn),
-      setPlatformRole: (userId: string, action: "grant" | "revoke") =>
+      setPlatformRole: (userId: string, action: import("@/lib/adminApi").PlatformRoleAction) =>
         setAdminPlatformRole(userId, action, fetchFn),
       setProjectRole: (userId: string, projectId: string, role: ProjectRole) =>
         setAdminProjectRole(userId, projectId, role, fetchFn),

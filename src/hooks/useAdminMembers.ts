@@ -38,7 +38,13 @@ function asProjectLinks(value: unknown): MemberProjectLink[] {
 
 function asRoles(value: unknown): AppRole[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((role): role is AppRole => role === "admin" || role === "moderator" || role === "user");
+  return value.filter(
+    (role): role is AppRole =>
+      role === "admin" ||
+      role === "moderator" ||
+      role === "super_admin" ||
+      role === "user",
+  );
 }
 
 function parseDirectoryPayload(data: unknown): AdminMemberRow[] {

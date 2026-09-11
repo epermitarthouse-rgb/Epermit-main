@@ -5,6 +5,10 @@ import type {
   AdminProjectAccessRow,
 } from "@/lib/adminApi";
 import {
+  platformRoleFromUser,
+  platformRoleLabel,
+} from "@/lib/adminRoleHelpers";
+import {
   ACCESS_LEVEL_LABELS,
   CREDENTIAL_GRANT_CONTROL_LABELS,
   CREDENTIAL_GRANT_DISPLAY,
@@ -40,7 +44,12 @@ export function userIdentityMeta(effective: AdminEffectivePermissions): string |
 
 const RISK_LABELS: Record<string, string> = {
   sole_platform_admin: "This user is the only platform administrator.",
+  sole_super_admin: "This user is the only super administrator.",
 };
+
+export function effectivePlatformRoleLabel(effective: AdminEffectivePermissions): string {
+  return platformRoleLabel(platformRoleFromUser(effective));
+}
 
 export function humanRiskLabel(risk: string): string {
   return RISK_LABELS[risk] ?? risk.replace(/_/g, " ");

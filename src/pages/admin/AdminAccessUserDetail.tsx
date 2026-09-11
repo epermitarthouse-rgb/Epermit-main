@@ -27,7 +27,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 import { useAdminApi } from "@/hooks/useAdminApi";
+import {
+  mapRoleActionToApiAction,
+  platformRoleFromUser,
+  visibleRoleActions,
+  type AdminRoleAction,
+} from "@/lib/adminRoleHelpers";
 import type { AdminEffectivePermissions } from "@/lib/adminApi";
 import {
   buildCredentialAccessRows,
@@ -41,6 +48,7 @@ import {
   formatCredentialGrantLevel,
   formatProjectAccessLevel,
   globalFeatureAccessRow,
+  effectivePlatformRoleLabel,
   humanRiskLabel,
   projectAccessSummaryText,
   userIdentityMeta,
@@ -57,7 +65,9 @@ import {
   type ProjectAccessControl,
 } from "@/lib/governanceConstants";
 
-type ConfirmAction = { type: "deactivate" } | { type: "revoke_admin" };
+type ConfirmAction =
+  | { type: "deactivate" }
+  | { type: AdminRoleAction };
 
 const PROJECT_ACCESS_CONTROLS: ProjectAccessControl[] = [
   "default",
@@ -76,6 +86,7 @@ const CREDENTIAL_ACCESS_CONTROLS: CredentialGrantControl[] = [
 export default function AdminAccessUserDetail() {
   const { userId = "" } = useParams();
   const { user: currentUser } = useAuth();
+  const { platformRole: viewerRole } = useRequireAdmin();
   const { toast } = useToast();
   const adminApi = useAdminApi();
   const [effective, setEffective] = useState<AdminEffectivePermissions | null>(null);
@@ -188,27 +199,53 @@ export default function AdminAccessUserDetail() {
     }
   };
 
+  const targetRole = effective ? platformRoleFromUser(effective) : "user";
+  const isSelf = currentUser?.id === userId;
+  const isLastSuperAdmin =
+    targetRole === "super_admin" && (effective?.risks ?? []).includes("sole_super_admin");
+  const roleActions = visibleRoleActions({
+    viewerRole,
+    targetRole,
+    isSelf,
+    isLastSuperAdmin,
+  });
+
   const handleConfirmDestructive = async (reason: string) => {
     if (!confirmAction) return;
     if (confirmAction.type === "deactivate") {
       await adminApi.deactivateUser(userId, reason);
       toast({ title: "User deactivated" });
-    } else if (confirmAction.type === "revoke_admin") {
-      await adminApi.setPlatformRole(userId, "revoke");
-      toast({ title: "Platform admin revoked" });
+    } else {
+      await adminApi.setPlatformRole(
+        userId,
+        mapRoleActionToApiAction(confirmAction.type),
+      );
+      toast({ title: "Role updated" });
     }
     await load();
   };
 
-  const handleGrantAdmin = async () => {
+  const handleRoleAction = async (action: AdminRoleAction) => {
+    if (action === "deactivate") {
+      setConfirmAction({ type: "deactivate" });
+      return;
+    }
+    if (
+      action === "revoke-platform-admin" ||
+      action === "demote-super-admin" ||
+      action === "promote-to-super-admin"
+    ) {
+      setConfirmAction({ type: action });
+      return;
+    }
     setBusy(true);
     try {
-      await adminApi.setPlatformRole(userId, "grant");
-      toast({ title: "Platform admin granted" });
+      await adminApi.setPlatformRole(userId, mapRoleActionToApiAction(action));
+      toast({ title: "Role updated" });
       await load();
     } catch (err) {
       toast({
-        title: "Grant failed",
+        title: "Role change failed",
         description: err instanceof Error ? err.message : undefined,
         variant: "destructive",
       });
@@ -372,7 +409,7 @@ export default function AdminAccessUserDetail() {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Platform role</dt>
-                    <dd>{effective.platform_admin ? "Platform admin" : "User"}</dd>
+                    <dd>{effectivePlatformRoleLabel(effective)}</dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Projects</dt>
@@ -400,35 +437,75 @@ export default function AdminAccessUserDetail() {
               </Panel>
 
               <Panel title="Account actions" eyebrow="governance">
+                {isSelf ? (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    You cannot change your own role or deactivate your own account from this
+                    screen. Ask another super admin if you need a role change.
+                  </p>
+                ) : null}
+                {isLastSuperAdmin ? (
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    This is the last active super admin. Demotion and deactivation are blocked
+                    until another super admin is assigned.
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  {effective.access_status === "deactivated" ? (
+                  {effective.access_status === "deactivated" &&
+                  roleActions.includes("activate") ? (
                     <Button disabled={busy} onClick={() => void handleActivate()}>
                       Activate user
                     </Button>
-                  ) : (
+                  ) : null}
+                  {effective.access_status !== "deactivated" &&
+                  roleActions.includes("deactivate") ? (
                     <Button
                       variant="destructive"
-                      disabled={busy || currentUser?.id === userId}
+                      disabled={busy}
                       onClick={() => setConfirmAction({ type: "deactivate" })}
                     >
                       Deactivate user
                     </Button>
-                  )}
-                  {effective.platform_admin ? (
+                  ) : null}
+                  {roleActions.includes("grant-platform-admin") ? (
                     <Button
                       variant="outline"
-                      disabled={busy || currentUser?.id === userId}
-                      onClick={() => setConfirmAction({ type: "revoke_admin" })}
+                      disabled={busy}
+                      onClick={() => void handleRoleAction("grant-platform-admin")}
                     >
                       <Shield className="mr-2 h-4 w-4" />
-                      Revoke platform admin
+                      Grant Platform Admin
                     </Button>
-                  ) : (
-                    <Button variant="outline" disabled={busy} onClick={() => void handleGrantAdmin()}>
+                  ) : null}
+                  {roleActions.includes("promote-to-super-admin") ? (
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void handleRoleAction("promote-to-super-admin")}
+                    >
                       <Shield className="mr-2 h-4 w-4" />
-                      Grant platform admin
+                      Promote to Super Admin
                     </Button>
-                  )}
+                  ) : null}
+                  {roleActions.includes("revoke-platform-admin") ? (
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void handleRoleAction("revoke-platform-admin")}
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Revoke Platform Admin
+                    </Button>
+                  ) : null}
+                  {roleActions.includes("demote-super-admin") ? (
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void handleRoleAction("demote-super-admin")}
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Demote Super Admin
+                    </Button>
+                  ) : null}
                 </div>
               </Panel>
 
@@ -576,7 +653,9 @@ export default function AdminAccessUserDetail() {
               {effective.platform_admin ? (
                 <AlertBanner
                   tone="info"
-                  title="Platform admin"
+                  title={
+                    targetRole === "super_admin" ? "Super Admin" : "Platform Admin"
+                  }
                   detail="All features resolve to Write for this user. Per-feature customization does not apply while platform admin is granted."
                 />
               ) : null}
@@ -655,7 +734,9 @@ export default function AdminAccessUserDetail() {
               {effective.platform_admin ? (
                 <AlertBanner
                   tone="info"
-                  title="Platform admin"
+                  title={
+                    targetRole === "super_admin" ? "Super Admin" : "Platform Admin"
+                  }
                   detail="Effective Manage access to all portal credentials. Overrides below apply if platform admin is revoked."
                 />
               ) : null}
@@ -743,10 +824,24 @@ export default function AdminAccessUserDetail() {
           if (!open) setConfirmAction(null);
         }}
         title={
-          confirmAction?.type === "deactivate" ? "Deactivate user" : "Revoke platform admin"
+          confirmAction?.type === "deactivate"
+            ? "Deactivate user"
+            : confirmAction?.type === "demote-super-admin"
+              ? "Demote super admin"
+              : confirmAction?.type === "promote-to-super-admin"
+                ? "Promote to super admin"
+                : "Change platform role"
         }
         description="This is a high-risk governance action."
-        confirmLabel={confirmAction?.type === "deactivate" ? "Deactivate" : "Revoke admin"}
+        confirmLabel={
+          confirmAction?.type === "deactivate"
+            ? "Deactivate"
+            : confirmAction?.type === "demote-super-admin"
+              ? "Demote"
+              : confirmAction?.type === "promote-to-super-admin"
+                ? "Promote"
+                : "Confirm"
+        }
         onConfirm={handleConfirmDestructive}
       />
 

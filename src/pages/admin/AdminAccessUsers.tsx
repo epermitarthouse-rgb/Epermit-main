@@ -26,6 +26,7 @@ import {
 import { useAdminApi } from "@/hooks/useAdminApi";
 import { useToast } from "@/hooks/use-toast";
 import type { AdminDirectoryUser } from "@/lib/adminApi";
+import { platformRoleFromUser } from "@/lib/adminRoleHelpers";
 
 const PAGE_SIZE = 25;
 
@@ -185,13 +186,20 @@ export default function AdminAccessUsers() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {user.platform_admin ? (
-                            <Badge>Platform admin</Badge>
-                          ) : (
-                            <Badge variant="outline" className="font-normal text-muted-foreground">
-                              user
-                            </Badge>
-                          )}
+                          {(() => {
+                            const role = platformRoleFromUser(user);
+                            if (role === "super_admin") {
+                              return <Badge>Super Admin</Badge>;
+                            }
+                            if (role === "admin") {
+                              return <Badge variant="secondary">Platform Admin</Badge>;
+                            }
+                            return (
+                              <Badge variant="outline" className="font-normal text-muted-foreground">
+                                User
+                              </Badge>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                           {format(new Date(user.created_at), "MMM d, yyyy")}

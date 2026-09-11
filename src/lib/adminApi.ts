@@ -27,6 +27,14 @@ export type AdminPermissionRisk = {
   detail?: string;
 };
 
+export type PlatformRoleAction =
+  | "grant"
+  | "revoke"
+  | "promote-to-admin"
+  | "revoke-admin"
+  | "promote-to-super-admin"
+  | "demote-super-admin";
+
 export type AdminDirectoryUser = {
   user_id: string;
   email: string | null;
@@ -36,7 +44,9 @@ export type AdminDirectoryUser = {
   access_status: "active" | "deactivated" | string;
   created_at: string;
   platform_roles: string[];
+  platform_role?: "user" | "admin" | "super_admin";
   platform_admin: boolean;
+  super_admin?: boolean;
 };
 
 export type AdminUsersListResponse = {
@@ -120,6 +130,8 @@ export type AdminEffectivePermissions = {
   job_title?: string | null;
   access_status: string;
   platform_admin: boolean;
+  platform_role?: "user" | "admin" | "super_admin";
+  super_admin?: boolean;
   platform_roles?: string[];
   /** User-level feature access independent of project membership. */
   global_features?: Record<string, FeatureAccessLevel>;
@@ -403,9 +415,16 @@ export async function deactivateAdminUser(
 
 export async function setAdminPlatformRole(
   userId: string,
-  action: "grant" | "revoke",
+  action: PlatformRoleAction,
   fetchFn?: AdminFetchFn,
-): Promise<AdminMutationOk & { user_id: string; platform_admin: boolean }> {
+): Promise<
+  AdminMutationOk & {
+    user_id: string;
+    platform_admin: boolean;
+    platform_role?: string;
+    super_admin?: boolean;
+  }
+> {
   return adminFetchJson(
     `${ADMIN_API_PREFIX}/access/users/${encodeURIComponent(userId)}/platform-role`,
     {
