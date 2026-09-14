@@ -21,6 +21,8 @@ import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import FAQ from "./pages/FAQ";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import ChangePasswordRequired from "./pages/ChangePasswordRequired";
 import { PasswordChangeRequiredRoute } from "@/components/auth/PasswordChangeRequiredRoute";
 import Install from "./pages/Install";
@@ -106,6 +108,8 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<HomeRoute />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+                <Route path="/auth/reset-password" element={<ResetPassword />} />
                 <Route
                   path="/auth/change-password-required"
                   element={

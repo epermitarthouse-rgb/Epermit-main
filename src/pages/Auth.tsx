@@ -270,12 +270,12 @@ export default function Auth() {
                         <FormItem>
                           <div className="flex items-center justify-between gap-4">
                             <FormLabel className={AUTH_LABEL_CLASSES}>Password</FormLabel>
-                            <a
-                              href="#"
+                            <Link
+                              to="/auth/forgot-password"
                               className="text-xs font-semibold uppercase tracking-[0.12em] text-primary underline-offset-4 transition-colors hover:text-primary/80"
                             >
                               Forgot password?
-                            </a>
+                            </Link>
                           </div>
                           <FormControl>
                             <div className="relative">
