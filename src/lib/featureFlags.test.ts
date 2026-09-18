@@ -207,10 +207,15 @@ describe('ProductTourSection visibility wiring', () => {
 });
 
 describe('FeatureFlagsPanel server-backed UI', () => {
-  it('documents separation from access control and railway', () => {
-    assert.match(panelSource, /Access Control/);
-    assert.match(panelSource, /Railway env vars/);
-    assert.match(panelSource, /localStorage/);
+  it('shows business-friendly labels without internal key badges', () => {
+    assert.match(panelSource, /Platform Demo Video/);
+    assert.match(panelSource, /Show the interactive platform demo video/);
+    assert.match(panelSource, /Last updated/);
     assert.match(panelSource, /toggleFlag/);
+    assert.match(panelSource, /localStorage/);
+    assert.doesNotMatch(panelSource, /Product visibility controls/);
+    assert.doesNotMatch(panelSource, /Access Control/);
+    assert.doesNotMatch(panelSource, /Railway env vars/);
+    assert.doesNotMatch(panelSource, /font-mono/);
   });
 });

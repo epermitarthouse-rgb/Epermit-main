@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns';
-import { AlertCircle, Flag, Loader2, Server, Shield, Train, Video } from 'lucide-react';
+import { AlertCircle, Flag, Loader2, Video } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -74,36 +74,6 @@ export function FeatureFlagsPanel() {
 
   return (
     <div className="space-y-6">
-      <Alert>
-        <Flag className="h-4 w-4" />
-        <AlertTitle>Product visibility controls</AlertTitle>
-        <AlertDescription className="space-y-2">
-          <p>
-            Feature Flags toggle what product UI is visible <strong>platform-wide</strong> for all
-            users. Changes apply globally after save.
-          </p>
-          <ul className="list-disc pl-5 text-sm space-y-1">
-            <li className="flex items-start gap-2">
-              <Shield className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>
-                <strong>Access Control</strong> (Admin → Users) governs who can use product features
-                — separate from these flags.
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Train className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>
-                <strong>Railway env vars</strong> control backend infrastructure — not managed here.
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Server className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>Flags are stored server-side with an audit trail.</span>
-            </li>
-          </ul>
-        </AlertDescription>
-      </Alert>
-
       {legacyShowDemoVideo === true && (
         <Alert variant="default">
           <AlertCircle className="h-4 w-4" />
@@ -187,9 +157,6 @@ export function FeatureFlagsPanel() {
                       </Label>
                       <Badge variant="outline" className="text-xs">
                         {config.category}
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs font-mono">
-                        {row.key}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{config.description}</p>
