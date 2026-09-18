@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,14 @@ import { ArchitectProfileManager } from "@/components/settings/ArchitectProfileM
 import { ExportBrandingManager } from "@/components/settings/ExportBrandingManager";
 import { PageHeader } from "@/components/design/ProductPrimitives";
 import { cn } from "@/lib/utils";
+import {
+  defaultNotificationPreferences,
+  fetchNotificationPreferences,
+  saveNotificationPreferences,
+  unsubscribeJurisdictionEmails,
+  type NotificationPreferences,
+} from "@/lib/notificationPreferences";
+import { JurisdictionSubscriptionsManager } from "@/components/settings/JurisdictionSubscriptionsManager";
 
 // Validation schemas
 const profileSchema = z.object({
@@ -69,26 +77,11 @@ interface Profile {
   phone: string | null;
 }
 
-interface NotificationPreferences {
-  emailDeadlineReminders: boolean;
-  emailInspectionReminders: boolean;
-  emailProjectUpdates: boolean;
-  emailJurisdictionUpdates: boolean;
-  inAppNotifications: boolean;
-}
-
-const defaultNotificationPrefs: NotificationPreferences = {
-  emailDeadlineReminders: true,
-  emailInspectionReminders: true,
-  emailProjectUpdates: true,
-  emailJurisdictionUpdates: false,
-  inAppNotifications: true,
-};
-
 export default function Settings() {
   const { user, loading: authLoading } = useAuth();
   const { completeItem } = useGettingStarted();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Profile state
   const [profile, setProfile] = useState<Profile>({
@@ -113,8 +106,14 @@ export default function Settings() {
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
 
   // Notification preferences state
-  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(defaultNotificationPrefs);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(
+    defaultNotificationPreferences,
+  );
   const [notificationsSaving, setNotificationsSaving] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [activeSettingsTab, setActiveSettingsTab] = useState(
+    searchParams.get("tab") || "profile",
+  );
 
   // Clean up data state
   const [removingDuplicates, setRemovingDuplicates] = useState(false);
@@ -131,9 +130,32 @@ export default function Settings() {
   useEffect(() => {
     if (user) {
       fetchProfile();
-      loadNotificationPrefs();
+      void loadNotificationPrefs();
     }
   }, [user]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab) {
+      setActiveSettingsTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (searchParams.get("unsubscribe") !== "jurisdiction-email") return;
+
+    void (async () => {
+      try {
+        await unsubscribeJurisdictionEmails();
+        setNotificationPrefs((prev) => ({ ...prev, emailJurisdictionUpdates: false }));
+        toast.success("Unsubscribed from jurisdiction email updates");
+      } catch (error) {
+        console.error("Unsubscribe error:", error);
+        toast.error("Could not unsubscribe — update preferences below");
+      }
+    })();
+  }, [user, searchParams]);
 
   const fetchProfile = async () => {
     setProfileLoading(true);
@@ -161,14 +183,17 @@ export default function Settings() {
     }
   };
 
-  const loadNotificationPrefs = () => {
-    const saved = localStorage.getItem(`notification_prefs_${user?.id}`);
-    if (saved) {
-      try {
-        setNotificationPrefs(JSON.parse(saved));
-      } catch {
-        setNotificationPrefs(defaultNotificationPrefs);
-      }
+  const loadNotificationPrefs = async () => {
+    if (!user) return;
+    setNotificationsLoading(true);
+    try {
+      const prefs = await fetchNotificationPreferences(user.id);
+      setNotificationPrefs(prefs);
+    } catch (error) {
+      console.error("Error loading notification preferences:", error);
+      toast.error("Failed to load notification preferences");
+    } finally {
+      setNotificationsLoading(false);
     }
   };
 
@@ -272,12 +297,13 @@ export default function Settings() {
     setNotificationPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleNotificationsSave = () => {
+  const handleNotificationsSave = async () => {
     setNotificationsSaving(true);
     try {
-      localStorage.setItem(`notification_prefs_${user?.id}`, JSON.stringify(notificationPrefs));
+      await saveNotificationPreferences(notificationPrefs);
       toast.success("Notification preferences saved");
     } catch (error) {
+      console.error("Error saving notification preferences:", error);
       toast.error("Failed to save preferences");
     } finally {
       setNotificationsSaving(false);
@@ -419,7 +445,11 @@ export default function Settings() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <Tabs defaultValue="profile" className="space-y-6">
+        <Tabs
+          value={activeSettingsTab}
+          onValueChange={setActiveSettingsTab}
+          className="space-y-6"
+        >
           <TabsList className="pilot-card flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1.5">
             <TabsTrigger value="profile" className={settingsTabTrigger}>
               <User className="h-4 w-4" />
@@ -729,6 +759,13 @@ export default function Settings() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {notificationsLoading ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading preferences…
+                      </div>
+                    ) : null}
+
                     {/* Email Notifications */}
                     <div>
                       <h4 className="font-medium mb-4">Email Notifications</h4>
@@ -802,24 +839,55 @@ export default function Settings() {
                     {/* In-App Notifications */}
                     <div>
                       <h4 className="font-medium mb-4">In-App Notifications</h4>
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="space-y-0.5">
-                          <Label htmlFor="inAppNotifications">Enable In-App Notifications</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Show notifications within the application
-                          </p>
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="inAppNotifications">Enable In-App Notifications</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Show notifications within the application
+                            </p>
+                          </div>
+                          <Switch
+                            id="inAppNotifications"
+                            checked={notificationPrefs.inAppNotifications}
+                            onCheckedChange={() => handleNotificationToggle("inAppNotifications")}
+                            disabled={notificationsLoading}
+                          />
                         </div>
-                        <Switch
-                          id="inAppNotifications"
-                          checked={notificationPrefs.inAppNotifications}
-                          onCheckedChange={() => handleNotificationToggle("inAppNotifications")}
-                        />
+                        <Separator />
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="inAppJurisdictionUpdates">Jurisdiction Updates (In-App)</Label>
+                            <p className="text-sm text-muted-foreground">
+                              In-app alerts for subscribed jurisdiction code updates
+                            </p>
+                          </div>
+                          <Switch
+                            id="inAppJurisdictionUpdates"
+                            checked={notificationPrefs.inAppJurisdictionUpdates}
+                            onCheckedChange={() =>
+                              handleNotificationToggle("inAppJurisdictionUpdates")
+                            }
+                            disabled={notificationsLoading}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     <Separator />
 
-                    <Button variant="default" onClick={handleNotificationsSave} disabled={notificationsSaving}>
+                    <div>
+                      <h4 className="font-medium mb-4">Jurisdiction Subscriptions</h4>
+                      <JurisdictionSubscriptionsManager />
+                    </div>
+
+                    <Separator />
+
+                    <Button
+                      variant="default"
+                      onClick={() => void handleNotificationsSave()}
+                      disabled={notificationsSaving || notificationsLoading}
+                    >
                       {notificationsSaving ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (

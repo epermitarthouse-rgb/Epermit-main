@@ -3,13 +3,13 @@ import { format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-
-export interface JurisdictionSubscribers {
-  jurisdiction_id: string;
-  jurisdiction_name: string;
-  jurisdiction_state: string;
-  subscriber_count: number;
-}
+import {
+  fetchJurisdictionSubscriberSummary,
+  formatDeliveryToast,
+  sendJurisdictionNotification,
+  type JurisdictionSubscriberSummary,
+  type SubscriberFetchState,
+} from "@/lib/platformNotificationsAdmin";
 
 export interface BrandingSettings {
   id: string;
@@ -42,13 +42,14 @@ const defaultBranding: Omit<BrandingSettings, "id"> = {
 
 export function usePlatformNotifications() {
   const { user } = useAuth();
-  const [jurisdictions, setJurisdictions] = useState<JurisdictionSubscribers[]>([]);
+  const [subscriberState, setSubscriberState] = useState<SubscriberFetchState>({
+    status: "loading",
+  });
   const [selectedJurisdiction, setSelectedJurisdiction] = useState("");
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [sendEmailNotification, setSendEmailNotification] = useState(true);
   const [sending, setSending] = useState(false);
-  const [loadingJurisdictions, setLoadingJurisdictions] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [branding, setBranding] = useState<BrandingSettings | null>(null);
   const [editedBranding, setEditedBranding] =
@@ -63,43 +64,31 @@ export function usePlatformNotifications() {
   );
   const [loadingScheduled, setLoadingScheduled] = useState(true);
 
+  const jurisdictions: JurisdictionSubscriberSummary[] =
+    subscriberState.status === "ready" ? subscriberState.jurisdictions : [];
+  const loadingJurisdictions = subscriberState.status === "loading";
+  const jurisdictionLoadError =
+    subscriberState.status === "error" ? subscriberState.message : null;
+
+  const reloadSubscribers = useCallback(async () => {
+    setSubscriberState({ status: "loading" });
+    try {
+      const rows = await fetchJurisdictionSubscriberSummary();
+      setSubscriberState({ status: "ready", jurisdictions: rows });
+    } catch (error) {
+      console.error("Error fetching jurisdiction subscribers:", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to load subscriber data";
+      setSubscriberState({ status: "error", message });
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
 
-    async function fetchData() {
-      try {
-        const { data, error } = await supabase
-          .from("jurisdiction_subscriptions")
-          .select("jurisdiction_id, jurisdiction_name, jurisdiction_state");
+    void reloadSubscribers();
 
-        if (error) throw error;
-
-        const jurisdictionMap = new Map<string, JurisdictionSubscribers>();
-        data?.forEach((sub) => {
-          const existing = jurisdictionMap.get(sub.jurisdiction_id);
-          if (existing) {
-            existing.subscriber_count++;
-          } else {
-            jurisdictionMap.set(sub.jurisdiction_id, {
-              jurisdiction_id: sub.jurisdiction_id,
-              jurisdiction_name: sub.jurisdiction_name,
-              jurisdiction_state: sub.jurisdiction_state,
-              subscriber_count: 1,
-            });
-          }
-        });
-
-        setJurisdictions(
-          Array.from(jurisdictionMap.values()).sort((a, b) =>
-            a.jurisdiction_name.localeCompare(b.jurisdiction_name),
-          ),
-        );
-      } catch (error) {
-        console.error("Error fetching jurisdictions:", error);
-      } finally {
-        setLoadingJurisdictions(false);
-      }
-
+    async function fetchBrandingAndScheduled() {
       try {
         const { data, error } = await supabase
           .from("email_branding_settings")
@@ -141,8 +130,8 @@ export function usePlatformNotifications() {
       }
     }
 
-    void fetchData();
-  }, [user?.id]);
+    void fetchBrandingAndScheduled();
+  }, [user?.id, reloadSubscribers]);
 
   const handleSaveBranding = useCallback(async () => {
     setSavingBranding(true);
@@ -194,81 +183,22 @@ export function usePlatformNotifications() {
       const jurisdiction = jurisdictions.find((j) => j.jurisdiction_id === selectedJurisdiction);
       if (!jurisdiction) throw new Error("Jurisdiction not found");
 
-      const { data: subscribers, error: subError } = await supabase
-        .from("jurisdiction_subscriptions")
-        .select("user_id")
-        .eq("jurisdiction_id", selectedJurisdiction);
-
-      if (subError) throw subError;
-
-      if (!subscribers?.length) {
-        toast({
-          title: "No subscribers",
-          description: "There are no subscribers for this jurisdiction.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const notifications = subscribers.map((sub) => ({
-        user_id: sub.user_id,
+      const result = await sendJurisdictionNotification({
+        jurisdictionId: selectedJurisdiction,
+        jurisdictionName: jurisdiction.jurisdiction_name,
         title: notificationTitle,
         message: notificationMessage,
-        jurisdiction_id: selectedJurisdiction,
-        jurisdiction_name: jurisdiction.jurisdiction_name,
-      }));
-
-      const { error: insertError } = await supabase
-        .from("jurisdiction_notifications")
-        .insert(notifications);
-      if (insertError) throw insertError;
-
-      if (sendEmailNotification) {
-        const { error: emailErr } = await supabase.functions.invoke(
-          "send-jurisdiction-notification",
-          {
-            body: {
-              jurisdictionId: selectedJurisdiction,
-              jurisdictionName: jurisdiction.jurisdiction_name,
-              title: notificationTitle,
-              message: notificationMessage,
-            },
-          },
-        );
-        if (emailErr) {
-          toast({
-            title: "Partial success",
-            description: `In-app notifications sent to ${subscribers.length} subscriber(s), but email delivery failed.`,
-          });
-        } else {
-          toast({
-            title: "Notifications sent",
-            description: `Sent to ${subscribers.length} subscriber(s).`,
-          });
-        }
-      } else {
-        toast({
-          title: "Notifications sent",
-          description: `In-app notifications sent to ${subscribers.length} subscriber(s).`,
-        });
-      }
-
-      await supabase.from("admin_activity_log").insert({
-        admin_user_id: user?.id,
-        admin_email: user?.email || "unknown",
-        action_type: "notification_sent",
-        jurisdiction_id: selectedJurisdiction,
-        jurisdiction_name: jurisdiction.jurisdiction_name,
-        notification_title: notificationTitle,
-        notification_message: notificationMessage,
-        subscriber_count: subscribers.length,
-        email_sent: sendEmailNotification,
-        delivery_status: "success",
+        sendEmail: sendEmailNotification,
       });
 
-      setNotificationTitle("");
-      setNotificationMessage("");
-      setSelectedJurisdiction("");
+      const toastPayload = formatDeliveryToast(result, sendEmailNotification);
+      toast(toastPayload);
+
+      if (result.deliveryStatus !== "failed") {
+        setNotificationTitle("");
+        setNotificationMessage("");
+        setSelectedJurisdiction("");
+      }
     } catch (error) {
       console.error("Error sending notifications:", error);
       toast({
@@ -285,8 +215,6 @@ export function usePlatformNotifications() {
     notificationTitle,
     selectedJurisdiction,
     sendEmailNotification,
-    user?.email,
-    user?.id,
   ]);
 
   const handleScheduleNotification = useCallback(async () => {
@@ -409,6 +337,8 @@ export function usePlatformNotifications() {
     setSendEmailNotification,
     sending,
     loadingJurisdictions,
+    jurisdictionLoadError,
+    reloadSubscribers,
     showPreview,
     setShowPreview,
     branding,

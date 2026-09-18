@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import {
+  AlertCircle,
   Bell,
   Calendar,
   Clock,
@@ -7,6 +8,7 @@ import {
   Loader2,
   Mail,
   Palette,
+  RefreshCw,
   Save,
   Send,
   Trash2,
@@ -50,6 +52,8 @@ export function PlatformNotificationsPanel() {
     setSendEmailNotification,
     sending,
     loadingJurisdictions,
+    jurisdictionLoadError,
+    reloadSubscribers,
     showPreview,
     setShowPreview,
     editedBranding,
@@ -118,6 +122,22 @@ export function PlatformNotificationsPanel() {
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading…
+                  </div>
+                ) : jurisdictionLoadError ? (
+                  <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="space-y-2">
+                      <p>Could not load subscribers: {jurisdictionLoadError}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void reloadSubscribers()}
+                      >
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        Retry
+                      </Button>
+                    </div>
                   </div>
                 ) : jurisdictions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No jurisdictions with subscribers.</p>
