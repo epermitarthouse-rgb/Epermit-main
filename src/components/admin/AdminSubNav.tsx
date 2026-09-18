@@ -9,7 +9,7 @@ type SubNavItem = {
 const PLATFORM_CONTROL_ITEMS: SubNavItem[] = [
   { label: "Jurisdictions", href: "/admin/platform/jurisdictions" },
   { label: "Notifications", href: "/admin/platform/notifications" },
-  { label: "Campaigns", href: "/admin/platform/campaigns" },
+  { label: "Onboarding emails", href: "/admin/platform/campaigns" },
   { label: "Feature Flags", href: "/admin/feature-flags" },
 ];
 

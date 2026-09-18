@@ -26,3 +26,18 @@ export function verifyProcessorBearerToken(
 
   return { authorized: true };
 }
+
+/** Documents drip processor dual-auth contract (service role OR platform admin JWT). */
+export function isDripProcessorServiceRoleAuth(
+  authHeader: string | null | undefined,
+  serviceRoleKey: string | null | undefined,
+): boolean {
+  return verifyProcessorBearerToken(authHeader, serviceRoleKey).authorized;
+}
+
+export function isDripProcessorAdminRole(roles: string[] | null | undefined): boolean {
+  if (!roles?.length) {
+    return false;
+  }
+  return roles.some((role) => role === "admin" || role === "super_admin");
+}

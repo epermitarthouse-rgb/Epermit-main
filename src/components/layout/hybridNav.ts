@@ -350,7 +350,7 @@ export const pageTitles: Record<string, string> = {
   "/admin/platform": "Admin · Platform Control",
   "/admin/platform/jurisdictions": "Admin · Jurisdictions",
   "/admin/platform/notifications": "Admin · Notifications",
-  "/admin/platform/campaigns": "Admin · Campaigns",
+  "/admin/platform/campaigns": "Admin · Onboarding emails",
   "/admin/feature-flags": "Admin · Feature Flags",
   "/admin/shadow-mode": "Admin · Shadow Mode",
   "/admin/authorizations": "Admin · Authorization",
