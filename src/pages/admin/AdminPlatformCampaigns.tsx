@@ -5,8 +5,8 @@ export default function AdminPlatformCampaigns() {
   return (
     <AdminPageShell
       variant="editorial"
-      title="Email campaigns"
-      description="Manage drip marketing campaigns for jurisdiction subscribers."
+      title="Onboarding emails"
+      description="Monitor the fixed onboarding email sequence sent to new users after they complete setup."
       breadcrumbs={[
         { label: "Platform", href: "/admin/platform/jurisdictions" },
         { label: "Campaigns" },
