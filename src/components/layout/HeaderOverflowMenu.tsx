@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { MoreHorizontal, Plus, Rocket, Search, Sparkles } from "lucide-react";
 import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +21,10 @@ interface HeaderOverflowMenuProps {
  * Primary controls remain visible; this catches items that do not fit.
  */
 export function HeaderOverflowMenu({ onOpenCommand }: HeaderOverflowMenuProps) {
+  const { flags } = useFeatureFlags();
+  const showFiling = isModuleHrefVisible("/permit-wizard-filing", flags);
+  const showDemo = isModuleHrefVisible("/demo/mcdonalds", flags);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -43,18 +49,22 @@ export function HeaderOverflowMenu({ onOpenCommand }: HeaderOverflowMenuProps) {
             New Project
           </AuthGatedLink>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild className="cursor-pointer gap-2 lg:hidden">
-          <AuthGatedLink to="/permit-wizard-filing">
-            <Rocket className="h-4 w-4" />
-            Start Filing
-          </AuthGatedLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild className="cursor-pointer gap-2 sm:hidden">
-          <Link to="/demo/mcdonalds">
-            <Sparkles className="h-4 w-4" />
-            Request Demo
-          </Link>
-        </DropdownMenuItem>
+        {showFiling ? (
+          <DropdownMenuItem asChild className="cursor-pointer gap-2 lg:hidden">
+            <AuthGatedLink to="/permit-wizard-filing">
+              <Rocket className="h-4 w-4" />
+              Start Filing
+            </AuthGatedLink>
+          </DropdownMenuItem>
+        ) : null}
+        {showDemo ? (
+          <DropdownMenuItem asChild className="cursor-pointer gap-2 sm:hidden">
+            <Link to="/demo/mcdonalds">
+              <Sparkles className="h-4 w-4" />
+              Request Demo
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

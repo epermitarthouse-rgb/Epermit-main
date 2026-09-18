@@ -43,14 +43,18 @@ import {
 import { hybridNavGroups, type HybridNavItem } from "@/components/layout/hybridNav";
 import { AdminAccessControlSidebarNav } from "@/components/admin/AdminAccessControlSidebarNav";
 import { UciSidebarNav } from "@/components/layout/UciSidebarNav";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 
 export function AppSidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const { isAdmin } = useRequireAdmin();
   const { state } = useSidebar();
+  const { flags } = useFeatureFlags();
   const { recentPages, favorites, toggleFavorite, isFavorite } =
     useNavigationHistory();
+  const navVisible = (href: string) => isModuleHrefVisible(href, flags);
   const selectedProject = useSelectedProjectOptional();
   const { projects, loading, fetchProjects } = useProjects();
   const isCollapsed = state === "collapsed";
@@ -220,7 +224,7 @@ export function AppSidebar() {
               <CollapsibleContent>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {favorites.map((page) => (
+                    {favorites.filter((page) => navVisible(page.href)).map((page) => (
                       <SidebarMenuItem
                         key={page.href}
                         className="group/menu-item"
@@ -276,7 +280,7 @@ export function AppSidebar() {
               <CollapsibleContent>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {recentPages.slice(1).map((page) => (
+                    {recentPages.slice(1).filter((page) => navVisible(page.href)).map((page) => (
                       <SidebarMenuItem
                         key={page.href}
                         className="group/menu-item"
@@ -305,7 +309,7 @@ export function AppSidebar() {
           // gated item redirects to /auth via AuthGatedLink instead of hiding it.
           if (group.requiresAdmin && !isAdmin) return null;
 
-          const items = group.items;
+          const items = group.items.filter((item) => navVisible(item.href));
           if (items.length === 0) return null;
 
           const useCollapsible = group.defaultOpen === false;

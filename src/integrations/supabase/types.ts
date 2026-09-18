@@ -1,4 +1,3 @@
-Initialising login role...
 export type Json =
   | string
   | number
@@ -48,8 +47,11 @@ export type Database = {
           created_at: string
           delivery_status: string | null
           email_sent: boolean | null
+          emails_failed_count: number | null
+          emails_sent_count: number | null
           error_message: string | null
           id: string
+          inapp_sent: number | null
           jurisdiction_id: string | null
           jurisdiction_name: string | null
           notification_message: string | null
@@ -63,8 +65,11 @@ export type Database = {
           created_at?: string
           delivery_status?: string | null
           email_sent?: boolean | null
+          emails_failed_count?: number | null
+          emails_sent_count?: number | null
           error_message?: string | null
           id?: string
+          inapp_sent?: number | null
           jurisdiction_id?: string | null
           jurisdiction_name?: string | null
           notification_message?: string | null
@@ -78,8 +83,11 @@ export type Database = {
           created_at?: string
           delivery_status?: string | null
           email_sent?: boolean | null
+          emails_failed_count?: number | null
+          emails_sent_count?: number | null
           error_message?: string | null
           id?: string
+          inapp_sent?: number | null
           jurisdiction_id?: string | null
           jurisdiction_name?: string | null
           notification_message?: string | null
@@ -2673,6 +2681,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_preferences: {
+        Row: {
+          email_deadline_reminders: boolean
+          email_inspection_reminders: boolean
+          email_jurisdiction_updates: boolean
+          email_project_updates: boolean
+          inapp_jurisdiction_updates: boolean
+          inapp_notifications: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          email_deadline_reminders?: boolean
+          email_inspection_reminders?: boolean
+          email_jurisdiction_updates?: boolean
+          email_project_updates?: boolean
+          inapp_jurisdiction_updates?: boolean
+          inapp_notifications?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          email_deadline_reminders?: boolean
+          email_inspection_reminders?: boolean
+          email_jurisdiction_updates?: boolean
+          email_project_updates?: boolean
+          inapp_jurisdiction_updates?: boolean
+          inapp_notifications?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       parsed_comments: {
         Row: {
           ai_generated_response_text: string | null
@@ -4154,8 +4195,12 @@ export type Database = {
           admin_email: string
           admin_user_id: string
           created_at: string
+          delivery_status: string | null
+          emails_failed_count: number | null
+          emails_sent_count: number | null
           error_message: string | null
           id: string
+          inapp_sent: number | null
           jurisdiction_id: string
           jurisdiction_name: string
           notification_message: string
@@ -4169,8 +4214,12 @@ export type Database = {
           admin_email: string
           admin_user_id: string
           created_at?: string
+          delivery_status?: string | null
+          emails_failed_count?: number | null
+          emails_sent_count?: number | null
           error_message?: string | null
           id?: string
+          inapp_sent?: number | null
           jurisdiction_id: string
           jurisdiction_name: string
           notification_message: string
@@ -4184,8 +4233,12 @@ export type Database = {
           admin_email?: string
           admin_user_id?: string
           created_at?: string
+          delivery_status?: string | null
+          emails_failed_count?: number | null
+          emails_sent_count?: number | null
           error_message?: string | null
           id?: string
+          inapp_sent?: number | null
           jurisdiction_id?: string
           jurisdiction_name?: string
           notification_message?: string
@@ -6539,6 +6592,25 @@ export type Database = {
           updated_by: string
         }[]
       }
+      get_jurisdiction_subscriber_list: {
+        Args: { p_jurisdiction_id: string }
+        Returns: {
+          jurisdiction_id: string
+          jurisdiction_name: string
+          jurisdiction_state: string
+          subscribed_at: string
+          user_id: string
+        }[]
+      }
+      get_jurisdiction_subscriber_summary: {
+        Args: never
+        Returns: {
+          jurisdiction_id: string
+          jurisdiction_name: string
+          jurisdiction_state: string
+          subscriber_count: number
+        }[]
+      }
       get_jurisdiction_subscription_count: {
         Args: { p_jurisdiction_id: string }
         Returns: number
@@ -6601,6 +6673,10 @@ export type Database = {
           p_worker_id: string
         }
         Returns: boolean
+      }
+      invoke_process_scheduled_notifications: {
+        Args: never
+        Returns: undefined
       }
       is_demo_tenant: { Args: { _tenant_id: string }; Returns: boolean }
       is_platform_admin: { Args: { _user_id: string }; Returns: boolean }
@@ -6869,6 +6945,26 @@ export type Database = {
       set_feature_flag: {
         Args: { p_enabled: boolean; p_key: string }
         Returns: Json
+      }
+      unsubscribe_jurisdiction_emails: { Args: never; Returns: boolean }
+      upsert_notification_preferences: {
+        Args: { p_prefs: Json }
+        Returns: {
+          email_deadline_reminders: boolean
+          email_inspection_reminders: boolean
+          email_jurisdiction_updates: boolean
+          email_project_updates: boolean
+          inapp_jurisdiction_updates: boolean
+          inapp_notifications: boolean
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "notification_preferences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
@@ -7180,5 +7276,3 @@ export const Constants = {
     },
   },
 } as const
-A new version of Supabase CLI is available: v2.117.0 (currently installed v2.90.0)
-We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

@@ -22,12 +22,20 @@ const migrationSql = readFileSync(
   join(__dirname, '../../supabase/migrations/20260918200000_feature_flags_platform_control.sql'),
   'utf8',
 );
+const moduleMigrationSql = readFileSync(
+  join(__dirname, '../../supabase/migrations/20260918220000_module_feature_flags.sql'),
+  'utf8',
+);
 const productTourSource = readFileSync(
   join(__dirname, '../components/home/ProductTourSection.tsx'),
   'utf8',
 );
 const panelSource = readFileSync(
   join(__dirname, '../components/admin/FeatureFlagsPanel.tsx'),
+  'utf8',
+);
+const featureFlagsSource = readFileSync(
+  join(__dirname, './featureFlags.ts'),
   'utf8',
 );
 
@@ -61,7 +69,12 @@ describe('featureFlags helpers', () => {
 
   it('isKnownFeatureFlagKey validates allowlist', () => {
     assert.equal(isKnownFeatureFlagKey(FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO), true);
+    assert.equal(isKnownFeatureFlagKey(FEATURE_FLAG.MODULE_DESIGN_CHECK), true);
     assert.equal(isKnownFeatureFlagKey('unknown.flag'), false);
+  });
+
+  it('allowlist includes 12 server-backed flags', () => {
+    assert.equal(Object.keys(FEATURE_FLAG).length, 12);
   });
 
   it('isAdminRequiredError detects admin guard', () => {
@@ -193,6 +206,12 @@ describe('feature flag migration SQL audit', () => {
   it('grants anon read on get_feature_flags', () => {
     assert.match(migrationSql, /GRANT EXECUTE ON FUNCTION public\.get_feature_flags\(\) TO anon, authenticated/);
   });
+
+  it('module migration seeds 11 flags with Modules category', () => {
+    assert.match(moduleMigrationSql, /module\.operations_board/);
+    assert.match(moduleMigrationSql, /ON CONFLICT \(key\) DO NOTHING/);
+    assert.equal((moduleMigrationSql.match(/'module\./g) ?? []).length, 11);
+  });
 });
 
 describe('ProductTourSection visibility wiring', () => {
@@ -208,14 +227,18 @@ describe('ProductTourSection visibility wiring', () => {
 
 describe('FeatureFlagsPanel server-backed UI', () => {
   it('shows business-friendly labels without internal key badges', () => {
-    assert.match(panelSource, /Platform Demo Video/);
-    assert.match(panelSource, /Show the interactive platform demo video/);
+    assert.match(featureFlagsSource, /Platform Demo Video/);
+    assert.match(featureFlagsSource, /Show the interactive platform demo video/);
+    assert.match(featureFlagsSource, /DesignCheck/);
+    assert.match(featureFlagsSource, /Utility Coordination/);
     assert.match(panelSource, /Last updated/);
     assert.match(panelSource, /toggleFlag/);
     assert.match(panelSource, /localStorage/);
+    assert.match(panelSource, /flagUiConfig/);
     assert.doesNotMatch(panelSource, /Product visibility controls/);
     assert.doesNotMatch(panelSource, /Access Control/);
     assert.doesNotMatch(panelSource, /Railway env vars/);
     assert.doesNotMatch(panelSource, /font-mono/);
+    assert.doesNotMatch(panelSource, /module\.design_check/);
   });
 });

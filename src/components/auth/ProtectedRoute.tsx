@@ -10,6 +10,7 @@ import {
   isDeactivatedProfile,
   shouldForcePasswordChange,
 } from "@/lib/profileSecurity";
+import { ModuleFlagGate } from "@/components/auth/ModuleFlagGate";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -85,7 +86,9 @@ export function ProtectedLayoutRoute() {
 
   return (
     <DashboardLayout>
-      <Outlet />
+      <ModuleFlagGate>
+        <Outlet />
+      </ModuleFlagGate>
     </DashboardLayout>
   );
 }

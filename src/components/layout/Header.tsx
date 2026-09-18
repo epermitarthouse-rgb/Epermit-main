@@ -5,8 +5,11 @@ import { Menu, X, User, LogIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+
 const navigation = [
   { name: "Home", href: "/" },
   { name: "Code Analyzer", href: "/code-compliance" },
@@ -21,6 +24,8 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
   const { user } = useAuth();
+  const { flags } = useFeatureFlags();
+  const visibleNavigation = navigation.filter((item) => isModuleHrefVisible(item.href, flags));
 
   useEffect(() => {
     const handleScroll = () => {
@@ -76,7 +81,7 @@ export function Header() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
         >
-          {navigation.map((item, index) => (
+          {visibleNavigation.map((item, index) => (
             <motion.div
               key={item.name}
               initial={{ opacity: 0, y: -10 }}
@@ -188,7 +193,7 @@ export function Header() {
             transition={{ duration: 0.3 }}
           >
             <div className="space-y-1 px-4 py-4">
-              {navigation.map((item, index) => (
+              {visibleNavigation.map((item, index) => (
                 <motion.div
                   key={item.name}
                   initial={{ opacity: 0, x: -20 }}

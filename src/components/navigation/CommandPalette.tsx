@@ -35,7 +35,9 @@ import {
   Network,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isPublicShellHref } from "@/lib/authGatedNav";
+import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -147,6 +149,8 @@ const settingsItems = [
 export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { flags } = useFeatureFlags();
+  const navVisible = (href: string) => isModuleHrefVisible(href, flags);
 
   const runCommand = useCallback((command: () => void) => {
     onOpenChange(false);
@@ -173,7 +177,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
         <CommandEmpty>No navigation matches. Live project/permit search is not connected yet.</CommandEmpty>
 
         <CommandGroup heading="Pages">
-          {navigationItems.map((item) => {
+          {navigationItems.filter((item) => navVisible(item.href)).map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
@@ -191,7 +195,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
         <CommandSeparator />
 
         <CommandGroup heading="Tools">
-          {toolItems.map((item) => {
+          {toolItems.filter((item) => navVisible(item.href)).map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
@@ -209,7 +213,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
         <CommandSeparator />
 
         <CommandGroup heading="Jurisdictions">
-          {jurisdictionItems.map((item) => {
+          {jurisdictionItems.filter((item) => navVisible(item.href)).map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
@@ -227,7 +231,7 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
         <CommandSeparator />
 
         <CommandGroup heading="Resources">
-          {resourceItems.map((item) => {
+          {resourceItems.filter((item) => navVisible(item.href)).map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
