@@ -3080,6 +3080,7 @@ export type Database = {
           id: string
           job_title: string | null
           must_change_password: boolean
+          onboarding_completed: boolean
           password_changed_at: string | null
           phone: string | null
           stripe_customer_id: string | null
@@ -3098,6 +3099,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           must_change_password?: boolean
+          onboarding_completed?: boolean
           password_changed_at?: string | null
           phone?: string | null
           stripe_customer_id?: string | null
@@ -3116,6 +3118,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           must_change_password?: boolean
+          onboarding_completed?: boolean
           password_changed_at?: string | null
           phone?: string | null
           stripe_customer_id?: string | null
@@ -6674,6 +6677,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      invoke_process_drip_emails: { Args: never; Returns: undefined }
       invoke_process_scheduled_notifications: {
         Args: never
         Returns: undefined

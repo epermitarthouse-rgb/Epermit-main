@@ -185,6 +185,7 @@ async function adminCreateUser(supabase, input) {
       access_status: "active",
       must_change_password: true,
       created_by_admin: true,
+      onboarding_completed: false,
     },
     { onConflict: "user_id" },
   );
