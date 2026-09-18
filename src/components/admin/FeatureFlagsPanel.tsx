@@ -1,5 +1,22 @@
 import { formatDistanceToNow } from 'date-fns';
-import { AlertCircle, Flag, Loader2, Video } from 'lucide-react';
+import {
+  AlertCircle,
+  ClipboardCheck,
+  Flag,
+  Globe,
+  Loader2,
+  Map,
+  MessageSquare,
+  PlayCircle,
+  RadioTower,
+  Rocket,
+  Scale,
+  Search,
+  ShieldCheck,
+  Table2,
+  Video,
+  type LucideIcon,
+} from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -8,6 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import {
   FEATURE_FLAG,
+  flagUiConfig,
   isAdminRequiredError,
   isUnknownFlagError,
   readLegacyShowDemoVideo,
@@ -15,16 +33,19 @@ import {
 } from '@/lib/featureFlags';
 import { toast } from '@/hooks/use-toast';
 
-const flagUiConfig: Record<
-  FeatureFlagKey,
-  { icon: typeof Video; label: string; description: string; category: string }
-> = {
-  [FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO]: {
-    label: 'Platform Demo Video',
-    description: 'Show the interactive platform demo video on the homepage',
-    icon: Video,
-    category: 'Homepage',
-  },
+const flagIcons: Record<FeatureFlagKey, LucideIcon> = {
+  [FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO]: Video,
+  [FEATURE_FLAG.MODULE_DESIGN_CHECK]: ClipboardCheck,
+  [FEATURE_FLAG.MODULE_CODE_ANALYZER]: ShieldCheck,
+  [FEATURE_FLAG.MODULE_UTILITY_COORDINATION]: RadioTower,
+  [FEATURE_FLAG.MODULE_JURISDICTION_MAP]: Map,
+  [FEATURE_FLAG.MODULE_PROVIDER_COMPARE]: Scale,
+  [FEATURE_FLAG.MODULE_PERMIT_INTELLIGENCE]: Search,
+  [FEATURE_FLAG.MODULE_PERMIT_FILING]: Rocket,
+  [FEATURE_FLAG.MODULE_RESPONSE_MATRIX]: MessageSquare,
+  [FEATURE_FLAG.MODULE_PORTAL_HARVEST]: Globe,
+  [FEATURE_FLAG.MODULE_OPERATIONS_BOARD]: Table2,
+  [FEATURE_FLAG.MODULE_DEMO]: PlayCircle,
 };
 
 export function FeatureFlagsPanel() {
@@ -138,7 +159,7 @@ export function FeatureFlagsPanel() {
             const key = row.key as FeatureFlagKey;
             const config = flagUiConfig[key];
             if (!config) return null;
-            const Icon = config.icon;
+            const Icon = flagIcons[key];
             const isEnabled = flags[key] ?? false;
 
             return (

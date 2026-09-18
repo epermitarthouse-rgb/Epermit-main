@@ -14,6 +14,8 @@ import { NotificationsProvider } from "@/components/notifications/NotificationsP
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { HeaderOverflowMenu } from "@/components/layout/HeaderOverflowMenu";
 import { useAuth } from "@/hooks/useAuth";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 import {
   ArrowLeft,
   Eye,
@@ -62,7 +64,10 @@ function AppHeader({
 }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { flags } = useFeatureFlags();
   const isHome = pathname === "/dashboard";
+  const showFiling = isModuleHrefVisible("/permit-wizard-filing", flags);
+  const showDemo = isModuleHrefVisible("/demo/mcdonalds", flags);
 
   return (
     <header
@@ -129,24 +134,28 @@ function AppHeader({
             <span className="hidden 2xl:inline">New Project</span>
           </AuthGatedLink>
 
-          <AuthGatedLink
-            to="/permit-wizard-filing"
-            className="pilot-button-ghost hidden shrink-0 border border-border lg:inline-flex"
-            aria-label="Start Permit Filing"
-          >
-            <Rocket className="h-4 w-4 shrink-0" />
-            <span className="hidden 2xl:inline">Start Permit Filing</span>
-            <span className="hidden lg:inline 2xl:hidden">Start Filing</span>
-          </AuthGatedLink>
+          {showFiling ? (
+            <AuthGatedLink
+              to="/permit-wizard-filing"
+              className="pilot-button-ghost hidden shrink-0 border border-border lg:inline-flex"
+              aria-label="Start Permit Filing"
+            >
+              <Rocket className="h-4 w-4 shrink-0" />
+              <span className="hidden 2xl:inline">Start Permit Filing</span>
+              <span className="hidden lg:inline 2xl:hidden">Start Filing</span>
+            </AuthGatedLink>
+          ) : null}
 
-          <Link
-            to="/demo/mcdonalds"
-            className="pilot-button-primary hidden shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 sm:inline-flex"
-            aria-label="Request Demo"
-          >
-            <Sparkles className="h-4 w-4 shrink-0" />
-            <span className="hidden xl:inline">Request Demo</span>
-          </Link>
+          {showDemo ? (
+            <Link
+              to="/demo/mcdonalds"
+              className="pilot-button-primary hidden shrink-0 bg-accent text-accent-foreground hover:bg-accent/90 sm:inline-flex"
+              aria-label="Request Demo"
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span className="hidden xl:inline">Request Demo</span>
+            </Link>
+          ) : null}
 
           <ThemeToggle />
 

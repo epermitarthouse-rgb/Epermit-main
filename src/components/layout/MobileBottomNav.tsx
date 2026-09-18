@@ -4,6 +4,8 @@ import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { AuthGatedNavLink } from "@/components/layout/AuthGatedLink";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 
 /** Lovable shell mobile IA — same PP hrefs as plan §6 */
 const navItems = [
@@ -17,6 +19,8 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
   function MobileBottomNav(_props, ref) {
     const location = useLocation();
     const { toggleSidebar } = useSidebar();
+    const { flags } = useFeatureFlags();
+    const visibleItems = navItems.filter((item) => isModuleHrefVisible(item.path, flags));
 
     return (
       <nav
@@ -24,7 +28,7 @@ export const MobileBottomNav = React.forwardRef<HTMLElement, object>(
         className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 text-foreground backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 md:hidden"
       >
         <div className="flex h-16 items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
-          {navItems.map((item) => {
+          {visibleItems.map((item) => {
             const isActive =
               item.path === "/dashboard"
                 ? location.pathname === "/dashboard"
