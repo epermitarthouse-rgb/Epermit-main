@@ -15,11 +15,10 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 
-const JURISDICTION_UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isValidSubscriptionJurisdictionId } from "@/lib/jurisdictionSubscriptionIntegrity";
 
 function isCatalogJurisdictionId(id: string): boolean {
-  return JURISDICTION_UUID_REGEX.test(id);
+  return isValidSubscriptionJurisdictionId(id);
 }
 
 // Region definitions for filtering
