@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/lib/supabase";
+import { shouldShowOnboarding } from "./onboardingLogic";
 
 const ONBOARDING_KEY = "insight_onboarding_completed";
 
@@ -18,39 +19,30 @@ export function useOnboarding() {
   useEffect(() => {
     const checkOnboardingStatus = async () => {
       if (authLoading) return;
-      
+
       if (!user) {
         setShowOnboarding(false);
         setLoading(false);
         return;
       }
 
-      // Check localStorage first for quick response
-      const localCompleted = localStorage.getItem(`${ONBOARDING_KEY}_${user.id}`);
-      if (localCompleted === "true") {
-        setShowOnboarding(false);
-        setLoading(false);
-        return;
-      }
-
-      // Check if user has a profile with a name (indicates they've gone through onboarding)
       try {
-        const { data: profile } = await supabase
+        const { data: profile, error } = await supabase
           .from("profiles")
-          .select("full_name")
+          .select("onboarding_completed")
           .eq("user_id", user.id)
           .single();
 
-        // Also check if user has any projects
-        const { data: projects } = await supabase
-          .from("projects")
-          .select("id")
-          .eq("user_id", user.id)
-          .limit(1);
+        if (error) {
+          throw error;
+        }
 
-        // Show onboarding if no profile name and no projects
-        const needsOnboarding = !profile?.full_name && (!projects || projects.length === 0);
-        setShowOnboarding(needsOnboarding);
+        setShowOnboarding(
+          shouldShowOnboarding({
+            isAuthenticated: true,
+            onboardingCompleted: profile?.onboarding_completed,
+          }),
+        );
       } catch (error) {
         // If there's an error, don't show onboarding to avoid blocking the user
         console.error("Error checking onboarding status:", error);
@@ -71,7 +63,7 @@ export function useOnboarding() {
 
     try {
       console.log("Sending welcome email to:", user.email);
-      
+
       const { data: response, error } = await supabase.functions.invoke("send-welcome-email", {
         body: {
           email: user.email,
@@ -100,7 +92,7 @@ export function useOnboarding() {
 
     try {
       console.log("Enrolling user in drip campaign:", user.email);
-      
+
       const { error } = await supabase
         .from("user_drip_campaigns")
         .insert({
@@ -125,22 +117,55 @@ export function useOnboarding() {
   }, [user]);
 
   const completeOnboarding = useCallback(async (data?: OnboardingData) => {
-    if (user) {
-      localStorage.setItem(`${ONBOARDING_KEY}_${user.id}`, "true");
-      
-      // Send welcome email and enroll in drip campaign in the background
-      if (data) {
-        sendWelcomeEmail(data);
-        enrollInDripCampaign(data);
-      }
+    if (!user) {
+      setShowOnboarding(false);
+      return;
     }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ onboarding_completed: true })
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error persisting onboarding completion:", error);
+      } else {
+        localStorage.setItem(`${ONBOARDING_KEY}_${user.id}`, "true");
+      }
+    } catch (error) {
+      console.error("Failed to persist onboarding completion:", error);
+    }
+
+    if (data) {
+      sendWelcomeEmail(data);
+      enrollInDripCampaign(data);
+    }
+
     setShowOnboarding(false);
   }, [user, sendWelcomeEmail, enrollInDripCampaign]);
 
-  const resetOnboarding = useCallback(() => {
-    if (user) {
-      localStorage.removeItem(`${ONBOARDING_KEY}_${user.id}`);
+  const resetOnboarding = useCallback(async () => {
+    if (!user) {
+      setShowOnboarding(true);
+      return;
     }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ onboarding_completed: false })
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error resetting onboarding:", error);
+      } else {
+        localStorage.removeItem(`${ONBOARDING_KEY}_${user.id}`);
+      }
+    } catch (error) {
+      console.error("Failed to reset onboarding:", error);
+    }
+
     setShowOnboarding(true);
   }, [user]);
 

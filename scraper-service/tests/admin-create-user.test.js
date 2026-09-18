@@ -162,6 +162,21 @@ describe("admin create user validation", () => {
 describe("adminCreateUser service", () => {
   it("creates auth user, profile flags, and audit without returning password", async () => {
     const supabase = makeSupabase();
+    /** @type {Record<string, unknown> | null} */
+    let profileUpsert = null;
+    const originalFrom = supabase.from.bind(supabase);
+    supabase.from = (table) => {
+      const chain = originalFrom(table);
+      if (table === "profiles") {
+        const originalUpsert = chain.upsert.bind(chain);
+        chain.upsert = (payload) => {
+          profileUpsert = payload;
+          return originalUpsert(payload);
+        };
+      }
+      return chain;
+    };
+
     const result = await adminCreateUser(supabase, {
       actorId: USER_ADMIN,
       email: "new@example.com",
@@ -178,6 +193,8 @@ describe("adminCreateUser service", () => {
     assert.equal(result.email, "new@example.com");
     assert.equal("temporary_password" in result, false);
     assert.equal("password" in result, false);
+    assert.equal(profileUpsert?.onboarding_completed, false);
+    assert.equal(profileUpsert?.full_name, "New User");
   });
 
   it("rejects duplicate email", async () => {
