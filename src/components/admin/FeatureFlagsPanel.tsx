@@ -1,101 +1,232 @@
+import { formatDistanceToNow } from 'date-fns';
+import { AlertCircle, Flag, Loader2, Server, Shield, Train, Video } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { Flag, Video, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import {
+  FEATURE_FLAG,
+  isAdminRequiredError,
+  isUnknownFlagError,
+  readLegacyShowDemoVideo,
+  type FeatureFlagKey,
+} from '@/lib/featureFlags';
+import { toast } from '@/hooks/use-toast';
 
-const flagConfig = {
-  showDemoVideo: {
+const flagUiConfig: Record<
+  FeatureFlagKey,
+  { icon: typeof Video; label: string; description: string; category: string }
+> = {
+  [FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO]: {
     label: 'Platform Demo Video',
     description: 'Show the interactive platform demo video on the homepage',
     icon: Video,
     category: 'Homepage',
   },
-} as const;
+};
 
 export function FeatureFlagsPanel() {
-  const { flags, toggleFlag } = useFeatureFlags();
+  const {
+    rows,
+    flags,
+    isLoading,
+    isError,
+    error,
+    toggleFlag,
+    isMutating,
+    mutationError,
+    refetch,
+  } = useFeatureFlags();
 
-  const handleReset = () => {
-    Object.keys(flags).forEach((key) => {
-      const flagKey = key as keyof typeof flags;
-      if (flags[flagKey]) {
-        toggleFlag(flagKey);
-      }
-    });
+  const legacyShowDemoVideo = readLegacyShowDemoVideo();
+
+  const handleToggle = async (key: FeatureFlagKey) => {
+    try {
+      const result = await toggleFlag(key);
+      toast({
+        title: result.changed ? 'Feature flag updated' : 'No change',
+        description: `${flagUiConfig[key].label} is now ${result.enabled ? 'ON' : 'OFF'} platform-wide.`,
+      });
+    } catch (err) {
+      const message = isAdminRequiredError(err)
+        ? 'Admin access required to change feature flags.'
+        : isUnknownFlagError(err)
+          ? 'Unknown feature flag key.'
+          : 'Failed to update feature flag.';
+      toast({ title: 'Update failed', description: message, variant: 'destructive' });
+    }
   };
 
+  const displayRows =
+    rows.length > 0
+      ? rows.filter((row) => row.key in flagUiConfig)
+      : Object.entries(flagUiConfig).map(([key, config]) => ({
+          key,
+          enabled: flags[key as FeatureFlagKey] ?? false,
+          label: config.label,
+          description: config.description,
+          category: config.category,
+          updated_at: null as string | null,
+          updated_by: null as string | null,
+        }));
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <Alert>
+        <Flag className="h-4 w-4" />
+        <AlertTitle>Product visibility controls</AlertTitle>
+        <AlertDescription className="space-y-2">
+          <p>
+            Feature Flags toggle what product UI is visible <strong>platform-wide</strong> for all
+            users. Changes apply globally after save.
+          </p>
+          <ul className="list-disc pl-5 text-sm space-y-1">
+            <li className="flex items-start gap-2">
+              <Shield className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                <strong>Access Control</strong> (Admin → Users) governs who can use product features
+                — separate from these flags.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Train className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                <strong>Railway env vars</strong> control backend infrastructure — not managed here.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Server className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>Flags are stored server-side with an audit trail.</span>
+            </li>
+          </ul>
+        </AlertDescription>
+      </Alert>
+
+      {legacyShowDemoVideo === true && (
+        <Alert variant="default">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Previous browser-only setting detected</AlertTitle>
+          <AlertDescription>
+            Demo video was previously enabled in this browser via localStorage. Server default is
+            OFF — toggle ON above to enable platform-wide. The old localStorage value is ignored.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
           <div className="flex items-center gap-3">
             <Flag className="h-5 w-5 text-primary" />
             <div>
               <CardTitle>Feature Flags</CardTitle>
               <CardDescription>
-                Toggle features on/off without code changes
+                Global product visibility toggles (server-backed)
               </CardDescription>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleReset}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Reset All
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {Object.entries(flagConfig).map(([key, config]) => {
-          const flagKey = key as keyof typeof flags;
-          const Icon = config.icon;
-          const isEnabled = flags[flagKey];
-
-          return (
-            <div
-              key={key}
-              className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
-            >
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-md bg-primary/10">
-                  <Icon className="h-4 w-4 text-primary" />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor={key} className="font-medium cursor-pointer">
-                      {config.label}
-                    </Label>
-                    <Badge variant="outline" className="text-xs">
-                      {config.category}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {config.description}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-medium ${isEnabled ? 'text-green-600' : 'text-muted-foreground'}`}>
-                  {isEnabled ? 'ON' : 'OFF'}
-                </span>
-                <Switch
-                  id={key}
-                  checked={isEnabled}
-                  onCheckedChange={() => toggleFlag(flagKey)}
-                />
-              </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {isLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading feature flags…
             </div>
-          );
-        })}
+          )}
 
-        <div className="pt-4 border-t">
-          <p className="text-xs text-muted-foreground">
-            Feature flags are stored in browser localStorage and persist across sessions.
-            Changes take effect immediately on page refresh.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+          {isError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Failed to load flags</AlertTitle>
+              <AlertDescription className="flex flex-col gap-2">
+                <span>
+                  {(error as Error)?.message ?? 'Unknown error'}. All flags default to OFF.
+                </span>
+                <button
+                  type="button"
+                  className="text-sm underline w-fit"
+                  onClick={() => void refetch()}
+                >
+                  Retry
+                </button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {mutationError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Update failed</AlertTitle>
+              <AlertDescription>
+                {(mutationError as Error)?.message ?? 'Could not save flag change.'}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {displayRows.map((row) => {
+            const key = row.key as FeatureFlagKey;
+            const config = flagUiConfig[key];
+            if (!config) return null;
+            const Icon = config.icon;
+            const isEnabled = flags[key] ?? false;
+
+            return (
+              <div
+                key={row.key}
+                className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
+              >
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="p-2 rounded-md bg-primary/10 shrink-0">
+                    <Icon className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Label htmlFor={row.key} className="font-medium cursor-pointer">
+                        {config.label}
+                      </Label>
+                      <Badge variant="outline" className="text-xs">
+                        {config.category}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs font-mono">
+                        {row.key}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{config.description}</p>
+                    {row.updated_at && (
+                      <p className="text-xs text-muted-foreground">
+                        Last updated{' '}
+                        {formatDistanceToNow(new Date(row.updated_at), { addSuffix: true })}
+                        {row.updated_by ? ` · by ${row.updated_by.slice(0, 8)}…` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className={`text-xs font-medium ${isEnabled ? 'text-green-600' : 'text-muted-foreground'}`}
+                  >
+                    {isEnabled ? 'ON' : 'OFF'}
+                  </span>
+                  <Switch
+                    id={row.key}
+                    checked={isEnabled}
+                    disabled={isLoading || isMutating}
+                    onCheckedChange={() => void handleToggle(key)}
+                  />
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="pt-4 border-t">
+            <p className="text-xs text-muted-foreground">
+              Flags are stored in Supabase and apply to all users and browsers. Failed loads safely
+              default to OFF. Only registered flag keys can be toggled.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

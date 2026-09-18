@@ -3,7 +3,7 @@ import { CheckCircle, ArrowRight, FileSearch, Brain, Clock, Users, Building2, Ma
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useFeatureFlag, FEATURE_FLAG } from "@/hooks/useFeatureFlags";
 import { PlatformDemoVideo } from "./PlatformDemoVideo";
 
 const tourHighlights = [
@@ -102,10 +102,12 @@ function AnimatedCounter({
 }
 
 export function ProductTourSection() {
-  const { flags } = useFeatureFlags();
+  const { enabled: showDemoVideo, isLoading } = useFeatureFlag(
+    FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO,
+  );
 
   // If demo video is enabled, render the video component instead
-  if (flags.showDemoVideo) {
+  if (!isLoading && showDemoVideo) {
     return <PlatformDemoVideo />;
   }
 

@@ -6,7 +6,7 @@ export default function FeatureFlagsAdmin() {
     <AdminPageShell
       variant="editorial"
       title="Feature Flags"
-      description="Toggle features per browser (stored in localStorage). Server-side flags not implemented yet."
+      description="Control platform-wide product visibility. Changes apply globally for all users."
       breadcrumbs={[{ label: 'Feature Flags' }]}
     >
       <div className="max-w-3xl">

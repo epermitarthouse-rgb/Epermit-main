@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -1874,6 +1875,71 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      feature_flag_audit: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          flag_key: string
+          id: string
+          new_value: boolean
+          old_value: boolean
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          flag_key: string
+          id?: string
+          new_value: boolean
+          old_value: boolean
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          flag_key?: string
+          id?: string
+          new_value?: boolean
+          old_value?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flag_audit_flag_key_fkey"
+            columns: ["flag_key"]
+            isOneToOne: false
+            referencedRelation: "feature_flags"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      feature_flags: {
+        Row: {
+          category: string | null
+          description: string | null
+          enabled: boolean
+          key: string
+          label: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: string | null
+          description?: string | null
+          enabled?: boolean
+          key: string
+          label: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string | null
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          label?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       filing_documents: {
         Row: {
@@ -6461,6 +6527,18 @@ export type Database = {
           reused_existing: boolean
         }[]
       }
+      get_feature_flags: {
+        Args: never
+        Returns: {
+          category: string
+          description: string
+          enabled: boolean
+          key: string
+          label: string
+          updated_at: string
+          updated_by: string
+        }[]
+      }
       get_jurisdiction_subscription_count: {
         Args: { p_jurisdiction_id: string }
         Returns: number
@@ -6788,6 +6866,10 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: Json
       }
+      set_feature_flag: {
+        Args: { p_enabled: boolean; p_key: string }
+        Returns: Json
+      }
     }
     Enums: {
       activity_type:
@@ -7098,3 +7180,5 @@ export const Constants = {
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.90.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
