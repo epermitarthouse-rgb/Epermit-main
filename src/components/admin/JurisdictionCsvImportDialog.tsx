@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -32,6 +31,13 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import {
+  parseJurisdictionCsv,
+  csvRowsToRpcPayload,
+  type JurisdictionCsvRow,
+  type CsvImportMode,
+} from '@/lib/jurisdictionCsvParser';
+import { isMissingRpcError } from '@/lib/jurisdictionSubscriptionIntegrity';
 
 interface JurisdictionCsvImportDialogProps {
   open: boolean;
@@ -39,21 +45,13 @@ interface JurisdictionCsvImportDialogProps {
   onImportComplete: () => void;
 }
 
-interface ParsedRow {
-  state: string;
-  place_name: string;
-  fips_place: string;
-  total_units: number;
-  sf_1unit_units: number;
-  duplex_units: number;
-  mf_3plus_units: number;
-}
-
 interface ImportStats {
   total: number;
   imported: number;
+  updated: number;
   skipped: number;
   errors: number;
+  errorDetails: Array<{ place_name: string; state: string; message: string }>;
 }
 
 export function JurisdictionCsvImportDialog({
@@ -63,18 +61,18 @@ export function JurisdictionCsvImportDialog({
 }: JurisdictionCsvImportDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
-  const [parseError, setParseError] = useState<string | null>(null);
+  const [parsedData, setParsedData] = useState<JurisdictionCsvRow[]>([]);
+  const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStats, setImportStats] = useState<ImportStats | null>(null);
-  const [skipExisting, setSkipExisting] = useState(true);
+  const [importMode, setImportMode] = useState<CsvImportMode>('skip_existing');
   const [minUnitsFilter, setMinUnitsFilter] = useState(0);
 
   const resetState = () => {
     setFile(null);
     setParsedData([]);
-    setParseError(null);
+    setParseErrors([]);
     setImporting(false);
     setImportProgress(0);
     setImportStats(null);
@@ -85,161 +83,106 @@ export function JurisdictionCsvImportDialog({
     if (!selectedFile) return;
 
     if (!selectedFile.name.endsWith('.csv')) {
-      setParseError('Please select a CSV file');
+      setParseErrors(['Please select a CSV file']);
       return;
     }
 
     setFile(selectedFile);
-    setParseError(null);
-    parseCSV(selectedFile);
+    setParseErrors([]);
+    void parseCSV(selectedFile);
   };
 
   const parseCSV = async (csvFile: File) => {
     try {
       const text = await csvFile.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      
-      if (lines.length < 2) {
-        setParseError('CSV file is empty or has no data rows');
-        return;
-      }
-
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      
-      // Validate required columns
-      const requiredColumns = ['state', 'place_name'];
-      const missingColumns = requiredColumns.filter(col => !headers.includes(col));
-      
-      if (missingColumns.length > 0) {
-        setParseError(`Missing required columns: ${missingColumns.join(', ')}`);
-        return;
-      }
-
-      const stateIdx = headers.indexOf('state');
-      const nameIdx = headers.indexOf('place_name');
-      const fipsIdx = headers.indexOf('fips_place');
-      const totalIdx = headers.indexOf('total_units');
-      const sfIdx = headers.indexOf('sf_1unit_units');
-      const duplexIdx = headers.indexOf('duplex_units');
-      const mfIdx = headers.indexOf('mf_3plus_units');
-
-      const parsed: ParsedRow[] = [];
-      
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
-        
-        if (values.length < 2) continue;
-
-        parsed.push({
-          state: values[stateIdx] || '',
-          place_name: values[nameIdx] || '',
-          fips_place: fipsIdx >= 0 ? values[fipsIdx] || '' : '',
-          total_units: totalIdx >= 0 ? parseInt(values[totalIdx]) || 0 : 0,
-          sf_1unit_units: sfIdx >= 0 ? parseInt(values[sfIdx]) || 0 : 0,
-          duplex_units: duplexIdx >= 0 ? parseInt(values[duplexIdx]) || 0 : 0,
-          mf_3plus_units: mfIdx >= 0 ? parseInt(values[mfIdx]) || 0 : 0,
-        });
-      }
-
-      setParsedData(parsed);
-    } catch (err: any) {
-      setParseError(`Error parsing CSV: ${err.message}`);
+      const result = parseJurisdictionCsv(text);
+      setParsedData(result.rows);
+      setParseErrors(result.errors);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown parse error';
+      setParseErrors([`Error parsing CSV: ${message}`]);
     }
   };
 
-  const filteredData = parsedData.filter(row => row.total_units >= minUnitsFilter);
+  const filteredData = parsedData.filter((row) => row.total_units >= minUnitsFilter);
 
   const handleImport = async () => {
     if (filteredData.length === 0) return;
 
     setImporting(true);
     setImportProgress(0);
-    
-    const stats: ImportStats = { total: filteredData.length, imported: 0, skipped: 0, errors: 0 };
+
     const batchSize = 100;
     const totalBatches = Math.ceil(filteredData.length / batchSize);
+    const aggregate: ImportStats = {
+      total: filteredData.length,
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      errors: 0,
+      errorDetails: [],
+    };
 
     try {
-      // Get existing jurisdictions to check for duplicates
-      let existingNames = new Set<string>();
-      
-      if (skipExisting) {
-        const { data: existing } = await supabase
-          .from('jurisdictions')
-          .select('name, state');
-        
-        if (existing) {
-          existingNames = new Set(existing.map(j => `${j.name.toLowerCase()}-${j.state.toLowerCase()}`));
-        }
-      }
-
       for (let batch = 0; batch < totalBatches; batch++) {
-        const startIdx = batch * batchSize;
-        const endIdx = Math.min(startIdx + batchSize, filteredData.length);
-        const batchData = filteredData.slice(startIdx, endIdx);
+        const batchRows = filteredData.slice(batch * batchSize, batch * batchSize + batchSize);
+        const { data, error } = await supabase.rpc('bulk_upsert_jurisdiction_volume', {
+          p_rows: csvRowsToRpcPayload(batchRows),
+          p_mode: importMode,
+        });
 
-        const recordsToInsert = batchData
-          .filter(row => {
-            if (skipExisting) {
-              const key = `${row.place_name.toLowerCase()}-${row.state.toLowerCase()}`;
-              if (existingNames.has(key)) {
-                stats.skipped++;
-                return false;
-              }
-            }
-            return true;
-          })
-          .map(row => ({
-            name: row.place_name,
-            state: row.state,
-            fips_place: row.fips_place || null,
-            residential_units_2024: row.total_units,
-            sf_1unit_units_2024: row.sf_1unit_units,
-            duplex_units_2024: row.duplex_units,
-            mf_3plus_units_2024: row.mf_3plus_units,
-            is_high_volume: row.total_units >= 1000,
-            is_active: true,
-            data_source: 'BPS 2024 CSV Import',
-            base_permit_fee: 0,
-            plan_review_fee: 0,
-            inspection_fee: 0,
-            expedited_available: false,
-            expedited_fee_multiplier: 1,
-            reviewer_contacts: [],
-          }));
-
-        if (recordsToInsert.length > 0) {
-          const { error } = await supabase
-            .from('jurisdictions')
-            .insert(recordsToInsert);
-
-          if (error) {
-            console.error('Batch insert error:', error);
-            stats.errors += recordsToInsert.length;
-          } else {
-            stats.imported += recordsToInsert.length;
+        if (error) {
+          if (isMissingRpcError(error)) {
+            toast.error('CSV import RPC is not deployed yet. Apply the latest migration first.');
+            break;
           }
+          throw error;
         }
+
+        aggregate.imported += Number(data?.imported ?? 0);
+        aggregate.updated += Number(data?.updated ?? 0);
+        aggregate.skipped += Number(data?.skipped ?? 0);
+        const batchErrors = Array.isArray(data?.errors) ? data.errors : [];
+        aggregate.errors += Number(data?.error_count ?? batchErrors.length);
+        aggregate.errorDetails.push(
+          ...batchErrors.map((entry: { place_name?: string; state?: string; message?: string }) => ({
+            place_name: entry.place_name ?? '',
+            state: entry.state ?? '',
+            message: entry.message ?? 'Unknown error',
+          })),
+        );
 
         setImportProgress(Math.round(((batch + 1) / totalBatches) * 100));
       }
 
-      setImportStats(stats);
-      
-      if (stats.imported > 0) {
-        toast.success(`Successfully imported ${stats.imported.toLocaleString()} jurisdictions`);
+      setImportStats(aggregate);
+
+      if (aggregate.imported + aggregate.updated > 0) {
+        toast.success(
+          `Import complete: ${aggregate.imported} added, ${aggregate.updated} updated, ${aggregate.skipped} skipped`,
+        );
         onImportComplete();
+      } else if (aggregate.errors > 0) {
+        toast.error(`Import finished with ${aggregate.errors} error(s)`);
+      } else {
+        toast.message('No rows imported', {
+          description: `${aggregate.skipped} existing row(s) were skipped.`,
+        });
       }
-    } catch (err: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Import failed';
       console.error('Import error:', err);
-      toast.error('Import failed: ' + err.message);
+      toast.error(message);
     } finally {
       setImporting(false);
     }
   };
 
   const downloadTemplate = () => {
-    const template = 'state,place_name,fips_place,total_units,sf_1unit_units,duplex_units,mf_3plus_units\nCA,Los Angeles,12345,5000,2000,200,2800\nTX,Houston,23456,4500,3000,150,1350';
+    const template =
+      'state,place_name,fips_place,total_units,sf_1unit_units,duplex_units,mf_3plus_units\n' +
+      'CA,"Los Angeles, City",12345,5000,2000,200,2800\n' +
+      'TX,Houston,23456,4500,3000,150,1350';
     const blob = new Blob([template], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -250,7 +193,15 @@ export function JurisdictionCsvImportDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!importing) { onOpenChange(o); if (!o) resetState(); } }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!importing) {
+          onOpenChange(o);
+          if (!o) resetState();
+        }
+      }}
+    >
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -258,19 +209,18 @@ export function JurisdictionCsvImportDialog({
             Import Jurisdictions from CSV
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV file with jurisdiction data. Supports BPS format with permit volume data.
+            Upload BPS-style CSV data. Server-side import avoids loading the full catalog in the browser.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden space-y-4">
-          {/* Import Stats (after import) */}
           {importStats && (
             <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
               <h4 className="font-medium flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 Import Complete
               </h4>
-              <div className="grid grid-cols-4 gap-4 text-center">
+              <div className="grid grid-cols-5 gap-4 text-center">
                 <div>
                   <p className="text-2xl font-bold">{importStats.total.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Total Rows</p>
@@ -280,18 +230,32 @@ export function JurisdictionCsvImportDialog({
                   <p className="text-xs text-muted-foreground">Imported</p>
                 </div>
                 <div>
+                  <p className="text-2xl font-bold text-blue-600">{importStats.updated.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Updated</p>
+                </div>
+                <div>
                   <p className="text-2xl font-bold text-amber-600">{importStats.skipped.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Skipped (Existing)</p>
+                  <p className="text-xs text-muted-foreground">Skipped</p>
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-red-600">{importStats.errors.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Errors</p>
                 </div>
               </div>
+              {importStats.errorDetails.length > 0 && (
+                <ScrollArea className="h-24 mt-2">
+                  <ul className="text-xs text-destructive space-y-1">
+                    {importStats.errorDetails.slice(0, 20).map((err, idx) => (
+                      <li key={idx}>
+                        {err.place_name || 'Unknown'} ({err.state || '??'}): {err.message}
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              )}
             </div>
           )}
 
-          {/* File Upload */}
           {!file && !importStats && (
             <div className="space-y-4">
               <div
@@ -300,9 +264,6 @@ export function JurisdictionCsvImportDialog({
               >
                 <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                 <p className="font-medium">Click to upload CSV file</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  or drag and drop
-                </p>
               </div>
               <input
                 ref={fileInputRef}
@@ -311,7 +272,6 @@ export function JurisdictionCsvImportDialog({
                 className="hidden"
                 onChange={handleFileSelect}
               />
-              
               <Button variant="outline" onClick={downloadTemplate} className="w-full">
                 <Download className="mr-2 h-4 w-4" />
                 Download Template CSV
@@ -319,21 +279,24 @@ export function JurisdictionCsvImportDialog({
             </div>
           )}
 
-          {/* Parse Error */}
-          {parseError && (
-            <div className="p-4 border border-destructive/50 rounded-lg bg-destructive/10 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-destructive">Error parsing file</p>
-                <p className="text-sm text-destructive/80">{parseError}</p>
+          {parseErrors.length > 0 && (
+            <div className="p-4 border border-destructive/50 rounded-lg bg-destructive/10 space-y-2">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">CSV parse issues</p>
+                  <ul className="text-sm text-destructive/80 list-disc pl-4">
+                    {parseErrors.slice(0, 10).map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
           )}
 
-          {/* File Info & Preview */}
           {file && parsedData.length > 0 && !importStats && (
             <div className="space-y-4">
-              {/* File info */}
               <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
                 <div className="flex items-center gap-3">
                   <FileSpreadsheet className="h-8 w-8 text-green-600" />
@@ -349,22 +312,29 @@ export function JurisdictionCsvImportDialog({
                 </Button>
               </div>
 
-              {/* Import Options */}
               <div className="flex flex-wrap gap-4 items-center p-3 border rounded-lg">
                 <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="skip-existing"
-                    checked={skipExisting}
-                    onCheckedChange={(c) => setSkipExisting(!!c)}
-                  />
-                  <Label htmlFor="skip-existing" className="text-sm">Skip existing jurisdictions</Label>
+                  <Label htmlFor="import-mode" className="text-sm whitespace-nowrap">
+                    Existing rows:
+                  </Label>
+                  <select
+                    id="import-mode"
+                    value={importMode}
+                    onChange={(e) => setImportMode(e.target.value as CsvImportMode)}
+                    className="px-2 py-1 border rounded text-sm"
+                  >
+                    <option value="skip_existing">Skip</option>
+                    <option value="upsert_volume">Update volume data</option>
+                  </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="min-units" className="text-sm whitespace-nowrap">Min units:</Label>
+                  <Label htmlFor="min-units" className="text-sm whitespace-nowrap">
+                    Min units:
+                  </Label>
                   <select
                     id="min-units"
                     value={minUnitsFilter}
-                    onChange={(e) => setMinUnitsFilter(parseInt(e.target.value))}
+                    onChange={(e) => setMinUnitsFilter(parseInt(e.target.value, 10))}
                     className="px-2 py-1 border rounded text-sm"
                   >
                     <option value={0}>All</option>
@@ -380,7 +350,6 @@ export function JurisdictionCsvImportDialog({
                 </Badge>
               </div>
 
-              {/* Preview Table */}
               <div className="border rounded-lg overflow-hidden">
                 <ScrollArea className="h-[250px]">
                   <Table>
@@ -390,13 +359,11 @@ export function JurisdictionCsvImportDialog({
                         <TableHead className="text-center">State</TableHead>
                         <TableHead className="text-center">FIPS</TableHead>
                         <TableHead className="text-right">Total Units</TableHead>
-                        <TableHead className="text-right">SF</TableHead>
-                        <TableHead className="text-right">MF 3+</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredData.slice(0, 100).map((row, idx) => (
-                        <TableRow key={idx}>
+                      {filteredData.slice(0, 100).map((row) => (
+                        <TableRow key={`${row.state}-${row.place_name}-${row.lineNumber}`}>
                           <TableCell className="font-medium">
                             {row.place_name}
                             {row.total_units >= 1000 && (
@@ -406,23 +373,19 @@ export function JurisdictionCsvImportDialog({
                             )}
                           </TableCell>
                           <TableCell className="text-center">{row.state}</TableCell>
-                          <TableCell className="text-center text-muted-foreground text-xs">{row.fips_place || '—'}</TableCell>
-                          <TableCell className="text-right font-medium">{row.total_units.toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{row.sf_1unit_units.toLocaleString()}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{row.mf_3plus_units.toLocaleString()}</TableCell>
+                          <TableCell className="text-center text-muted-foreground text-xs">
+                            {row.fips_place || '—'}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {row.total_units.toLocaleString()}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </ScrollArea>
-                {filteredData.length > 100 && (
-                  <div className="p-2 text-center text-xs text-muted-foreground border-t bg-muted/30">
-                    Showing first 100 of {filteredData.length.toLocaleString()} rows
-                  </div>
-                )}
               </div>
 
-              {/* Import Progress */}
               {importing && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -437,7 +400,14 @@ export function JurisdictionCsvImportDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => { onOpenChange(false); resetState(); }} disabled={importing}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              onOpenChange(false);
+              resetState();
+            }}
+            disabled={importing}
+          >
             {importStats ? 'Close' : 'Cancel'}
           </Button>
           {!importStats && file && parsedData.length > 0 && (

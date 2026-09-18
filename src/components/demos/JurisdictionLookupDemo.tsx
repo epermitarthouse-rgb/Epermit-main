@@ -15,6 +15,13 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 
+const JURISDICTION_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isCatalogJurisdictionId(id: string): boolean {
+  return JURISDICTION_UUID_REGEX.test(id);
+}
+
 // Region definitions for filtering
 const regions: Record<string, string[]> = {
   "Northeast": ["NY", "MA", "PA", "MD", "DC"],
@@ -1878,6 +1885,16 @@ export function JurisdictionLookupDemo() {
       return;
     }
 
+    if (!isCatalogJurisdictionId(jurisdiction.id)) {
+      toast({
+        title: "Subscribe unavailable in demo",
+        description:
+          "This demo uses sample jurisdiction IDs. Subscriptions require the live jurisdiction catalog.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubscriptionLoading(jurisdiction.id);
     const isSubscribed = subscriptions.includes(jurisdiction.id);
 
@@ -2780,7 +2797,15 @@ export function JurisdictionLookupDemo() {
                     variant={subscriptions.includes(selectedJurisdiction.id) ? "default" : "outline"} 
                     size="sm"
                     onClick={() => toggleSubscription(selectedJurisdiction)}
-                    disabled={subscriptionLoading === selectedJurisdiction.id}
+                    disabled={
+                      subscriptionLoading === selectedJurisdiction.id ||
+                      !isCatalogJurisdictionId(selectedJurisdiction.id)
+                    }
+                    title={
+                      isCatalogJurisdictionId(selectedJurisdiction.id)
+                        ? undefined
+                        : "Subscribe is unavailable for demo sample jurisdictions"
+                    }
                   >
                     {subscriptionLoading === selectedJurisdiction.id ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
