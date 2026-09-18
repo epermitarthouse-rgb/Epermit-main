@@ -1489,6 +1489,18 @@ async function appendAuditEvent(supabase, payload) {
   return { id: data?.id ? String(data.id) : undefined };
 }
 
+/**
+ * Attach server-side admin actor id for service-role mutation RPCs.
+ * Actor must come from requirePlatformAdmin JWT context, never the request body.
+ *
+ * @param {Record<string, unknown>} rpcArgs
+ * @param {string} actorId
+ * @returns {Record<string, unknown>}
+ */
+function withAdminActorId(rpcArgs, actorId) {
+  return { ...rpcArgs, p_actor_id: actorId };
+}
+
 module.exports = {
   enforceModeFromEnv,
   getEnforceMode,
@@ -1513,4 +1525,5 @@ module.exports = {
   resolveExplicitGrantForCredentialGroup,
   sanitizeAuditJson,
   appendAuditEvent,
+  withAdminActorId,
 };

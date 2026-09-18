@@ -6,13 +6,16 @@ type SubNavItem = {
   href: string;
 };
 
-const ACCESS_ITEMS: SubNavItem[] = [{ label: "Directory", href: "/admin/access/users" }];
-
-const PLATFORM_ITEMS: SubNavItem[] = [
+const PLATFORM_CONTROL_ITEMS: SubNavItem[] = [
   { label: "Jurisdictions", href: "/admin/platform/jurisdictions" },
   { label: "Notifications", href: "/admin/platform/notifications" },
   { label: "Campaigns", href: "/admin/platform/campaigns" },
+  { label: "Feature Flags", href: "/admin/feature-flags" },
 ];
+
+function isPlatformControlRoute(pathname: string) {
+  return pathname.startsWith("/admin/platform") || pathname === "/admin/feature-flags";
+}
 
 function SubNavBar({ items, title }: { items: SubNavItem[]; title: string }) {
   const { pathname } = useLocation();
@@ -50,12 +53,8 @@ function SubNavBar({ items, title }: { items: SubNavItem[]; title: string }) {
 export function AdminSubNav() {
   const { pathname } = useLocation();
 
-  if (pathname.startsWith("/admin/access")) {
-    return <SubNavBar title="Authorization" items={ACCESS_ITEMS} />;
-  }
-
-  if (pathname.startsWith("/admin/platform")) {
-    return <SubNavBar title="Platform" items={PLATFORM_ITEMS} />;
+  if (isPlatformControlRoute(pathname)) {
+    return <SubNavBar title="Platform Control" items={PLATFORM_CONTROL_ITEMS} />;
   }
 
   return null;

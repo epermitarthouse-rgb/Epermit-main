@@ -193,6 +193,10 @@ const App = () => (
                     <Route path="access/users" element={<AdminAccessUsers />} />
                     <Route path="access/users/:userId" element={<AdminAccessUserDetail />} />
                     <Route path="audit" element={<AdminAudit />} />
+                    <Route
+                      path="platform"
+                      element={<Navigate to="/admin/platform/jurisdictions" replace />}
+                    />
                     <Route path="platform/jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="platform/notifications" element={<AdminPlatformNotifications />} />
                     <Route path="platform/campaigns" element={<AdminPlatformCampaigns />} />

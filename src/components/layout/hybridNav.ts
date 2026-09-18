@@ -10,13 +10,11 @@ import {
   FileQuestion,
   FileSignature,
   FileText,
-  Flag,
   Gauge,
   Globe,
   HelpCircle,
   Layers,
   ListTodo,
-  Mail,
   Map,
   MessageSquare,
   Network,
@@ -24,14 +22,12 @@ import {
   RadioTower,
   Rocket,
   Scale,
-  ScrollText,
   Search,
   Settings,
   Shield,
   ShieldCheck,
   Sparkles,
   Table2,
-  Users,
   WalletCards,
   Inbox,
 } from "lucide-react";
@@ -46,6 +42,8 @@ export type HybridNavItem = {
   comingSoon?: boolean;
   /** Admin-gated preview placeholder */
   adminPreview?: boolean;
+  /** Optional custom active-state matcher for grouped admin routes */
+  isRouteActive?: (pathname: string) => boolean;
 };
 
 export type HybridNavGroup = {
@@ -253,40 +251,18 @@ export const hybridNavGroups: HybridNavGroup[] = [
     items: [
       { title: "Overview", href: "/admin", icon: Shield, description: "Governance overview" },
       {
-        title: "Authorization",
-        href: "/admin/access/users",
-        icon: Users,
-        description: "Platform users, roles, and access",
+        title: "Access Control",
+        href: "/admin/access-control",
+        icon: ShieldCheck,
+        description: "Authorization and audit",
       },
       {
-        title: "Audit",
-        href: "/admin/audit",
-        icon: ScrollText,
-        description: "Platform & legacy audit log",
-      },
-      {
-        title: "Jurisdictions",
+        title: "Platform Control",
         href: "/admin/platform/jurisdictions",
         icon: Building2,
-        description: "Platform — jurisdiction catalog",
-      },
-      {
-        title: "Notifications",
-        href: "/admin/platform/notifications",
-        icon: Inbox,
-        description: "Platform — notifications & branding",
-      },
-      {
-        title: "Campaigns",
-        href: "/admin/platform/campaigns",
-        icon: Mail,
-        description: "Platform — drip email campaigns",
-      },
-      {
-        title: "Feature Flags",
-        href: "/admin/feature-flags",
-        icon: Flag,
-        description: "Toggle features",
+        description: "Jurisdictions, notifications, campaigns, and flags",
+        isRouteActive: (pathname) =>
+          pathname.startsWith("/admin/platform") || pathname === "/admin/feature-flags",
       },
       {
         title: "Shadow Mode",
@@ -371,6 +347,7 @@ export const pageTitles: Record<string, string> = {
   "/admin": "Admin · Overview",
   "/admin/access/users": "Admin · Authorization",
   "/admin/audit": "Admin · Audit",
+  "/admin/platform": "Admin · Platform Control",
   "/admin/platform/jurisdictions": "Admin · Jurisdictions",
   "/admin/platform/notifications": "Admin · Notifications",
   "/admin/platform/campaigns": "Admin · Campaigns",

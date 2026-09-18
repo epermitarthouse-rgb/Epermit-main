@@ -78,6 +78,9 @@ function makeHierarchySupabase(opts = {}) {
       if (name === "admin_activate_user" || name === "admin_deactivate_user") {
         return { data: { ok: true }, error: null };
       }
+      if (name === "admin_overview_metrics") {
+        return { data: null, error: new Error("Not authorized") };
+      }
       if (name === "admin_append_audit_event") {
         auditEvents.push(args);
         return { data: "audit-id", error: null };
@@ -452,6 +455,29 @@ describe("admin hierarchy API", () => {
     );
     assert.equal(res.status, 400);
     assert.equal(res.body.error, "SELF_ROLE_CHANGE_BLOCKED");
+  });
+
+  it("K: overview fallback counts distinct platform admins without double-count", async () => {
+    supabase = makeHierarchySupabase({
+      userRoles: [
+        { user_id: SUPER_ADMIN, role: "super_admin" },
+        { user_id: SUPER_ADMIN, role: "admin" },
+        { user_id: PLATFORM_ADMIN, role: "admin" },
+        { user_id: PLATFORM_ADMIN_2, role: "admin" },
+      ],
+      profiles: [
+        { user_id: SUPER_ADMIN, access_status: "active" },
+        { user_id: PLATFORM_ADMIN, access_status: "active" },
+        { user_id: PLATFORM_ADMIN_2, access_status: "active" },
+        { user_id: NORMAL_USER, access_status: "active" },
+      ],
+    });
+    const app = mountAdminApp(supabase);
+    const res = await requestAdmin(app, "GET", "/api/admin/v1/overview", "super");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.platform_admins, 3);
+    assert.equal("governance_enforce_mode" in res.body, false);
+    assert.equal("permission_risks" in res.body, false);
   });
 
   it("J: super_admin and admin both access admin dashboard middleware", async () => {

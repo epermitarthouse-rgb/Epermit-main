@@ -41,6 +41,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { hybridNavGroups, type HybridNavItem } from "@/components/layout/hybridNav";
+import { AdminAccessControlSidebarNav } from "@/components/admin/AdminAccessControlSidebarNav";
 import { UciSidebarNav } from "@/components/layout/UciSidebarNav";
 
 export function AppSidebar() {
@@ -125,6 +126,14 @@ export function AppSidebar() {
       return <UciSidebarNav />;
     }
 
+    if (item.href === "/admin/access-control") {
+      return <AdminAccessControlSidebarNav />;
+    }
+
+    const active = item.isRouteActive
+      ? item.isRouteActive(location.pathname)
+      : isActive(item.href);
+
     const label = item.comingSoon
       ? item.adminPreview
         ? `${item.title} (Preview)`
@@ -135,7 +144,7 @@ export function AppSidebar() {
       <SidebarMenuItem>
         <SidebarMenuButton
           asChild
-          isActive={isActive(item.href)}
+          isActive={active}
           tooltip={label}
         >
           <AuthGatedLink to={item.href}>

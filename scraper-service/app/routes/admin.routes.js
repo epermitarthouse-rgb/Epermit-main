@@ -6,6 +6,7 @@ const { createRequirePlatformAdmin } = require("../services/governance/require-p
 const {
   computeEffectivePermissions,
   appendAuditEvent,
+  withAdminActorId,
   groupPortalCredentialsByCanonical,
   pickCanonicalPortalCredential,
 } = require("../services/governance/governance.service.js");
@@ -13,7 +14,7 @@ const {
   getActorPlatformRoleLevel,
   getUserPlatformRoleLevel,
   countActiveSuperAdmins,
-  countPlatformAdminRoles,
+  countDistinctPlatformAdmins,
   assertCanManageUserLifecycle,
   assertSuperAdminActor,
   resolvePrimaryPlatformRole,
@@ -90,17 +91,12 @@ function createAdminRouter(opts) {
         .select("*", { count: "exact", head: true })
         .eq("access_status", "active");
 
-      const adminCount = await countPlatformAdminRoles(supabase);
-      const superAdminCount = await countActiveSuperAdmins(supabase);
+      const platformAdmins = await countDistinctPlatformAdmins(supabase);
 
       res.json({
         total_users: totalUsers ?? 0,
         active_users: activeUsers ?? 0,
-        platform_admins: adminCount + superAdminCount,
-        platform_admin_roles: adminCount,
-        super_admins: superAdminCount,
-        permission_risks: [],
-        pending_invitations: 0,
+        platform_admins: platformAdmins,
       });
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -397,10 +393,10 @@ function createAdminRouter(opts) {
         throw Object.assign(new Error(authErr.message), { statusCode: 500 });
       }
 
-      const { error: rpcErr } = await supabase.rpc("admin_activate_user", {
-        p_user_id: userId,
-        p_reason: reason,
-      });
+      const { error: rpcErr } = await supabase.rpc(
+        "admin_activate_user",
+        withAdminActorId({ p_user_id: userId, p_reason: reason }, actor.id),
+      );
 
       if (rpcErr) {
         const { error: profileErr } = await supabase
@@ -477,10 +473,10 @@ function createAdminRouter(opts) {
         throw Object.assign(new Error(authErr.message), { statusCode: 500 });
       }
 
-      const { error: rpcErr } = await supabase.rpc("admin_deactivate_user", {
-        p_user_id: userId,
-        p_reason: reason,
-      });
+      const { error: rpcErr } = await supabase.rpc(
+        "admin_deactivate_user",
+        withAdminActorId({ p_user_id: userId, p_reason: reason }, actor.id),
+      );
 
       if (rpcErr) {
         await supabase
@@ -853,11 +849,17 @@ function createAdminRouter(opts) {
         }
 
         if (reset) {
-          const { error: rpcErr } = await supabase.rpc("admin_delete_feature_permission", {
-            p_user_id: userId,
-            p_project_id: projectId,
-            p_feature_key: featureKey,
-          });
+          const { error: rpcErr } = await supabase.rpc(
+            "admin_delete_feature_permission",
+            withAdminActorId(
+              {
+                p_user_id: userId,
+                p_project_id: projectId,
+                p_feature_key: featureKey,
+              },
+              actor.id,
+            ),
+          );
 
           if (rpcErr) {
             let deleteQuery = supabase
@@ -896,12 +898,18 @@ function createAdminRouter(opts) {
           continue;
         }
 
-        const { error: rpcErr } = await supabase.rpc("admin_set_feature_permission", {
-          p_user_id: userId,
-          p_project_id: projectId,
-          p_feature_key: featureKey,
-          p_access_level: accessLevel,
-        });
+        const { error: rpcErr } = await supabase.rpc(
+          "admin_set_feature_permission",
+          withAdminActorId(
+            {
+              p_user_id: userId,
+              p_project_id: projectId,
+              p_feature_key: featureKey,
+              p_access_level: accessLevel,
+            },
+            actor.id,
+          ),
+        );
 
         if (rpcErr) {
           const { error } = await supabase.from("user_feature_permissions").upsert(
@@ -976,11 +984,17 @@ function createAdminRouter(opts) {
             continue;
           }
 
-          const { error: rpcErr } = await supabase.rpc("admin_set_scraped_data_scope", {
-            p_user_id: userId,
-            p_scope_type: scopeType,
-            p_scope_ref: scopeRef,
-          });
+          const { error: rpcErr } = await supabase.rpc(
+            "admin_set_scraped_data_scope",
+            withAdminActorId(
+              {
+                p_user_id: userId,
+                p_scope_type: scopeType,
+                p_scope_ref: scopeRef,
+              },
+              actor.id,
+            ),
+          );
 
           if (rpcErr) {
             usedFallback = true;
@@ -1089,13 +1103,19 @@ function createAdminRouter(opts) {
             continue;
           }
 
-          const { error: rpcErr } = await supabase.rpc("admin_set_credential_grant", {
-            p_user_id: userId,
-            p_credential_id: credentialId,
-            p_grant_level: grantLevel,
-            p_project_id: row.project_id ?? null,
-            p_jurisdiction: row.jurisdiction ?? null,
-          });
+          const { error: rpcErr } = await supabase.rpc(
+            "admin_set_credential_grant",
+            withAdminActorId(
+              {
+                p_user_id: userId,
+                p_credential_id: credentialId,
+                p_grant_level: grantLevel,
+                p_project_id: row.project_id ?? null,
+                p_jurisdiction: row.jurisdiction ?? null,
+              },
+              actor.id,
+            ),
+          );
 
           if (rpcErr) {
             const { error } = await supabase
@@ -1167,10 +1187,13 @@ function createAdminRouter(opts) {
           });
         }
 
-        const { error: rpcErr } = await supabase.rpc("admin_copy_permissions", {
-          p_from_user_id: sourceId,
-          p_to_user_id: userId,
-        });
+        const { error: rpcErr } = await supabase.rpc(
+          "admin_copy_permissions",
+          withAdminActorId(
+            { p_from_user_id: sourceId, p_to_user_id: userId },
+            actor.id,
+          ),
+        );
 
         if (rpcErr) {
           throw Object.assign(new Error(rpcErr.message), { statusCode: 500 });

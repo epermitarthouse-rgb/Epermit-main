@@ -143,6 +143,24 @@ async function countPlatformAdminRoles(supabase) {
 }
 
 /**
+ * Distinct users with admin or super_admin role (no double-count).
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @returns {Promise<number>}
+ */
+async function countDistinctPlatformAdmins(supabase) {
+  const { data: roleRows, error } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .in("role", ["admin", "super_admin"]);
+
+  if (error || !Array.isArray(roleRows) || roleRows.length === 0) {
+    return 0;
+  }
+
+  return new Set(roleRows.map((row) => String(row.user_id))).size;
+}
+
+/**
  * Platform admins may only manage normal users.
  * @param {PlatformRoleLevel} targetRole
  * @returns {boolean}
@@ -229,6 +247,7 @@ module.exports = {
   getActorPlatformRoleLevel,
   countActiveSuperAdmins,
   countPlatformAdminRoles,
+  countDistinctPlatformAdmins,
   isNormalUserRole,
   assertCanManageUserLifecycle,
   assertSuperAdminActor,
