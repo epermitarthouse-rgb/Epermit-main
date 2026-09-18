@@ -9,11 +9,21 @@ export interface ProcessorAuthResult {
   error?: string;
 }
 
+/** Accept auto-injected and manually-set service role env vars (hosted may differ). */
+function configuredServiceRoleKeys(): string[] {
+  const keys = new Set<string>();
+  for (const name of ["SUPABASE_SERVICE_ROLE_KEY", "SERVICE_ROLE_KEY"] as const) {
+    const value = Deno.env.get(name)?.trim();
+    if (value) keys.add(value);
+  }
+  return [...keys];
+}
+
 export function verifyProcessorRequest(req: Request): ProcessorAuthResult {
   const authHeader = req.headers.get("Authorization");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKeys = configuredServiceRoleKeys();
 
-  if (!serviceRoleKey) {
+  if (!serviceRoleKeys.length) {
     return { authorized: false, error: "Processor not configured" };
   }
 
@@ -22,7 +32,7 @@ export function verifyProcessorRequest(req: Request): ProcessorAuthResult {
   }
 
   const token = authHeader.slice("Bearer ".length).trim();
-  if (token !== serviceRoleKey) {
+  if (!serviceRoleKeys.includes(token)) {
     return { authorized: false, error: "Unauthorized" };
   }
 
