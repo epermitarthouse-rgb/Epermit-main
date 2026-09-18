@@ -1,75 +1,92 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  clearLegacyFeatureFlagsStorage,
+  FEATURE_FLAG,
+  fetchFeatureFlags,
+  isFeatureEnabled,
+  isKnownFeatureFlagKey,
+  mergeWithDefaults,
+  readLegacyShowDemoVideo,
+  setFeatureFlag,
+  type FeatureFlagKey,
+  type FeatureFlagRow,
+} from '@/lib/featureFlags';
 
-const FEATURE_FLAGS_KEY = "permitpulse_feature_flags";
+export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
 
-interface FeatureFlags {
-  showDemoVideo: boolean;
-}
-
-const defaultFlags: FeatureFlags = {
-  showDemoVideo: false, // Set to true when voice is fixed
-};
+const STALE_TIME_MS = 5 * 60 * 1000;
 
 export function useFeatureFlags() {
-  const [flags, setFlags] = useState<FeatureFlags>(() => {
-    try {
-      const stored = localStorage.getItem(FEATURE_FLAGS_KEY);
-      return stored ? { ...defaultFlags, ...JSON.parse(stored) } : defaultFlags;
-    } catch {
-      return defaultFlags;
-    }
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: FEATURE_FLAGS_QUERY_KEY,
+    queryFn: fetchFeatureFlags,
+    staleTime: STALE_TIME_MS,
+    retry: 1,
   });
 
+  const flags = mergeWithDefaults(query.data);
+
   useEffect(() => {
-    try {
-      localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(flags));
-    } catch {
-      // Ignore storage errors
+    if (!query.isSuccess) return;
+    const legacyEnabled = readLegacyShowDemoVideo();
+    if (legacyEnabled !== null) {
+      clearLegacyFeatureFlagsStorage();
     }
-  }, [flags]);
+  }, [query.isSuccess]);
 
-  const setFlag = useCallback(<K extends keyof FeatureFlags>(
-    key: K,
-    value: FeatureFlags[K]
-  ) => {
-    setFlags((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const mutation = useMutation({
+    mutationFn: ({ key, enabled }: { key: FeatureFlagKey; enabled: boolean }) =>
+      setFeatureFlag(key, enabled),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: FEATURE_FLAGS_QUERY_KEY });
+    },
+  });
 
-  const toggleFlag = useCallback(<K extends keyof FeatureFlags>(key: K) => {
-    setFlags((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  const setFlag = useCallback(
+    async (key: FeatureFlagKey, enabled: boolean) => {
+      if (!isKnownFeatureFlagKey(key)) {
+        throw new Error(`Unknown feature flag key: ${key}`);
+      }
+      return mutation.mutateAsync({ key, enabled });
+    },
+    [mutation],
+  );
 
-  return { flags, setFlag, toggleFlag };
-}
+  const toggleFlag = useCallback(
+    async (key: FeatureFlagKey) => {
+      const current = isFeatureEnabled(flags, key);
+      return setFlag(key, !current);
+    },
+    [flags, setFlag],
+  );
 
-// Utility to check flag without hook (for SSR or non-React contexts)
-export function getFeatureFlag<K extends keyof FeatureFlags>(key: K): FeatureFlags[K] {
-  try {
-    const stored = localStorage.getItem(FEATURE_FLAGS_KEY);
-    const flags = stored ? { ...defaultFlags, ...JSON.parse(stored) } : defaultFlags;
-    return flags[key];
-  } catch {
-    return defaultFlags[key];
-  }
-}
-
-// Enable demo video via console: enableDemoVideo()
-if (typeof window !== "undefined") {
-  (window as any).enableDemoVideo = () => {
-    const stored = localStorage.getItem(FEATURE_FLAGS_KEY);
-    const flags = stored ? JSON.parse(stored) : {};
-    flags.showDemoVideo = true;
-    localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(flags));
-    console.log("✅ Demo video enabled! Refresh the page to see it.");
-    return "Demo video enabled. Refresh to apply.";
-  };
-  
-  (window as any).disableDemoVideo = () => {
-    const stored = localStorage.getItem(FEATURE_FLAGS_KEY);
-    const flags = stored ? JSON.parse(stored) : {};
-    flags.showDemoVideo = false;
-    localStorage.setItem(FEATURE_FLAGS_KEY, JSON.stringify(flags));
-    console.log("❌ Demo video disabled! Refresh the page to hide it.");
-    return "Demo video disabled. Refresh to apply.";
+  return {
+    flags,
+    rows: (query.data ?? []) as FeatureFlagRow[],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    isFetching: query.isFetching,
+    refetch: query.refetch,
+    setFlag,
+    toggleFlag,
+    isMutating: mutation.isPending,
+    mutationError: mutation.error,
   };
 }
+
+export function useFeatureFlag(key: FeatureFlagKey): {
+  enabled: boolean;
+  isLoading: boolean;
+} {
+  const { flags, isLoading } = useFeatureFlags();
+  return {
+    enabled: isFeatureEnabled(flags, key),
+    isLoading,
+  };
+}
+
+export { FEATURE_FLAG };
