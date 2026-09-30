@@ -12,16 +12,19 @@ const {
 const {
   assertCredentialGrant,
   appendAuditEvent,
-} = require("../services/governance/governance.service.js");
-
-/** DB requires permit_number NOT NULL — Settings-created rows use this sentinel. */
-const SETTINGS_PERMIT_SENTINEL = "SETTINGS";
-
-const {
+  isUserActive,
+  isPlatformAdmin,
   portalCredentialCanonicalKey,
   pickCanonicalPortalCredential,
   groupPortalCredentialsByCanonical,
+  resolveExplicitGrantForCredentialGroup,
 } = require("../services/governance/governance.service.js");
+const {
+  resolveDefaultCredentialGrantLevel,
+} = require("../services/governance/governance.constants.js");
+
+/** DB requires permit_number NOT NULL — Settings-created rows use this sentinel. */
+const SETTINGS_PERMIT_SENTINEL = "SETTINGS";
 
 /**
  * Find an existing credential matching jurisdiction + username (case-insensitive).
@@ -67,6 +70,121 @@ function sanitizeRow(row) {
 }
 
 /**
+ * Effective level for one canonical credential group.
+ * Same rules as resolveCredentialGrant, applied to the explicit grant
+ * resolveExplicitGrantForCredentialGroup finds anywhere in the group
+ * (including a newer duplicate). Missing grant uses resolveDefaultCredentialGrantLevel.
+ *
+ * @param {string | null} explicitLevel
+ * @param {"use"|"manage"|"none"} defaultLevel
+ * @returns {"use"|"manage"|"none"}
+ */
+function effectiveGrantForCanonicalGroup(explicitLevel, defaultLevel) {
+  if (!explicitLevel) {
+    return defaultLevel;
+  }
+  if (
+    explicitLevel === "use" ||
+    explicitLevel === "manage" ||
+    explicitLevel === "none"
+  ) {
+    return explicitLevel;
+  }
+  return "none";
+}
+
+/**
+ * Settings list: canonical credentials the caller can use under the
+ * default-plus-override model. Does not insert grant rows.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} userId
+ * @returns {Promise<Array<ReturnType<typeof sanitizeRow>>>}
+ */
+async function listVisiblePortalCredentials(supabase, userId) {
+  if (!(await isUserActive(supabase, userId))) {
+    return [];
+  }
+
+  const platformAdmin = await isPlatformAdmin(supabase, userId);
+  const defaultLevel = resolveDefaultCredentialGrantLevel(platformAdmin);
+
+  const { data: credentials, error: credErr } = await supabase
+    .from("portal_credentials")
+    .select(
+      "id, user_id, jurisdiction, portal_username, login_url, permit_number, project_id, created_at, portal_password",
+    )
+    .order("created_at", { ascending: true });
+
+  if (credErr) {
+    throw Object.assign(new Error(credErr.message), {
+      cause: credErr,
+      statusCode: 500,
+    });
+  }
+
+  const { data: grants, error: grantErr } = await supabase
+    .from("user_portal_credential_grants")
+    .select("grant_level, credential_id")
+    .eq("user_id", userId);
+
+  if (grantErr) {
+    throw Object.assign(new Error(grantErr.message), {
+      cause: grantErr,
+      statusCode: 500,
+    });
+  }
+
+  /** @type {Map<string, Record<string, unknown>>} */
+  const grantByCredential = new Map();
+  for (const row of grants || []) {
+    if (!row || row.credential_id == null) continue;
+    grantByCredential.set(String(row.credential_id), row);
+  }
+
+  const groups = groupPortalCredentialsByCanonical(credentials || []);
+  /** @type {Array<ReturnType<typeof sanitizeRow>>} */
+  const rows = [];
+
+  for (const group of groups.values()) {
+    const credential = pickCanonicalPortalCredential(group);
+    const groupIds = group.map((row) => String(row.id));
+    const explicit = resolveExplicitGrantForCredentialGroup(
+      groupIds,
+      grantByCredential,
+    );
+    const explicitLevel = explicit ? String(explicit.grant_level || "none") : null;
+    const effectiveGrant = effectiveGrantForCanonicalGroup(
+      explicitLevel,
+      defaultLevel,
+    );
+
+    if (effectiveGrant === "none") {
+      continue;
+    }
+
+    rows.push(
+      sanitizeRow({
+        ...credential,
+        grant_level: effectiveGrant,
+      }),
+    );
+  }
+
+  rows.sort((a, b) => {
+    const byJurisdiction = String(a.jurisdiction || "").localeCompare(
+      String(b.jurisdiction || ""),
+    );
+    if (byJurisdiction !== 0) return byJurisdiction;
+    return String(a.portal_username || "").localeCompare(
+      String(b.portal_username || ""),
+    );
+  });
+
+  return rows;
+}
+
+/**
  * @param {{ supabase: import("@supabase/supabase-js").SupabaseClient }} opts
  */
 function createPortalCredentialsRouter(opts) {
@@ -75,37 +193,18 @@ function createPortalCredentialsRouter(opts) {
 
   router.get("/api/portal-credentials", async (req, res) => {
     try {
-      const user = await requireAuthenticatedUser(req, supabase);
-
-      const { data: grants, error: grantErr } = await supabase
-        .from("user_portal_credential_grants")
-        .select("grant_level, credential_id, portal_credentials(*)")
-        .eq("user_id", user.id)
-        .neq("grant_level", "none");
-
-      if (grantErr) {
-        throw Object.assign(new Error(grantErr.message), {
-          cause: grantErr,
-          statusCode: 500,
-        });
+      let user;
+      try {
+        user = await requireAuthenticatedUser(req, supabase);
+      } catch (authErr) {
+        if (authErr && authErr.code === "USER_DEACTIVATED") {
+          res.json([]);
+          return;
+        }
+        throw authErr;
       }
 
-      const rows = (grants || [])
-        .map((grant) => {
-          const cred =
-            grant.portal_credentials && typeof grant.portal_credentials === "object"
-              ? grant.portal_credentials
-              : null;
-          if (!cred) {
-            return null;
-          }
-          return sanitizeRow({
-            ...cred,
-            grant_level: grant.grant_level,
-          });
-        })
-        .filter(Boolean);
-
+      const rows = await listVisiblePortalCredentials(supabase, user.id);
       res.json(rows);
     } catch (err) {
       const s = sanitizeUciError(err);
@@ -389,4 +488,5 @@ function createPortalCredentialsRouter(opts) {
 
 module.exports = {
   createPortalCredentialsRouter,
+  listVisiblePortalCredentials,
 };
