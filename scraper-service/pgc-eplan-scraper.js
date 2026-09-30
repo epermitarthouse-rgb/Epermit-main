@@ -11923,6 +11923,78 @@ function pgcPickBravaPublishPdfFromFallbackChannels(channels, opts = {}) {
 }
 
 /**
+ * Choose one Brava export capture. A legacy publish URL wins when both it and
+ * a browser download are present, so the file is uploaded once.
+ * @param {{
+ *   publishUrl?: string|null,
+ *   downloadUrl?: string|null,
+ *   downloadBuffer?: Buffer|null,
+ *   usedPublishedPdfUrls?: Set<string>,
+ *   fileMeta?: { name?: string|null, fileId?: string|null },
+ * }} input
+ * @returns {{
+ *   action: "publish_url"|"browser_download"|"duplicate"|"none",
+ *   url?: string,
+ *   norm?: string,
+ *   buffer?: Buffer,
+ *   fileId?: string|null,
+ *   fileName?: string|null,
+ * }}
+ */
+function pgcSelectBravaExportCapture(input = {}) {
+  const used = input.usedPublishedPdfUrls || new Set();
+  const fileMeta = input.fileMeta || {};
+  const fileId = fileMeta.fileId != null ? String(fileMeta.fileId) : null;
+  const fileName = fileMeta.name != null ? String(fileMeta.name) : null;
+
+  const classify = (raw) => {
+    if (!raw || !isPgcBravaPublishToPdfUrl(raw)) return null;
+    const norm = pgcNormalizePublishUrl(raw);
+    return { url: String(raw), norm, duplicate: used.has(norm) };
+  };
+
+  const publish = classify(input.publishUrl);
+  if (publish && !publish.duplicate) {
+    return {
+      action: "publish_url",
+      url: publish.url,
+      norm: publish.norm,
+      fileId,
+      fileName,
+    };
+  }
+
+  const download = classify(input.downloadUrl);
+  const buf = input.downloadBuffer;
+  const pdfOk =
+    Buffer.isBuffer(buf) &&
+    buf.length > 0 &&
+    buf.slice(0, 4).toString("latin1") === "%PDF";
+  if (download && !download.duplicate && pdfOk) {
+    return {
+      action: "browser_download",
+      url: download.url,
+      norm: download.norm,
+      buffer: buf,
+      fileId,
+      fileName,
+    };
+  }
+
+  if ((publish && publish.duplicate) || (download && download.duplicate && pdfOk)) {
+    return {
+      action: "duplicate",
+      url: (publish || download).url,
+      norm: (publish || download).norm,
+      fileId,
+      fileName,
+    };
+  }
+
+  return { action: "none", fileId, fileName };
+}
+
+/**
  * Live inspect: capture-session events + all context pages/frames.
  * @param {import('playwright').Page} viewerPage
  * @param {{ events?: Array<Record<string, unknown>> } | null} captureSession
@@ -12220,6 +12292,111 @@ async function tryPgcPdfPublishOptionsDialogOnce(
   }
 }
 
+/** @type {WeakMap<object, { events: Array<Record<string, unknown>>, dispose: () => void }>} */
+const pgcExportOkTraces = new WeakMap();
+
+function pgcSanitizeTraceUrl(url) {
+  const raw = String(url || "");
+  if (!raw) return "";
+  if (/^(blob:|data:)/i.test(raw)) return raw.slice(0, 64);
+  try {
+    const u = new URL(raw);
+    return `${u.origin}${u.pathname}`.slice(0, 220);
+  } catch (_) {
+    return raw.split(/[?#]/)[0].slice(0, 220);
+  }
+}
+
+/**
+ * Capture the Playwright download started by Export-complete OK.
+ * Listeners stay for the existing post-publish wait; they do not add a timeout.
+ * @param {import('playwright').Page} viewerPage
+ * @param {{ name?: string|null, fileId?: string|null }} fileMeta
+ */
+function armPgcExportOkTrace(viewerPage, fileMeta) {
+  const existing = pgcExportOkTraces.get(viewerPage);
+  if (existing) return existing;
+  /** @type {Array<Record<string, unknown>>} */
+  const events = [];
+  /** @type {Array<{ url: string, suggestedFilename: string, buffer: Buffer }>} */
+  const items = [];
+  const downloadState = { pending: 0, generation: 0 };
+  const ctx = viewerPage.context();
+  const labelFor = fileMeta.name || fileMeta.fileId || "?";
+  const push = (kind, detail) => {
+    events.push({ t: Date.now(), kind, ...(detail || {}) });
+  };
+  /** @type {WeakSet<object>} */
+  const watched = new WeakSet();
+  const onDownload = (dl) => {
+    const generation = downloadState.generation || 0;
+    downloadState.pending += 1;
+    let suggested = "";
+    let rawUrl = "";
+    try {
+      suggested = dl.suggestedFilename();
+    } catch (_) {}
+    try {
+      rawUrl = dl.url();
+    } catch (_) {}
+    push("download", {
+      suggested: String(suggested || "").slice(0, 180),
+      url: pgcSanitizeTraceUrl(rawUrl),
+    });
+    Promise.resolve()
+      .then(async () => {
+        if ((downloadState.generation || 0) !== generation) return;
+        const filePath = await dl.path();
+        if (!filePath) return;
+        const buffer = await fs.promises.readFile(filePath);
+        if ((downloadState.generation || 0) !== generation) return;
+        items.push({
+          url: String(rawUrl || ""),
+          suggestedFilename: String(suggested || ""),
+          buffer,
+        });
+        console.log(
+          `[PGC] Brava | export_ok_download | ${labelFor} | ${buffer.length} bytes | ${pgcSanitizeTraceUrl(rawUrl)}`,
+        );
+      })
+      .catch((err) => {
+        console.log(
+          `[PGC] Brava | export_ok_download_failed | ${labelFor} | ${(err && err.message) || err}`,
+        );
+      })
+      .finally(() => {
+        downloadState.pending -= 1;
+      });
+  };
+  const watchPage = (p) => {
+    if (!p || watched.has(p)) return;
+    watched.add(p);
+    p.on("download", onDownload);
+    p.on("popup", (pop) => {
+      watchPage(pop);
+    });
+  };
+  try {
+    for (const p of ctx.pages()) watchPage(p);
+  } catch (_) {}
+  const onPage = (p) => {
+    watchPage(p);
+  };
+  ctx.on("page", onPage);
+  const bag = {
+    events,
+    items,
+    downloadState,
+    dispose() {
+      try {
+        ctx.off("page", onPage);
+      } catch (_) {}
+    },
+  };
+  pgcExportOkTraces.set(viewerPage, bag);
+  return bag;
+}
+
 /**
  * If Export complete popup is visible, click OK once.
  * @param {import('playwright').Frame|null} frame
@@ -12271,6 +12448,9 @@ async function tryPgcExportCompletePopupOnce(
     if (!(await okBtn.isVisible().catch(() => false))) {
       state.exportOkMissing = true;
       return;
+    }
+    if (!state.exportOkLogged) {
+      armPgcExportOkTrace(viewerPage, fileMeta);
     }
     await okBtn.click({ timeout: 10000 }).catch(() => {});
     await viewerPage.waitForTimeout(700);
@@ -12409,6 +12589,59 @@ async function waitForPgcPostPublishSuccess(
     exportOkLogged: uiState.exportOkLogged,
   });
 
+  const acceptBrowserDownload = () => {
+    const found = scanBravaPdfUrl();
+    const bag = pgcExportOkTraces.get(viewerPage);
+    const item =
+      bag?.items?.find((d) => d && Buffer.isBuffer(d.buffer) && d.buffer.length) ||
+      null;
+    const selected = pgcSelectBravaExportCapture({
+      publishUrl: found?.url || null,
+      downloadUrl: item?.url || null,
+      downloadBuffer: item?.buffer || null,
+      usedPublishedPdfUrls: exportCtx?.usedPublishedPdfUrls || new Set(),
+      fileMeta,
+    });
+    if (selected.action === "publish_url") {
+      const u = resolveAndLogUrl(selected.url, found?.source || "network");
+      if (!u) return null;
+      if (exportCtx) {
+        exportCtx.detectedPublishUrl = u;
+        exportCtx.detectedAt = Date.now();
+      }
+      return success(u, { detectionSource: "primary" });
+    }
+    if (selected.action === "browser_download") {
+      const fileId = fileMeta.fileId != null ? String(fileMeta.fileId) : "?";
+      const fileName = fileMeta.name || "?";
+      pgcProgress.pgcLogFileStep("pdf_url_detected", {
+        meta: {
+          source: "browser_download",
+          fileId,
+          bytes: selected.buffer.length,
+          urlSnippet: selected.url.slice(0, 200),
+        },
+        terminalLine: `[PGC] Step | pdf_url_detected | fileId=${fileId} | ${fileName} | browser_download`,
+      });
+      console.log(
+        `[PGC] Brava | pdf_url_detected | fileId=${fileId} | ${fileName} | browser_download | ${selected.buffer.length} bytes | ${selected.url.slice(0, 160)}`,
+      );
+      if (exportCtx) {
+        exportCtx.detectedPublishUrl = selected.url;
+        exportCtx.detectedAt = Date.now();
+      }
+      return success(selected.url, {
+        detectionSource: "browser_download",
+        downloadBuffer: selected.buffer,
+        downloadFilename: item.suggestedFilename || null,
+      });
+    }
+    if (selected.action === "duplicate") {
+      return failure("stale_export_reused");
+    }
+    return null;
+  };
+
   while (Date.now() - start < timeoutMs) {
     let found = scanBravaPdfUrl();
     if (found) {
@@ -12474,6 +12707,9 @@ async function waitForPgcPostPublishSuccess(
       }
     }
 
+    const downloadHit = acceptBrowserDownload();
+    if (downloadHit) return downloadHit;
+
     await viewerPage.waitForTimeout(360);
   }
 
@@ -12510,6 +12746,9 @@ async function waitForPgcPostPublishSuccess(
       });
     }
   }
+
+  const lateDownload = acceptBrowserDownload();
+  if (lateDownload) return lateDownload;
 
   if (uiState.pdfOptionsPublishMissing) {
     return failure("pdf_publish_button_not_clicked");
@@ -12623,6 +12862,14 @@ async function runPgcBravaPublishUiSequence(
   opts = {},
 ) {
   const exportCtx = opts.exportCtx || null;
+  const priorOkTrace = pgcExportOkTraces.get(viewerPage);
+  if (priorOkTrace) {
+    priorOkTrace.downloadState.generation =
+      (priorOkTrace.downloadState.generation || 0) + 1;
+    priorOkTrace.items.length = 0;
+    priorOkTrace.events.length = 0;
+    priorOkTrace.downloadState.pending = 0;
+  }
   if (exportCtx) {
     exportCtx.prePublishSnapshot = pgcCollectBravaPublishUrlsFromViewer(
       viewerPage,
@@ -12684,6 +12931,8 @@ async function runPgcBravaPublishUiSequence(
       return {
         ok: true,
         pdfUrl: wait.url,
+        downloadBuffer: wait.downloadBuffer || null,
+        downloadFilename: wait.downloadFilename || null,
         detectionSource: waitSource || "primary",
       };
     }
@@ -13038,6 +13287,40 @@ async function capturePgcBravaPublishResult(
       captureKind: null,
       publishFlowError: ui.error,
     };
+  }
+
+  if (ui.downloadBuffer && ui.detectionSource === "browser_download") {
+    const selected = pgcSelectBravaExportCapture({
+      downloadUrl: ui.pdfUrl,
+      downloadBuffer: ui.downloadBuffer,
+      usedPublishedPdfUrls: exportCtx?.usedPublishedPdfUrls || new Set(),
+      fileMeta,
+    });
+    if (selected.action === "duplicate") {
+      return {
+        buffer: null,
+        captureKind: null,
+        publishFlowError: "stale_export_reused",
+        url: ui.pdfUrl || null,
+      };
+    }
+    if (selected.action === "browser_download") {
+      const safeName = String(ui.downloadFilename || "")
+        .replace(/[\r\n"]/g, "")
+        .slice(0, 180);
+      const validated = validateFetched(
+        {
+          buffer: selected.buffer,
+          url: selected.url,
+          contentType: "application/pdf",
+          contentDisposition: safeName ? `inline; filename="${safeName}"` : "",
+          error: null,
+        },
+        selected.url,
+      );
+      if (validated?.publishFlowError) return validated;
+      if (validated && validated.buffer && !validated.error) return validated;
+    }
   }
 
   await viewerPage.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
@@ -19886,4 +20169,6 @@ module.exports = {
   pgcNormalizePublishUrl,
   pgcPickBravaPublishPdfFromFallbackChannels,
   pgcFallbackSourceToLogSource,
+  pgcSelectBravaExportCapture,
+  isValidPgcPublishedPdf,
 };
