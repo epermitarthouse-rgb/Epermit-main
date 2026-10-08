@@ -159,6 +159,11 @@ import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending
 import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
 import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
 import { createAsyncAnalyzerRun, retryFailedSheetJobs } from "@/lib/codeAnalyzer/asyncRun";
+import {
+  asyncRunTerminalKey,
+  isTerminalStandardRunStatus,
+  shouldHydrateStandardAsyncResults,
+} from "@/lib/codeAnalyzer/asyncRunCompletion";
 import { CodeAnalyzerV2StatusPanel } from "@/components/compliance/CodeAnalyzerV2StatusPanel";
 import {
   formatPdfProcessingDetail,
@@ -499,6 +504,8 @@ export function AIComplianceAnalyzer() {
     [sheetDocuments],
   );
   const indexPrescreenKeyRef = useRef("");
+  const asyncStandardTerminalRef = useRef("");
+  const asyncModTerminalRef = useRef("");
 
   // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
   useEffect(() => {
@@ -601,14 +608,19 @@ export function AIComplianceAnalyzer() {
     pendingSourceCount: pendingDrawingCount,
   });
 
-  // Poll async V2 runs until terminal, then hydrate persisted results.
+  useEffect(() => {
+    asyncStandardTerminalRef.current = "";
+    asyncModTerminalRef.current = "";
+  }, [selectedProjectId]);
+
+  // Poll async V2 runs while non-terminal (state refresh only).
   useEffect(() => {
     if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled()) return;
 
     const standardRun = displayRun;
     const modRun = modificationDisplayRun;
     const needsStandardPoll =
-      standardRun && ["running", "queued", "partial"].includes(standardRun.status);
+      standardRun && !isTerminalStandardRunStatus(standardRun.status);
     const needsModPoll =
       modRun && !isTerminalCodeModRunStatus(modRun.status);
 
@@ -625,22 +637,10 @@ export function AIComplianceAnalyzer() {
         const nextMod = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
         setModificationDisplayRun(nextMod);
         setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
-        if (nextMod && isTerminalCodeModRunStatus(nextMod.status)) {
-          try {
-            const review = await fetchModificationReviewForRun(nextMod.id);
-            setModificationReview(review);
-            if (nextMod.status === "current") {
-              toast.success("Code Modification Review complete");
-            } else if (nextMod.status === "partial") {
-              toast.warning("Code Modification Review completed with some failed jobs");
-            }
-          } catch (err) {
-            console.error("Error loading code modification review after async run:", err);
-          }
-        }
       }
     };
 
+    void poll();
     const timer = setInterval(() => void poll(), 5000);
     return () => clearInterval(timer);
   }, [
@@ -1004,6 +1004,114 @@ export function AIComplianceAnalyzer() {
     () => complianceDocsHydrateKey(documentsWithAnalysis.map((d) => d.id)),
     [documentsWithAnalysis],
   );
+
+  // General IBC async V2 — hydrate persisted findings once per terminal transition.
+  useEffect(() => {
+    if (!selectedProjectId || !user || !isCodeAnalyzerAsyncV2Enabled() || isModificationMode) {
+      return;
+    }
+    const run = displayRun;
+    if (!run) return;
+
+    const key = asyncRunTerminalKey(run.id, run.status);
+    if (asyncStandardTerminalRef.current === key) return;
+
+    if (shouldHydrateStandardAsyncResults(run.status)) {
+      asyncStandardTerminalRef.current = key;
+      void (async () => {
+        const projectId = selectedProjectId;
+        await reloadAnalyzerDataset(projectId);
+        if (selectedProjectIdRef.current !== projectId) return;
+
+        setAnalysisSavedAt(Date.now());
+        lastAllHydrateKeyRef.current = "";
+        setViewingHistoricalRunId(null);
+
+        const { data: annotations, error } = await supabase
+          .from("document_annotations")
+          .select("document_id")
+          .eq("project_id", projectId)
+          .not("document_id", "is", null);
+        if (error) {
+          console.error("Error loading annotations after async standard run:", error);
+          return;
+        }
+        if (selectedProjectIdRef.current !== projectId) return;
+
+        const docIds = [
+          ...new Set(
+            (annotations ?? [])
+              .map((row) => row.document_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        if (docIds.length > 0) {
+          await hydrateExistingAnalyses(docIds);
+        }
+
+        if (run.status === "current") {
+          toast.success("Analysis complete — results loaded");
+        } else if (run.status === "partial") {
+          toast.warning("Analysis completed with some failed sheet jobs — partial results loaded");
+        }
+      })();
+      return;
+    }
+
+    if (run.status === "failed" || run.status === "cancelled") {
+      asyncStandardTerminalRef.current = key;
+      if (run.status === "failed") {
+        toast.error("Analysis failed — check the status panel for failed jobs");
+      }
+    }
+  }, [
+    displayRun?.id,
+    displayRun?.status,
+    selectedProjectId,
+    user,
+    isModificationMode,
+    reloadAnalyzerDataset,
+    hydrateExistingAnalyses,
+  ]);
+
+  // DC Code Mod async V2 — load review once per terminal transition.
+  useEffect(() => {
+    if (!selectedProjectId || !user || !isCodeAnalyzerAsyncV2Enabled() || !isModificationMode) {
+      return;
+    }
+    const run = modificationDisplayRun;
+    if (!run || !isTerminalCodeModRunStatus(run.status)) return;
+
+    const key = asyncRunTerminalKey(run.id, run.status);
+    if (asyncModTerminalRef.current === key) return;
+    asyncModTerminalRef.current = key;
+
+    void (async () => {
+      if (run.status === "failed" || run.status === "cancelled") {
+        if (run.status === "failed") {
+          toast.error("Code Modification Review failed — check the status panel");
+        }
+        return;
+      }
+      try {
+        const review = await fetchModificationReviewForRun(run.id);
+        setModificationReview(review);
+        if (run.status === "current") {
+          toast.success("Code Modification Review complete");
+        } else if (run.status === "partial") {
+          toast.warning("Code Modification Review completed with some failed jobs");
+        }
+      } catch (err) {
+        console.error("Error loading code modification review after async run:", err);
+      }
+    })();
+  }, [
+    modificationDisplayRun?.id,
+    modificationDisplayRun?.status,
+    selectedProjectId,
+    user,
+    isModificationMode,
+  ]);
 
   // Reset analyzer results when Active Project / ?projectId= changes (header or DesignCheck link).
   const previousProjectIdRef = useRef<string | null | undefined>(undefined);

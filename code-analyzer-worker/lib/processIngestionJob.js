@@ -17,6 +17,7 @@ const {
   shouldIndexSpecForPage,
 } = require("./segments");
 const { classifyDocument } = require("./classify");
+const { isRasterImageFile, isPdfFile } = require("./mediaType");
 
 const HEARTBEAT_EVERY_PAGES = Number(process.env.CODE_ANALYZER_HEARTBEAT_EVERY_PAGES) || 5;
 const MAX_INTERNAL_PAGES = Number(process.env.CODE_ANALYZER_MAX_PAGES_PER_JOB) || 5000;
@@ -36,7 +37,7 @@ async function upsertAnalyzerSheet(supabase, params) {
   const row = {
     project_id: params.projectId,
     source_document_id: params.sourceDocumentId,
-    image_document_id: null,
+    image_document_id: params.imageDocumentId ?? null,
     derived_asset_id: params.derivedAssetId ?? null,
     page_number: params.pageNumber,
     file_name: params.fileName,
@@ -107,6 +108,24 @@ async function processIngestionJob({ supabase, job, workerId, workerVersion, hea
 
     tempPath = await downloadToTempFile(supabase, doc.file_path, doc.file_name);
     const sourceContentHash = doc.content_hash || job.content_fingerprint || "";
+
+    if (isRasterImageFile(doc.file_name, doc.file_type)) {
+      return await processRasterImageIngestion({
+        supabase,
+        job,
+        doc,
+        workerId,
+        workerVersion,
+        sourceContentHash,
+        stats,
+      });
+    }
+
+    if (!isPdfFile(doc.file_name, doc.file_type)) {
+      throw new Error(
+        `Unsupported ingestion source type for ${doc.file_name}. Upload PDF or raster image (PNG/JPG/WebP).`,
+      );
+    }
 
     const pages = [];
     for await (const page of extractPdfPagesFromFile(tempPath, (_pageNum, total) => {
@@ -301,4 +320,71 @@ async function processIngestionJob({ supabase, job, workerId, workerVersion, hea
   }
 }
 
-module.exports = { processIngestionJob };
+async function processRasterImageIngestion({
+  supabase,
+  job,
+  doc,
+  workerId,
+  workerVersion,
+  sourceContentHash,
+  stats,
+}) {
+  stats.totalPages = 1;
+  stats.processedPages = 1;
+
+  const docLevel = classifyDocument({
+    fileName: doc.file_name,
+    documentType: doc.document_type,
+    samplePageTexts: [],
+  });
+  const effectiveClass =
+    doc.analyzer_class_source === "user" ? doc.analyzer_class : docLevel.analyzerClass;
+
+  await supabase
+    .from("project_documents")
+    .update({
+      analyzer_class: effectiveClass || "drawing_set",
+      analyzer_class_source: doc.analyzer_class_source === "user" ? "user" : "auto",
+      analyzer_processing_status: "processing",
+    })
+    .eq("id", doc.id);
+
+  await updateJobProgress(supabase, job.id, {
+    progress_phase: "raster_image",
+    total_pages: 1,
+    analyzer_class: effectiveClass || "drawing_set",
+    worker_version: workerVersion,
+  });
+
+  await upsertAnalyzerSheet(supabase, {
+    projectId: doc.project_id,
+    sourceDocumentId: doc.id,
+    imageDocumentId: doc.id,
+    pageNumber: 1,
+    fileName: doc.file_name,
+    sourceContentHash,
+  });
+  stats.sheetsCreated = 1;
+
+  await supabase
+    .from("project_documents")
+    .update({ analyzer_processing_status: "completed" })
+    .eq("id", doc.id);
+
+  await releaseJob(supabase, {
+    jobId: job.id,
+    workerId,
+    status: "completed",
+    progressPhase: "done",
+    totalPages: 1,
+    processedPages: 1,
+    failedPages: 0,
+    progressDetail: {
+      sheets_created: 1,
+      analyzer_class: effectiveClass || "drawing_set",
+      raster_source: true,
+    },
+  });
+}
+
+module.exports = { processIngestionJob, processRasterImageIngestion };
