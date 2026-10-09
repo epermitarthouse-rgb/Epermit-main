@@ -1,12 +1,14 @@
 "use strict";
 
+const { normalizeClaimedJob } = require("./normalizeClaimedJob");
+
 async function claimSheetJob(supabase, workerId, leaseTtlSeconds) {
   const { data, error } = await supabase.rpc("claim_code_analyzer_sheet_job", {
     p_worker_id: workerId,
     p_lease_ttl_seconds: leaseTtlSeconds,
   });
   if (error) throw new Error(error.message);
-  return data ?? null;
+  return normalizeClaimedJob(data);
 }
 
 async function heartbeatSheetJob(supabase, jobId, workerId, leaseTtlSeconds) {
