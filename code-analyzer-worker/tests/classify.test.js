@@ -47,6 +47,35 @@ B. Remove all existing waterproofing membranes and prepare surfaces for new appl
     assert.equal(result.analyzerClass, "specification");
   });
 
+  it("classifies V2 plan PDFs as drawing_set despite document_type specification", () => {
+    const planNames = [
+      "A001-SITE PLAN.pdf",
+      "A002-PLAZA PLAN.pdf",
+      "A003-LOWER LVL PL (EXISTING).pdf",
+      "A004-LOWER LVL RESTO PL (NEW).pdf",
+      "A005-GARAGE B PLAN.pdf",
+    ];
+    for (const fileName of planNames) {
+      const result = classifyDocument({
+        fileName,
+        documentType: "specification",
+        samplePageTexts: [""],
+      });
+      assert.equal(result.analyzerClass, "drawing_set", fileName);
+      assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), true, fileName);
+    }
+  });
+
+  it("still classifies project manuals as specification with V2 document_type", () => {
+    const result = classifyDocument({
+      fileName: "Riverside Project Manual.pdf",
+      documentType: "specification",
+      samplePageTexts: [],
+    });
+    assert.equal(result.analyzerClass, "specification");
+    assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), false);
+  });
+
   it("classifies code modification forms", () => {
     const result = classifyDocument({
       fileName: "DC Code Mod Application.pdf",

@@ -76,3 +76,17 @@ export async function updateDocumentContentHash(
 export function isTerminalIngestionStatus(status: CodeAnalyzerIngestionJobStatus): boolean {
   return status === "completed" || status === "partial" || status === "failed" || status === "cancelled";
 }
+
+/** Poll ingestion UI while server-side jobs or document rows are still in flight. */
+export function shouldPollIngestionState(
+  jobs: Pick<CodeAnalyzerIngestionJob, "status">[],
+  documents: Pick<{ analyzer_processing_status: string }, "analyzer_processing_status">[],
+): boolean {
+  if (jobs.some((j) => !isTerminalIngestionStatus(j.status))) {
+    return true;
+  }
+  return documents.some(
+    (d) =>
+      d.analyzer_processing_status === "queued" || d.analyzer_processing_status === "processing",
+  );
+}

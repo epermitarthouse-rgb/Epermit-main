@@ -9,6 +9,7 @@ import {
   type CodeAnalyzerSheet,
 } from "@/lib/codeAnalyzer/model";
 import {
+  ANALYZER_DRAWING_SET_ROLE_HINT,
   resolveAnalyzerRuntimeStatus,
   type AnalyzerWorkflowMode,
 } from "@/lib/codeAnalyzer/analyzerRuntimeStatus";
@@ -290,6 +291,9 @@ export function AnalyzerDrawingSet({
       <p className="text-xs text-muted-foreground" data-testid="analyzer-dataset-summary">
         {runtimeStatus.datasetLine}
         {runtimeStatus.statusLine ? ` · ${runtimeStatus.statusLine}` : ""}
+      </p>
+      <p className="text-xs text-muted-foreground" data-testid="analyzer-drawing-set-role-hint">
+        {ANALYZER_DRAWING_SET_ROLE_HINT}
       </p>
       {runtimeStatus.capacityLine ? (
         <p className="text-xs text-muted-foreground" data-testid="analyzer-included-sheet-capacity">

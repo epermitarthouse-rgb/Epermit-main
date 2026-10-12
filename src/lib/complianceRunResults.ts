@@ -80,7 +80,10 @@ export function computeActiveRunProgressMetrics(
   };
 }
 
-/** Pending session uploads are user-added files not yet persisted as analyzer sheets. */
+/** Session uploads not yet persisted as analyzer sheets (includes in-flight upload). */
 export function isPendingSessionUpload(file: { status: string; sheetId?: string }): boolean {
-  return file.status === "pending" && !file.sheetId;
+  return (
+    (file.status === "pending" || file.status === "uploading" || file.status === "preparing") &&
+    !file.sheetId
+  );
 }

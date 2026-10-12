@@ -35,6 +35,10 @@ export function formatCompactDatasetLine(metrics: AnalyzerDatasetMetrics): strin
   return `Documents ${metrics.sourceDocumentCount} · Sheets ${metrics.includedSheetCount}`;
 }
 
+/** Shown under the drawing-set counter — specs/forms are not missing from analysis by accident. */
+export const ANALYZER_DRAWING_SET_ROLE_HINT =
+  "Counts are plan sheets in the drawing set only. Specification and supporting PDFs are indexed for context during analysis; code modification forms and non-drawing pages are not vision-analyzed as sheets.";
+
 export function formatCapacityLine(
   includedCount: number,
   excludedCount: number,

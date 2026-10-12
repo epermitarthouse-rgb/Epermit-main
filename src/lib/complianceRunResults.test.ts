@@ -101,5 +101,6 @@ describe("isPendingSessionUpload", () => {
   it("excludes persisted sheets re-queued for analysis", () => {
     assert.equal(isPendingSessionUpload({ status: "pending", sheetId: "sheet-1" }), false);
     assert.equal(isPendingSessionUpload({ status: "pending" }), true);
+    assert.equal(isPendingSessionUpload({ status: "uploading" }), true);
   });
 });
