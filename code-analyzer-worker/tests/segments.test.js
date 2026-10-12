@@ -76,4 +76,59 @@ B. Related work specified in Division 01 and Division 02.`,
     });
     assert.equal(specPage.analyzerClass, "specification");
   });
+
+  it("classifies architectural SECTION DETAILS sheets as drawing_set, not specification", () => {
+    const noisySectionDetailText = `
+      SECTION DETAILS
+      SECTION DETAIL AT STOREFRONT
+      SECTION DETAIL AT PARAPET
+      SCALE: 1 1/2" = 1'-0"
+      PROJECT NO. 100-41ST
+      SHEET OF
+      DRAWN BY
+    `.trim();
+
+    for (const fileName of [
+      "ASK04 - SECTION DETAILS.pdf",
+      "A201 - SECTION DETAILS.pdf",
+      "Wall Section Details.pdf",
+    ]) {
+      const page = classifyPage({
+        pageNumber: 1,
+        text: noisySectionDetailText,
+        fileName,
+        documentType: "specification",
+      });
+      assert.equal(page.analyzerClass, "drawing_set", fileName);
+      assert.equal(shouldCreateSheetsForPage(page.analyzerClass), true, fileName);
+    }
+  });
+
+  it("still classifies CSI SECTION headings as specification", () => {
+    const csi03030 = classifyPage({
+      pageNumber: 1,
+      text: `DIVISION 03 CONCRETE
+SECTION 03 30 00 CAST-IN-PLACE CONCRETE
+PART 1 GENERAL
+1.1 SUMMARY
+A. Work includes cast-in-place concrete for foundations, slabs, and structural elements as shown on the drawings.
+B. Related work is specified in Division 01 and Division 02 of the project manual.`,
+      fileName: "upload.pdf",
+      documentType: "other",
+    });
+    assert.equal(csi03030.analyzerClass, "specification");
+    assert.equal(shouldCreateSheetsForPage(csi03030.analyzerClass), false);
+
+    const csi01010 = classifyPage({
+      pageNumber: 1,
+      text: `DIVISION 1 - GENERAL REQUIREMENTS
+SECTION 01010 Summary of Work
+PART 1 GENERAL
+1.1 The work includes selective demolition and facade restoration per the contract documents and applicable codes.`,
+      fileName: "Project Manual.pdf",
+      documentType: "specification",
+    });
+    assert.equal(csi01010.analyzerClass, "specification");
+    assert.equal(shouldCreateSheetsForPage(csi01010.analyzerClass), false);
+  });
 });

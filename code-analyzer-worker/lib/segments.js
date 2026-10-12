@@ -1,11 +1,13 @@
 "use strict";
 
-const { classifyDocument } = require("./classify");
+const {
+  classifyDocument,
+  countCsiSpecificationSignals,
+  isArchitecturalSectionDetailDrawing,
+} = require("./classify");
 
 const FORM_PAGE_RE =
   /\b(applicant request|code modification|for official use only|dob reviewer|requests? a modification)\b/i;
-const SPEC_PAGE_RE =
-  /\b(DIVISION|SECTION|PART\s+[12]|GENERAL REQUIREMENTS|TECHNICAL SPECIFICATIONS|CSI|MasterFormat)\b/i;
 const DRAWING_PAGE_RE = /\b([A-Z]{1,4}-\d+(?:\.\d+)*)\b/;
 
 /**
@@ -16,15 +18,20 @@ function classifyPage({ pageNumber, text, fileName, documentType }) {
   if (FORM_PAGE_RE.test(body)) {
     return { analyzerClass: "code_modification_form", source: "auto", confidence: 0.8, pageNumber };
   }
-  const specHits = (body.match(SPEC_PAGE_RE) || []).length;
+
+  if (isArchitecturalSectionDetailDrawing({ fileName, text: body })) {
+    return { analyzerClass: "drawing_set", source: "auto", confidence: 0.82, pageNumber };
+  }
+
+  const csiSpecSignals = countCsiSpecificationSignals(body);
   const sheetHits = (body.match(DRAWING_PAGE_RE) || []).length;
-  if (specHits >= 2 && body.length > 200) {
+  if (csiSpecSignals >= 2 && body.length > 200) {
     return { analyzerClass: "specification", source: "auto", confidence: 0.75, pageNumber };
   }
   if (sheetHits >= 1 && body.length < 500) {
     return { analyzerClass: "drawing_set", source: "auto", confidence: 0.7, pageNumber };
   }
-  if (body.length > 600 && specHits >= 1) {
+  if (body.length > 600 && csiSpecSignals >= 1) {
     return { analyzerClass: "specification", source: "auto", confidence: 0.6, pageNumber };
   }
 
