@@ -932,19 +932,15 @@ async function rebuildDcPlanReviewProjectSession(session, project) {
 
 // ─── Analyze Drawing (AI Compliance) endpoint ──────────────────────────────
 const { analyzeDrawingWithOpenAI } = require("./services/compliance/analyze-drawing.service.js");
+const {
+  authenticateComplianceServiceRequest,
+} = require("./services/compliance/compliance-service-auth.js");
 
 app.post("/api/analyze-drawing", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-    const token = authHeader.split(" ")[1];
-    if (supabase) {
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      if (authError || !user) {
-        return res.status(401).json({ error: "Invalid or expired authentication token" });
-      }
+    const auth = await authenticateComplianceServiceRequest(req, supabase);
+    if (!auth.ok) {
+      return res.status(auth.status).json({ error: auth.error });
     }
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -955,7 +951,7 @@ app.post("/api/analyze-drawing", async (req, res) => {
     const OpenAI = require("openai").default || require("openai");
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, analysisInstructions, specChunks, sheetTitle, discipline } = req.body;
+    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, analysisInstructions, specChunks, sheetTitle, discipline, jurisdictionDiagnostics } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: "Image data is required" });
@@ -973,6 +969,7 @@ app.post("/api/analyze-drawing", async (req, res) => {
       specChunks,
       sheetTitle,
       discipline,
+      jurisdictionDiagnostics,
       logInfo: console.log,
       logError: console.error,
     });
@@ -996,16 +993,9 @@ const { extractDrawingIndexWithOpenAI } = require("./services/compliance/index-e
 
 app.post("/api/extract-drawing-index", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-    const token = authHeader.split(" ")[1];
-    if (supabase) {
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      if (authError || !user) {
-        return res.status(401).json({ error: "Invalid or expired authentication token" });
-      }
+    const auth = await authenticateComplianceServiceRequest(req, supabase);
+    if (!auth.ok) {
+      return res.status(auth.status).json({ error: auth.error });
     }
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -1045,16 +1035,9 @@ const { analyzeCodeModification, extractModificationForm, reviewModificationEvid
 
 app.post("/api/analyze-code-modification", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-    const token = authHeader.split(" ")[1];
-    if (supabase) {
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      if (authError || !user) {
-        return res.status(401).json({ error: "Invalid or expired authentication token" });
-      }
+    const auth = await authenticateComplianceServiceRequest(req, supabase);
+    if (!auth.ok) {
+      return res.status(auth.status).json({ error: auth.error });
     }
 
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -1121,18 +1104,10 @@ app.post("/api/analyze-code-modification", async (req, res) => {
 });
 
 async function authenticateCodeModRequest(req, res) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Authentication required" });
+  const auth = await authenticateComplianceServiceRequest(req, supabase);
+  if (!auth.ok) {
+    res.status(auth.status).json({ error: auth.error });
     return null;
-  }
-  const token = authHeader.split(" ")[1];
-  if (supabase) {
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      res.status(401).json({ error: "Invalid or expired authentication token" });
-      return null;
-    }
   }
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (!OPENAI_API_KEY) {
