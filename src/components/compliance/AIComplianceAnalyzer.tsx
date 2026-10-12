@@ -128,6 +128,7 @@ import {
   type CodeAnalyzerSheet,
 } from "@/lib/codeAnalyzer/model";
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
+import { buildJurisdictionDiagnostics } from "@/lib/codeAnalyzer/jurisdictionDiagnostics";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   analyzerSheetFingerprint,
@@ -413,6 +414,8 @@ export function AIComplianceAnalyzer() {
   /** Active queued/running standard run — separate from displayRun (current/stale results). */
   const [standardInProgressRun, setStandardInProgressRun] = useState<CodeAnalyzerRun | null>(null);
   const [asyncStandardSheetJobs, setAsyncStandardSheetJobs] = useState<SheetJobSummary[]>([]);
+  /** Sheet jobs for terminal displayRun (partial/failed) when no in-progress poll is active. */
+  const [displayRunSheetJobs, setDisplayRunSheetJobs] = useState<SheetJobSummary[]>([]);
   const [modificationDisplayRun, setModificationDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationCurrentRun, setModificationCurrentRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationInProgressRun, setModificationInProgressRun] = useState<CodeAnalyzerRun | null>(null);
@@ -512,6 +515,18 @@ export function AIComplianceAnalyzer() {
   const [activeResultTab, setActiveResultTab] = useState<"ibc" | "local">("ibc");
 
   const hasLocalAmendments = JURISDICTIONS_WITH_AMENDMENTS.includes(jurisdiction);
+
+  const jurisdictionRunDiagnostics = useMemo(
+    () =>
+      buildJurisdictionDiagnostics(
+        jurisdiction,
+        workflowDocumentsHydrated.map((d) => d.file_name).filter(Boolean),
+      ),
+    [jurisdiction, workflowDocumentsHydrated],
+  );
+
+  const localAnalysisWillBeEmpty =
+    (analysisMode === "both" || analysisMode === "local") && !hasLocalAmendments;
   const isModificationMode =
     analysisKind === "dc_code_modification" && isDcJurisdiction(jurisdiction);
 
@@ -756,7 +771,16 @@ export function AIComplianceAnalyzer() {
       setIndexPrescreenError(null);
       indexPrescreenKeyRef.current = "";
     } else if (display?.index_completeness) {
-      setIndexCompleteness((prev) => prev ?? display.index_completeness ?? null);
+      setIndexCompleteness((prev) => {
+        const incoming = display.index_completeness ?? null;
+        if (!incoming) return prev ?? null;
+        if (!prev) return incoming;
+        return {
+          ...prev,
+          ...incoming,
+          analysisCoverage: incoming.analysisCoverage ?? prev.analysisCoverage,
+        };
+      });
     }
     const ids = [
       ...new Set(
@@ -2442,6 +2466,14 @@ export function AIComplianceAnalyzer() {
             toast.info("Add at least one included sheet to the drawing set before running analysis.");
             return;
           }
+          if (jurisdictionRunDiagnostics.mismatch) {
+            toast.warning(jurisdictionRunDiagnostics.message ?? "Jurisdiction mismatch detected.");
+          }
+          if (localAnalysisWillBeEmpty && analysisMode !== "ibc") {
+            toast.info(
+              "Local amendment analysis requires a jurisdiction with loaded amendments (e.g. DC). Only IBC findings will be produced with the current settings.",
+            );
+          }
           const run = await createAsyncAnalyzerRun({
             projectId: selectedProjectId,
             userId: user.id,
@@ -3002,10 +3034,48 @@ export function AIComplianceAnalyzer() {
     };
   }, [completedBatchFiles, failedBatchFiles, loadedExistingResults, isolateCurrentRun]);
 
+  const workflowSheetJobs = useMemo(
+    () => (standardInProgressRun ? asyncStandardSheetJobs : displayRunSheetJobs),
+    [standardInProgressRun, asyncStandardSheetJobs, displayRunSheetJobs],
+  );
+
+  useEffect(() => {
+    if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled() || isModificationMode) {
+      setDisplayRunSheetJobs([]);
+      return;
+    }
+    if (standardInProgressRun) {
+      setDisplayRunSheetJobs([]);
+      return;
+    }
+    const runId = displayRun?.id;
+    if (!runId) {
+      setDisplayRunSheetJobs([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchSheetJobsForRun(runId)
+      .then((jobs) => {
+        if (!cancelled) setDisplayRunSheetJobs(jobs);
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayRunSheetJobs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedProjectId,
+    displayRun?.id,
+    displayRun?.status,
+    standardInProgressRun?.id,
+    isModificationMode,
+  ]);
+
   const asyncStandardJobMetrics = useMemo(() => {
-    if (!standardInProgressRun || asyncStandardSheetJobs.length === 0) return null;
-    return metricsFromAsyncSheetJobs(asyncStandardSheetJobs);
-  }, [standardInProgressRun, asyncStandardSheetJobs]);
+    if (workflowSheetJobs.length === 0) return null;
+    return metricsFromAsyncSheetJobs(workflowSheetJobs);
+  }, [workflowSheetJobs]);
 
   const analyzerMetrics = useMemo(() => {
     const sheetsForMetrics =
@@ -4023,6 +4093,21 @@ export function AIComplianceAnalyzer() {
                 searchPlaceholder="Search jurisdictions..."
                 emptyText="No jurisdiction found."
               />
+              {jurisdictionRunDiagnostics.mismatch ? (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{jurisdictionRunDiagnostics.message}</AlertDescription>
+                </Alert>
+              ) : null}
+              {localAnalysisWillBeEmpty && !isModificationMode ? (
+                <Alert className="mt-2">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Dual or local analysis is selected, but General IBC has no local amendment package — local
+                    sheet jobs will return empty local findings until you pick a supported jurisdiction.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -4174,6 +4259,7 @@ export function AIComplianceAnalyzer() {
                     error: f.error,
                   }))}
                   displayRun={workflowDisplayRun}
+                  sheetJobs={workflowSheetJobs}
                   runMetrics={analyzerMetrics}
                   complianceRunActive={complianceRunActive}
                   analysisStale={isModificationMode ? modificationStale : analysisStale}

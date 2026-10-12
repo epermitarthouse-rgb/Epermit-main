@@ -156,6 +156,14 @@ export interface CodeAnalyzerV2Functions {
     };
     Returns: Array<{ job: CodeAnalyzerIngestionJobRow; reused_existing: boolean }>;
   };
+  retry_failed_sheet_jobs_for_sheets_v2: {
+    Args: { p_run_id: string; p_user_id: string; p_sheet_ids: string[] };
+    Returns: number;
+  };
+  retry_failed_ingestion_job_v2: {
+    Args: { p_job_id: string; p_user_id: string };
+    Returns: CodeAnalyzerIngestionJobRow;
+  };
   create_code_analyzer_run_async_v2: {
     Args: {
       p_project_id: string;

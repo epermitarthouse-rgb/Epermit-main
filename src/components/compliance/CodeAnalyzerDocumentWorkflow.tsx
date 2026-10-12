@@ -40,8 +40,14 @@ import {
   type CodeAnalyzerIngestionJob,
 } from "@/lib/codeAnalyzer/ingestion";
 import { fetchDocumentIngestionJobs, fetchProjectDocumentsWithAnalyzerMeta } from "@/lib/codeAnalyzer/classification";
-import { retryFailedSheetJobs } from "@/lib/codeAnalyzer/asyncRun";
+import { retryFailedSheetJobs, type SheetJobSummary } from "@/lib/codeAnalyzer/asyncRun";
 import type { RunAnalysisMetrics } from "@/lib/codeAnalyzer/sheetState";
+import {
+  countFailedSheetJobs,
+  retryFailedIngestionJob,
+  retryFailedSheetJobsForSheets,
+} from "@/lib/codeAnalyzer/retryWorkflow";
+import { toast } from "sonner";
 import { resolveAnalyzerRuntimeStatus, type AnalyzerWorkflowMode } from "@/lib/codeAnalyzer/analyzerRuntimeStatus";
 import type { AnalyzerPendingFile } from "./AnalyzerDrawingSet";
 
@@ -53,6 +59,8 @@ function statusBadgeVariant(
   switch (status) {
     case "Completed":
     case "Used as analysis context":
+    case "Not analyzed":
+    case "Excluded from analysis":
       return "secondary";
     case "Failed":
       return "destructive";
@@ -120,7 +128,9 @@ function DocumentWorkflowCard({
   onToggleSelect,
   onRemove,
   onCancelProcessing,
-  onRetryAnalysis,
+  onRetryFailedAnalysis,
+  onRetryOrganizing,
+  retryDisabled,
 }: {
   card: ConsolidatedDocumentCardModel;
   complianceRunActive: boolean;
@@ -129,7 +139,9 @@ function DocumentWorkflowCard({
   onToggleSelect: () => void;
   onRemove: () => void;
   onCancelProcessing: () => void;
-  onRetryAnalysis: () => void;
+  onRetryFailedAnalysis: () => void;
+  onRetryOrganizing: () => void;
+  retryDisabled: boolean;
 }) {
   const selectable = selectionMode && isBulkSelectableDocumentCard(card);
   return (
@@ -196,11 +208,28 @@ function DocumentWorkflowCard({
             Cancel
           </Button>
         )}
-        {card.showRetryAnalysis && (
-          <Button size="sm" variant="outline" onClick={onRetryAnalysis} disabled={complianceRunActive}>
-            Retry
+        {card.showRetryOrganizing && card.ingestionJobId ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRetryOrganizing}
+            disabled={retryDisabled}
+            data-testid="retry-organizing-button"
+          >
+            Retry organizing
           </Button>
-        )}
+        ) : null}
+        {card.showRetryFailedAnalysis ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRetryFailedAnalysis}
+            disabled={retryDisabled}
+            data-testid="retry-failed-analysis-button"
+          >
+            Retry failed analysis
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -212,6 +241,7 @@ export interface CodeAnalyzerDocumentWorkflowProps {
   sheets: CodeAnalyzerSheet[];
   uploadQueueFiles: AnalyzerPendingFile[];
   displayRun: CodeAnalyzerRun | null;
+  sheetJobs?: SheetJobSummary[];
   runMetrics?: RunAnalysisMetrics;
   /** True only while a compliance run is actively executing (not upload/organize). */
   complianceRunActive: boolean;
@@ -247,6 +277,7 @@ export function CodeAnalyzerDocumentWorkflow({
   sheets,
   uploadQueueFiles,
   displayRun,
+  sheetJobs = [],
   runMetrics,
   complianceRunActive,
   analysisStale,
@@ -272,6 +303,9 @@ export function CodeAnalyzerDocumentWorkflow({
   const [selectedDrawingIds, setSelectedDrawingIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<"selected" | "all" | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [retryingRunLevel, setRetryingRunLevel] = useState(false);
+  const [retryingIngestionJobId, setRetryingIngestionJobId] = useState<string | null>(null);
+  const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
 
   const [jobs, setJobs] = useState<CodeAnalyzerIngestionJob[]>([]);
   const [documents, setDocuments] = useState<
@@ -386,6 +420,8 @@ export function CodeAnalyzerDocumentWorkflow({
         analyzing: complianceRunActive,
         currentAnalyzingSheetId,
         analysisStale,
+        analysisSettled,
+        sheetJobs,
       }),
     [
       normalizedDocuments,
@@ -398,8 +434,13 @@ export function CodeAnalyzerDocumentWorkflow({
       complianceRunActive,
       currentAnalyzingSheetId,
       analysisStale,
+      analysisSettled,
+      sheetJobs,
     ],
   );
+
+  const failedSheetJobCount = useMemo(() => countFailedSheetJobs(sheetJobs), [sheetJobs]);
+  const showRunLevelRetry = Boolean(displayRun?.id) && failedSheetJobCount > 0;
 
   const sheetSourceDocumentCount = useMemo(
     () => new Set(included.map((s) => s.source_document_id).filter(Boolean)).size,
@@ -436,6 +477,12 @@ export function CodeAnalyzerDocumentWorkflow({
     analysisStale,
   });
 
+  const analysisSettled =
+    activeStep >= 5 &&
+    !complianceRunActive &&
+    !anyOrganizing &&
+    Boolean(displayRun?.status === "current" || displayRun?.status === "partial");
+
   const runtimeStatus = resolveAnalyzerRuntimeStatus({
     mode: workflowMode,
     metrics: {
@@ -452,9 +499,55 @@ export function CodeAnalyzerDocumentWorkflow({
     hasModificationReview,
   });
 
-  const handleRetryAnalysis = () => {
-    if (!displayRun?.id) return;
-    void retryFailedSheetJobs(displayRun.id, userId).then(onRefresh);
+  const handleRetryAllFailedSheets = async () => {
+    if (!displayRun?.id || retryingRunLevel) return;
+    setRetryingRunLevel(true);
+    try {
+      const n = await retryFailedSheetJobs(displayRun.id, userId);
+      toast.success(n > 0 ? `Retrying ${n} failed sheet job${n === 1 ? "" : "s"}` : "No failed sheet jobs to retry");
+      onRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetryingRunLevel(false);
+    }
+  };
+
+  const handleRetryDocumentAnalysis = async (card: ConsolidatedDocumentCardModel) => {
+    if (!displayRun?.id || !card.retryFailedSheetIds.length || retryingDocumentId) return;
+    setRetryingDocumentId(card.documentId);
+    try {
+      const n = await retryFailedSheetJobsForSheets(
+        displayRun.id,
+        userId,
+        card.retryFailedSheetIds,
+      );
+      toast.success(
+        n > 0
+          ? `Retrying analysis for ${card.fileName}`
+          : "No failed jobs to retry for this document",
+      );
+      onRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetryingDocumentId(null);
+    }
+  };
+
+  const handleRetryOrganizing = async (jobId: string, documentId: string | null) => {
+    if (retryingIngestionJobId) return;
+    setRetryingIngestionJobId(jobId);
+    try {
+      await retryFailedIngestionJob(jobId, userId);
+      toast.success("Re-queued file organization");
+      onRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not retry organizing");
+    } finally {
+      setRetryingIngestionJobId(null);
+      void documentId;
+    }
   };
 
   const deletableDocumentIds = useMemo(() => bulkDeletableDocumentIds(cards), [cards]);
@@ -521,6 +614,34 @@ export function CodeAnalyzerDocumentWorkflow({
           </AlertDescription>
         </Alert>
       )}
+
+      {showRunLevelRetry ? (
+        <Alert variant="destructive" data-testid="run-level-retry-alert">
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span>
+              {failedSheetJobCount} sheet{failedSheetJobCount === 1 ? "" : "s"} failed
+              {displayRun?.status === "partial" ? " (partial run)" : ""}.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 bg-background"
+              disabled={retryingRunLevel || Boolean(retryingDocumentId)}
+              onClick={() => void handleRetryAllFailedSheets()}
+              data-testid="retry-failed-sheets-run-button"
+            >
+              {retryingRunLevel ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Retrying…
+                </>
+              ) : (
+                "Retry failed sheets"
+              )}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="rounded-lg border border-border/60 bg-muted/15 px-3 py-2 text-xs text-muted-foreground space-y-1">
         <p>
@@ -627,7 +748,17 @@ export function CodeAnalyzerDocumentWorkflow({
                       void cancelIngestionJob(card.ingestionJobId, userId).then(onRefresh);
                     }
                   }}
-                  onRetryAnalysis={handleRetryAnalysis}
+                  onRetryFailedAnalysis={() => void handleRetryDocumentAnalysis(card)}
+                  onRetryOrganizing={() => {
+                    if (card.ingestionJobId) {
+                      void handleRetryOrganizing(card.ingestionJobId, card.documentId);
+                    }
+                  }}
+                  retryDisabled={
+                    retryingRunLevel ||
+                    retryingIngestionJobId === card.ingestionJobId ||
+                    retryingDocumentId === card.documentId
+                  }
                 />
                 {pendingFile?.status === "pending" && onPendingDisciplineChange && (
                   <Select

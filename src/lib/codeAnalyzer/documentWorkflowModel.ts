@@ -6,6 +6,8 @@ import { isTerminalIngestionStatus } from "./ingestion";
 import type { CodeAnalyzerSheet } from "./model";
 import { deriveDocumentCardStatus } from "./documentCardStatus";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
+import type { SheetJobSummary } from "./asyncRun";
+import { failedSheetIdsForDocument } from "./retryWorkflow";
 
 export type DocumentPurposeLabel =
   | "Drawing"
@@ -20,6 +22,8 @@ export type DocumentUserStatusLabel =
   | "Analyzing"
   | "Used as analysis context"
   | "Completed"
+  | "Not analyzed"
+  | "Excluded from analysis"
   | "Needs attention"
   | "Failed";
 
@@ -69,7 +73,12 @@ export interface ConsolidatedDocumentCardModel {
   countLabel: string | null;
   showRemove: boolean;
   showCancelProcessing: boolean;
+  /** @deprecated use showRetryFailedAnalysis */
   showRetryAnalysis: boolean;
+  showRetryFailedAnalysis: boolean;
+  showRetryOrganizing: boolean;
+  /** Sheet ids with failed jobs on the active run (document-scoped retry). */
+  retryFailedSheetIds: string[];
   ingestionJobId: string | null;
   borderClass: string;
 }
@@ -136,6 +145,38 @@ function ingestionIsActive(job: CodeAnalyzerIngestionJob | undefined): boolean {
   return Boolean(job && !isTerminalIngestionStatus(job.status));
 }
 
+type DocumentStatusFields = Pick<
+  ConsolidatedDocumentCardModel,
+  | "status"
+  | "statusDetail"
+  | "borderClass"
+  | "showRetryAnalysis"
+  | "showRetryFailedAnalysis"
+  | "showRetryOrganizing"
+  | "retryFailedSheetIds"
+>;
+
+function withRetryDefaults(
+  fields: Omit<
+    DocumentStatusFields,
+    "showRetryAnalysis" | "showRetryFailedAnalysis" | "showRetryOrganizing" | "retryFailedSheetIds"
+  > &
+    Partial<
+      Pick<
+        DocumentStatusFields,
+        "showRetryAnalysis" | "showRetryFailedAnalysis" | "showRetryOrganizing" | "retryFailedSheetIds"
+      >
+    >,
+): DocumentStatusFields {
+  return {
+    showRetryAnalysis: false,
+    showRetryFailedAnalysis: false,
+    showRetryOrganizing: false,
+    retryFailedSheetIds: [],
+    ...fields,
+  };
+}
+
 export function resolveDocumentUserStatus(input: {
   doc: ProjectDocumentMeta;
   job: CodeAnalyzerIngestionJob | undefined;
@@ -145,25 +186,29 @@ export function resolveDocumentUserStatus(input: {
   analyzing: boolean;
   currentAnalyzingSheetId?: string | null;
   analysisStale?: boolean;
-}): Pick<ConsolidatedDocumentCardModel, "status" | "statusDetail" | "borderClass" | "showRetryAnalysis"> {
+  /** True when a terminal compliance run finished and results are in effect (Step 5). */
+  analysisSettled?: boolean;
+}): DocumentStatusFields {
   const { doc, job } = input;
 
   if (job?.status === "failed") {
-    return {
+    const err = job.last_error?.trim();
+    return withRetryDefaults({
       status: "Failed",
-      statusDetail: "Organization failed. Remove and upload again, or retry when available.",
+      statusDetail: err
+        ? `Organization failed: ${err.slice(0, 160)}`
+        : "Organization failed. Retry organizing or remove and re-upload if the problem persists.",
       borderClass: "border-destructive/40 bg-destructive/[0.04]",
-      showRetryAnalysis: false,
-    };
+      showRetryOrganizing: true,
+    });
   }
 
   if (ingestionIsActive(job) || doc.analyzer_processing_status === "processing" || doc.analyzer_processing_status === "queued") {
-    return {
+    return withRetryDefaults({
       status: "Organizing",
       statusDetail: "PermitPilot is preparing plan sheets from this file.",
       borderClass: "border-gold/45 bg-gold/[0.05]",
-      showRetryAnalysis: false,
-    };
+    });
   }
 
   const terminalJob =
@@ -174,12 +219,11 @@ export function resolveDocumentUserStatus(input: {
     doc.document_type === "permit_drawing" &&
     (doc.analyzer_processing_status === "not_started" || !doc.analyzer_processing_status)
   ) {
-    return {
+    return withRetryDefaults({
       status: "Needs attention",
       statusDetail: "This file was not organized yet. Remove it or upload again through Add documents.",
       borderClass: "border-warning/40 bg-warning/[0.04]",
-      showRetryAnalysis: false,
-    };
+    });
   }
 
   const purpose = resolveDocumentPurpose(doc, input.includedSheets.filter((s) => !s.excluded).length);
@@ -191,33 +235,56 @@ export function resolveDocumentUserStatus(input: {
       job?.status === "completed" ||
       job?.status === "partial";
     if (purpose.purpose === "Code modification form" && organized) {
-      return {
+      return withRetryDefaults({
         status: "Ready for analysis",
         statusDetail: "Form is stored for Code Modification review.",
         borderClass: "border-border bg-card",
-        showRetryAnalysis: false,
-      };
+      });
     }
     if (organized) {
-      return {
+      return withRetryDefaults({
         status: "Used as analysis context",
         statusDetail:
           purpose.purpose === "Supporting document"
             ? "Indexed for specification context during drawing analysis."
             : null,
         borderClass: "border-teal/30 bg-teal/[0.03]",
-        showRetryAnalysis: false,
-      };
+      });
     }
-    return {
+    return withRetryDefaults({
       status: "Organizing",
       statusDetail: "PermitPilot is preparing this supporting document.",
       borderClass: "border-gold/45 bg-gold/[0.05]",
-      showRetryAnalysis: false,
-    };
+    });
   }
 
   if (purpose.purpose === "Drawing") {
+    const included = input.includedSheets.filter((s) => !s.excluded);
+    const allSheets = input.includedSheets;
+    const organized =
+      doc.analyzer_processing_status === "completed" ||
+      doc.analyzer_processing_status === "partial" ||
+      job?.status === "completed" ||
+      job?.status === "partial";
+
+    if (input.analysisSettled && included.length === 0) {
+      if (allSheets.length > 0 && allSheets.every((s) => s.excluded)) {
+        return withRetryDefaults({
+          status: "Excluded from analysis",
+          statusDetail: "All plan sheets from this file were excluded from the drawing set.",
+          borderClass: "border-border bg-muted/30",
+        });
+      }
+      if (organized || allSheets.length === 0) {
+        return withRetryDefaults({
+          status: "Not analyzed",
+          statusDetail:
+            "No analyzable plan sheets were detected from this file. Detail-only or non-rasterized pages are not in the analysis set.",
+          borderClass: "border-border bg-muted/25",
+        });
+      }
+    }
+
     const card = deriveDocumentCardStatus({
       includedSheets: input.includedSheets,
       completedSheetIds: input.completedSheetIds,
@@ -225,62 +292,75 @@ export function resolveDocumentUserStatus(input: {
       analyzing: input.analyzing,
       currentAnalyzingSheetId: input.currentAnalyzingSheetId,
       analysisStale: input.analysisStale,
+      analysisSettled: input.analysisSettled,
     });
 
+    const failedSheetIdsOnDoc = input.includedSheets
+      .filter((s) => !s.excluded && input.failedSheetIds.has(s.id))
+      .map((s) => s.id);
+
     if (card.status === "failed" || (card.counts.failed > 0 && card.counts.completed === 0)) {
-      return {
+      return withRetryDefaults({
         status: "Failed",
         statusDetail: card.progressLabel,
         borderClass: card.borderClass,
         showRetryAnalysis: true,
-      };
+        showRetryFailedAnalysis: failedSheetIdsOnDoc.length > 0,
+        retryFailedSheetIds: failedSheetIdsOnDoc,
+      });
     }
     if (card.status === "partial" || card.counts.failed > 0) {
-      return {
+      return withRetryDefaults({
         status: "Needs attention",
         statusDetail: card.progressLabel,
         borderClass: card.borderClass,
         showRetryAnalysis: true,
-      };
+        showRetryFailedAnalysis: failedSheetIdsOnDoc.length > 0,
+        retryFailedSheetIds: failedSheetIdsOnDoc,
+      });
     }
     if (card.status === "completed") {
-      return {
+      return withRetryDefaults({
         status: "Completed",
         statusDetail: card.progressLabel,
         borderClass: card.borderClass,
-        showRetryAnalysis: false,
-      };
+      });
     }
     if (card.status === "analyzing") {
-      return {
+      return withRetryDefaults({
         status: "Analyzing",
         statusDetail: card.progressLabel,
         borderClass: card.borderClass,
-        showRetryAnalysis: false,
-      };
+      });
     }
     if (card.status === "stale") {
-      return {
+      return withRetryDefaults({
         status: "Needs attention",
         statusDetail: "Drawing set changed — run Update Analysis.",
         borderClass: card.borderClass,
-        showRetryAnalysis: false,
-      };
+      });
     }
-    return {
+
+    if (included.length === 0 && organized && !input.analyzing) {
+      return withRetryDefaults({
+        status: "Not analyzed",
+        statusDetail: "No analyzable plan sheets detected from this file.",
+        borderClass: "border-border bg-muted/25",
+      });
+    }
+
+    return withRetryDefaults({
       status: "Ready for analysis",
       statusDetail: card.progressLabel,
       borderClass: card.borderClass,
-      showRetryAnalysis: false,
-    };
+    });
   }
 
-  return {
+  return withRetryDefaults({
     status: "Needs attention",
     statusDetail: null,
     borderClass: "border-border bg-card",
-    showRetryAnalysis: false,
-  };
+  });
 }
 
 export function formatDocumentCountLabel(input: {
@@ -290,7 +370,11 @@ export function formatDocumentCountLabel(input: {
   isPdf: boolean;
 }): string | null {
   if (input.purpose === "Drawing") {
-    if (input.includedSheetCount === 0) return input.totalPages ? `${input.totalPages} pages · no plan sheets yet` : null;
+    if (input.includedSheetCount === 0) {
+      return input.totalPages
+        ? `${input.totalPages} page${input.totalPages === 1 ? "" : "s"} · no analyzable sheets detected`
+        : "No analyzable sheets detected";
+    }
     const sheetPart = `${input.includedSheetCount} plan sheet${input.includedSheetCount === 1 ? "" : "s"}`;
     if (input.isPdf && input.totalPages && input.totalPages > input.includedSheetCount) {
       return `${sheetPart} from ${input.totalPages} pages`;
@@ -341,6 +425,9 @@ export function buildConsolidatedDocumentCards(input: {
   analyzing: boolean;
   currentAnalyzingSheetId?: string | null;
   analysisStale?: boolean;
+  analysisSettled?: boolean;
+  /** When set, refines retryFailedSheetIds per document from durable sheet jobs. */
+  sheetJobs?: SheetJobSummary[];
 }): ConsolidatedDocumentCardModel[] {
   const handoffPendingIds = input.handoffPendingIds ?? new Set<string>();
   const placeholderDocumentIds = input.placeholderDocumentIds ?? new Set<string>();
@@ -375,6 +462,7 @@ export function buildConsolidatedDocumentCards(input: {
       analyzing: input.analyzing,
       currentAnalyzingSheetId: input.currentAnalyzingSheetId,
       analysisStale: input.analysisStale,
+      analysisSettled: input.analysisSettled,
     });
     const isPdf =
       docSheets.length > 1 || doc.file_name.toLowerCase().endsWith(".pdf") || doc.document_type === "specification";
@@ -386,6 +474,13 @@ export function buildConsolidatedDocumentCards(input: {
     });
 
     const isPersistedDocument = !placeholderDocumentIds.has(doc.id);
+    let retryFailedSheetIds = statusFields.retryFailedSheetIds;
+    if (input.sheetJobs?.length) {
+      retryFailedSheetIds = failedSheetIdsForDocument(doc.id, input.sheets, input.sheetJobs);
+    }
+    const showRetryFailedAnalysis =
+      statusFields.showRetryFailedAnalysis || retryFailedSheetIds.length > 0;
+
     cards.push({
       key: doc.id,
       documentId: doc.id,
@@ -399,7 +494,10 @@ export function buildConsolidatedDocumentCards(input: {
       countLabel,
       showRemove: isPersistedDocument,
       showCancelProcessing: ingestionIsActive(job),
-      showRetryAnalysis: statusFields.showRetryAnalysis,
+      showRetryAnalysis: statusFields.showRetryAnalysis || showRetryFailedAnalysis,
+      showRetryFailedAnalysis,
+      showRetryOrganizing: statusFields.showRetryOrganizing,
+      retryFailedSheetIds,
       ingestionJobId: job?.id ?? null,
       borderClass: statusFields.borderClass,
     });
@@ -427,6 +525,9 @@ export function buildConsolidatedDocumentCards(input: {
       showRemove: pending.status === "pending" || failed,
       showCancelProcessing: false,
       showRetryAnalysis: false,
+      showRetryFailedAnalysis: false,
+      showRetryOrganizing: false,
+      retryFailedSheetIds: [],
       ingestionJobId: null,
       borderClass: failed
         ? "border-destructive/40 bg-destructive/[0.04] border-dashed"
