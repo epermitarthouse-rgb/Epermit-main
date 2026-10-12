@@ -1,0 +1,25 @@
+{
+  "name": "code-analyzer-worker",
+  "version": "2.0.0",
+  "description": "Background worker for Code Analyzer Async V2 (ingestion + sheet analysis)",
+  "private": true,
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js",
+    "dev": "node dev.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
+    "canvas": "^2.11.2",
+    "dotenv": "^16.6.1",
+    "openai": "^4.28.0",
+    "pdfjs-dist": "^3.11.174",
+    "sharp": "^0.33.5",
+    "ws": "^8.21.0"
+  }
+}

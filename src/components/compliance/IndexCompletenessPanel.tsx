@@ -164,6 +164,27 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
                 </ul>
               </div>
             )}
+
+            {result.analysisCoverage ? (
+              <div className="pt-2 border-t border-border">
+                <p className="font-medium text-foreground mb-1">Analysis coverage</p>
+                <p className="text-muted-foreground">
+                  {result.analysisCoverage.sheetsAnalyzed} of {result.analysisCoverage.eligibleSheetCount}{" "}
+                  eligible sheets analyzed · {result.analysisCoverage.sheetsWithFindings} with findings ·{" "}
+                  {result.analysisCoverage.sheetsWithoutFindings.length} with no findings
+                  {result.analysisCoverage.sheetsPendingOrFailed > 0
+                    ? ` · ${result.analysisCoverage.sheetsPendingOrFailed} pending or failed`
+                    : ""}
+                </p>
+                {result.analysisCoverage.sheetsWithoutFindings.length > 0 ? (
+                  <ul className="list-disc pl-5 mt-1 space-y-0.5 text-muted-foreground">
+                    {result.analysisCoverage.sheetsWithoutFindings.slice(0, 12).map((name) => (
+                      <li key={name}>{name} — no issues flagged (sheet was analyzed)</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
           </>
         )}
       </CardContent>

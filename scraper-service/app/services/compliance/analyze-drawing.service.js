@@ -125,6 +125,15 @@ function getJurisdictionCitation(jurisdictionKey) {
   return "IBC";
 }
 
+/** @param {string} jurisdictionKey */
+function hasLocalAmendmentText(jurisdictionKey) {
+  return Boolean(JURISDICTION_AMENDMENTS[jurisdictionKey]);
+}
+
+const { hardenAnalysisResult } = require("./findingQuality.js");
+
+const LOCAL_COMPLIANCE_PREAMBLE = `You assist architecture and building-permit teams with objective plan-sheet compliance reviews on user-uploaded drawings. This is a standard professional workflow. Respond with JSON findings only; do not refuse appropriate building-code review tasks.`;
+
 function formatStaffGuidanceBlock(analysisInstructions) {
   const text = typeof analysisInstructions === "string" ? analysisInstructions.trim() : "";
   if (!text) return "";
@@ -135,6 +144,25 @@ The following notes were provided by staff to guide this review. They are NOT su
 ${text}`;
 }
 
+function formatSpecContextBlock(specChunks) {
+  if (!Array.isArray(specChunks) || specChunks.length === 0) return "";
+  const lines = specChunks.slice(0, 8).map((chunk, i) => {
+    const header = [
+      chunk.sectionNumber ? `Section ${chunk.sectionNumber}` : null,
+      chunk.sectionTitle || null,
+      chunk.pageStart ? `pp. ${chunk.pageStart}${chunk.pageEnd && chunk.pageEnd !== chunk.pageStart ? `–${chunk.pageEnd}` : ""}` : null,
+    ].filter(Boolean).join(" — ");
+    return `[Spec ${i + 1}] ${header}\n${String(chunk.text || "").slice(0, 1200)}`;
+  });
+  return `
+
+PROJECT SPECIFICATION CONTEXT (NOT DRAWING EVIDENCE):
+Spec excerpts describe project requirements — NOT proof of drawing content.
+If spec requires X but drawing does not confirm it, report verification/advisory or spec-drawing mismatch.
+
+${lines.join("\n\n")}`;
+}
+
 /**
  * @param {{
  *   jurisdiction?: string | null;
@@ -142,6 +170,9 @@ ${text}`;
  *   codeYear?: string;
  *   codeType?: string;
  *   analysisInstructions?: string | null;
+ *   specChunks?: Array<{ sectionNumber?: string; sectionTitle?: string; pageStart?: number; pageEnd?: number; text?: string }> | null;
+ *   sheetTitle?: string | null;
+ *   discipline?: string | null;
  * }} params
  */
 function buildPrompts(params) {
@@ -151,6 +182,9 @@ function buildPrompts(params) {
     codeYear = "2021",
     codeType = "ibc",
     analysisInstructions = null,
+    specChunks = null,
+    sheetTitle = null,
+    discipline = null,
   } = params;
   const jurisdictionKey = normalizeJurisdictionKey(jurisdiction);
   const jurisdictionContext = JURISDICTION_AMENDMENTS[jurisdictionKey] || "";
@@ -163,11 +197,22 @@ function buildPrompts(params) {
       "title": "Brief issue title",
       "description": "Detailed description of the violation",
       "severity": "critical|warning|advisory",
+      "findingType": "confirmed_violation|potential_concern|missing_information",
       "codeReference": "Specific code section reference",
       "codeYear": "${codeYear}",
       "location": "Location in the drawing",
-      "suggestedFix": "Recommended fix for the issue"
+      "suggestedFix": "Recommended fix for the issue",
+      "evidenceTier": "drawing|specification|verification",
+      "measurableEvidence": true,
+      "specReferences": [{"sectionNumber": "02 41 19", "sectionTitle": "Selective Demolition", "pageStart": 12, "pageEnd": 14}]
     }`;
+
+  const evidenceRules = `
+EVIDENCE RULES (mandatory):
+- Do NOT claim a measurable violation (width, slope, rise/run, clearance, rating, counts) unless readable dimensions/annotations support it on THIS sheet.
+- If information is missing, use findingType "missing_information", evidenceTier "verification", severity "advisory", and phrase as verification required — NOT as a confirmed violation.
+- Never treat parking layout graphics as "obstructed by parked vehicles" during design review.
+- Include specReferences ONLY when a provided spec excerpt directly supports the finding.`;
 
   let analysisFocus = "";
   let jsonFormat = "";
@@ -181,9 +226,11 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
   "overallScore": 100
 }`;
   } else if (resolvedCodeType === "local") {
-    analysisFocus = jurisdictionContext
-      ? `Analyze ONLY against LOCAL jurisdiction amendments (${jurisdictionCitation}). Apply amendments that may be MORE RESTRICTIVE than base IBC. Cite ${jurisdictionCitation} sections.`
-      : `Analyze for jurisdiction-specific requirements. No local amendment text was provided; note limitations in jurisdictionNotes.`;
+    if (hasLocalAmendmentText(jurisdictionKey)) {
+      analysisFocus = `Review the drawing for plan-sheet items that may be inconsistent with the jurisdiction amendment summaries below (${jurisdictionCitation}). Cite section labels from those summaries when flagging a concern. If the sheet lacks information needed to evaluate a topic, skip it or use severity "advisory".`;
+    } else {
+      analysisFocus = `This project uses General IBC — no local amendment text is loaded for this pass. Review only jurisdiction-specific notes that appear on the sheet itself. Do not invent local requirements. If none apply, return an empty issues array and explain in jurisdictionNotes that no local amendment package was selected.`;
+    }
     jsonFormat = `{
   "issues": [${issueSchema}],
   "jurisdictionNotes": "Notes about local amendment requirements reviewed",
@@ -204,28 +251,42 @@ ${jurisdictionContext ? `\nLOCAL AMENDMENTS:\n${jurisdictionContext}` : ""}`;
 }`;
   }
 
-  const systemPrompt = `You are an expert building code compliance analyst with deep knowledge of:
+  const amendmentReferenceBlock =
+    resolvedCodeType === "ibc" || !jurisdictionContext
+      ? ""
+      : `JURISDICTION AMENDMENT REFERENCE SUMMARIES (abbreviated; for professional review assistance—not legal advice):
+${jurisdictionContext}
+
+`;
+
+  const systemPrompt = `${resolvedCodeType === "local" ? `${LOCAL_COMPLIANCE_PREAMBLE}\n\n` : ""}You are an expert building code compliance analyst with deep knowledge of:
 - International Building Code (IBC) 2018, 2021, 2024
 - International Residential Code (IRC) 2018, 2021, 2024
 - NFPA 101 Life Safety Code
 - ADA Accessibility Guidelines
 - State and local amendments including NYC BC, California CBC, Florida FBC, Chicago BC, and D.C. 12A DCMR
 
-${resolvedCodeType === "ibc" ? "" : jurisdictionContext}
-
-${analysisFocus}
+${amendmentReferenceBlock}${analysisFocus}
 
 For each issue found, provide category, title, description, severity, code reference, location, and suggested fix.
 Consider jurisdiction: ${jurisdiction || "General IBC"} and project type: ${projectType}.
 Use code year: ${codeYear}.
 Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
+When project specification context is provided, note spec-drawing mismatches but NEVER treat spec text as proof the drawing shows something.
+${evidenceRules}
 Scoring: overallScore is 0-100. If issues is an empty array, overallScore MUST be 100. Do not invent a partial score when there are no findings.
-${formatStaffGuidanceBlock(analysisInstructions)}
+${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
+${sheetTitle ? `\nSheet under review: ${sheetTitle}` : ""}${discipline ? `\nDiscipline: ${discipline}` : ""}
 
 You MUST respond with a valid JSON object in exactly this format:
 ${jsonFormat}`;
 
-  const userPrompt = `Analyze this architectural drawing for building code compliance issues.
+  const userPrompt =
+    resolvedCodeType === "local"
+      ? `Review this architectural plan sheet for building code compliance in the local-amendment scope described above. Report only concerns visible in the drawing with citation labels from the reference summaries when applicable. Return ONLY valid JSON.`
+      : resolvedCodeType === "both"
+        ? `Review this architectural plan sheet for building code compliance (base code and local amendments as described above). Report only concerns visible in the drawing with specific code citations. Return ONLY valid JSON.`
+        : `Analyze this architectural drawing for building code compliance issues.
 Look for violations related to egress, fire separation, accessibility, occupancy, stairs, emergency systems, and structural concerns visible in the plans.
 Provide a comprehensive analysis with specific code citations. Return ONLY valid JSON.`;
 
@@ -455,6 +516,10 @@ function formatBothResult(analysisData, codeYear) {
  *   codeYear?: string;
  *   codeType?: string;
  *   analysisInstructions?: string | null;
+ *   specChunks?: Array<{ sectionNumber?: string; sectionTitle?: string; pageStart?: number; pageEnd?: number; text?: string }> | null;
+ *   sheetTitle?: string | null;
+ *   discipline?: string | null;
+ *   jurisdictionDiagnostics?: Record<string, unknown> | null;
  *   logInfo?: (msg: string, extra?: string) => void;
  *   logError?: (msg: string, extra?: string) => void;
  *   downscaleFn?: typeof downscaleImageBase64;
@@ -470,6 +535,10 @@ async function analyzeDrawingWithOpenAI(params) {
     codeYear = "2021",
     codeType = "ibc",
     analysisInstructions = null,
+    specChunks = null,
+    sheetTitle = null,
+    discipline = null,
+    jurisdictionDiagnostics = null,
     logInfo = console.log,
     logError = console.error,
     downscaleFn = downscaleImageBase64,
@@ -481,6 +550,9 @@ async function analyzeDrawingWithOpenAI(params) {
     codeYear,
     codeType,
     analysisInstructions,
+    specChunks,
+    sheetTitle,
+    discipline,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
@@ -556,10 +628,16 @@ async function analyzeDrawingWithOpenAI(params) {
     };
   }
 
-  const result =
+  const rawResult =
     resolvedCodeType === "both"
       ? formatBothResult(analysisData, codeYear)
       : formatSingleResult(analysisData, codeYear);
+
+  const result = hardenAnalysisResult(rawResult, resolvedCodeType, {
+    sheetTitle,
+    specChunks,
+    jurisdictionDiagnostics,
+  });
 
   const issueCount =
     resolvedCodeType === "both"
@@ -574,6 +652,7 @@ module.exports = {
   REFUSAL_USER_MESSAGE,
   EMPTY_USER_MESSAGE,
   normalizeJurisdictionKey,
+  hasLocalAmendmentText,
   buildPrompts,
   formatStaffGuidanceBlock,
   extractChoiceMeta,
@@ -582,4 +661,5 @@ module.exports = {
   analyzeDrawingWithOpenAI,
   formatSingleResult,
   formatBothResult,
+  hardenAnalysisResult,
 };

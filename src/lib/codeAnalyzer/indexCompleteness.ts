@@ -25,6 +25,17 @@ export interface IndexCompletenessInconsistency {
 
 export type IndexCompletenessStatus = "complete" | "incomplete" | "no_index";
 
+/** Post-run sheet coverage (distinct from index prescreen). */
+export interface AnalysisCoverageSnapshot {
+  eligibleSheetCount: number;
+  sheetsAnalyzed: number;
+  sheetsWithFindings: number;
+  sheetsWithoutFindings: string[];
+  sheetsPendingOrFailed: number;
+  supportingSpecChunksUsed: number;
+  updatedAt: string;
+}
+
 export interface IndexCompletenessResult {
   status: IndexCompletenessStatus;
   hasIndex: boolean;
@@ -37,6 +48,8 @@ export interface IndexCompletenessResult {
   numberingInconsistencies: IndexCompletenessInconsistency[];
   /** Included sheets compared (excluding the index sheet itself when detected). */
   comparedSheetCount: number;
+  /** Filled incrementally during async V2 analysis runs. */
+  analysisCoverage?: AnalysisCoverageSnapshot | null;
 }
 
 export interface ActualSheetLabel {

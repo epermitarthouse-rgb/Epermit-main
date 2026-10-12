@@ -29,6 +29,8 @@ export interface DocumentCardStatusInput {
   analysisStale?: boolean;
   /** Included sheets in this source document that are new since the last completed run. */
   newSheetIds?: Set<string>;
+  /** When true, do not show pre-run "Ready" copy for zero-sheet documents. */
+  analysisSettled?: boolean;
 }
 
 export interface DocumentCardPresentation {
@@ -127,11 +129,21 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
   const { total, completed, failed, pending, analyzing: analyzingCount } = counts;
 
   if (total === 0) {
+    if (input.analysisSettled) {
+      return {
+        status: "completed",
+        counts,
+        badgeLabel: "Not in set",
+        progressLabel: "No analyzable sheets in analysis set",
+        borderClass: "border-border bg-muted/25",
+        badgeVariant: "outline",
+      };
+    }
     return {
       status: "ready",
       counts,
       badgeLabel: "Ready",
-      progressLabel: "No included sheets",
+      progressLabel: "No included sheets yet",
       borderClass: "border-border bg-card",
       badgeVariant: "outline",
     };

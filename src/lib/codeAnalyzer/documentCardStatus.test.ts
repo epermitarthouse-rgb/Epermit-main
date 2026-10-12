@@ -55,6 +55,17 @@ describe("documentCardStatus", () => {
     );
   });
 
+  it("uses settled copy when analysis finished with zero included sheets", () => {
+    const card = deriveDocumentCardStatus({
+      includedSheets: [],
+      completedSheetIds: new Set(),
+      failedSheetIds: new Set(),
+      analyzing: false,
+      analysisSettled: true,
+    });
+    assert.equal(card.progressLabel, "No analyzable sheets in analysis set");
+  });
+
   it("B: 10 completed + 10 analyzing → Analyzing", () => {
     const sheets = sheetsForPdf("pdf-one", 20);
     const completed = new Set(sheets.slice(0, 10).map((s) => s.id));

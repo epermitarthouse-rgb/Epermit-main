@@ -203,7 +203,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
           />
 
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-20 text-foreground md:px-6 md:pb-5 lg:px-8">
-            <div className="min-h-full min-w-0 max-w-full">{children}</div>
+            <div className="min-w-0 max-w-full">{children}</div>
           </main>
         </div>
       </NotificationsProvider>
@@ -223,8 +223,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <SelectedProjectProvider>
       <ScrapeProvider>
-        <SidebarProvider>
-          <div className="signal-grid flex h-svh min-h-0 w-full overflow-hidden bg-background text-foreground">
+        <SidebarProvider className="h-svh min-h-0 max-h-svh overflow-hidden">
+          <div className="signal-grid flex h-full min-h-0 w-full overflow-hidden bg-background text-foreground">
             <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
               <AppSidebar />
               <DashboardContent>{children}</DashboardContent>

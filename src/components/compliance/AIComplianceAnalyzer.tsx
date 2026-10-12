@@ -128,6 +128,7 @@ import {
   type CodeAnalyzerSheet,
 } from "@/lib/codeAnalyzer/model";
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
+import { buildJurisdictionDiagnostics } from "@/lib/codeAnalyzer/jurisdictionDiagnostics";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   analyzerSheetFingerprint,
@@ -154,8 +155,46 @@ import {
   markCurrentRunStale,
   displayRunFromList,
   currentRunFromList,
+  inProgressRunFromList,
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
+import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
+import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
+import {
+  createAsyncAnalyzerRun,
+  fetchSheetJobsForRun,
+  retryFailedSheetJobs,
+  type SheetJobSummary,
+} from "@/lib/codeAnalyzer/asyncRun";
+import {
+  metricsFromAsyncSheetJobs,
+  pickActiveSheetJobSheetId,
+} from "@/lib/codeAnalyzer/asyncRunProgress";
+import { isInProgressRunStatus } from "@/lib/codeAnalyzer/model";
+import {
+  collectAnalyzerWorkflowDocumentIds,
+  isAsyncStandardRunInProgress,
+  pruneUploadHandoffs,
+  reconcileTrackedWorkflowDocumentIds,
+  shouldShowAnalyzerUploadWorkspace,
+  type UploadHandoffEntry,
+} from "@/lib/codeAnalyzer/analyzerUploadWorkspace";
+import {
+  buildOptimisticWorkflowDocumentsFromEnqueues,
+  buildUploadHandoffsFromEnqueues,
+  countVerifiedIngestionEnqueues,
+  isWorkflowOrganizing,
+} from "@/lib/codeAnalyzer/v2UploadHandoff";
+import type { ProjectDocumentMeta } from "@/lib/codeAnalyzer/documentWorkflowModel";
+import { mergeProjectDocumentMetaFetch } from "@/lib/codeAnalyzer/analyzerUploadWorkspace";
+import { fetchDocumentIngestionJobs, fetchProjectDocumentsWithAnalyzerMeta } from "@/lib/codeAnalyzer/classification";
+import type { CodeAnalyzerIngestionJob } from "@/lib/codeAnalyzer/ingestion";
+import {
+  asyncRunTerminalKey,
+  isTerminalStandardRunStatus,
+  shouldHydrateStandardAsyncResults,
+} from "@/lib/codeAnalyzer/asyncRunCompletion";
+import { CodeAnalyzerDocumentWorkflow } from "@/components/compliance/CodeAnalyzerDocumentWorkflow";
 import {
   formatPdfProcessingDetail,
   formatUploadCompletionToast,
@@ -174,7 +213,11 @@ import {
   type UploadSessionState,
 } from "@/lib/codeAnalyzer/uploadSession";
 import { replaceComplianceFindingsForSheet } from "@/lib/codeAnalyzer/findings";
-import { deleteAnalyzerSheet, deleteAnalyzerSourceDrawing } from "@/lib/codeAnalyzer/deleteDrawings";
+import {
+  deleteAnalyzerSheet,
+  removeAnalyzerSourceDocument,
+  removeAnalyzerSourceDocuments,
+} from "@/lib/codeAnalyzer/deleteDrawings";
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
 import { IndexCompletenessPanel } from "@/components/compliance/IndexCompletenessPanel";
 import { CodeModificationReviewResults } from "@/components/compliance/CodeModificationReviewResults";
@@ -190,10 +233,13 @@ import {
   fetchModificationReviewForRun,
 } from "@/lib/codeModification/persistence";
 import {
-  runDcCodeModificationReview,
   CodeModificationReviewError,
   type CodeModificationDrawingUploadOutcome,
 } from "@/lib/codeModification/runReview";
+import {
+  runDcCodeModificationReviewWithMode,
+  isTerminalCodeModRunStatus,
+} from "@/lib/codeModification/runReviewAsyncV2";
 import { existingAnalyzerSourceRefs } from "@/lib/codeAnalyzer/sourceIdentity";
 import { isDcJurisdiction } from "@/lib/codeModification/workflow";
 
@@ -343,10 +389,36 @@ export function AIComplianceAnalyzer() {
   );
   const [uploadSession, setUploadSession] = useState<UploadSessionState | null>(null);
   const [persistedSheets, setPersistedSheets] = useState<CodeAnalyzerSheet[]>([]);
+  /** V2: document ids that belong in the workflow (survives pending→persisted handoff). */
+  const [trackedWorkflowDocumentIds, setTrackedWorkflowDocumentIds] = useState<string[]>([]);
+  const [workflowSourceDocumentCountSticky, setWorkflowSourceDocumentCountSticky] = useState(0);
+  const [workflowDocumentsLatch, setWorkflowDocumentsLatch] = useState(false);
+  const [workflowOrganizingActive, setWorkflowOrganizingActive] = useState(false);
+  const [uploadHandoffs, setUploadHandoffs] = useState<UploadHandoffEntry[]>([]);
+  const v2SessionUploadBusyRef = useRef(false);
+  const v2SessionUploadRetryRef = useRef(false);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const [v2UploadSessionEpoch, setV2UploadSessionEpoch] = useState(0);
+  const committedUploadDocumentIdsRef = useRef<string[]>([]);
+  const [workflowDocumentsHydrated, setWorkflowDocumentsHydrated] = useState<ProjectDocumentMeta[]>(
+    [],
+  );
+  const workflowDocumentsHydratedRef = useRef<ProjectDocumentMeta[]>([]);
+  const applyWorkflowDocumentsHydrated = useCallback((next: ProjectDocumentMeta[]) => {
+    workflowDocumentsHydratedRef.current = next;
+    setWorkflowDocumentsHydrated(next);
+  }, []);
   const [displayRun, setDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  /** Active queued/running standard run — separate from displayRun (current/stale results). */
+  const [standardInProgressRun, setStandardInProgressRun] = useState<CodeAnalyzerRun | null>(null);
+  const [asyncStandardSheetJobs, setAsyncStandardSheetJobs] = useState<SheetJobSummary[]>([]);
+  /** Sheet jobs for terminal displayRun (partial/failed) when no in-progress poll is active. */
+  const [displayRunSheetJobs, setDisplayRunSheetJobs] = useState<SheetJobSummary[]>([]);
   const [modificationDisplayRun, setModificationDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationCurrentRun, setModificationCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  const [modificationInProgressRun, setModificationInProgressRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationForms, setModificationForms] = useState<ProjectDocument[]>([]);
   const [uploadingFormNames, setUploadingFormNames] = useState<string[]>([]);
   const [modificationReview, setModificationReview] = useState<CodeModificationReview | null>(null);
@@ -443,6 +515,18 @@ export function AIComplianceAnalyzer() {
   const [activeResultTab, setActiveResultTab] = useState<"ibc" | "local">("ibc");
 
   const hasLocalAmendments = JURISDICTIONS_WITH_AMENDMENTS.includes(jurisdiction);
+
+  const jurisdictionRunDiagnostics = useMemo(
+    () =>
+      buildJurisdictionDiagnostics(
+        jurisdiction,
+        workflowDocumentsHydrated.map((d) => d.file_name).filter(Boolean),
+      ),
+    [jurisdiction, workflowDocumentsHydrated],
+  );
+
+  const localAnalysisWillBeEmpty =
+    (analysisMode === "both" || analysisMode === "local") && !hasLocalAmendments;
   const isModificationMode =
     analysisKind === "dc_code_modification" && isDcJurisdiction(jurisdiction);
 
@@ -492,6 +576,8 @@ export function AIComplianceAnalyzer() {
     [sheetDocuments],
   );
   const indexPrescreenKeyRef = useRef("");
+  const asyncStandardTerminalRef = useRef("");
+  const asyncModTerminalRef = useRef("");
 
   // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
   useEffect(() => {
@@ -594,28 +680,107 @@ export function AIComplianceAnalyzer() {
     pendingSourceCount: pendingDrawingCount,
   });
 
+  useEffect(() => {
+    asyncStandardTerminalRef.current = "";
+    asyncModTerminalRef.current = "";
+  }, [selectedProjectId]);
+
+  const reconcileWorkflowSync = useCallback(
+    (payload: {
+      documents: ProjectDocumentMeta[];
+      jobs: Pick<CodeAnalyzerIngestionJob, "document_id" | "status">[];
+    }) => {
+      const mergedHydrated = mergeProjectDocumentMetaFetch(
+        workflowDocumentsHydratedRef.current,
+        payload.documents,
+      );
+      applyWorkflowDocumentsHydrated(mergedHydrated);
+
+      setUploadHandoffs((prev) => {
+        const next = pruneUploadHandoffs(prev, mergedHydrated, payload.jobs);
+        setWorkflowOrganizingActive(
+          isWorkflowOrganizing(payload.jobs, mergedHydrated, next.length),
+        );
+        return next.length === prev.length ? prev : next;
+      });
+      setTrackedWorkflowDocumentIds((prev) =>
+        reconcileTrackedWorkflowDocumentIds(prev, mergedHydrated, {
+          committedUploadIds: committedUploadDocumentIdsRef.current,
+        }),
+      );
+      const uiDocCount = collectAnalyzerWorkflowDocumentIds(mergedHydrated).length;
+      if (uiDocCount > 0) {
+        setWorkflowSourceDocumentCountSticky((current) => Math.max(current, uiDocCount));
+        setWorkflowDocumentsLatch(true);
+      }
+    },
+    [applyWorkflowDocumentsHydrated],
+  );
+
+  const syncWorkflowDocumentsFromProject = useCallback(
+    async (projectId: string) => {
+      if (!isCodeAnalyzerAsyncV2Enabled()) return;
+      const [meta, jobs] = await Promise.all([
+        fetchProjectDocumentsWithAnalyzerMeta(projectId),
+        fetchDocumentIngestionJobs(projectId),
+      ]);
+      reconcileWorkflowSync({
+        documents: meta,
+        jobs: jobs as CodeAnalyzerIngestionJob[],
+      });
+    },
+    [reconcileWorkflowSync],
+  );
+
   const reloadAnalyzerDataset = useCallback(async (projectId: string) => {
     const runs = await fetchAnalyzerRuns(projectId);
     const sheets = await fetchAnalyzerSheets(projectId);
     const display = displayRunFromList(runs, ANALYSIS_TYPE_STANDARD);
     const current = currentRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+    const standardInProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD);
     const modificationDisplay = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
     const modificationCurrent = currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+    const modificationInProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
     const hasStandardRuns = runs.some(isStandardComplianceRun);
     setHasAnalyzerRuns(hasStandardRuns);
     setAnalyzerRuns(runs.filter(isStandardComplianceRun));
     setDisplayRun(display);
     setCurrentRun(current);
+    setStandardInProgressRun(standardInProgress);
+    if (standardInProgress?.id) {
+      try {
+        setAsyncStandardSheetJobs(await fetchSheetJobsForRun(standardInProgress.id));
+      } catch (err) {
+        console.error("Error loading async sheet jobs:", err);
+        setAsyncStandardSheetJobs([]);
+      }
+    } else {
+      setAsyncStandardSheetJobs([]);
+    }
     setModificationDisplayRun(modificationDisplay);
     setModificationCurrentRun(modificationCurrent);
+    setModificationInProgressRun(modificationInProgress);
     setPersistedSheets(sheets);
+    const sheetSourceCount = new Set(sheets.map((s) => s.source_document_id).filter(Boolean)).size;
+    if (sheetSourceCount > 0) {
+      setWorkflowSourceDocumentCountSticky((current) => Math.max(current, sheetSourceCount));
+    }
     const includedCount = sheets.filter((s) => !s.excluded).length;
     if (shouldClearPrescreenOnDatasetReload(includedCount)) {
       setIndexCompleteness(null);
       setIndexPrescreenError(null);
       indexPrescreenKeyRef.current = "";
     } else if (display?.index_completeness) {
-      setIndexCompleteness((prev) => prev ?? display.index_completeness ?? null);
+      setIndexCompleteness((prev) => {
+        const incoming = display.index_completeness ?? null;
+        if (!incoming) return prev ?? null;
+        if (!prev) return incoming;
+        return {
+          ...prev,
+          ...incoming,
+          analysisCoverage: incoming.analysisCoverage ?? prev.analysisCoverage,
+        };
+      });
     }
     const ids = [
       ...new Set(
@@ -638,8 +803,146 @@ export function AIComplianceAnalyzer() {
       console.error("Error loading code modification review:", err);
       setModificationReview(null);
     }
+    await syncWorkflowDocumentsFromProject(projectId);
     return { runs, sheets, display, current, hasAnalyzerRuns: hasStandardRuns };
-  }, []);
+  }, [syncWorkflowDocumentsFromProject]);
+
+  // Poll async V2 in-progress runs (displayRun stays current/stale for hydration).
+  useEffect(() => {
+    if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled()) return;
+
+    const needsStandardPoll =
+      standardInProgressRun && isInProgressRunStatus(standardInProgressRun.status);
+    const needsModPoll =
+      modificationInProgressRun && isInProgressRunStatus(modificationInProgressRun.status);
+
+    if (!needsStandardPoll && !needsModPoll) return;
+
+    const poll = async () => {
+      const projectId = selectedProjectId;
+      const runs = await fetchAnalyzerRuns(projectId);
+
+      if (needsStandardPoll) {
+        const prevId = standardInProgressRun?.id;
+        const inProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+        setStandardInProgressRun(inProgress);
+        setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+        setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+
+        if (inProgress?.id) {
+          const jobs = await fetchSheetJobsForRun(inProgress.id);
+          if (selectedProjectIdRef.current === projectId) {
+            setAsyncStandardSheetJobs(jobs);
+          }
+        } else {
+          setAsyncStandardSheetJobs([]);
+          if (prevId && selectedProjectIdRef.current === projectId) {
+            await reloadAnalyzerDataset(projectId);
+          }
+        }
+      }
+
+      if (needsModPoll) {
+        const prevModId = modificationInProgressRun?.id;
+        const inProgressMod = inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+        setModificationInProgressRun(inProgressMod);
+        setModificationDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        if (!inProgressMod && prevModId && selectedProjectIdRef.current === projectId) {
+          await reloadAnalyzerDataset(projectId);
+        }
+      }
+    };
+
+    void poll();
+    const timer = setInterval(() => void poll(), 5000);
+    return () => clearInterval(timer);
+  }, [
+    selectedProjectId,
+    standardInProgressRun?.id,
+    standardInProgressRun?.status,
+    modificationInProgressRun?.id,
+    modificationInProgressRun?.status,
+    reloadAnalyzerDataset,
+  ]);
+
+  const resolveAnalyzerSourceDocument = useCallback(
+    async (sourceDocumentId: string): Promise<ProjectDocument | null> => {
+      let source =
+        sheetDocuments.find((d) => d.id === sourceDocumentId) ??
+        documentsWithAnalysis.find((d) => d.id === sourceDocumentId) ??
+        null;
+      if (!source) {
+        const fetched = await fetchDocumentsByIds([sourceDocumentId]);
+        source = fetched[0] ?? null;
+      }
+      return source;
+    },
+    [sheetDocuments, documentsWithAnalysis],
+  );
+
+  const afterAnalyzerDrawingsRemoved = useCallback(
+    async (removedIds: string[]) => {
+      if (!selectedProjectId || removedIds.length === 0) return;
+      const removedSet = new Set(removedIds);
+      setUploadHandoffs((prev) =>
+        prev.filter((h) => h.documentId && !removedSet.has(h.documentId)),
+      );
+      setTrackedWorkflowDocumentIds((prev) => prev.filter((id) => !removedSet.has(id)));
+      committedUploadDocumentIdsRef.current = committedUploadDocumentIdsRef.current.filter(
+        (id) => !removedSet.has(id),
+      );
+      applyWorkflowDocumentsHydrated(
+        workflowDocumentsHydratedRef.current.filter((d) => !removedSet.has(d.id)),
+      );
+      await markCurrentRunStale(selectedProjectId);
+      await reloadAnalyzerDataset(selectedProjectId);
+      setAnalysisSavedAt(Date.now());
+    },
+    [selectedProjectId, reloadAnalyzerDataset, applyWorkflowDocumentsHydrated],
+  );
+
+  const bulkDeleteAnalyzerDrawings = useCallback(
+    async (sourceDocumentIds: string[]) => {
+      if (!selectedProjectId || sourceDocumentIds.length === 0) {
+        return { removed: [] as string[], failed: [] as string[] };
+      }
+      const uniqueIds = [...new Set(sourceDocumentIds)];
+      const { removed, failed } = await removeAnalyzerSourceDocuments({
+        sourceDocumentIds: uniqueIds,
+        persistedSheets,
+        sheetDocuments,
+        resolveSourceDocument: resolveAnalyzerSourceDocument,
+        deleteDocument,
+      });
+      if (removed.length > 0) {
+        await afterAnalyzerDrawingsRemoved(removed);
+        const staleLabel = isModificationMode ? "Update Review" : "Update Analysis";
+        toast.success(
+          removed.length === 1
+            ? `Document removed — run ${staleLabel} to refresh findings`
+            : `${removed.length} documents removed — run ${staleLabel} to refresh findings`,
+        );
+      }
+      if (failed.length > 0) {
+        toast.error(
+          failed.length === uniqueIds.length
+            ? "Could not remove the selected documents"
+            : `Could not remove ${failed.length} of ${uniqueIds.length} documents`,
+        );
+      }
+      return { removed, failed };
+    },
+    [
+      selectedProjectId,
+      persistedSheets,
+      sheetDocuments,
+      resolveAnalyzerSourceDocument,
+      deleteDocument,
+      afterAnalyzerDrawingsRemoved,
+      isModificationMode,
+    ],
+  );
 
   // Load runs/sheets once when the active project changes (or user becomes available).
   useEffect(() => {
@@ -948,6 +1251,114 @@ export function AIComplianceAnalyzer() {
     [documentsWithAnalysis],
   );
 
+  // General IBC async V2 — hydrate persisted findings once per terminal transition.
+  useEffect(() => {
+    if (!selectedProjectId || !user || !isCodeAnalyzerAsyncV2Enabled() || isModificationMode) {
+      return;
+    }
+    const run = displayRun;
+    if (!run) return;
+
+    const key = asyncRunTerminalKey(run.id, run.status);
+    if (asyncStandardTerminalRef.current === key) return;
+
+    if (shouldHydrateStandardAsyncResults(run.status)) {
+      asyncStandardTerminalRef.current = key;
+      void (async () => {
+        const projectId = selectedProjectId;
+        await reloadAnalyzerDataset(projectId);
+        if (selectedProjectIdRef.current !== projectId) return;
+
+        setAnalysisSavedAt(Date.now());
+        lastAllHydrateKeyRef.current = "";
+        setViewingHistoricalRunId(null);
+
+        const { data: annotations, error } = await supabase
+          .from("document_annotations")
+          .select("document_id")
+          .eq("project_id", projectId)
+          .not("document_id", "is", null);
+        if (error) {
+          console.error("Error loading annotations after async standard run:", error);
+          return;
+        }
+        if (selectedProjectIdRef.current !== projectId) return;
+
+        const docIds = [
+          ...new Set(
+            (annotations ?? [])
+              .map((row) => row.document_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        if (docIds.length > 0) {
+          await hydrateExistingAnalyses(docIds);
+        }
+
+        if (run.status === "current") {
+          toast.success("Analysis complete — results loaded");
+        } else if (run.status === "partial") {
+          toast.warning("Analysis completed with some failed sheet jobs — partial results loaded");
+        }
+      })();
+      return;
+    }
+
+    if (run.status === "failed" || run.status === "cancelled") {
+      asyncStandardTerminalRef.current = key;
+      if (run.status === "failed") {
+        toast.error("Analysis failed — check the status panel for failed jobs");
+      }
+    }
+  }, [
+    displayRun?.id,
+    displayRun?.status,
+    selectedProjectId,
+    user,
+    isModificationMode,
+    reloadAnalyzerDataset,
+    hydrateExistingAnalyses,
+  ]);
+
+  // DC Code Mod async V2 — load review once per terminal transition.
+  useEffect(() => {
+    if (!selectedProjectId || !user || !isCodeAnalyzerAsyncV2Enabled() || !isModificationMode) {
+      return;
+    }
+    const run = modificationDisplayRun;
+    if (!run || !isTerminalCodeModRunStatus(run.status)) return;
+
+    const key = asyncRunTerminalKey(run.id, run.status);
+    if (asyncModTerminalRef.current === key) return;
+    asyncModTerminalRef.current = key;
+
+    void (async () => {
+      if (run.status === "failed" || run.status === "cancelled") {
+        if (run.status === "failed") {
+          toast.error("Code Modification Review failed — check the status panel");
+        }
+        return;
+      }
+      try {
+        const review = await fetchModificationReviewForRun(run.id);
+        setModificationReview(review);
+        if (run.status === "current") {
+          toast.success("Code Modification Review complete");
+        } else if (run.status === "partial") {
+          toast.warning("Code Modification Review completed with some failed jobs");
+        }
+      } catch (err) {
+        console.error("Error loading code modification review after async run:", err);
+      }
+    })();
+  }, [
+    modificationDisplayRun?.id,
+    modificationDisplayRun?.status,
+    selectedProjectId,
+    user,
+    isModificationMode,
+  ]);
+
   // Reset analyzer results when Active Project / ?projectId= changes (header or DesignCheck link).
   const previousProjectIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
@@ -968,8 +1379,20 @@ export function AIComplianceAnalyzer() {
     setSheetDocuments([]);
     setDisplayRun(null);
     setCurrentRun(null);
+    setStandardInProgressRun(null);
+    setAsyncStandardSheetJobs([]);
+    setModificationInProgressRun(null);
     setHasAnalyzerRuns(false);
     setFiles([]);
+    setUploadHandoffs([]);
+    setTrackedWorkflowDocumentIds([]);
+    setWorkflowSourceDocumentCountSticky(0);
+    setWorkflowDocumentsLatch(false);
+    setWorkflowOrganizingActive(false);
+    committedUploadDocumentIdsRef.current = [];
+    applyWorkflowDocumentsHydrated([]);
+    v2SessionUploadBusyRef.current = false;
+    v2SessionUploadRetryRef.current = false;
     setUploadSession(resetUploadSession());
     setHydrateLoadFailed(false);
     setHydrateRunId(null);
@@ -982,7 +1405,7 @@ export function AIComplianceAnalyzer() {
     indexPrescreenKeyRef.current = "";
     lastAllHydrateKeyRef.current = "";
     setActiveResultFileId(null);
-  }, [selectedProjectId]);
+  }, [selectedProjectId, applyWorkflowDocumentsHydrated]);
 
   useEffect(() => {
     if (!selectedProjectId || !user) {
@@ -1609,6 +2032,169 @@ export function AIComplianceAnalyzer() {
     [jurisdiction, projectType, codeYear, analysisInstructions],
   );
 
+  const runV2SessionUpload = useCallback(async () => {
+    if (!selectedProjectId || !user || !isCodeAnalyzerAsyncV2Enabled()) {
+      return;
+    }
+    if (v2SessionUploadBusyRef.current) {
+      v2SessionUploadRetryRef.current = true;
+      return;
+    }
+    const pendingFiles = filesRef.current.filter(isPendingSessionUpload);
+    if (pendingFiles.length === 0) return;
+
+    v2SessionUploadBusyRef.current = true;
+    setFiles((prev) =>
+      prev.map((f) =>
+        isPendingSessionUpload(f) ? { ...f, status: "uploading" as const } : f,
+      ),
+    );
+    try {
+      const persistUpload = async (opts: {
+        file: File;
+        document_type: string;
+        description: string;
+        parent_document_id?: string;
+      }) => {
+        const doc = await uploadDocument({
+          file: opts.file,
+          document_type: opts.document_type as ProjectDocument["document_type"],
+          description: opts.description,
+          parent_document_id: opts.parent_document_id,
+          suppressToasts: true,
+        });
+        if (doc) await fetchDocuments();
+        return doc;
+      };
+
+      setDrawingUploadProgress({
+        total: pendingFiles.length,
+        completed: 0,
+        currentIndex: 1,
+        currentFileName: pendingFiles[0]?.file.name,
+        phase: "uploading",
+      });
+
+      const persisted = await persistPendingAnalyzerSourcesAsyncV2({
+        projectId: selectedProjectId,
+        userId: user.id,
+        pendingFiles,
+        uploadDocument: persistUpload,
+        onUploadProgress: setDrawingUploadProgress,
+      });
+
+      for (const warning of persisted.warnings) toast.warning(warning);
+
+      const uploadSucceeded = pendingFiles.length - persisted.failedSources.length;
+      const uploadToast = formatUploadCompletionToast({
+        total: pendingFiles.length,
+        succeeded: uploadSucceeded,
+        failed: persisted.failedSources.length,
+        singleFileName: pendingFiles.length === 1 ? pendingFiles[0]?.file.name : undefined,
+      });
+      if (uploadToast) {
+        if (uploadToast.type === "success") toast.success(uploadToast.message);
+        else if (uploadToast.type === "warning") toast.warning(uploadToast.message);
+        else toast.error(uploadToast.message);
+      }
+
+      if (uploadSucceeded === 0) {
+        setFiles((prev) =>
+          prev.map((f) => {
+            const failed = persisted.failedSources.find((fs) => fs.id === f.id);
+            if (failed) return { ...f, status: "failed" as const, error: failed.error };
+            return f;
+          }),
+        );
+        return;
+      }
+
+      const verifiedEnqueueCount = countVerifiedIngestionEnqueues(persisted.ingestionJobs);
+      const newDocIds = persisted.ingestionJobs.map((j) => j.documentId);
+      committedUploadDocumentIdsRef.current = [
+        ...new Set([...committedUploadDocumentIdsRef.current, ...newDocIds]),
+      ];
+
+      const pendingNames = new Map(pendingFiles.map((f) => [f.id, f.file.name]));
+      const newHandoffs = buildUploadHandoffsFromEnqueues(persisted.ingestionJobs, pendingNames);
+      const optimisticDocs = buildOptimisticWorkflowDocumentsFromEnqueues(
+        persisted.ingestionJobs,
+        pendingNames,
+      );
+      applyWorkflowDocumentsHydrated(
+        mergeProjectDocumentMetaFetch(workflowDocumentsHydratedRef.current, optimisticDocs),
+      );
+
+      setWorkflowDocumentsLatch(true);
+      setWorkflowSourceDocumentCountSticky((current) =>
+        Math.max(current, newDocIds.length, committedUploadDocumentIdsRef.current.length),
+      );
+      setTrackedWorkflowDocumentIds((prev) => [
+        ...new Set([...prev, ...committedUploadDocumentIdsRef.current]),
+      ]);
+      setUploadHandoffs((prev) => {
+        const byPending = new Map(prev.map((h) => [h.pendingId, h]));
+        for (const h of newHandoffs) byPending.set(h.pendingId, h);
+        const merged = [...byPending.values()];
+        setWorkflowOrganizingActive(true);
+        return merged;
+      });
+
+      if (verifiedEnqueueCount > 0) {
+        toast.info(
+          `${verifiedEnqueueCount} document(s) queued for server-side processing.`,
+        );
+      }
+
+      await syncWorkflowDocumentsFromProject(selectedProjectId);
+      const sheets = await fetchAnalyzerSheets(selectedProjectId);
+      setPersistedSheets(sheets);
+
+      setFiles((prev) =>
+        prev
+          .map((f) => {
+            const failed = persisted.failedSources.find((fs) => fs.id === f.id);
+            if (failed) return { ...f, status: "failed" as const, error: failed.error };
+            return f;
+          })
+          .filter((f) => f.status === "failed"),
+      );
+
+      if (shouldClearUploadProgress({
+        total: pendingFiles.length,
+        completed: pendingFiles.length,
+        currentIndex: pendingFiles.length,
+        phase: "complete",
+      })) {
+        setDrawingUploadProgress(null);
+      }
+    } catch (err) {
+      console.error("V2 session upload failed:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to upload documents");
+      setDrawingUploadProgress(null);
+    } finally {
+      v2SessionUploadBusyRef.current = false;
+      if (v2SessionUploadRetryRef.current) {
+        v2SessionUploadRetryRef.current = false;
+        setV2UploadSessionEpoch((epoch) => epoch + 1);
+      }
+    }
+  }, [
+    selectedProjectId,
+    user,
+    uploadDocument,
+    fetchDocuments,
+    syncWorkflowDocumentsFromProject,
+    applyWorkflowDocumentsHydrated,
+  ]);
+
+  useEffect(() => {
+    if (!isCodeAnalyzerAsyncV2Enabled() || !selectedProjectId || !user) return;
+    const pendingCount = filesRef.current.filter(isPendingSessionUpload).length;
+    if (pendingCount === 0) return;
+    void runV2SessionUpload();
+  }, [files, selectedProjectId, user, runV2SessionUpload, v2UploadSessionEpoch]);
+
   const runBatchAnalysis = useCallback(
     async (onlyFailed = false) => {
       if (selectedProjectId && !user) {
@@ -1632,7 +2218,6 @@ export function AIComplianceAnalyzer() {
         return;
       }
 
-      setAnalyzing(true);
       if (!onlyFailed) {
         setResponses({});
         setActiveResultFileId(null);
@@ -1646,6 +2231,26 @@ export function AIComplianceAnalyzer() {
 
       try {
         let sheets = persistedSheets;
+
+        if (
+          !onlyFailed &&
+          isCodeAnalyzerAsyncV2Enabled() &&
+          pendingFiles.length > 0
+        ) {
+          toast.info("Documents are still uploading — wait for organization to finish.");
+          return;
+        }
+
+        if (
+          !onlyFailed &&
+          isCodeAnalyzerAsyncV2Enabled() &&
+          (workflowOrganizingActive ||
+            uploadHandoffs.length > 0 ||
+            shouldShowUploadProgress(drawingUploadProgress))
+        ) {
+          toast.info("Wait for document organization to finish before running analysis.");
+          return;
+        }
 
         if (!onlyFailed && selectedProjectId && user && pendingFiles.length > 0) {
           if (sheets.length === 0 && documentsWithAnalysis.length > 0) {
@@ -1690,15 +2295,25 @@ export function AIComplianceAnalyzer() {
             phase: "uploading",
           });
 
-          const persisted = await persistPendingAnalyzerSources({
-            projectId: selectedProjectId,
-            pendingFiles,
-            existingSheets: sheets,
-            existingSources: existingAnalyzerSourceRefs(sheets, sheetDocuments),
-            uploadDocument: persistUpload,
-            renderPdfPages: pdfPagesToImageFiles,
-            onUploadProgress: setDrawingUploadProgress,
-          });
+          const useAsyncV2 = isCodeAnalyzerAsyncV2Enabled();
+
+          const persisted = useAsyncV2
+            ? await persistPendingAnalyzerSourcesAsyncV2({
+                projectId: selectedProjectId,
+                userId: user.id,
+                pendingFiles,
+                uploadDocument: persistUpload,
+                onUploadProgress: setDrawingUploadProgress,
+              })
+            : await persistPendingAnalyzerSources({
+                projectId: selectedProjectId,
+                pendingFiles,
+                existingSheets: sheets,
+                existingSources: existingAnalyzerSourceRefs(sheets, sheetDocuments),
+                uploadDocument: persistUpload,
+                renderPdfPages: pdfPagesToImageFiles,
+                onUploadProgress: setDrawingUploadProgress,
+              });
           for (const warning of persisted.warnings) toast.warning(warning);
 
           const uploadSucceeded = pendingFiles.length - persisted.failedSources.length;
@@ -1839,6 +2454,52 @@ export function AIComplianceAnalyzer() {
           return;
         }
 
+        if (onlyFailed && canPersist && selectedProjectId && user && isCodeAnalyzerAsyncV2Enabled() && displayRun?.id) {
+          const retried = await retryFailedSheetJobs(displayRun.id, user.id);
+          toast.success(retried > 0 ? `Retrying ${retried} failed sheet job(s)` : "No failed sheet jobs to retry");
+          setAnalyzing(false);
+          return;
+        }
+
+        if (canPersist && selectedProjectId && user && !onlyFailed && isCodeAnalyzerAsyncV2Enabled()) {
+          if (included.length === 0) {
+            toast.info("Add at least one included sheet to the drawing set before running analysis.");
+            return;
+          }
+          if (jurisdictionRunDiagnostics.mismatch) {
+            toast.warning(jurisdictionRunDiagnostics.message ?? "Jurisdiction mismatch detected.");
+          }
+          if (localAnalysisWillBeEmpty && analysisMode !== "ibc") {
+            toast.info(
+              "Local amendment analysis requires a jurisdiction with loaded amendments (e.g. DC). Only IBC findings will be produced with the current settings.",
+            );
+          }
+          const run = await createAsyncAnalyzerRun({
+            projectId: selectedProjectId,
+            userId: user.id,
+            analysisType: ANALYSIS_TYPE_STANDARD,
+            jurisdiction,
+            projectType,
+            codeYear,
+            analysisMode,
+            sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
+            sheetIds: included.map((s) => s.id),
+            analysisModes:
+              analysisMode === "both" ? ["ibc", "local"] : analysisMode === "local" ? ["local"] : ["ibc"],
+            analysisInstructions,
+            indexCompleteness: indexCompleteness ?? undefined,
+          });
+          analysisRunIdRef.current = run.run.id;
+          setStandardInProgressRun(run.run);
+          setAsyncStandardSheetJobs([]);
+          toast.success(
+            `Analysis queued (${run.jobsCreated} sheet job${run.jobsCreated === 1 ? "" : "s"}). You can close this tab.`,
+          );
+          return;
+        }
+
+        setAnalyzing(true);
+
         if (canPersist && selectedProjectId && user && !onlyFailed) {
           const run = await createAnalyzerRun({
             projectId: selectedProjectId,
@@ -1962,6 +2623,7 @@ export function AIComplianceAnalyzer() {
       persistedSheets,
       projectType,
       reloadAnalyzerDataset,
+      syncWorkflowDocumentsFromProject,
       requestDrawingAnalysis,
       saveAnalysisToDb,
       hydrateExistingAnalyses,
@@ -2069,7 +2731,7 @@ export function AIComplianceAnalyzer() {
         });
       }
 
-      const { review, forms, drawingUpload } = await runDcCodeModificationReview({
+      const result = await runDcCodeModificationReviewWithMode({
         projectId: selectedProjectId,
         userId: user.id,
         jurisdiction,
@@ -2085,9 +2747,28 @@ export function AIComplianceAnalyzer() {
         onUploadProgress: setDrawingUploadProgress,
       });
 
-      await finalizeCodeModDrawingUpload(drawingUpload, pendingDrawingFiles, selectedProjectId);
-      setModificationReview(review);
-      setModificationForms(forms);
+      if (result.async) {
+        const runs = await fetchAnalyzerRuns(selectedProjectId);
+        setModificationDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        setModificationReview(null);
+        if (result.forms) setModificationForms(result.forms);
+        setFiles((prev) => prev.filter((f) => f.status === "failed"));
+        await reloadAnalyzerDataset(selectedProjectId);
+        toast.success(
+          `Code Modification Review queued (${result.jobsCreated} job${result.jobsCreated === 1 ? "" : "s"}). You can close this tab.`,
+        );
+        return;
+      }
+
+      await finalizeCodeModDrawingUpload(
+        result.drawingUpload,
+        pendingDrawingFiles,
+        selectedProjectId,
+      );
+      setModificationReview(result.review!);
+      setModificationForms(result.forms ?? modificationForms);
+      setFiles((prev) => prev.filter((f) => f.status === "failed"));
       await reloadAnalyzerDataset(selectedProjectId);
       toast.success("Code Modification Review complete");
     } catch (err) {
@@ -2353,6 +3034,49 @@ export function AIComplianceAnalyzer() {
     };
   }, [completedBatchFiles, failedBatchFiles, loadedExistingResults, isolateCurrentRun]);
 
+  const workflowSheetJobs = useMemo(
+    () => (standardInProgressRun ? asyncStandardSheetJobs : displayRunSheetJobs),
+    [standardInProgressRun, asyncStandardSheetJobs, displayRunSheetJobs],
+  );
+
+  useEffect(() => {
+    if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled() || isModificationMode) {
+      setDisplayRunSheetJobs([]);
+      return;
+    }
+    if (standardInProgressRun) {
+      setDisplayRunSheetJobs([]);
+      return;
+    }
+    const runId = displayRun?.id;
+    if (!runId) {
+      setDisplayRunSheetJobs([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchSheetJobsForRun(runId)
+      .then((jobs) => {
+        if (!cancelled) setDisplayRunSheetJobs(jobs);
+      })
+      .catch(() => {
+        if (!cancelled) setDisplayRunSheetJobs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedProjectId,
+    displayRun?.id,
+    displayRun?.status,
+    standardInProgressRun?.id,
+    isModificationMode,
+  ]);
+
+  const asyncStandardJobMetrics = useMemo(() => {
+    if (workflowSheetJobs.length === 0) return null;
+    return metricsFromAsyncSheetJobs(workflowSheetJobs);
+  }, [workflowSheetJobs]);
+
   const analyzerMetrics = useMemo(() => {
     const sheetsForMetrics =
       persistedSheets.length > 0
@@ -2367,11 +3091,61 @@ export function AIComplianceAnalyzer() {
             excluded: false,
             created_at: d.created_at,
           }));
-    return computeRunAnalysisMetrics({
+    const base = computeRunAnalysisMetrics({
       sheets: sheetsForMetrics,
       ...runAnalysisContext,
     });
-  }, [persistedSheets, documentsWithAnalysis, runAnalysisContext]);
+    if (!asyncStandardJobMetrics) return base;
+    const failedSheetIds = new Set([
+      ...base.failedSheetIds,
+      ...asyncStandardJobMetrics.failedSheetIds,
+    ]);
+    return {
+      ...base,
+      analyzedCompletedCount: asyncStandardJobMetrics.completed,
+      analyzedFailedCount: asyncStandardJobMetrics.failed,
+      completedSheetIds: asyncStandardJobMetrics.completedSheetIds,
+      failedSheetIds,
+    };
+  }, [persistedSheets, documentsWithAnalysis, runAnalysisContext, asyncStandardJobMetrics]);
+
+  const workflowDisplayRun = useMemo(
+    () =>
+      isModificationMode
+        ? modificationInProgressRun ?? modificationDisplayRun
+        : standardInProgressRun ?? displayRun,
+    [
+      isModificationMode,
+      modificationInProgressRun,
+      modificationDisplayRun,
+      standardInProgressRun,
+      displayRun,
+    ],
+  );
+
+  const workflowBatchProgress = useMemo(() => {
+    if (
+      !isModificationMode &&
+      standardInProgressRun &&
+      asyncStandardJobMetrics &&
+      asyncStandardJobMetrics.total > 0
+    ) {
+      return {
+        completed: asyncStandardJobMetrics.completed,
+        total: asyncStandardJobMetrics.total,
+      };
+    }
+    if (analyzing && batchProgress) {
+      return { completed: batchProgress.completed, total: batchProgress.total };
+    }
+    return null;
+  }, [
+    isModificationMode,
+    standardInProgressRun,
+    asyncStandardJobMetrics,
+    analyzing,
+    batchProgress,
+  ]);
 
   const completedSheetIdsForDrawingSet = analyzerMetrics.completedSheetIds;
 
@@ -2405,6 +3179,9 @@ export function AIComplianceAnalyzer() {
     [newSinceLastAnalysis],
   );
   const currentAnalyzingSheetId = useMemo(() => {
+    if (standardInProgressRun && asyncStandardSheetJobs.length > 0) {
+      return pickActiveSheetJobSheetId(asyncStandardSheetJobs);
+    }
     if (!analyzing) return null;
     const active = files.find((f) => f.status === "analyzing");
     if (active) return active.id;
@@ -2415,7 +3192,7 @@ export function AIComplianceAnalyzer() {
       return match?.id ?? null;
     }
     return null;
-  }, [analyzing, files, batchProgress]);
+  }, [standardInProgressRun, asyncStandardSheetJobs, analyzing, files, batchProgress]);
 
   const historicalAnalysisRuns = useMemo(
     () =>
@@ -2748,6 +3525,38 @@ export function AIComplianceAnalyzer() {
     ? formatPdfProcessingDetail(drawingUploadProgress)
     : null;
   const showDrawingUploadProgress = shouldShowUploadProgress(drawingUploadProgress);
+  const persistedSheetSourceDocumentCount = useMemo(
+    () => new Set(persistedSheets.map((s) => s.source_document_id).filter(Boolean)).size,
+    [persistedSheets],
+  );
+  const hydratedWorkflowDocumentCount = useMemo(
+    () => collectAnalyzerWorkflowDocumentIds(workflowDocumentsHydrated).length,
+    [workflowDocumentsHydrated],
+  );
+  const workflowVisibilityDocumentCount = Math.max(
+    trackedWorkflowDocumentIds.length,
+    workflowSourceDocumentCountSticky,
+    persistedSheetSourceDocumentCount,
+    hydratedWorkflowDocumentCount,
+  );
+  const includedSheetCountForGate = persistedSheets.filter((s) => !s.excluded).length;
+  const showAnalyzerUploadWorkspace = shouldShowAnalyzerUploadWorkspace({
+    persistedSheetCount: persistedSheets.length,
+    sessionFileCount: files.length,
+    analyzedDocCount: documentsWithAnalysis.length,
+    uploadHandoffCount: uploadHandoffs.length,
+    trackedWorkflowDocumentCount: workflowVisibilityDocumentCount,
+    workflowDocumentsLatch,
+  });
+  const uploadSessionInProgress = showDrawingUploadProgress;
+  const complianceRunActive =
+    !isModificationMode &&
+    (isAsyncStandardRunInProgress(
+      isCodeAnalyzerAsyncV2Enabled(),
+      standardInProgressRun?.status,
+    ) ||
+      analyzing);
+  const uiAnalyzing = uploadSessionInProgress || complianceRunActive;
   const hasAnyResults =
     completedBatchFiles.length > 0 ||
     failedBatchFiles.length > 0 ||
@@ -3126,8 +3935,7 @@ export function AIComplianceAnalyzer() {
             )}
             {selectedProjectId &&
               !loadingDocsWithAnalysis &&
-              persistedSheets.length === 0 &&
-              files.length === 0 && (
+              !showAnalyzerUploadWorkspace && (
                 <p className="text-xs text-muted-foreground mt-1" data-testid="text-docs-not-yet-analyzed">
                   No drawings added to this analysis yet.
                 </p>
@@ -3285,6 +4093,21 @@ export function AIComplianceAnalyzer() {
                 searchPlaceholder="Search jurisdictions..."
                 emptyText="No jurisdiction found."
               />
+              {jurisdictionRunDiagnostics.mismatch ? (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{jurisdictionRunDiagnostics.message}</AlertDescription>
+                </Alert>
+              ) : null}
+              {localAnalysisWillBeEmpty && !isModificationMode ? (
+                <Alert className="mt-2">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Dual or local analysis is selected, but General IBC has no local amendment package — local
+                    sheet jobs will return empty local findings until you pick a supported jurisdiction.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -3404,81 +4227,137 @@ export function AIComplianceAnalyzer() {
               onChange={handleFileChange}
             />
 
-            {persistedSheets.length > 0 || files.length > 0 || documentsWithAnalysis.length > 0 ? (
-              <AnalyzerDrawingSet
-                sheets={
-                  persistedSheets.length > 0
-                    ? persistedSheets
-                    : documentsWithAnalysis.map((d) => ({
-                        id: d.id,
-                        project_id: d.project_id,
-                        source_document_id: d.id,
-                        image_document_id: d.id,
-                        page_number: 1,
-                        file_name: d.file_name,
-                        excluded: false,
-                        created_at: d.created_at,
-                      }))
-                }
-                uploadQueueFiles={uploadQueueFiles.map((f) => ({
-                  id: f.id,
-                  name: batchFileDisplayName(f),
-                  sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
-                  preview: f.preview,
-                  discipline: f.discipline,
-                  status: f.status,
-                  error: f.error,
-                }))}
-                failedSheetFiles={failedBatchFiles.map((f) => ({
-                  id: f.id,
-                  name: batchFileDisplayName(f),
-                  sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
-                  preview: f.preview,
-                  discipline: f.discipline,
-                  status: f.status,
-                  error: f.error,
-                }))}
-                newSinceLastAnalysisCount={newSinceLastAnalysis.length}
-                runMetrics={analyzerMetrics}
-                runAnalysisContext={runAnalysisContext}
-                completedSheetIds={completedSheetIdsForDrawingSet}
-                analysisPendingCount={
-                  batchProgress
-                    ? Math.max(0, batchProgress.total - batchProgress.completed)
-                    : undefined
-                }
-                currentAnalyzingSheetName={batchProgress?.currentFileName ?? null}
-                currentAnalyzingSheetId={currentAnalyzingSheetId}
-                newSinceLastAnalysisSheetIds={newSinceLastAnalysisSheetIds}
-                displayRun={isModificationMode ? modificationDisplayRun : displayRun}
-                analysisStale={isModificationMode ? modificationStale : analysisStale}
-                staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
-                workflowMode={isModificationMode ? "code_modification" : "standard"}
-                hasModificationReview={Boolean(modificationReview)}
-                batchProgress={
-                  analyzing && batchProgress
-                    ? { completed: batchProgress.completed, total: batchProgress.total }
-                    : null
-                }
-                analyzing={analyzing}
-                isLegacy={hasAnalyzerRuns === false && persistedSheets.length === 0 && documentsWithAnalysis.length > 0}
-                onAddClick={() => document.getElementById("drawing-upload")?.click()}
-                onRemovePending={removeFile}
-                onPendingDisciplineChange={updateFileDiscipline}
-                onRequestRemoveSource={(sourceDocumentId, label) =>
-                  setDeleteTarget({ kind: "source", sourceDocumentId, label })
-                }
-                onRequestRemoveSheet={(sheet, label) =>
-                  setDeleteTarget({
-                    kind: "sheet",
-                    sourceDocumentId: sheet.source_document_id,
-                    sheet,
-                    label,
-                  })
-                }
-                canAddMore={uploadQueueFiles.length < COMPLIANCE_MAX_BATCH_FILES}
-                pendingUploadCapacityLabel={pendingUploadCapacityLabel}
-              />
+            {showAnalyzerUploadWorkspace ? (
+              selectedProjectId && user && isCodeAnalyzerAsyncV2Enabled() ? (
+                <CodeAnalyzerDocumentWorkflow
+                  projectId={selectedProjectId}
+                  userId={user.id}
+                  uploadHandoffs={uploadHandoffs}
+                  parentWorkflowDocuments={workflowDocumentsHydrated}
+                  onWorkflowSync={reconcileWorkflowSync}
+                  sheets={
+                    persistedSheets.length > 0
+                      ? persistedSheets
+                      : documentsWithAnalysis.map((d) => ({
+                          id: d.id,
+                          project_id: d.project_id,
+                          source_document_id: d.id,
+                          image_document_id: d.id,
+                          page_number: 1,
+                          file_name: d.file_name,
+                          excluded: false,
+                          created_at: d.created_at,
+                        }))
+                  }
+                  uploadQueueFiles={uploadQueueFiles.map((f) => ({
+                    id: f.id,
+                    name: batchFileDisplayName(f),
+                    sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
+                    preview: f.preview,
+                    discipline: f.discipline,
+                    status: f.status,
+                    error: f.error,
+                  }))}
+                  displayRun={workflowDisplayRun}
+                  sheetJobs={workflowSheetJobs}
+                  runMetrics={analyzerMetrics}
+                  complianceRunActive={complianceRunActive}
+                  analysisStale={isModificationMode ? modificationStale : analysisStale}
+                  staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
+                  workflowMode={isModificationMode ? "code_modification" : "standard"}
+                  hasModificationReview={Boolean(modificationReview)}
+                  batchProgress={workflowBatchProgress}
+                  currentAnalyzingSheetId={currentAnalyzingSheetId}
+                  hasResults={hasAnyResults}
+                  onRefresh={() => {
+                    void reloadAnalyzerDataset(selectedProjectId);
+                  }}
+                  onAddClick={() => document.getElementById("drawing-upload")?.click()}
+                  onRemovePending={removeFile}
+                  onPendingDisciplineChange={updateFileDiscipline}
+                  onRequestRemoveSource={(sourceDocumentId, label) =>
+                    setDeleteTarget({ kind: "source", sourceDocumentId, label })
+                  }
+                  onBulkDeleteDrawings={bulkDeleteAnalyzerDrawings}
+                  canAddMore={uploadQueueFiles.length < COMPLIANCE_MAX_BATCH_FILES}
+                  pendingUploadCapacityLabel={pendingUploadCapacityLabel}
+                />
+              ) : (
+                <AnalyzerDrawingSet
+                  sheets={
+                    persistedSheets.length > 0
+                      ? persistedSheets
+                      : documentsWithAnalysis.map((d) => ({
+                          id: d.id,
+                          project_id: d.project_id,
+                          source_document_id: d.id,
+                          image_document_id: d.id,
+                          page_number: 1,
+                          file_name: d.file_name,
+                          excluded: false,
+                          created_at: d.created_at,
+                        }))
+                  }
+                  uploadQueueFiles={uploadQueueFiles.map((f) => ({
+                    id: f.id,
+                    name: batchFileDisplayName(f),
+                    sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
+                    preview: f.preview,
+                    discipline: f.discipline,
+                    status: f.status,
+                    error: f.error,
+                  }))}
+                  failedSheetFiles={failedBatchFiles.map((f) => ({
+                    id: f.id,
+                    name: batchFileDisplayName(f),
+                    sizeLabel: f.file ? formatFileSize(f.file.size) : "—",
+                    preview: f.preview,
+                    discipline: f.discipline,
+                    status: f.status,
+                    error: f.error,
+                  }))}
+                  newSinceLastAnalysisCount={newSinceLastAnalysis.length}
+                  runMetrics={analyzerMetrics}
+                  runAnalysisContext={runAnalysisContext}
+                  completedSheetIds={completedSheetIdsForDrawingSet}
+                  analysisPendingCount={
+                    batchProgress
+                      ? Math.max(0, batchProgress.total - batchProgress.completed)
+                      : undefined
+                  }
+                  currentAnalyzingSheetName={batchProgress?.currentFileName ?? null}
+                  currentAnalyzingSheetId={currentAnalyzingSheetId}
+                  newSinceLastAnalysisSheetIds={newSinceLastAnalysisSheetIds}
+                  displayRun={isModificationMode ? modificationDisplayRun : displayRun}
+                  analysisStale={isModificationMode ? modificationStale : analysisStale}
+                  staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
+                  workflowMode={isModificationMode ? "code_modification" : "standard"}
+                  hasModificationReview={Boolean(modificationReview)}
+                  batchProgress={
+                    analyzing && batchProgress
+                      ? { completed: batchProgress.completed, total: batchProgress.total }
+                      : null
+                  }
+                  analyzing={analyzing}
+                  isLegacy={hasAnalyzerRuns === false && persistedSheets.length === 0 && documentsWithAnalysis.length > 0}
+                  onAddClick={() => document.getElementById("drawing-upload")?.click()}
+                  onRemovePending={removeFile}
+                  onPendingDisciplineChange={updateFileDiscipline}
+                  onRequestRemoveSource={(sourceDocumentId, label) =>
+                    setDeleteTarget({ kind: "source", sourceDocumentId, label })
+                  }
+                  onRequestRemoveSheet={(sheet, label) =>
+                    setDeleteTarget({
+                      kind: "sheet",
+                      sourceDocumentId: sheet.source_document_id,
+                      sheet,
+                      label,
+                    })
+                  }
+                  canAddMore={uploadQueueFiles.length < COMPLIANCE_MAX_BATCH_FILES}
+                  pendingUploadCapacityLabel={pendingUploadCapacityLabel}
+                />
+              )
             ) : (
               <label htmlFor="drawing-upload" className="cursor-pointer">
                 <div className="space-y-2">
@@ -3503,18 +4382,28 @@ export function AIComplianceAnalyzer() {
               size="lg"
               onClick={analyzeDrawings}
               disabled={
-                analyzing ||
+                uiAnalyzing ||
                 (isModificationMode
                   ? modificationForms.length === 0 || uploadingFormNames.length > 0
-                  : (
-                    files.filter((f) => f.status === "pending").length === 0 &&
-                    persistedSheets.filter((s) => !s.excluded).length === 0 &&
-                    files.filter((f) => f.status === "failed").length === 0
-                  ))
+                  : isCodeAnalyzerAsyncV2Enabled()
+                    ? (() => {
+                        const pendingSession = files.filter((f) => f.status === "pending").length;
+                        const organizing =
+                          workflowOrganizingActive ||
+                          uploadHandoffs.length > 0 ||
+                          showDrawingUploadProgress ||
+                          pendingSession > 0;
+                        return organizing || includedSheetCountForGate === 0;
+                      })()
+                    : files.filter((f) => f.status === "pending").length === 0 &&
+                      includedSheetCountForGate === 0 &&
+                      files.filter((f) => f.status === "failed").length === 0 &&
+                      uploadHandoffs.length === 0 &&
+                      trackedWorkflowDocumentIds.length === 0)
               }
               className="px-8"
             >
-              {analyzing ? (
+              {uiAnalyzing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {isModificationMode
@@ -3621,10 +4510,15 @@ export function AIComplianceAnalyzer() {
                 value={analyzerMetrics.analyzedCompletedCount}
                 icon={FileText}
                 detail={formatAnalysisProgressSummary(analyzerMetrics, {
-                  inProgress: analyzing,
-                  pendingCount: batchProgress
-                    ? Math.max(0, batchProgress.total - batchProgress.completed)
-                    : undefined,
+                  inProgress: complianceRunActive || analyzing,
+                  pendingCount: workflowBatchProgress
+                    ? Math.max(
+                        0,
+                        workflowBatchProgress.total - workflowBatchProgress.completed,
+                      )
+                    : batchProgress
+                      ? Math.max(0, batchProgress.total - batchProgress.completed)
+                      : undefined,
                   currentSheetName: batchProgress?.currentFileName ?? null,
                 })}
               />
@@ -3812,32 +4706,27 @@ export function AIComplianceAnalyzer() {
                       deleteSheetRow: deleteAnalyzerSheetRow,
                     });
                     if (!ok) return;
+                    await markCurrentRunStale(selectedProjectId);
+                    await reloadAnalyzerDataset(selectedProjectId);
+                    setAnalysisSavedAt(Date.now());
                   } else {
-                    const source =
-                      sheetDocuments.find((d) => d.id === target.sourceDocumentId) ??
-                      documentsWithAnalysis.find((d) => d.id === target.sourceDocumentId);
-                    if (!source) {
+                    const ok = await removeAnalyzerSourceDocument({
+                      sourceDocumentId: target.sourceDocumentId,
+                      persistedSheets,
+                      sheetDocuments,
+                      resolveSourceDocument: resolveAnalyzerSourceDocument,
+                      deleteDocument,
+                    });
+                    if (!ok) {
+                      setUploadHandoffs((prev) =>
+                        prev.filter((h) => h.documentId !== target.sourceDocumentId),
+                      );
                       toast.error("Could not find that drawing to delete");
                       setDeleteTarget(null);
                       return;
                     }
-                    const relatedSheets = persistedSheets.filter(
-                      (s) => s.source_document_id === source.id,
-                    );
-                    const imageDocs = sheetDocuments.filter((d) =>
-                      relatedSheets.some((s) => s.image_document_id === d.id),
-                    );
-                    const ok = await deleteAnalyzerSourceDrawing({
-                      sourceDocument: source,
-                      sheets: relatedSheets,
-                      imageDocuments: imageDocs,
-                      deleteDocument,
-                    });
-                    if (!ok) return;
+                    await afterAnalyzerDrawingsRemoved([target.sourceDocumentId]);
                   }
-                  await markCurrentRunStale(selectedProjectId);
-                  await reloadAnalyzerDataset(selectedProjectId);
-                  setAnalysisSavedAt(Date.now());
                   toast.success(
                     isModificationMode
                       ? "Drawing set updated — run Update Review to refresh findings"

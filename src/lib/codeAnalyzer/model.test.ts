@@ -13,6 +13,7 @@ import {
   normalizeAnalysisInstructions,
   pickCurrentRun,
   pickDisplayRun,
+  pickInProgressRun,
   planPdfPageNumbers,
   planSourceFilePages,
   resolveHydrateRun,
@@ -166,6 +167,17 @@ describe("pickDisplayRun / pickCurrentRun", () => {
     ];
     assert.equal(pickCurrentRun(runs), null);
     assert.equal(pickDisplayRun(runs)?.id, "new");
+  });
+
+  it("pickInProgressRun returns latest queued/running run without affecting display pick", () => {
+    const runs = [
+      run({ id: "old-stale", status: "stale", completed_at: "2026-08-01T00:00:00Z" }),
+      run({ id: "active", status: "running", created_at: "2026-08-06T00:00:00Z", updated_at: "2026-08-06T01:00:00Z" }),
+      run({ id: "queued", status: "queued", created_at: "2026-08-05T00:00:00Z" }),
+      run({ id: "cur", status: "current", completed_at: "2026-08-04T00:00:00Z" }),
+    ];
+    assert.equal(pickInProgressRun(runs)?.id, "active");
+    assert.equal(pickDisplayRun(runs)?.id, "cur");
   });
 
   it("scopes current/display runs by analysis type and treats missing type as standard", () => {

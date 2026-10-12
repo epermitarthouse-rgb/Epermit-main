@@ -21,7 +21,9 @@ describe("analyze-drawing.service", () => {
     const both = buildPrompts({ codeType: "both", jurisdiction: "dc", codeYear: "2021" });
 
     assert.match(ibc.systemPrompt, /Analyze ONLY against base International Building Code/i);
-    assert.match(local.systemPrompt, /Analyze ONLY against LOCAL jurisdiction amendments/i);
+    assert.match(local.systemPrompt, /JURISDICTION AMENDMENT REFERENCE SUMMARIES/i);
+    assert.match(local.systemPrompt, /plan-sheet items that may be inconsistent/i);
+    assert.doesNotMatch(local.systemPrompt, /Analyze ONLY against LOCAL jurisdiction amendments/i);
     assert.match(both.systemPrompt, /ibcIssues/i);
     assert.match(both.systemPrompt, /localIssues/i);
     assert.equal(ibc.codeType, "ibc");
@@ -125,6 +127,18 @@ describe("analyze-drawing.service", () => {
   it("formatStaffGuidanceBlock returns empty for blank input", () => {
     assert.equal(formatStaffGuidanceBlock(""), "");
     assert.equal(formatStaffGuidanceBlock("   "), "");
+  });
+
+  it("buildPrompts uses a bounded local pass when jurisdiction is General IBC", () => {
+    const localGeneral = buildPrompts({
+      codeType: "local",
+      jurisdiction: "general",
+      codeYear: "2021",
+    });
+    assert.match(localGeneral.systemPrompt, /objective plan-sheet compliance reviews/i);
+    assert.match(localGeneral.systemPrompt, /no local amendment text is loaded/i);
+    assert.doesNotMatch(localGeneral.systemPrompt, /WASHINGTON D\.C\. BUILDING CODE AMENDMENTS/i);
+    assert.doesNotMatch(localGeneral.userPrompt, /violations related to egress/i);
   });
 
   it("buildPrompts treats 3-hour stair staff guidance as non-evidence focus only", () => {
