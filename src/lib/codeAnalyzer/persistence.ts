@@ -9,6 +9,7 @@ import {
   computeSheetFingerprint,
   pickCurrentRun,
   pickDisplayRun,
+  pickInProgressRun,
   type CodeAnalyzerRun,
   type CodeAnalyzerRunStatus,
   type CodeAnalyzerSheet,
@@ -167,6 +168,13 @@ export function displayRunFromList(
   analysisType: string = ANALYSIS_TYPE_STANDARD,
 ): CodeAnalyzerRun | null {
   return pickDisplayRun(runs, analysisType);
+}
+
+export function inProgressRunFromList(
+  runs: CodeAnalyzerRun[],
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): CodeAnalyzerRun | null {
+  return pickInProgressRun(runs, analysisType);
 }
 
 export function currentRunFromList(

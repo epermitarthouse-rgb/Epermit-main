@@ -154,11 +154,22 @@ import {
   markCurrentRunStale,
   displayRunFromList,
   currentRunFromList,
+  inProgressRunFromList,
 } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
 import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
 import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
-import { createAsyncAnalyzerRun, retryFailedSheetJobs } from "@/lib/codeAnalyzer/asyncRun";
+import {
+  createAsyncAnalyzerRun,
+  fetchSheetJobsForRun,
+  retryFailedSheetJobs,
+  type SheetJobSummary,
+} from "@/lib/codeAnalyzer/asyncRun";
+import {
+  metricsFromAsyncSheetJobs,
+  pickActiveSheetJobSheetId,
+} from "@/lib/codeAnalyzer/asyncRunProgress";
+import { isInProgressRunStatus } from "@/lib/codeAnalyzer/model";
 import {
   collectAnalyzerWorkflowDocumentIds,
   isAsyncStandardRunInProgress,
@@ -399,8 +410,12 @@ export function AIComplianceAnalyzer() {
   }, []);
   const [displayRun, setDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [currentRun, setCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  /** Active queued/running standard run — separate from displayRun (current/stale results). */
+  const [standardInProgressRun, setStandardInProgressRun] = useState<CodeAnalyzerRun | null>(null);
+  const [asyncStandardSheetJobs, setAsyncStandardSheetJobs] = useState<SheetJobSummary[]>([]);
   const [modificationDisplayRun, setModificationDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationCurrentRun, setModificationCurrentRun] = useState<CodeAnalyzerRun | null>(null);
+  const [modificationInProgressRun, setModificationInProgressRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationForms, setModificationForms] = useState<ProjectDocument[]>([]);
   const [uploadingFormNames, setUploadingFormNames] = useState<string[]>([]);
   const [modificationReview, setModificationReview] = useState<CodeModificationReview | null>(null);
@@ -655,44 +670,6 @@ export function AIComplianceAnalyzer() {
     asyncModTerminalRef.current = "";
   }, [selectedProjectId]);
 
-  // Poll async V2 runs while non-terminal (state refresh only).
-  useEffect(() => {
-    if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled()) return;
-
-    const standardRun = displayRun;
-    const modRun = modificationDisplayRun;
-    const needsStandardPoll =
-      standardRun && !isTerminalStandardRunStatus(standardRun.status);
-    const needsModPoll =
-      modRun && !isTerminalCodeModRunStatus(modRun.status);
-
-    if (!needsStandardPoll && !needsModPoll) return;
-
-    const poll = async () => {
-      const runs = await fetchAnalyzerRuns(selectedProjectId);
-      if (needsStandardPoll) {
-        const next = displayRunFromList(runs, ANALYSIS_TYPE_STANDARD);
-        setDisplayRun(next);
-        setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
-      }
-      if (needsModPoll) {
-        const nextMod = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
-        setModificationDisplayRun(nextMod);
-        setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
-      }
-    };
-
-    void poll();
-    const timer = setInterval(() => void poll(), 5000);
-    return () => clearInterval(timer);
-  }, [
-    selectedProjectId,
-    displayRun?.id,
-    displayRun?.status,
-    modificationDisplayRun?.id,
-    modificationDisplayRun?.status,
-  ]);
-
   const reconcileWorkflowSync = useCallback(
     (payload: {
       documents: ProjectDocumentMeta[];
@@ -745,15 +722,29 @@ export function AIComplianceAnalyzer() {
     const sheets = await fetchAnalyzerSheets(projectId);
     const display = displayRunFromList(runs, ANALYSIS_TYPE_STANDARD);
     const current = currentRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+    const standardInProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD);
     const modificationDisplay = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
     const modificationCurrent = currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+    const modificationInProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
     const hasStandardRuns = runs.some(isStandardComplianceRun);
     setHasAnalyzerRuns(hasStandardRuns);
     setAnalyzerRuns(runs.filter(isStandardComplianceRun));
     setDisplayRun(display);
     setCurrentRun(current);
+    setStandardInProgressRun(standardInProgress);
+    if (standardInProgress?.id) {
+      try {
+        setAsyncStandardSheetJobs(await fetchSheetJobsForRun(standardInProgress.id));
+      } catch (err) {
+        console.error("Error loading async sheet jobs:", err);
+        setAsyncStandardSheetJobs([]);
+      }
+    } else {
+      setAsyncStandardSheetJobs([]);
+    }
     setModificationDisplayRun(modificationDisplay);
     setModificationCurrentRun(modificationCurrent);
+    setModificationInProgressRun(modificationInProgress);
     setPersistedSheets(sheets);
     const sheetSourceCount = new Set(sheets.map((s) => s.source_document_id).filter(Boolean)).size;
     if (sheetSourceCount > 0) {
@@ -791,6 +782,65 @@ export function AIComplianceAnalyzer() {
     await syncWorkflowDocumentsFromProject(projectId);
     return { runs, sheets, display, current, hasAnalyzerRuns: hasStandardRuns };
   }, [syncWorkflowDocumentsFromProject]);
+
+  // Poll async V2 in-progress runs (displayRun stays current/stale for hydration).
+  useEffect(() => {
+    if (!selectedProjectId || !isCodeAnalyzerAsyncV2Enabled()) return;
+
+    const needsStandardPoll =
+      standardInProgressRun && isInProgressRunStatus(standardInProgressRun.status);
+    const needsModPoll =
+      modificationInProgressRun && isInProgressRunStatus(modificationInProgressRun.status);
+
+    if (!needsStandardPoll && !needsModPoll) return;
+
+    const poll = async () => {
+      const projectId = selectedProjectId;
+      const runs = await fetchAnalyzerRuns(projectId);
+
+      if (needsStandardPoll) {
+        const prevId = standardInProgressRun?.id;
+        const inProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+        setStandardInProgressRun(inProgress);
+        setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+        setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+
+        if (inProgress?.id) {
+          const jobs = await fetchSheetJobsForRun(inProgress.id);
+          if (selectedProjectIdRef.current === projectId) {
+            setAsyncStandardSheetJobs(jobs);
+          }
+        } else {
+          setAsyncStandardSheetJobs([]);
+          if (prevId && selectedProjectIdRef.current === projectId) {
+            await reloadAnalyzerDataset(projectId);
+          }
+        }
+      }
+
+      if (needsModPoll) {
+        const prevModId = modificationInProgressRun?.id;
+        const inProgressMod = inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+        setModificationInProgressRun(inProgressMod);
+        setModificationDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
+        if (!inProgressMod && prevModId && selectedProjectIdRef.current === projectId) {
+          await reloadAnalyzerDataset(projectId);
+        }
+      }
+    };
+
+    void poll();
+    const timer = setInterval(() => void poll(), 5000);
+    return () => clearInterval(timer);
+  }, [
+    selectedProjectId,
+    standardInProgressRun?.id,
+    standardInProgressRun?.status,
+    modificationInProgressRun?.id,
+    modificationInProgressRun?.status,
+    reloadAnalyzerDataset,
+  ]);
 
   const resolveAnalyzerSourceDocument = useCallback(
     async (sourceDocumentId: string): Promise<ProjectDocument | null> => {
@@ -1305,6 +1355,9 @@ export function AIComplianceAnalyzer() {
     setSheetDocuments([]);
     setDisplayRun(null);
     setCurrentRun(null);
+    setStandardInProgressRun(null);
+    setAsyncStandardSheetJobs([]);
+    setModificationInProgressRun(null);
     setHasAnalyzerRuns(false);
     setFiles([]);
     setUploadHandoffs([]);
@@ -2405,8 +2458,8 @@ export function AIComplianceAnalyzer() {
             indexCompleteness: indexCompleteness ?? undefined,
           });
           analysisRunIdRef.current = run.run.id;
-          setDisplayRun(run.run);
-          setCurrentRun(null);
+          setStandardInProgressRun(run.run);
+          setAsyncStandardSheetJobs([]);
           toast.success(
             `Analysis queued (${run.jobsCreated} sheet job${run.jobsCreated === 1 ? "" : "s"}). You can close this tab.`,
           );
@@ -2949,6 +3002,11 @@ export function AIComplianceAnalyzer() {
     };
   }, [completedBatchFiles, failedBatchFiles, loadedExistingResults, isolateCurrentRun]);
 
+  const asyncStandardJobMetrics = useMemo(() => {
+    if (!standardInProgressRun || asyncStandardSheetJobs.length === 0) return null;
+    return metricsFromAsyncSheetJobs(asyncStandardSheetJobs);
+  }, [standardInProgressRun, asyncStandardSheetJobs]);
+
   const analyzerMetrics = useMemo(() => {
     const sheetsForMetrics =
       persistedSheets.length > 0
@@ -2963,11 +3021,61 @@ export function AIComplianceAnalyzer() {
             excluded: false,
             created_at: d.created_at,
           }));
-    return computeRunAnalysisMetrics({
+    const base = computeRunAnalysisMetrics({
       sheets: sheetsForMetrics,
       ...runAnalysisContext,
     });
-  }, [persistedSheets, documentsWithAnalysis, runAnalysisContext]);
+    if (!asyncStandardJobMetrics) return base;
+    const failedSheetIds = new Set([
+      ...base.failedSheetIds,
+      ...asyncStandardJobMetrics.failedSheetIds,
+    ]);
+    return {
+      ...base,
+      analyzedCompletedCount: asyncStandardJobMetrics.completed,
+      analyzedFailedCount: asyncStandardJobMetrics.failed,
+      completedSheetIds: asyncStandardJobMetrics.completedSheetIds,
+      failedSheetIds,
+    };
+  }, [persistedSheets, documentsWithAnalysis, runAnalysisContext, asyncStandardJobMetrics]);
+
+  const workflowDisplayRun = useMemo(
+    () =>
+      isModificationMode
+        ? modificationInProgressRun ?? modificationDisplayRun
+        : standardInProgressRun ?? displayRun,
+    [
+      isModificationMode,
+      modificationInProgressRun,
+      modificationDisplayRun,
+      standardInProgressRun,
+      displayRun,
+    ],
+  );
+
+  const workflowBatchProgress = useMemo(() => {
+    if (
+      !isModificationMode &&
+      standardInProgressRun &&
+      asyncStandardJobMetrics &&
+      asyncStandardJobMetrics.total > 0
+    ) {
+      return {
+        completed: asyncStandardJobMetrics.completed,
+        total: asyncStandardJobMetrics.total,
+      };
+    }
+    if (analyzing && batchProgress) {
+      return { completed: batchProgress.completed, total: batchProgress.total };
+    }
+    return null;
+  }, [
+    isModificationMode,
+    standardInProgressRun,
+    asyncStandardJobMetrics,
+    analyzing,
+    batchProgress,
+  ]);
 
   const completedSheetIdsForDrawingSet = analyzerMetrics.completedSheetIds;
 
@@ -3001,6 +3109,9 @@ export function AIComplianceAnalyzer() {
     [newSinceLastAnalysis],
   );
   const currentAnalyzingSheetId = useMemo(() => {
+    if (standardInProgressRun && asyncStandardSheetJobs.length > 0) {
+      return pickActiveSheetJobSheetId(asyncStandardSheetJobs);
+    }
     if (!analyzing) return null;
     const active = files.find((f) => f.status === "analyzing");
     if (active) return active.id;
@@ -3011,7 +3122,7 @@ export function AIComplianceAnalyzer() {
       return match?.id ?? null;
     }
     return null;
-  }, [analyzing, files, batchProgress]);
+  }, [standardInProgressRun, asyncStandardSheetJobs, analyzing, files, batchProgress]);
 
   const historicalAnalysisRuns = useMemo(
     () =>
@@ -3370,7 +3481,11 @@ export function AIComplianceAnalyzer() {
   const uploadSessionInProgress = showDrawingUploadProgress;
   const complianceRunActive =
     !isModificationMode &&
-    (isAsyncStandardRunInProgress(isCodeAnalyzerAsyncV2Enabled(), displayRun?.status) || analyzing);
+    (isAsyncStandardRunInProgress(
+      isCodeAnalyzerAsyncV2Enabled(),
+      standardInProgressRun?.status,
+    ) ||
+      analyzing);
   const uiAnalyzing = uploadSessionInProgress || complianceRunActive;
   const hasAnyResults =
     completedBatchFiles.length > 0 ||
@@ -4058,18 +4173,14 @@ export function AIComplianceAnalyzer() {
                     status: f.status,
                     error: f.error,
                   }))}
-                  displayRun={isModificationMode ? modificationDisplayRun : displayRun}
+                  displayRun={workflowDisplayRun}
                   runMetrics={analyzerMetrics}
                   complianceRunActive={complianceRunActive}
                   analysisStale={isModificationMode ? modificationStale : analysisStale}
                   staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
                   workflowMode={isModificationMode ? "code_modification" : "standard"}
                   hasModificationReview={Boolean(modificationReview)}
-                  batchProgress={
-                    analyzing && batchProgress
-                      ? { completed: batchProgress.completed, total: batchProgress.total }
-                      : null
-                  }
+                  batchProgress={workflowBatchProgress}
                   currentAnalyzingSheetId={currentAnalyzingSheetId}
                   hasResults={hasAnyResults}
                   onRefresh={() => {
@@ -4313,10 +4424,15 @@ export function AIComplianceAnalyzer() {
                 value={analyzerMetrics.analyzedCompletedCount}
                 icon={FileText}
                 detail={formatAnalysisProgressSummary(analyzerMetrics, {
-                  inProgress: analyzing,
-                  pendingCount: batchProgress
-                    ? Math.max(0, batchProgress.total - batchProgress.completed)
-                    : undefined,
+                  inProgress: complianceRunActive || analyzing,
+                  pendingCount: workflowBatchProgress
+                    ? Math.max(
+                        0,
+                        workflowBatchProgress.total - workflowBatchProgress.completed,
+                      )
+                    : batchProgress
+                      ? Math.max(0, batchProgress.total - batchProgress.completed)
+                      : undefined,
                   currentSheetName: batchProgress?.currentFileName ?? null,
                 })}
               />

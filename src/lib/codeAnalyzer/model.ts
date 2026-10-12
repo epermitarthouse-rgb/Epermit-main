@@ -195,6 +195,25 @@ function runCompletedAtTime(run: RunPickFields): string {
   return run.completed_at || run.updated_at || run.created_at || "";
 }
 
+export const IN_PROGRESS_RUN_STATUSES = ["queued", "running"] as const;
+
+export function isInProgressRunStatus(status: string): boolean {
+  return status === "queued" || status === "running";
+}
+
+/** Latest active async run (queued/running) for live progress UI — not used for results hydration. */
+export function pickInProgressRun<T extends RunPickFields>(
+  runs: T[],
+  analysisType: string = ANALYSIS_TYPE_STANDARD,
+): T | null {
+  const scoped = runs
+    .filter((r) => runAnalysisType(r) === analysisType && isInProgressRunStatus(r.status))
+    .sort((a, b) =>
+      (b.updated_at || b.created_at || "").localeCompare(a.updated_at || a.created_at || ""),
+    );
+  return scoped[0] ?? null;
+}
+
 /** Prefer the current run; otherwise the most recently completed stale run (last results). */
 export function pickDisplayRun<T extends RunPickFields>(
   runs: T[],
