@@ -6,7 +6,10 @@ import { supabase } from "@/lib/supabase";
 import { computeSheetFingerprint, type CodeAnalyzerSheet } from "@/lib/codeAnalyzer/model";
 import { fetchDocumentsByIds } from "@/lib/codeAnalyzer/persistence";
 import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
-import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
+import {
+  CODE_ANALYZER_V2_REQUIRED_MESSAGE,
+  isCodeAnalyzerAsyncV2Enabled,
+} from "@/lib/codeAnalyzer/featureFlags";
 import {
   computeFormsFingerprint,
   computeModificationSourceFingerprint,
@@ -19,10 +22,7 @@ import {
 } from "@/lib/codeModification/evidenceSources";
 import { analyzerWorkflowFor } from "@/lib/codeModification/workflow";
 import type { ProjectDocument } from "@/types/document";
-import {
-  runDcCodeModificationReview,
-  type CodeModificationDrawingUploadOutcome,
-} from "./runReview";
+import type { CodeModificationDrawingUploadOutcome } from "./runReview";
 
 export interface CodeModJobSummary {
   id: string;
@@ -120,15 +120,7 @@ export async function runDcCodeModificationReviewWithMode(params: {
   }
 
   if (!isCodeAnalyzerAsyncV2Enabled()) {
-    const legacy = await runDcCodeModificationReview(params);
-    return {
-      runId: legacy.review.run_id,
-      jobsCreated: 0,
-      async: false,
-      review: legacy.review,
-      forms: legacy.forms,
-      drawingUpload: legacy.drawingUpload,
-    };
+    throw new Error(CODE_ANALYZER_V2_REQUIRED_MESSAGE);
   }
 
   let sheets = params.persistedSheets;

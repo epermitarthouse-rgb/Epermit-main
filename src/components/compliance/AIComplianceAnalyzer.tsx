@@ -68,8 +68,6 @@ import {
   createComplianceBatchFileId,
   batchFileDisplayName,
   formatBatchProgressLabel,
-  formatAnalysisCompletionToast,
-  processComplianceBatch,
   type ComplianceBatchAnalysisResult,
   type ComplianceBatchFile,
   type ComplianceBatchFileStatus,
@@ -145,8 +143,6 @@ import {
   newSincePreviousRun,
 } from "@/lib/codeAnalyzer/sheetState";
 import {
-  completeAnalyzerRun,
-  createAnalyzerRun,
   deleteAnalyzerSheetRow,
   fetchAnalyzerRuns,
   fetchAnalyzerSheets,
@@ -157,9 +153,11 @@ import {
   currentRunFromList,
   inProgressRunFromList,
 } from "@/lib/codeAnalyzer/persistence";
-import { persistPendingAnalyzerSources } from "@/lib/codeAnalyzer/persistPending";
 import { persistPendingAnalyzerSourcesAsyncV2 } from "@/lib/codeAnalyzer/persistPendingV2";
-import { isCodeAnalyzerAsyncV2Enabled } from "@/lib/codeAnalyzer/featureFlags";
+import {
+  CODE_ANALYZER_V2_REQUIRED_MESSAGE,
+  isCodeAnalyzerAsyncV2Enabled,
+} from "@/lib/codeAnalyzer/featureFlags";
 import {
   createAsyncAnalyzerRun,
   fetchSheetJobsForRun,
@@ -240,7 +238,6 @@ import {
   runDcCodeModificationReviewWithMode,
   isTerminalCodeModRunStatus,
 } from "@/lib/codeModification/runReviewAsyncV2";
-import { existingAnalyzerSourceRefs } from "@/lib/codeAnalyzer/sourceIdentity";
 import { isDcJurisdiction } from "@/lib/codeModification/workflow";
 
 interface ComplianceIssue {
@@ -2197,6 +2194,10 @@ export function AIComplianceAnalyzer() {
 
   const runBatchAnalysis = useCallback(
     async (onlyFailed = false) => {
+      if (!isCodeAnalyzerAsyncV2Enabled()) {
+        toast.error(CODE_ANALYZER_V2_REQUIRED_MESSAGE);
+        return;
+      }
       if (selectedProjectId && !user) {
         toast.error("You must be logged in to save analysis to a project");
         return;
@@ -2295,25 +2296,13 @@ export function AIComplianceAnalyzer() {
             phase: "uploading",
           });
 
-          const useAsyncV2 = isCodeAnalyzerAsyncV2Enabled();
-
-          const persisted = useAsyncV2
-            ? await persistPendingAnalyzerSourcesAsyncV2({
-                projectId: selectedProjectId,
-                userId: user.id,
-                pendingFiles,
-                uploadDocument: persistUpload,
-                onUploadProgress: setDrawingUploadProgress,
-              })
-            : await persistPendingAnalyzerSources({
-                projectId: selectedProjectId,
-                pendingFiles,
-                existingSheets: sheets,
-                existingSources: existingAnalyzerSourceRefs(sheets, sheetDocuments),
-                uploadDocument: persistUpload,
-                renderPdfPages: pdfPagesToImageFiles,
-                onUploadProgress: setDrawingUploadProgress,
-              });
+          const persisted = await persistPendingAnalyzerSourcesAsyncV2({
+            projectId: selectedProjectId,
+            userId: user.id,
+            pendingFiles,
+            uploadDocument: persistUpload,
+            onUploadProgress: setDrawingUploadProgress,
+          });
           for (const warning of persisted.warnings) toast.warning(warning);
 
           const uploadSucceeded = pendingFiles.length - persisted.failedSources.length;
@@ -2498,109 +2487,18 @@ export function AIComplianceAnalyzer() {
           return;
         }
 
-        setAnalyzing(true);
-
-        if (canPersist && selectedProjectId && user && !onlyFailed) {
-          const run = await createAnalyzerRun({
-            projectId: selectedProjectId,
-            userId: user.id,
-            jurisdiction,
-            projectType,
-            codeYear,
-            analysisMode,
-            sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
-            analysisInstructions,
-            indexCompleteness: indexCompleteness ?? undefined,
-          });
-          analysisRunIdRef.current = run.id;
-          setActiveBatchRunId(run.id);
-          setHydrateRunId(run.id);
-          setDisplayRun(run);
-          setCurrentRun(null);
-        } else if (onlyFailed && !analysisRunIdRef.current && displayRun?.id) {
-          analysisRunIdRef.current = displayRun.id;
-          setActiveBatchRunId(displayRun.id);
-          setHydrateRunId(displayRun.id);
-        }
-
-        setBatchRetrying(onlyFailed);
-        setBatchProgress({ total: batchFiles.length, completed: 0, currentIndex: 1 });
-        setFiles(batchFiles);
-
-        const fetchSheetImage =
-          lazySheetDocsById && canPersist
-            ? async (item: ComplianceBatchFile) => {
-                const imageDoc =
-                  (item.documentId && lazySheetDocsById!.get(item.documentId)) ||
-                  (item.sourceDocumentId ? lazySheetDocsById!.get(item.sourceDocumentId) : undefined);
-                if (!imageDoc) {
-                  throw new Error(
-                    `Missing image for ${item.fileName ?? "drawing"}${item.pageNumber ? ` p.${item.pageNumber}` : ""}`,
-                  );
-                }
-                const url = await getDownloadUrl(imageDoc);
-                if (!url) throw new Error(`Could not download ${imageDoc.file_name}`);
-                const response = await fetch(url);
-                const blob = await response.blob();
-                const imageFile = new File([blob], imageDoc.file_name, {
-                  type: imageDoc.file_type || blob.type || "image/png",
-                });
-                return { file: imageFile, preparedImageFile: imageFile };
-              }
-            : undefined;
-
-        const { succeeded, failed } = await processComplianceBatch({
-          files: batchFiles,
-          onlyFailed,
-          fetchSheetImage,
-          analysisMode,
-          hasLocalAmendments,
-          jurisdiction,
-          projectType,
-          codeYear,
-          projectId: selectedProjectId,
-          canPersist,
-          uploadDocument: async () => null,
-          requestAnalysis: requestDrawingAnalysis,
-          saveAnalysisToDb: saveAnalysisToDb,
-          onFileUpdate: (id, patch) => {
-            setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
-          },
-          onProgress: setBatchProgress,
-        });
-
-        if (canPersist && analysisRunIdRef.current) {
-          await completeAnalyzerRun(analysisRunIdRef.current, succeeded > 0 ? "current" : "failed");
-        }
-
-        setFiles((prev) => prev.filter((f) => f.status === "failed"));
-        setActiveBatchRunId(null);
-        analysisRunIdRef.current = null;
-        setAnalysisSavedAt(Date.now());
-        if (selectedProjectId) {
-          await reloadAnalyzerDataset(selectedProjectId);
-          lastAllHydrateKeyRef.current = "";
-          void hydrateExistingAnalyses();
-        }
-
-        const completionToast = formatAnalysisCompletionToast({
-          total: batchFiles.length,
-          succeeded,
-          failed,
-        });
-        if (completionToast.type === "success") toast.success(completionToast.message);
-        else if (completionToast.type === "warning") toast.warning(completionToast.message);
-        else toast.error(completionToast.message);
+        toast.error(
+          selectedProjectId && user
+            ? "Code Analyzer could not queue a V2 run. Refresh and try again. The legacy browser analysis path is disabled."
+            : "Open a project before running Code Analyzer. New analysis runs on the server.",
+        );
+        return;
       } catch (err) {
         console.error("Batch analysis error:", err);
         toast.error(err instanceof Error ? err.message : "Failed to analyze drawings");
         setDrawingUploadProgress(null);
-        const failedRunId = analysisRunIdRef.current;
         setActiveBatchRunId(null);
         analysisRunIdRef.current = null;
-        if (failedRunId && selectedProjectId) {
-          await completeAnalyzerRun(failedRunId, "failed").catch(() => undefined);
-        }
       } finally {
         setBatchRetrying(false);
         setAnalyzing(false);
