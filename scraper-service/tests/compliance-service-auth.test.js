@@ -12,6 +12,9 @@ describe("compliance-service-auth", () => {
     const key = "test-service-role-key-12345";
     assert.equal(isServiceRoleKey(key, key), true);
     assert.equal(isServiceRoleKey("wrong", key), false);
+    assert.equal(isServiceRoleKey(key, `${key}\n`), true);
+    assert.equal(isServiceRoleKey(`${key}\n`, key), true);
+    assert.equal(isServiceRoleKey(" \n", key), false);
   });
 
   it("rejects missing bearer token", async () => {
@@ -24,6 +27,29 @@ describe("compliance-service-auth", () => {
     const key = "local-service-role-secret";
     const prev = process.env.SUPABASE_SERVICE_ROLE_KEY;
     process.env.SUPABASE_SERVICE_ROLE_KEY = key;
+    try {
+      const out = await authenticateComplianceServiceRequest(
+        { headers: { authorization: `Bearer ${key}` } },
+        {
+          auth: {
+            getUser: () => {
+              throw new Error("getUser should not run for service role");
+            },
+          },
+        },
+      );
+      assert.equal(out.ok, true);
+      assert.equal(out.caller, "service_role");
+    } finally {
+      if (prev === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = prev;
+    }
+  });
+
+  it("accepts bearer token when the configured key has a trailing newline", async () => {
+    const key = "local-service-role-secret";
+    const prev = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = `${key}\n`;
     try {
       const out = await authenticateComplianceServiceRequest(
         { headers: { authorization: `Bearer ${key}` } },

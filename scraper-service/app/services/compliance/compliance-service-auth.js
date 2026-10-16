@@ -14,9 +14,9 @@ function isServiceRoleKey(token, serviceRoleKey) {
   if (!token || !serviceRoleKey) {
     return false;
   }
-  const left = Buffer.from(String(token));
-  const right = Buffer.from(String(serviceRoleKey));
-  if (left.length !== right.length) {
+  const left = Buffer.from(String(token).trim());
+  const right = Buffer.from(String(serviceRoleKey).trim());
+  if (left.length === 0 || left.length !== right.length) {
     return false;
   }
   return crypto.timingSafeEqual(left, right);
