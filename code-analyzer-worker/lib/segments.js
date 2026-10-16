@@ -4,6 +4,7 @@ const {
   classifyDocument,
   countCsiSpecificationSignals,
   isArchitecturalSectionDetailDrawing,
+  isArchitecturalSheetFileName,
 } = require("./classify");
 
 const FORM_PAGE_RE =
@@ -21,6 +22,10 @@ function classifyPage({ pageNumber, text, fileName, documentType }) {
 
   if (isArchitecturalSectionDetailDrawing({ fileName, text: body })) {
     return { analyzerClass: "drawing_set", source: "auto", confidence: 0.82, pageNumber };
+  }
+
+  if (isArchitecturalSheetFileName(fileName) && countCsiSpecificationSignals(body) < 2) {
+    return { analyzerClass: "drawing_set", source: "filename", confidence: 0.9, pageNumber };
   }
 
   const csiSpecSignals = countCsiSpecificationSignals(body);

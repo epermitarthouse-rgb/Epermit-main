@@ -2,13 +2,11 @@
 
 /**
  * Maximum source files accepted in one upload drop.
- *
- * Kept below the 40-sheet included cap so a single batch cannot attach dozens of
- * multipage PDFs (each expands to up to COMPLIANCE_MAX_PAGES_PER_PDF sheets).
- * Sixteen single-page files fit one drop; additional drops can fill included sheets
- * until COMPLIANCE_MAX_INCLUDED_SHEETS.
+ * Single-page permit sheets can fill one drop up to the included-sheet cap.
+ * Multipage expansion is still limited by COMPLIANCE_MAX_INCLUDED_SHEETS and the
+ * per-PDF page raster cap.
  */
-export const COMPLIANCE_MAX_BATCH_FILES = 16;
+export const COMPLIANCE_MAX_BATCH_FILES = 40;
 
 /** @deprecated Use COMPLIANCE_MAX_BATCH_FILES */
 export const COMPLIANCE_MAX_DRAWING_FILES = COMPLIANCE_MAX_BATCH_FILES;

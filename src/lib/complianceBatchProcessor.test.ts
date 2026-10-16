@@ -34,8 +34,8 @@ function makeBatchFile(name: string, overrides: Partial<ComplianceBatchFile> = {
 }
 
 describe("complianceUploadLimits batch", () => {
-  it("allows up to sixteen source files per upload drop", () => {
-    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 16);
+  it("allows up to forty source files per upload drop", () => {
+    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 40);
   });
 
   it("accepts multiple files up to the batch cap", () => {
@@ -48,7 +48,7 @@ describe("complianceUploadLimits batch", () => {
 
   it("rejects files beyond the batch cap without silently dropping silently-unreported extras", () => {
     const incoming = Array.from({ length: 4 }, (_, i) => makeFile(`f${i}.png`));
-    const { accepted, rejectedCount } = mergeComplianceFiles(15, incoming);
+    const { accepted, rejectedCount } = mergeComplianceFiles(39, incoming);
     assert.equal(accepted.length, 1);
     assert.equal(rejectedCount, 3);
   });

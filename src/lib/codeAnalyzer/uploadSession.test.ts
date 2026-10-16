@@ -44,7 +44,7 @@ describe("upload session lifecycle", () => {
     const session = syncUploadSession(null, 1, null);
     const batchTotal = resolveUploadSessionBatchTotal(session, 1, null);
     assert.equal(projectSourceDocumentCount, 16);
-    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 16);
+    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 40);
     assert.notEqual(batchTotal, projectSourceDocumentCount);
     assert.equal(
       formatPendingUploadCapacityLabel(1, batchTotal),
@@ -115,7 +115,7 @@ describe("upload session lifecycle", () => {
   });
 
   it("K: hydration/reload idle — zero pending and null progress never shows label", () => {
-    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 16);
+    assert.equal(COMPLIANCE_MAX_BATCH_FILES, 40);
     assert.equal(shouldShowPendingUploadCapacityLabel(null, null, 0), false);
   });
 

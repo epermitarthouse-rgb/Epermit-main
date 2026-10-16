@@ -47,6 +47,30 @@ B. Remove all existing waterproofing membranes and prepare surfaces for new appl
     assert.equal(result.analyzerClass, "specification");
   });
 
+  it("classifies dotted and hyphenated architectural sheet PDFs as drawing_set", () => {
+    const planNames = [
+      "A-1.03-00.pdf",
+      "A-1.04.00.pdf",
+      "A-1.05.00.pdf",
+      "A-2.02.00.pdf",
+      "A-3.02-00.pdf",
+      "M-1.1.pdf",
+      "S-001.00.pdf",
+      "E-1.0-00.pdf",
+      "FP100.pdf",
+    ];
+    const longTitleBlock = "GENERAL NOTES ".repeat(80);
+    for (const fileName of planNames) {
+      const result = classifyDocument({
+        fileName,
+        documentType: "specification",
+        samplePageTexts: [longTitleBlock],
+      });
+      assert.equal(result.analyzerClass, "drawing_set", fileName);
+      assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), true, fileName);
+    }
+  });
+
   it("classifies V2 plan PDFs as drawing_set despite document_type specification", () => {
     const planNames = [
       "A001-SITE PLAN.pdf",

@@ -8,6 +8,23 @@ import {
 } from "./documentWorkflowModel.ts";
 
 describe("documentWorkflowModel", () => {
+  it("treats architectural sheet filenames as drawings even when stored as specifications", () => {
+    for (const fileName of ["A-1.03-00.pdf", "A-1.04.00.pdf", "A-3.02-00.pdf"]) {
+      const { purpose, detail } = resolveDocumentPurpose(
+        {
+          id: "sheet",
+          file_name: fileName,
+          analyzer_class: "specification",
+          analyzer_processing_status: "completed",
+          document_type: "specification",
+        },
+        0,
+      );
+      assert.equal(purpose, "Drawing", fileName);
+      assert.match(detail ?? "", /Plan sheets/, fileName);
+    }
+  });
+
   it("includes specification and permit_drawing project uploads", () => {
     assert.equal(isAnalyzerWorkflowDocument({ id: "1", file_name: "a.pdf", analyzer_class: null, analyzer_processing_status: "not_started", document_type: "permit_drawing" }), true);
     assert.equal(isAnalyzerWorkflowDocument({ id: "2", file_name: "b.pdf", analyzer_class: "specification", analyzer_processing_status: "completed", document_type: "specification" }), true);

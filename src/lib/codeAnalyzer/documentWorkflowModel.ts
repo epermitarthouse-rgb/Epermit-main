@@ -1,8 +1,8 @@
 /**
  * User-facing document workflow model for Code Analyzer V2 (no raw backend labels).
  */
-import type { CodeAnalyzerIngestionJob } from "./ingestion";
-import { isTerminalIngestionStatus } from "./ingestion";
+import { isTerminalIngestionStatus, type CodeAnalyzerIngestionJob } from "./ingestion";
+import { isArchitecturalSheetFileName } from "./sheetFileName";
 import type { CodeAnalyzerSheet } from "./model";
 import { deriveDocumentCardStatus } from "./documentCardStatus";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
@@ -100,6 +100,12 @@ export function resolveDocumentPurpose(
     return {
       purpose: "Code modification form",
       detail: "Used for Code Modification review when that mode is enabled.",
+    };
+  }
+  if (isArchitecturalSheetFileName(doc.file_name)) {
+    return {
+      purpose: "Drawing",
+      detail: "Plan sheets from this file are analyzed visually.",
     };
   }
   if (cls === "specification" || cls === "supporting" || cls === "report") {

@@ -104,6 +104,20 @@ B. Related work specified in Division 01 and Division 02.`,
     }
   });
 
+  it("classifies one-page architectural sheet PDFs as drawings when title-block text is long", () => {
+    const longNotes = `${"GENERAL NOTES AND DIMENSIONS ".repeat(40)}\nA-1.03`;
+    for (const fileName of ["A-1.03-00.pdf", "A-1.04.00.pdf", "A-3.02-00.pdf"]) {
+      const page = classifyPage({
+        pageNumber: 1,
+        text: longNotes,
+        fileName,
+        documentType: "specification",
+      });
+      assert.equal(page.analyzerClass, "drawing_set", fileName);
+      assert.equal(shouldCreateSheetsForPage(page.analyzerClass), true, fileName);
+    }
+  });
+
   it("still classifies CSI SECTION headings as specification", () => {
     const csi03030 = classifyPage({
       pageNumber: 1,

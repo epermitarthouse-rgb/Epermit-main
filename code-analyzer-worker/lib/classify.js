@@ -32,6 +32,23 @@ const DRAWING_SHEET_RE = /\b([A-Z]{1,4}-\d+(?:\.\d+)*)\b/;
 const PERMIT_SHEET_INDEX_FILENAME_RE = /^[A-Z]{1,4}\s*\d{2,4}\s*[-–—_\s]/i;
 /** Architectural sheet IDs at file start (e.g. A001-SITE PLAN.pdf) — common permit set naming. */
 const ARCH_SHEET_FILENAME_RE = /^[A-Z]{1,4}\d{2,4}[-_.\s]/i;
+/**
+ * Whole-file sheet numbers used by permit sets (A-1.03-00.pdf, A-1.04.00.pdf, M-1.1.pdf).
+ * These are drawings even when extracted title-block text is long.
+ * Keep in sync with src/lib/codeAnalyzer/sheetFileName.ts.
+ */
+const ARCHITECTURAL_SHEET_FILE_RE = /^[A-Z]{1,4}(?:[-.]?\d+){1,6}$/i;
+
+function architecturalSheetFileStem(fileName) {
+  const base = String(fileName || "").split(/[/\\]/).pop() || "";
+  return base.replace(/\.[^.]+$/, "").replace(/-page\d+$/i, "").trim();
+}
+
+function isArchitecturalSheetFileName(fileName) {
+  const stem = architecturalSheetFileStem(fileName);
+  if (!stem || SPEC_FILENAME_RE.test(stem)) return false;
+  return ARCHITECTURAL_SHEET_FILE_RE.test(stem);
+}
 
 function countCsiSpecificationSignals(body) {
   const text = String(body || "");
@@ -84,7 +101,8 @@ function isDrawingDocumentHint({ fileName, documentType }) {
     docType === "elevation" ||
     docType === "site_plan" ||
     DRAWING_FILENAME_RE.test(name) ||
-    ARCH_SHEET_FILENAME_RE.test(name)
+    ARCH_SHEET_FILENAME_RE.test(name) ||
+    isArchitecturalSheetFileName(name)
   );
 }
 
@@ -145,6 +163,7 @@ module.exports = {
   shouldCreateAnalyzerSheets,
   countCsiSpecificationSignals,
   isArchitecturalSectionDetailDrawing,
+  isArchitecturalSheetFileName,
   CSI_SECTION_HEADING_RE,
   ARCH_SECTION_DETAIL_TITLE_RE,
 };
