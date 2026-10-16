@@ -18,7 +18,7 @@ interface AnalysisSummary {
   critical: number;
   warnings: number;
   advisory: number;
-  overallScore: number;
+  overallScore: number | null;
 }
 
 interface IssueResponse {
@@ -196,7 +196,15 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   y += 15;
   
   // Score indicator
-  const overallScore = summary.overallScore ?? 0;
+  const overallScore = summary.overallScore;
+  if (overallScore == null) {
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Not reviewed", margin, y + 18);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Compliance Score", margin, y + 38);
+  } else {
   const scoreColor = overallScore >= 80 
     ? [16, 185, 129] // emerald
     : overallScore >= 60 
@@ -215,6 +223,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text('Compliance Score', margin + 25, y + 38, { align: 'center' });
+  }
   
   // Summary stats
   const statsX = margin + 70;

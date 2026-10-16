@@ -31,7 +31,8 @@ export type DesignCheckSummaryCounts = {
   critical: number;
   warnings: number;
   advisory: number;
-  overallScore: number;
+  overallScore: number | null;
+  reviewState?: "not_reviewed" | "passed" | null;
 };
 
 export type DesignCheckDocumentRef = {
@@ -68,6 +69,8 @@ export type DesignCheckAnnotationData = {
   location?: string;
   suggestedFix?: string;
   summary?: DesignCheckSummaryCounts;
+  reviewState?: "not_reviewed" | "passed" | null;
+  checklist?: unknown;
   jurisdictionNotes?: string;
   jurisdiction?: string;
   projectType?: string;
@@ -104,14 +107,15 @@ export function bucketImpactCategory(category: string | undefined | null): Desig
   return "Other";
 }
 
-/** Match FE analyzer load path when metadata summary is missing. */
+/** Match FE analyzer load path when metadata summary is missing. Empty findings are not a pass. */
 export function recomputeOverallScore(counts: {
   critical: number;
   warnings: number;
   advisory: number;
   totalIssues: number;
-}): number {
-  if (counts.totalIssues === 0) return 100;
+  reviewState?: "not_reviewed" | "passed" | null;
+}): number | null {
+  if (counts.totalIssues === 0) return counts.reviewState === "passed" ? 100 : null;
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
 }
 
@@ -175,6 +179,7 @@ export function buildDesignCheckSummary(
   let codeYear: string | null = null;
   let hasIbc = false;
   let hasLocal = false;
+  let metadataReviewState: "not_reviewed" | "passed" | null = null;
 
   for (const ann of annotations) {
     const d = (ann.data ?? {}) as DesignCheckAnnotationData;
@@ -191,6 +196,9 @@ export function buildDesignCheckSummary(
       if (d.jurisdiction) jurisdiction = d.jurisdiction;
       if (d.projectType) projectType = d.projectType;
       if (d.codeYear_meta || d.codeYear) codeYear = d.codeYear_meta || d.codeYear || null;
+      const state = d.summary?.reviewState ?? d.reviewState;
+      if (state === "passed") metadataReviewState = "passed";
+      else if (state === "not_reviewed" && metadataReviewState !== "passed") metadataReviewState = "not_reviewed";
       continue;
     }
 
@@ -226,12 +234,11 @@ export function buildDesignCheckSummary(
     return null;
   }
 
+  const reviewState = findings.length === 0 ? (metadataReviewState === "passed" ? "passed" : "not_reviewed") : null;
   const computed = summarizeFindings(findings);
-  // Prefer recomputed from issue rows. When there are zero issue rows, always use 100
-  // (never trust a stored/AI-echoed score like 85 with an empty findings list).
   const overallScore =
     findings.length === 0
-      ? 100
+      ? recomputeOverallScore({ ...computed, reviewState })
       : computed.overallScore;
 
   return {
@@ -240,7 +247,7 @@ export function buildDesignCheckSummary(
       fileName: docNameById.get(id) ?? "Unknown document",
     })),
     findings,
-    summary: { ...computed, overallScore },
+    summary: { ...computed, overallScore, reviewState },
     impact: aggregateImpact(findings),
     latestUpdatedAt,
     jurisdiction,

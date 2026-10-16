@@ -92,6 +92,21 @@ describe("isNotFullyCompliantGroup / filterComplianceGroupsByScore", () => {
     assert.equal(isNotFullyCompliantGroup(scoredGroups[0]), false);
   });
 
+  it("treats an explicit not_reviewed result as not fully compliant", () => {
+    assert.equal(
+      isNotFullyCompliantGroup({
+        id: "unreviewed",
+        fileName: "blank.pdf",
+        ibcResult: {
+          summary: { overallScore: null, totalIssues: 0, reviewState: "not_reviewed" },
+          issues: [],
+        },
+        localResult: null,
+      }),
+      true,
+    );
+  });
+
   it("treats score < 100, failed, and issue rows as not fully compliant", () => {
     assert.equal(isNotFullyCompliantGroup(scoredGroups[1]), true);
     assert.equal(isNotFullyCompliantGroup(scoredGroups[2]), true);

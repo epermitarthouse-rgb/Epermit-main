@@ -21,11 +21,11 @@ export interface ComplianceResultGroupRef {
 export interface ComplianceScoreGroupRef extends ComplianceResultGroupRef {
   failed?: boolean;
   ibcResult?: {
-    summary?: { overallScore?: number; totalIssues?: number };
+    summary?: { overallScore?: number | null; totalIssues?: number; reviewState?: string | null };
     issues?: unknown[];
   } | null;
   localResult?: {
-    summary?: { overallScore?: number; totalIssues?: number };
+    summary?: { overallScore?: number | null; totalIssues?: number; reviewState?: string | null };
     issues?: unknown[];
   } | null;
 }
@@ -54,6 +54,8 @@ export function filterComplianceResultGroups<T extends ComplianceResultGroupRef>
 
 function resultLooksNonCompliant(result: ComplianceScoreGroupRef["ibcResult"]): boolean {
   if (!result) return false;
+  if (result.summary?.reviewState === "not_reviewed") return true;
+  if (result.summary?.reviewState === "passed") return false;
   const score = result.summary?.overallScore;
   if (typeof score === "number" && score < 100) return true;
   const total = result.summary?.totalIssues;

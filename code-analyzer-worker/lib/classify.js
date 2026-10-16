@@ -154,6 +154,56 @@ function isAmbiguousFormatTextDense(text) {
   return countCsiSpecificationSignals(body) >= 2 && body.length >= AMBIGUOUS_CSI_TEXT_DENSE_CHARS;
 }
 
+const SHEET_CONTENT_CLASSES = [
+  "floor_plan",
+  "egress_plan",
+  "enlarged_plan",
+  "elevation",
+  "section",
+  "schedule",
+  "form",
+  "drawing",
+];
+
+const FORM_CONTENT_RE =
+  /\b(special\s+inspections?|statement\s+of\s+special\s+inspections|energy\s+(?:code\s+)?certificate|certificate\s+of\s+(?:compliance|occupancy)|comcheck|energy\s+code\s+compliance)\b/i;
+const SCHEDULE_TITLE_RE =
+  /\b(?:door|hardware|window|finish|room(?:\s+finish)?|equipment|panel|fixture|lighting)\s+schedules?\b|\bhardware\s+sets?\b/i;
+
+/**
+ * Content class chooses which checks run. Page size still decides raster vs spec.
+ * Classification uses page text and simple drawing-title signals, never the file name.
+ * @param {{ text?: string | null }} input
+ * @returns {"floor_plan"|"egress_plan"|"enlarged_plan"|"elevation"|"section"|"schedule"|"form"|"drawing"}
+ */
+function classifySheetContent({ text }) {
+  const body = String(text || "");
+  const header = body.slice(0, 1800);
+  if (!header.trim()) return "drawing";
+
+  if (FORM_CONTENT_RE.test(header)) return "form";
+
+  const schedule = SCHEDULE_TITLE_RE.test(header);
+  if (/\benlarged\b/i.test(header) && /\bplan\b/i.test(header)) return "enlarged_plan";
+  if (/\b(?:egress|life\s+safety|exit)\s+plan\b/i.test(header)) return "egress_plan";
+  if (/\b(?:building|exterior|interior)\s+elevations?\b/i.test(header)) return "elevation";
+  if (
+    (/\b(?:building|wall|typical)\s+sections?\b/i.test(header) || /\bsection\s+details?\b/i.test(header)) &&
+    countCsiSpecificationSignals(header) < 2
+  ) {
+    return "section";
+  }
+  if (/\b(?:floor|level|plaza|roof|site)\s+plans?\b/i.test(header)) return "floor_plan";
+  if (schedule) return "schedule";
+  if (/\belevations?\b/i.test(header) && !/\bplan\b/i.test(header)) return "elevation";
+  return "drawing";
+}
+
+/** Schedules and forms are not visual architectural-defect checks. */
+function shouldRunVisualDefectChecks(contentClass) {
+  return contentClass !== "schedule" && contentClass !== "form";
+}
+
 function pageFormats(pageSizes) {
   return (pageSizes || [])
     .map((size) => pageFormatFromInches(size?.widthInches, size?.heightInches))
@@ -224,6 +274,8 @@ function shouldCreateAnalyzerSheets(analyzerClass) {
 
 module.exports = {
   classifyDocument,
+  classifySheetContent,
+  shouldRunVisualDefectChecks,
   shouldRasterizePage,
   shouldCreateAnalyzerSheets,
   countCsiSpecificationSignals,
@@ -238,4 +290,5 @@ module.exports = {
   AMBIGUOUS_TEXT_DENSE_CHARS,
   CSI_SECTION_HEADING_RE,
   ARCH_SECTION_DETAIL_TITLE_RE,
+  SHEET_CONTENT_CLASSES,
 };

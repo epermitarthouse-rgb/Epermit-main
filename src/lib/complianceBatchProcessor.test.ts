@@ -473,9 +473,19 @@ describe("complianceBatchProcessor", () => {
     assert.equal(canRemoveBatchFile("failed"), true);
   });
 
-  it("forces overallScore 100 when issues are empty (ignores AI-echoed 85)", () => {
+  it("does not score an empty issue list as 100 unless a checklist passed", () => {
     assert.equal(
       computeComplianceOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0 }),
+      null,
+    );
+    assert.equal(
+      computeComplianceOverallScore({
+        critical: 0,
+        warnings: 0,
+        advisory: 0,
+        totalIssues: 0,
+        reviewState: "passed",
+      }),
       100,
     );
     const normalized = normalizeComplianceAnalysisResult(
@@ -493,7 +503,20 @@ describe("complianceBatchProcessor", () => {
       "ibc",
     );
     assert.equal(normalized.summary.totalIssues, 0);
-    assert.equal(normalized.summary.overallScore, 100);
+    assert.equal(normalized.summary.reviewState, "not_reviewed");
+    assert.equal(normalized.summary.overallScore, null);
+
+    const passed = normalizeComplianceAnalysisResult(
+      {
+        issues: [],
+        checklist: ["Egress width checked"],
+        summary: { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 85 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+    );
+    assert.equal(passed.summary.reviewState, "passed");
+    assert.equal(passed.summary.overallScore, 100);
   });
 
   it("keeps a numeric AI score when issues are present", () => {

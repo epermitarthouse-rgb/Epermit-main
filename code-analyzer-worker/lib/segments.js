@@ -2,6 +2,7 @@
 
 const {
   classifyDocument,
+  classifySheetContent,
   countCsiSpecificationSignals,
   isAmbiguousFormatTextDense,
   isArchitecturalSectionDetailDrawing,
@@ -21,44 +22,46 @@ const DRAWING_PAGE_RE = /\b([A-Z]{1,4}-\d+(?:\.\d+)*)\b/;
 function classifyPage({ pageNumber, text, fileName, documentType, widthInches, heightInches }) {
   const body = String(text || "");
   const format = pageFormatFromInches(widthInches, heightInches);
+  const contentClass = classifySheetContent({ text: body });
+  const finish = (result) => ({ ...result, contentClass });
 
   if (format === "large") {
-    return { analyzerClass: "drawing_set", source: "page_size", confidence: 0.95, pageNumber };
+    return finish({ analyzerClass: "drawing_set", source: "page_size", confidence: 0.95, pageNumber });
   }
 
   if (FORM_PAGE_RE.test(body)) {
-    return { analyzerClass: "code_modification_form", source: "auto", confidence: 0.8, pageNumber };
+    return finish({ analyzerClass: "code_modification_form", source: "auto", confidence: 0.8, pageNumber });
   }
 
   if (format === "small" && isSmallFormatTextHeavy(body)) {
-    return { analyzerClass: "specification", source: "page_size", confidence: 0.85, pageNumber };
+    return finish({ analyzerClass: "specification", source: "page_size", confidence: 0.85, pageNumber });
   }
 
   if (format === "ambiguous") {
     if (isAmbiguousFormatTextDense(body)) {
-      return { analyzerClass: "specification", source: "page_size", confidence: 0.8, pageNumber };
+      return finish({ analyzerClass: "specification", source: "page_size", confidence: 0.8, pageNumber });
     }
-    return { analyzerClass: "drawing_set", source: "page_size", confidence: 0.8, pageNumber };
+    return finish({ analyzerClass: "drawing_set", source: "page_size", confidence: 0.8, pageNumber });
   }
 
   if (isArchitecturalSectionDetailDrawing({ fileName, text: body })) {
-    return { analyzerClass: "drawing_set", source: "auto", confidence: 0.82, pageNumber };
+    return finish({ analyzerClass: "drawing_set", source: "auto", confidence: 0.82, pageNumber });
   }
 
   if (isArchitecturalSheetFileName(fileName) && countCsiSpecificationSignals(body) < 2) {
-    return { analyzerClass: "drawing_set", source: "filename", confidence: 0.9, pageNumber };
+    return finish({ analyzerClass: "drawing_set", source: "filename", confidence: 0.9, pageNumber });
   }
 
   const csiSpecSignals = countCsiSpecificationSignals(body);
   const sheetHits = (body.match(DRAWING_PAGE_RE) || []).length;
   if (csiSpecSignals >= 2 && body.length > 200) {
-    return { analyzerClass: "specification", source: "auto", confidence: 0.75, pageNumber };
+    return finish({ analyzerClass: "specification", source: "auto", confidence: 0.75, pageNumber });
   }
   if (sheetHits >= 1 && body.length < 500) {
-    return { analyzerClass: "drawing_set", source: "auto", confidence: 0.7, pageNumber };
+    return finish({ analyzerClass: "drawing_set", source: "auto", confidence: 0.7, pageNumber });
   }
   if (body.length > 600 && csiSpecSignals >= 1) {
-    return { analyzerClass: "specification", source: "auto", confidence: 0.6, pageNumber };
+    return finish({ analyzerClass: "specification", source: "auto", confidence: 0.6, pageNumber });
   }
 
   const docLevel = classifyDocument({
@@ -66,7 +69,7 @@ function classifyPage({ pageNumber, text, fileName, documentType, widthInches, h
     documentType,
     samplePageTexts: body ? [body] : [],
   });
-  return { ...docLevel, pageNumber };
+  return finish({ ...docLevel, pageNumber });
 }
 
 /**
@@ -161,4 +164,5 @@ module.exports = {
   shouldCreateSheetsForPage,
   shouldRasterizeForPage,
   shouldIndexSpecForPage,
+  classifySheetContent,
 };

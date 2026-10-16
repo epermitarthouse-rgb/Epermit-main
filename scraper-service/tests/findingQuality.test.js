@@ -6,6 +6,7 @@ const {
   applyEvidenceGate,
   hardenAnalysisResult,
   buildJurisdictionDiagnostics,
+  resolveAnalysisJurisdiction,
   semanticDedupKey,
   dedupAgainstRun,
 } = require("../app/services/compliance/findingQuality.js");
@@ -124,6 +125,192 @@ describe("jurisdiction diagnostics", () => {
     ]);
     assert.equal(d.mismatch, true);
     assert.match(d.message, /Washington, DC/i);
+  });
+});
+
+describe("empty review is not a pass", () => {
+  it("marks an empty issue list with no checklist as not_reviewed", () => {
+    const hardened = hardenAnalysisResult(
+      { issues: [], summary: { overallScore: 100 }, jurisdictionNotes: "" },
+      "ibc",
+      {},
+    );
+    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.overallScore, null);
+    assert.equal(hardened.summary.checklist.length, 0);
+  });
+
+  it("marks a recorded checklist with no failing item as passed", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [],
+        checklist: [{ item: "Egress width", result: "checked, no failing condition" }],
+        summary: { overallScore: 85 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {},
+    );
+    assert.equal(hardened.summary.reviewState, "passed");
+    assert.equal(hardened.summary.overallScore, 100);
+    assert.match(hardened.summary.checklist[0], /Egress width/);
+  });
+});
+
+describe("page text drops missing-information notes that the sheet already states", () => {
+  it("drops a fire rating not shown note when the text has 1 HR and 45-MINUTE", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Fire Safety",
+            title: "Fire rating not shown",
+            description: "The wall fire rating is not shown on this sheet.",
+            codeReference: "IBC 703",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { pageText: "PARTITION TYPE A 1 HR / DOOR 45-MINUTE" },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+
+  it("drops an accessible seating not shown note when ADA seats are in the text", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "advisory",
+            category: "Accessibility",
+            title: "Accessible seating not shown",
+            description: "Accessible seating is not shown on this plan.",
+            codeReference: "IBC 1108",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { pageText: "ASSEMBLY SEATING ADA SEATS PROVIDED 12" },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+
+  it("keeps a measured defect even when other ratings appear in the text", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Corridor width below minimum",
+            description: 'Dimension note shows 36" clear, which does not meet the 44" minimum.',
+            codeReference: "IBC 1020.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { sheetTitle: "A-101 Floor Plan", pageText: "1 HR WALL 45-MINUTE DOOR" },
+    );
+    assert.equal(hardened.issues.length, 1);
+    assert.equal(hardened.issues[0].findingType, "confirmed_violation");
+    assert.doesNotMatch(hardened.issues[0].description, /does not provide enough readable evidence/i);
+  });
+});
+
+describe("schedule restatement and citation book", () => {
+  it("drops a finding that only restates hardware already on the schedule", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Life Safety",
+            title: "Hardware set 3 requires a closer",
+            description: "The schedule requires a door closer for hardware set 3.",
+            codeReference: "IBC 1010",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        contentClass: "schedule",
+        pageText: "DOOR SCHEDULE\nHARDWARE SET 3 CLOSER",
+      },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+
+  it("relabels an IBC finding whose reference is ADA section 604.8.1.2", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Accessibility",
+            title: "Wheelchair compartment",
+            description: "The compartment does not meet the required turning space.",
+            codeReference: "IBC 604.8.1.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { sheetTitle: "A-101 Floor Plan" },
+    );
+    assert.equal(hardened.issues.length, 1);
+    assert.equal(hardened.issues[0].citationBook, "ICC A117.1");
+    assert.doesNotMatch(hardened.issues[0].codeReference, /\bIBC\b/);
+    assert.match(hardened.issues[0].codeReference, /604\.8\.1\.2/);
+  });
+});
+
+describe("resolveAnalysisJurisdiction", () => {
+  it("uses a stored DC project jurisdiction when the run is general", () => {
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: "general",
+        projectJurisdiction: "Washington, D.C.",
+      }),
+      "dc",
+    );
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: "general",
+        projectJurisdiction: null,
+        projectCity: "Washington",
+        projectState: "DC",
+      }),
+      "dc",
+    );
+  });
+
+  it("keeps a specific run jurisdiction and does not treat Washington State as DC", () => {
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: "new-york-city",
+        projectJurisdiction: "Washington DC",
+      }),
+      "new-york-city",
+    );
+    assert.equal(resolveAnalysisJurisdiction({ runJurisdiction: "washington" }), "washington");
+    assert.equal(
+      resolveAnalysisJurisdiction({ runJurisdiction: "general", projectJurisdiction: null }),
+      "general",
+    );
   });
 });
 

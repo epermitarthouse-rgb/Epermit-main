@@ -35,7 +35,8 @@ function analyzerHref(projectId: string | null): string {
   return projectId ? `/code-compliance?projectId=${encodeURIComponent(projectId)}` : "/code-compliance";
 }
 
-function scoreTone(score: number): "good" | "warn" | "bad" {
+function scoreTone(score: number | null): "good" | "warn" | "bad" | "default" {
+  if (score == null) return "default";
   if (score >= 80) return "good";
   if (score >= 60) return "warn";
   return "bad";
@@ -266,14 +267,18 @@ export default function DesignCheck() {
                 value={
                   <span
                     className={cn(
-                      summary.summary.overallScore >= 80
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : summary.summary.overallScore >= 60
-                          ? "text-amber-600 dark:text-amber-400"
-                          : "text-destructive",
+                      summary.summary.reviewState === "not_reviewed" || summary.summary.overallScore == null
+                        ? "text-muted-foreground"
+                        : summary.summary.overallScore >= 80
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : summary.summary.overallScore >= 60
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-destructive",
                     )}
                   >
-                    {summary.summary.overallScore}%
+                    {summary.summary.reviewState === "not_reviewed" || summary.summary.overallScore == null
+                      ? "Not reviewed"
+                      : `${summary.summary.overallScore}%`}
                   </span>
                 }
                 icon={ClipboardCheck}
@@ -367,7 +372,7 @@ export default function DesignCheck() {
                 <div className="flex flex-wrap items-center gap-2">
                   <DataSourceBadge kind="live" />
                   <StatusPill tone={scoreTone(summary.summary.overallScore)}>
-                    Score {summary.summary.overallScore}%
+                    {summary.summary.overallScore == null ? "Not reviewed" : `Score ${summary.summary.overallScore}%`}
                   </StatusPill>
                 </div>
               }

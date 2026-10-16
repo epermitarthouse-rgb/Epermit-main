@@ -63,4 +63,32 @@ async function* extractPdfPagesFromFile(filePath, onPageStart) {
   }
 }
 
-module.exports = { extractPdfPagesFromFile, readPdfPageSizeInches, PDF_POINTS_PER_INCH };
+async function extractPdfPageText(filePath, pageNumber) {
+  const buffer = await fs.readFile(filePath);
+  const data = new Uint8Array(buffer);
+  const loadingTask = pdfjsLib.getDocument({
+    data,
+    useSystemFonts: true,
+    disableFontFace: true,
+  });
+  const pdf = await loadingTask.promise;
+  const pageNum = Math.max(1, Number(pageNumber) || 1);
+  try {
+    if (pageNum > pdf.numPages) return "";
+    const page = await pdf.getPage(pageNum);
+    try {
+      return await extractPageText(page);
+    } finally {
+      page.cleanup();
+    }
+  } finally {
+    await pdf.destroy();
+  }
+}
+
+module.exports = {
+  extractPdfPagesFromFile,
+  extractPdfPageText,
+  readPdfPageSizeInches,
+  PDF_POINTS_PER_INCH,
+};

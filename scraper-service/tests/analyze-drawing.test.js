@@ -86,12 +86,14 @@ describe("analyze-drawing.service", () => {
     );
     assert.equal(result.ibc.summary.totalIssues, 1);
     assert.equal(result.local.summary.totalIssues, 0);
-    assert.equal(result.local.summary.overallScore, 100); // empty issues ignore echoed 95
+    assert.equal(result.local.summary.reviewState, "not_reviewed");
+    assert.equal(result.local.summary.overallScore, null);
+    assert.notEqual(result.local.summary.overallScore, 95);
     assert.equal(result.ibc.jurisdictionNotes, "ibc note");
     assert.equal(result.local.jurisdictionNotes, "local note");
   });
 
-  it("formatSingleResult forces overallScore 100 when issues are empty", () => {
+  it("formatSingleResult does not treat an empty issue list as a pass", () => {
     const result = formatSingleResult(
       {
         issues: [],
@@ -101,14 +103,42 @@ describe("analyze-drawing.service", () => {
       "2021",
     );
     assert.equal(result.summary.totalIssues, 0);
+    assert.equal(result.summary.reviewState, "not_reviewed");
+    assert.equal(result.summary.overallScore, null);
+  });
+
+  it("formatSingleResult passes when a checklist records the checks", () => {
+    const result = formatSingleResult(
+      {
+        issues: [],
+        checklist: ["Egress width checked"],
+        overallScore: 85,
+        jurisdictionNotes: "clean",
+      },
+      "2021",
+    );
+    assert.equal(result.summary.reviewState, "passed");
     assert.equal(result.summary.overallScore, 100);
   });
 
-  it("buildPrompts exemplar score is 100 not 85", () => {
-    const ibc = buildPrompts({ codeType: "ibc", codeYear: "2021" });
+  it("buildPrompts does not tell the model to score an empty review as 100", () => {
+    const ibc = buildPrompts({ codeType: "ibc", codeYear: "2021", pageText: "1 HR WALL" });
     assert.match(ibc.systemPrompt, /"overallScore": 100/);
     assert.doesNotMatch(ibc.systemPrompt, /"overallScore": 85/);
-    assert.match(ibc.systemPrompt, /overallScore MUST be 100/i);
+    assert.match(ibc.systemPrompt, /do not set overallScore to 100/i);
+    assert.doesNotMatch(ibc.systemPrompt, /overallScore MUST be 100/i);
+    assert.match(ibc.systemPrompt, /EXTRACTED PDF TEXT LAYER/);
+    assert.match(ibc.systemPrompt, /1 HR WALL/);
+  });
+
+  it("buildPrompts uses DC Building Code summaries for a Washington DC jurisdiction", () => {
+    const local = buildPrompts({
+      codeType: "local",
+      jurisdiction: "Washington, D.C.",
+      codeYear: "2021",
+    });
+    assert.match(local.systemPrompt, /12A DCMR/);
+    assert.match(local.systemPrompt, /WASHINGTON D\.C\. BUILDING CODE AMENDMENTS/i);
   });
 
   it("buildPrompts injects staff guidance as non-evidence focus", () => {
@@ -190,7 +220,28 @@ describe("analyze-drawing.service", () => {
     assert.equal(outcome.ok, true);
     assert.equal(outcome.status, 200);
     assert.equal(outcome.result.summary.totalIssues, 0);
+    assert.equal(outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(outcome.result.summary.overallScore, null);
     assert.equal(openai.chat.completions.create.mock.calls.length, 1);
+  });
+
+  it("does not send a schedule or form sheet through visual defect checks", async () => {
+    const create = mock.fn(async () => {
+      throw new Error("vision should not be called");
+    });
+    const outcome = await analyzeDrawingWithOpenAI({
+      openai: { chat: { completions: { create } } },
+      imageBase64: "abc",
+      contentClass: "schedule",
+      pageText: "DOOR SCHEDULE\nHARDWARE SET 3 CLOSER",
+      codeType: "ibc",
+      logInfo: () => {},
+      logError: () => {},
+    });
+    assert.equal(outcome.ok, true);
+    assert.equal(create.mock.calls.length, 0);
+    assert.equal(outcome.result.summary.reviewState, "not_reviewed");
+    assert.match(outcome.result.jurisdictionNotes, /schedule/i);
   });
 
   it("returns 422 when refusal is present after retry", async () => {

@@ -20,7 +20,11 @@ describe("designCheckSummary helpers", () => {
   });
 
   it("recomputes overall score with the analyzer FE formula", () => {
-    assert.equal(recomputeOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0 }), 100);
+    assert.equal(recomputeOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0 }), null);
+    assert.equal(
+      recomputeOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0, reviewState: "passed" }),
+      100,
+    );
     assert.equal(recomputeOverallScore({ critical: 2, warnings: 1, advisory: 1, totalIssues: 4 }), 63);
     assert.equal(recomputeOverallScore({ critical: 10, warnings: 0, advisory: 0, totalIssues: 10 }), 0);
   });
@@ -106,7 +110,7 @@ describe("designCheckSummary helpers", () => {
     assert.equal(buildDesignCheckSummary([{ id: "x", document_id: "d", data: {} }], []), null);
   });
 
-  it("uses overallScore 100 when only metadata exists with echoed 85 and zero issue rows", () => {
+  it("does not treat metadata with an echoed score and zero issue rows as a pass", () => {
     const summary = buildDesignCheckSummary(
       [
         {
@@ -129,6 +133,34 @@ describe("designCheckSummary helpers", () => {
     );
     assert.ok(summary);
     assert.equal(summary!.findings.length, 0);
+    assert.equal(summary!.summary.reviewState, "not_reviewed");
+    assert.equal(summary!.summary.overallScore, null);
+  });
+
+  it("keeps a passed checklist with zero issue rows at 100", () => {
+    const summary = buildDesignCheckSummary(
+      [
+        {
+          id: "meta-1",
+          document_id: "doc-1",
+          data: {
+            compliance_metadata: true,
+            codeType: "ibc",
+            summary: {
+              totalIssues: 0,
+              critical: 0,
+              warnings: 0,
+              advisory: 0,
+              overallScore: 100,
+              reviewState: "passed",
+              checklist: ["Egress width checked"],
+            },
+          },
+        },
+      ],
+      [{ id: "doc-1", file_name: "clean.pdf" }],
+    );
+    assert.equal(summary!.summary.reviewState, "passed");
     assert.equal(summary!.summary.overallScore, 100);
   });
 

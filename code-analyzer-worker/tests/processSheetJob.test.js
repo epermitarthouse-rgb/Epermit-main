@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { extractResultForAnalysisMode } = require("../lib/processSheetJob.js");
+const { extractResultForAnalysisMode, buildIssueAnnotationData } = require("../lib/processSheetJob.js");
 
 describe("extractResultForAnalysisMode", () => {
   const both = {
@@ -25,5 +25,27 @@ describe("extractResultForAnalysisMode", () => {
   it("passes through flat result", () => {
     const flat = { issues: [{ id: "x" }], summary: {} };
     assert.deepEqual(extractResultForAnalysisMode(flat, "ibc").issues, [{ id: "x" }]);
+  });
+});
+
+describe("buildIssueAnnotationData", () => {
+  it("copies the sheet file name onto every issue annotation", () => {
+    const data = buildIssueAnnotationData({
+      issue: {
+        title: "Corridor width",
+        description: "Shown as 36 inches.",
+        evidenceTier: "drawing",
+      },
+      codeType: "ibc",
+      sheetId: "sheet-1",
+      pageNumber: 4,
+      sourceDocumentId: "doc-1",
+      sheetFileName: "A-2.01.pdf",
+    });
+    assert.equal(data.compliance_issue, true);
+    assert.equal(data.sheet_file_name, "A-2.01.pdf");
+    assert.equal(data.file_name, "A-2.01.pdf");
+    assert.equal(data.sheet_id, "sheet-1");
+    assert.notEqual(data.sheet_file_name, "(no name)");
   });
 });

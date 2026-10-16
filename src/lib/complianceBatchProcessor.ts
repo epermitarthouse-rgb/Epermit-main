@@ -28,7 +28,9 @@ export interface ComplianceBatchAnalysisResult {
     critical: number;
     warnings: number;
     advisory: number;
-    overallScore: number;
+    overallScore: number | null;
+    reviewState?: "not_reviewed" | "passed" | null;
+    checklist?: string[];
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";
@@ -131,15 +133,39 @@ export function createComplianceBatchFileId(): string {
   return `batch-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** Score from issue severities. Empty issues always score 100 (ignore AI-echoed exemplars). */
+/** Score from issue severities. An empty issue list is not a pass unless reviewState is passed. */
 export function computeComplianceOverallScore(counts: {
   critical: number;
   warnings: number;
   advisory: number;
   totalIssues: number;
-}): number {
-  if (counts.totalIssues === 0) return 100;
+  reviewState?: "not_reviewed" | "passed" | null;
+}): number | null {
+  if (counts.totalIssues === 0) return counts.reviewState === "passed" ? 100 : null;
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
+}
+
+function checklistFromAnalysis(raw: Record<string, unknown>, summary: { checklist?: unknown } | null): string[] {
+  const source = Array.isArray(raw.checklist)
+    ? raw.checklist
+    : Array.isArray(summary?.checklist)
+      ? summary.checklist
+      : [];
+  const items: string[] = [];
+  for (const entry of source) {
+    if (typeof entry === "string") {
+      if (entry.trim()) items.push(entry.trim());
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const record = entry as { item?: unknown; check?: unknown; title?: unknown; result?: unknown };
+      const label = String(record.item || record.check || record.title || "").trim();
+      if (!label) continue;
+      const result = record.result != null ? String(record.result).trim() : "";
+      items.push(result ? `${label}: ${result}` : label);
+    }
+  }
+  return items;
 }
 
 export function normalizeComplianceAnalysisResult(
@@ -154,22 +180,28 @@ export function normalizeComplianceAnalysisResult(
   const critical = issues.filter((i) => i.severity === "critical").length;
   const warnings = issues.filter((i) => i.severity === "warning").length;
   const advisory = issues.filter((i) => i.severity === "advisory").length;
+  const checklist = checklistFromAnalysis(d, sum);
+  const reviewState: "not_reviewed" | "passed" | null =
+    issues.length === 0 ? (checklist.length > 0 ? "passed" : "not_reviewed") : null;
   const recomputedScore = computeComplianceOverallScore({
     critical,
     warnings,
     advisory,
     totalIssues: issues.length,
+    reviewState,
   });
-  // Always reconcile counts from the issues array. Never trust an AI/summary score
-  // when there are zero issues (prompt exemplars often echo overallScore: 85).
+  // Always reconcile counts from the issues array. An empty issue list is not a pass
+  // unless a checklist records what was checked. Ignore an echoed exemplar score.
   const summary: ComplianceBatchAnalysisResult["summary"] = {
     totalIssues: issues.length,
     critical,
     warnings,
     advisory,
+    checklist,
+    reviewState,
     overallScore:
       issues.length === 0
-        ? 100
+        ? recomputedScore
         : typeof sum?.overallScore === "number"
           ? sum.overallScore
           : recomputedScore,

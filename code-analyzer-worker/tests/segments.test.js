@@ -12,6 +12,7 @@ const {
   shouldIndexSpecForPage,
   shouldRasterizeForPage,
 } = require("../lib/segments");
+const { shouldRunVisualDefectChecks } = require("../lib/classify");
 
 const LETTER = { widthInches: 8.5, heightInches: 11 };
 const ARCH_D = { widthInches: 36, heightInches: 24 };
@@ -244,5 +245,103 @@ PART 1 GENERAL
     assert.equal(dense.analyzerClass, "specification");
     assert.equal(shouldCreateSheetsForPage(dense.analyzerClass), false);
     assert.equal(shouldIndexSpecForPage(dense.analyzerClass), true);
+  });
+
+  it("keeps large-format schedules and forms as rasterized drawing sheets but skips visual defect checks", () => {
+    const schedule = classifyPage({
+      pageNumber: 1,
+      text: "A-6.00\nDOOR SCHEDULE\nHARDWARE SCHEDULE\nMARK TYPE HARDWARE SET WIDTH",
+      fileName: "upload.pdf",
+      documentType: "specification",
+      ...ARCH_D,
+    });
+    assert.equal(schedule.analyzerClass, "drawing_set");
+    assert.equal(schedule.source, "page_size");
+    assert.equal(schedule.contentClass, "schedule");
+    assert.equal(shouldRasterizeForPage(schedule.analyzerClass), true);
+    assert.equal(shouldCreateSheetsForPage(schedule.analyzerClass), true);
+    assert.equal(shouldRunVisualDefectChecks(schedule.contentClass), false);
+
+    const inspections = classifyPage({
+      pageNumber: 2,
+      text: "S-300.00\nSTATEMENT OF SPECIAL INSPECTIONS",
+      fileName: "A-101 FLOOR PLAN.pdf",
+      documentType: "permit_drawing",
+      ...ARCH_D,
+    });
+    assert.equal(inspections.analyzerClass, "drawing_set");
+    assert.equal(inspections.contentClass, "form");
+    assert.equal(shouldRasterizeForPage(inspections.analyzerClass), true);
+
+    const energy = classifyPage({
+      pageNumber: 3,
+      text: "EN-1.00\nENERGY CODE COMPLIANCE CERTIFICATE",
+      fileName: "floor-plan.pdf",
+      documentType: "permit_drawing",
+      ...ARCH_D,
+    });
+    assert.equal(energy.contentClass, "form");
+    assert.equal(energy.analyzerClass, "drawing_set");
+    assert.equal(shouldRunVisualDefectChecks(energy.contentClass), false);
+  });
+
+  it("classifies plan content from the page text and ignores the file name", () => {
+    const floorFromScheduleName = classifyPage({
+      pageNumber: 1,
+      text: "A-2.01\nFIRST FLOOR PLAN\nSCALE 1/8\" = 1'-0\"",
+      fileName: "DOOR SCHEDULE.pdf",
+      documentType: "specification",
+      ...ARCH_D,
+    });
+    assert.equal(floorFromScheduleName.contentClass, "floor_plan");
+    assert.equal(floorFromScheduleName.analyzerClass, "drawing_set");
+    assert.equal(shouldRunVisualDefectChecks(floorFromScheduleName.contentClass), true);
+
+    const scheduleFromPlanName = classifyPage({
+      pageNumber: 1,
+      text: "A-6.00 DOOR AND HARDWARE SCHEDULE\nHARDWARE SET 3 CLOSER",
+      fileName: "A-101 FLOOR PLAN.pdf",
+      documentType: "permit_drawing",
+      ...ARCH_D,
+    });
+    assert.equal(scheduleFromPlanName.contentClass, "schedule");
+    assert.equal(shouldRunVisualDefectChecks(scheduleFromPlanName.contentClass), false);
+
+    const egress = classifyPage({
+      pageNumber: 1,
+      text: "LIFE SAFETY EGRESS PLAN\nEXIT ACCESS",
+      fileName: "notes.pdf",
+      documentType: "other",
+      ...ARCH_D,
+    });
+    assert.equal(egress.contentClass, "egress_plan");
+
+    const enlarged = classifyPage({
+      pageNumber: 1,
+      text: "ENLARGED TOILET PLAN\nSCALE 1/4\" = 1'-0\"",
+      fileName: "sheet.pdf",
+      documentType: "other",
+      ...ARCH_D,
+    });
+    assert.equal(enlarged.contentClass, "enlarged_plan");
+
+    const elevation = classifyPage({
+      pageNumber: 1,
+      text: "EXTERIOR ELEVATIONS\nNORTH ELEVATION",
+      fileName: "sheet.pdf",
+      documentType: "other",
+      ...ARCH_D,
+    });
+    assert.equal(elevation.contentClass, "elevation");
+
+    const section = classifyPage({
+      pageNumber: 1,
+      text: "BUILDING SECTION\nWALL SECTION AT STOREFRONT",
+      fileName: "sheet.pdf",
+      documentType: "other",
+      ...ARCH_D,
+    });
+    assert.equal(section.contentClass, "section");
+    assert.equal(section.analyzerClass, "drawing_set");
   });
 });

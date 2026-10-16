@@ -4,8 +4,10 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const {
   classifyDocument,
+  classifySheetContent,
   shouldCreateAnalyzerSheets,
   shouldRasterizePage,
+  shouldRunVisualDefectChecks,
 } = require("../lib/classify");
 
 describe("classifyDocument", () => {
@@ -142,5 +144,39 @@ B. Related requirements are specified in Division 01.`,
     assert.equal(result.source, "page_size");
     assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), false);
     assert.equal(shouldRasterizePage(result.analyzerClass), false);
+  });
+
+  it("classifies schedule and form content without using the file name", () => {
+    assert.equal(
+      classifySheetContent({
+        text: "A-6.00\nDOOR SCHEDULE\nHARDWARE SET 3 CLOSER",
+      }),
+      "schedule",
+    );
+    assert.equal(
+      classifySheetContent({ text: "S-300.00\nSTATEMENT OF SPECIAL INSPECTIONS" }),
+      "form",
+    );
+    assert.equal(
+      classifySheetContent({ text: "EN-1.00\nENERGY CODE COMPLIANCE CERTIFICATE" }),
+      "form",
+    );
+    assert.equal(
+      classifySheetContent({ text: "FIRST FLOOR PLAN\nSCALE 1/8\" = 1'-0\"" }),
+      "floor_plan",
+    );
+    assert.equal(shouldRunVisualDefectChecks("schedule"), false);
+    assert.equal(shouldRunVisualDefectChecks("form"), false);
+    assert.equal(shouldRunVisualDefectChecks("floor_plan"), true);
+
+    const largeScheduleNamedAsPlan = classifyDocument({
+      fileName: "A-101 FLOOR PLAN.pdf",
+      documentType: "permit_drawing",
+      samplePageTexts: ["DOOR SCHEDULE\nHARDWARE SCHEDULE"],
+      pageSizes: [{ widthInches: 36, heightInches: 24 }],
+    });
+    assert.equal(largeScheduleNamedAsPlan.analyzerClass, "drawing_set");
+    assert.equal(largeScheduleNamedAsPlan.source, "page_size");
+    assert.equal(shouldRasterizePage(largeScheduleNamedAsPlan.analyzerClass), true);
   });
 });

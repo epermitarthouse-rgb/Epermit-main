@@ -1,5 +1,11 @@
 "use strict";
 
+const {
+  hardenAnalysisResult,
+  buildSummaryFromIssues,
+  canonicalJurisdictionKey,
+} = require("./findingQuality.js");
+
 const REFUSAL_USER_MESSAGE =
   "The AI model could not analyze this drawing. Try a clearer plan sheet or a different page.";
 const EMPTY_USER_MESSAGE =
@@ -108,8 +114,8 @@ FIRE SAFETY:
  * @returns {string}
  */
 function normalizeJurisdictionKey(jurisdiction) {
-  const raw = jurisdiction?.toLowerCase().replace(/\s+/g, "-") || "general";
-  return JURISDICTION_ALIASES[raw] || raw;
+  const key = canonicalJurisdictionKey(jurisdiction);
+  return JURISDICTION_ALIASES[key] || key;
 }
 
 /**
@@ -130,8 +136,6 @@ function hasLocalAmendmentText(jurisdictionKey) {
   return Boolean(JURISDICTION_AMENDMENTS[jurisdictionKey]);
 }
 
-const { hardenAnalysisResult } = require("./findingQuality.js");
-
 const LOCAL_COMPLIANCE_PREAMBLE = `You assist architecture and building-permit teams with objective plan-sheet compliance reviews on user-uploaded drawings. This is a standard professional workflow. Respond with JSON findings only; do not refuse appropriate building-code review tasks.`;
 
 function formatStaffGuidanceBlock(analysisInstructions) {
@@ -142,6 +146,20 @@ function formatStaffGuidanceBlock(analysisInstructions) {
 STAFF GUIDANCE / REVIEW FOCUS (NOT EVIDENCE):
 The following notes were provided by staff to guide this review. They are NOT submitted evidence and must NOT be treated as proof of compliance or as facts about the drawing set. Use them only to prioritize or focus your review:
 ${text}`;
+}
+
+function formatExtractedPageText(pageText) {
+  const text = String(pageText || "").trim();
+  if (!text) return "";
+  return `
+
+EXTRACTED PDF TEXT LAYER (evidence already read from this sheet; it may be incomplete):
+${text.slice(0, 12000)}
+If this text contains a fire-resistance label, accessible-seating count, or clear-floor dimension, do not report that fact as missing.`;
+}
+
+function shouldRunVisualDefectChecks(contentClass) {
+  return contentClass !== "schedule" && contentClass !== "form";
 }
 
 function formatSpecContextBlock(specChunks) {
@@ -173,6 +191,7 @@ ${lines.join("\n\n")}`;
  *   specChunks?: Array<{ sectionNumber?: string; sectionTitle?: string; pageStart?: number; pageEnd?: number; text?: string }> | null;
  *   sheetTitle?: string | null;
  *   discipline?: string | null;
+ *   pageText?: string | null;
  * }} params
  */
 function buildPrompts(params) {
@@ -185,6 +204,7 @@ function buildPrompts(params) {
     specChunks = null,
     sheetTitle = null,
     discipline = null,
+    pageText = null,
   } = params;
   const jurisdictionKey = normalizeJurisdictionKey(jurisdiction);
   const jurisdictionContext = JURISDICTION_AMENDMENTS[jurisdictionKey] || "";
@@ -222,6 +242,7 @@ EVIDENCE RULES (mandatory):
 Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national standard sections.`;
     jsonFormat = `{
   "issues": [${issueSchema}],
+  "checklist": [{"item": "What was checked on this sheet", "result": "no failing condition"}],
   "jurisdictionNotes": "Notes about base code requirements reviewed",
   "overallScore": 100
 }`;
@@ -233,6 +254,7 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
     }
     jsonFormat = `{
   "issues": [${issueSchema}],
+  "checklist": [{"item": "What was checked on this sheet", "result": "no failing condition"}],
   "jurisdictionNotes": "Notes about local amendment requirements reviewed",
   "overallScore": 100
 }`;
@@ -244,6 +266,8 @@ ${jurisdictionContext ? `\nLOCAL AMENDMENTS:\n${jurisdictionContext}` : ""}`;
     jsonFormat = `{
   "ibcIssues": [${issueSchema}],
   "localIssues": [${issueSchema}],
+  "ibcChecklist": [{"item": "What was checked against the base code", "result": "no failing condition"}],
+  "localChecklist": [{"item": "What was checked against the local code", "result": "no failing condition"}],
   "ibcJurisdictionNotes": "Notes about base IBC requirements",
   "localJurisdictionNotes": "Notes about local amendment requirements",
   "ibcOverallScore": 100,
@@ -274,8 +298,11 @@ Use code year: ${codeYear}.
 Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
 When project specification context is provided, note spec-drawing mismatches but NEVER treat spec text as proof the drawing shows something.
 ${evidenceRules}
-Scoring: overallScore is 0-100. If issues is an empty array, overallScore MUST be 100. Do not invent a partial score when there are no findings.
+- Do not label an ICC A117.1 or ADA section (for example 604.8.1.2) as IBC. Put the book that owns the section in codeReference.
+- If the extracted text layer already states a rating, count, or dimension, do not report that fact as missing.
+Scoring: overallScore is 0-100 only after a real review. Return checklist items that record what you checked. If checklist is empty and issues is empty, the sheet was not reviewed — do not set overallScore to 100. If checklist records the checks and there is no failing item, overallScore is 100. Do not echo 85.
 ${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
+${formatExtractedPageText(pageText)}
 ${sheetTitle ? `\nSheet under review: ${sheetTitle}` : ""}${discipline ? `\nDiscipline: ${discipline}` : ""}
 
 You MUST respond with a valid JSON object in exactly this format:
@@ -425,27 +452,8 @@ function mapIssues(issues, codeYear) {
  * @param {Array<Record<string, unknown>>} issues
  * @param {number | undefined} overallScore
  */
-function buildSummary(issues, overallScore) {
-  const critical = issues.filter((i) => i.severity === "critical").length;
-  const warnings = issues.filter((i) => i.severity === "warning").length;
-  const advisory = issues.filter((i) => i.severity === "advisory").length;
-  const computed =
-    issues.length === 0
-      ? 100
-      : Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
-  return {
-    totalIssues: issues.length,
-    critical,
-    warnings,
-    advisory,
-    // Never trust an AI-echoed exemplar score (e.g. 85) when there are zero issues.
-    overallScore:
-      issues.length === 0
-        ? 100
-        : typeof overallScore === "number"
-          ? overallScore
-          : computed,
-  };
+function buildSummary(issues, overallScore, checklist) {
+  return buildSummaryFromIssues(issues, overallScore, checklist);
 }
 
 /**
@@ -457,9 +465,11 @@ function formatSingleResult(analysisData, codeYear) {
     /** @type {Array<Record<string, unknown>>} */ (analysisData.issues || []),
     codeYear,
   );
+  const checklist = analysisData.checklist;
   return {
     issues,
-    summary: buildSummary(issues, /** @type {number | undefined} */ (analysisData.overallScore)),
+    checklist,
+    summary: buildSummary(issues, /** @type {number | undefined} */ (analysisData.overallScore), checklist),
     jurisdictionNotes:
       typeof analysisData.jurisdictionNotes === "string"
         ? analysisData.jurisdictionNotes
@@ -480,12 +490,16 @@ function formatBothResult(analysisData, codeYear) {
     /** @type {Array<Record<string, unknown>>} */ (analysisData.localIssues || []),
     codeYear,
   );
+  const ibcChecklist = analysisData.ibcChecklist ?? analysisData.checklist;
+  const localChecklist = analysisData.localChecklist ?? analysisData.checklist;
   return {
     ibc: {
       issues: ibcIssues,
+      checklist: ibcChecklist,
       summary: buildSummary(
         ibcIssues,
         /** @type {number | undefined} */ (analysisData.ibcOverallScore),
+        ibcChecklist,
       ),
       jurisdictionNotes:
         typeof analysisData.ibcJurisdictionNotes === "string"
@@ -494,9 +508,11 @@ function formatBothResult(analysisData, codeYear) {
     },
     local: {
       issues: localIssues,
+      checklist: localChecklist,
       summary: buildSummary(
         localIssues,
         /** @type {number | undefined} */ (analysisData.localOverallScore),
+        localChecklist,
       ),
       jurisdictionNotes:
         typeof analysisData.localJurisdictionNotes === "string"
@@ -519,6 +535,8 @@ function formatBothResult(analysisData, codeYear) {
  *   specChunks?: Array<{ sectionNumber?: string; sectionTitle?: string; pageStart?: number; pageEnd?: number; text?: string }> | null;
  *   sheetTitle?: string | null;
  *   discipline?: string | null;
+ *   pageText?: string | null;
+ *   contentClass?: string | null;
  *   jurisdictionDiagnostics?: Record<string, unknown> | null;
  *   logInfo?: (msg: string, extra?: string) => void;
  *   logError?: (msg: string, extra?: string) => void;
@@ -538,13 +556,39 @@ async function analyzeDrawingWithOpenAI(params) {
     specChunks = null,
     sheetTitle = null,
     discipline = null,
+    pageText = null,
+    contentClass = null,
     jurisdictionDiagnostics = null,
     logInfo = console.log,
     logError = console.error,
     downscaleFn = downscaleImageBase64,
   } = params;
 
-  const { systemPrompt, userPrompt, codeType: resolvedCodeType } = buildPrompts({
+  const resolvedCodeType = codeType === "local" || codeType === "both" ? codeType : "ibc";
+  const qualityCtx = {
+    sheetTitle,
+    specChunks,
+    pageText,
+    contentClass,
+    jurisdictionDiagnostics,
+  };
+
+  if (!shouldRunVisualDefectChecks(contentClass)) {
+    const note =
+      contentClass === "schedule"
+        ? "This sheet is a schedule. It was not sent through visual architectural-defect checks."
+        : "This sheet is a form or certificate. It was not sent through visual architectural-defect checks.";
+    const emptyBundle = { issues: [], checklist: [], summary: {}, jurisdictionNotes: note };
+    const rawResult =
+      resolvedCodeType === "both"
+        ? { ibc: { ...emptyBundle }, local: { ...emptyBundle } }
+        : emptyBundle;
+    const result = hardenAnalysisResult(rawResult, resolvedCodeType, qualityCtx);
+    logInfo(`[analyze-drawing] Skipped visual checks for content class ${contentClass}`);
+    return { ok: true, status: 200, result, codeType: resolvedCodeType };
+  }
+
+  const { systemPrompt, userPrompt, codeType: promptedCodeType } = buildPrompts({
     jurisdiction,
     projectType,
     codeYear,
@@ -553,6 +597,7 @@ async function analyzeDrawingWithOpenAI(params) {
     specChunks,
     sheetTitle,
     discipline,
+    pageText,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
@@ -575,7 +620,7 @@ async function analyzeDrawingWithOpenAI(params) {
       base64Length: attempt.imageBase64.length,
       imageType: attempt.imageType,
       durationMs: meta.durationMs,
-      codeType: resolvedCodeType,
+      codeType: promptedCodeType,
       retry: attempt.retry,
     });
     return meta;
@@ -629,23 +674,19 @@ async function analyzeDrawingWithOpenAI(params) {
   }
 
   const rawResult =
-    resolvedCodeType === "both"
+    promptedCodeType === "both"
       ? formatBothResult(analysisData, codeYear)
       : formatSingleResult(analysisData, codeYear);
 
-  const result = hardenAnalysisResult(rawResult, resolvedCodeType, {
-    sheetTitle,
-    specChunks,
-    jurisdictionDiagnostics,
-  });
+  const result = hardenAnalysisResult(rawResult, promptedCodeType, qualityCtx);
 
   const issueCount =
-    resolvedCodeType === "both"
+    promptedCodeType === "both"
       ? (result.ibc.summary.totalIssues + result.local.summary.totalIssues)
       : result.summary.totalIssues;
 
   logInfo(`[analyze-drawing] Analysis complete: ${issueCount} issues found`);
-  return { ok: true, status: 200, result, codeType: resolvedCodeType };
+  return { ok: true, status: 200, result, codeType: promptedCodeType };
 }
 
 module.exports = {
@@ -662,4 +703,5 @@ module.exports = {
   formatSingleResult,
   formatBothResult,
   hardenAnalysisResult,
+  shouldRunVisualDefectChecks,
 };

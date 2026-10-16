@@ -25,7 +25,8 @@ export interface ComplianceExportAnalysisResult {
     critical: number;
     warnings: number;
     advisory: number;
-    overallScore: number;
+    overallScore: number | null;
+    reviewState?: "not_reviewed" | "passed" | null;
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";
@@ -72,7 +73,8 @@ function emptySummary(): ComplianceExportAnalysisResult["summary"] {
     critical: 0,
     warnings: 0,
     advisory: 0,
-    overallScore: 100,
+    overallScore: null,
+    reviewState: "not_reviewed",
   };
 }
 

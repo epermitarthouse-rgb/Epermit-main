@@ -2,8 +2,13 @@
 
 const { BUCKET } = require("./derivedAssets");
 const { completeSheetJob, heartbeatSheetJob } = require("./sheetClaim");
+const { downloadToTempFile, removeTempFile } = require("./download");
+const { extractPdfPageText } = require("./pdfExtract");
+const { classifySheetContent } = require("./classify");
+const { isPdfFile } = require("./mediaType");
 const {
   buildJurisdictionDiagnostics,
+  resolveAnalysisJurisdiction,
   semanticDedupKey,
   dedupAgainstRun,
 } = require("../../scraper-service/app/services/compliance/findingQuality.js");
@@ -44,6 +49,73 @@ async function fetchSpecChunksForSheet(supabase, projectId, queryText, documentI
     return [];
   }
   return data ?? [];
+}
+
+function sheetFileNameFromRow(sheet) {
+  const name = String(sheet?.file_name || sheet?.sheet_label || "").trim();
+  return name || null;
+}
+
+/**
+ * Annotation payload for one issue. sheet_file_name is the field readers use;
+ * file_name is the same value for callers that read the document name off the row.
+ */
+function buildIssueAnnotationData({
+  issue,
+  codeType,
+  sheetId,
+  pageNumber,
+  sourceDocumentId,
+  sheetFileName,
+}) {
+  const name = sheetFileName || null;
+  return {
+    compliance_issue: true,
+    codeType,
+    ...issue,
+    sheet_id: sheetId,
+    page_number: pageNumber,
+    source_document_id: sourceDocumentId,
+    sheet_file_name: name,
+    file_name: name,
+    evidence_tier: issue.evidenceTier || "drawing",
+    evidence_strength: issue.evidenceStrength || null,
+    finding_type: issue.findingType || null,
+    spec_references: issue.specReferences?.length ? issue.specReferences : null,
+  };
+}
+
+async function fetchProjectJurisdiction(supabase, projectId) {
+  const { data } = await supabase
+    .from("projects")
+    .select("jurisdiction, city, state")
+    .eq("id", projectId)
+    .maybeSingle();
+  return data || {};
+}
+
+async function loadSheetPageText(supabase, sheet) {
+  try {
+    if (!sheet?.source_document_id) return "";
+    const { data: doc } = await supabase
+      .from("project_documents")
+      .select("file_path, file_name, file_type")
+      .eq("id", sheet.source_document_id)
+      .maybeSingle();
+    if (!doc?.file_path || !isPdfFile(doc.file_name, doc.file_type)) return "";
+    const tempPath = await downloadToTempFile(supabase, doc.file_path, doc.file_name || "sheet.pdf");
+    try {
+      return await extractPdfPageText(tempPath, sheet.page_number || 1);
+    } finally {
+      await removeTempFile(tempPath);
+    }
+  } catch (err) {
+    console.warn(
+      "[code-analyzer-worker] sheet text extract failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return "";
+  }
 }
 
 async function fetchProjectDocumentNameHints(supabase, projectId) {
@@ -117,6 +189,7 @@ async function persistSheetFindings(supabase, params) {
     analysisMode,
     specChunkCount,
     sheetFileName,
+    contentClass,
   } = params;
 
   const codeType =
@@ -162,6 +235,8 @@ async function persistSheetFindings(supabase, params) {
       page_number: pageNumber,
       source_document_id: sourceDocumentId,
       sheet_file_name: sheetFileName,
+      file_name: sheetFileName,
+      content_class: contentClass || null,
     },
   });
 
@@ -174,18 +249,14 @@ async function persistSheetFindings(supabase, params) {
       analysis_run_id: runId,
       annotation_type: "text",
       layer_order: layerOrder + i + 1,
-      data: {
-        compliance_issue: true,
+      data: buildIssueAnnotationData({
+        issue,
         codeType,
-        ...issue,
-        sheet_id: sheetId,
-        page_number: pageNumber,
-        source_document_id: sourceDocumentId,
-        evidence_tier: issue.evidenceTier || "drawing",
-        evidence_strength: issue.evidenceStrength || null,
-        finding_type: issue.findingType || null,
-        spec_references: issue.specReferences?.length ? issue.specReferences : null,
-      },
+        sheetId,
+        pageNumber,
+        sourceDocumentId,
+        sheetFileName,
+      }),
     });
   }
 
@@ -371,12 +442,22 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
 
   const specChunks = await fetchSpecChunksForSheet(supabase, job.project_id, queryText, null);
   const documentNameHints = await fetchProjectDocumentNameHints(supabase, job.project_id);
-  const jurisdictionDiagnostics = buildJurisdictionDiagnostics(run.jurisdiction, documentNameHints);
+  const projectJurisdiction = await fetchProjectJurisdiction(supabase, job.project_id);
+  const jurisdiction = resolveAnalysisJurisdiction({
+    runJurisdiction: run.jurisdiction,
+    projectJurisdiction: projectJurisdiction.jurisdiction,
+    projectCity: projectJurisdiction.city,
+    projectState: projectJurisdiction.state,
+  });
+  const jurisdictionDiagnostics = buildJurisdictionDiagnostics(jurisdiction, documentNameHints);
+  const pageText = await loadSheetPageText(supabase, sheet);
+  const contentClass = classifySheetContent({ text: pageText });
+  const sheetFileName = sheetFileNameFromRow(sheet);
 
   const result = await callAnalyzeDrawing({
     imageBase64,
     imageType,
-    jurisdiction: run.jurisdiction,
+    jurisdiction,
     projectType: run.project_type || "Commercial",
     codeYear: run.code_year || "2021",
     codeType: job.analysis_mode === "local" ? "local" : job.analysis_mode === "both" ? "both" : "ibc",
@@ -388,8 +469,10 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       pageEnd: c.page_end,
       text: c.chunk_text,
     })),
-    sheetTitle: sheet.file_name,
+    sheetTitle: sheetFileName,
     discipline: sheet.discipline,
+    pageText,
+    contentClass,
     jurisdictionDiagnostics,
   });
 
@@ -404,7 +487,8 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     result,
     analysisMode: job.analysis_mode,
     specChunkCount: specChunks.length,
-    sheetFileName: sheet.file_name,
+    sheetFileName,
+    contentClass,
   });
 
   await completeSheetJob(supabase, {
@@ -432,4 +516,6 @@ module.exports = {
   SHEET_CONCURRENCY,
   extractResultForAnalysisMode,
   refreshRunAnalysisCoverage,
+  buildIssueAnnotationData,
+  sheetFileNameFromRow,
 };

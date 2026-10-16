@@ -127,6 +127,7 @@ import {
 } from "@/lib/codeAnalyzer/model";
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
 import { buildJurisdictionDiagnostics } from "@/lib/codeAnalyzer/jurisdictionDiagnostics";
+import { jurisdictionForAnalyzerProject } from "@/lib/codeAnalyzer/analyzerJurisdiction";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   analyzerSheetFingerprint,
@@ -252,6 +253,7 @@ interface ComplianceIssue {
   location: string;
   suggestedFix: string;
   codeType?: "ibc" | "local";
+  sheetFileName?: string;
 }
 
 type AnalysisResult = ComplianceBatchAnalysisResult;
@@ -354,6 +356,8 @@ interface ComplianceAnnotationData {
   codeYear?: string;
   location?: string;
   suggestedFix?: string;
+  sheet_file_name?: string;
+  file_name?: string;
   summary?: AnalysisResult["summary"];
   jurisdictionNotes?: string;
   jurisdiction?: string;
@@ -1104,6 +1108,7 @@ export function AIComplianceAnalyzer() {
             location: d.location || "",
             suggestedFix: d.suggestedFix || "",
             codeType: d.codeType,
+            sheetFileName: d.sheet_file_name || d.file_name || undefined,
           };
           const list = issuesByCodeType.get(d.codeType) || [];
           list.push(issue);
@@ -1120,9 +1125,21 @@ export function AIComplianceAnalyzer() {
         const critical = issues.filter((i) => i.severity === "critical").length;
         const warnings = issues.filter((i) => i.severity === "warning").length;
         const advisory = issues.filter((i) => i.severity === "advisory").length;
-        // Never surface a stored/AI-echoed score (e.g. 85) when there are zero issues.
+        // An empty issue list is not a pass unless the stored checklist recorded the checks.
         if (issues.length === 0) {
-          return { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 100 };
+          const passed =
+            meta?.summary?.reviewState === "passed" &&
+            Array.isArray(meta.summary.checklist) &&
+            meta.summary.checklist.length > 0;
+          return {
+            totalIssues: 0,
+            critical: 0,
+            warnings: 0,
+            advisory: 0,
+            overallScore: passed ? 100 : null,
+            reviewState: passed ? "passed" : "not_reviewed",
+            checklist: passed ? meta?.summary?.checklist : [],
+          };
         }
         const recomputed = computeComplianceOverallScore({
           critical,
@@ -1245,9 +1262,15 @@ export function AIComplianceAnalyzer() {
           const { loadedIbc, loadedLocal } = buildResultsFromAnnotations(complianceAnnotations);
           if (!loadedIbc && !loadedLocal) continue;
           const doc = documentsWithAnalysis.find((d) => d.id === documentId);
+          const sheetFileName = complianceAnnotations
+            .map((ann) => {
+              const data = ann.data as ComplianceAnnotationData;
+              return data.sheet_file_name || data.file_name || "";
+            })
+            .find((name) => name.trim().length > 0);
           loaded.push({
             documentId,
-            fileName: doc?.file_name ?? "Loaded document",
+            fileName: sheetFileName || doc?.file_name || "Loaded document",
             ibcResult: loadedIbc,
             localResult: loadedLocal,
           });
@@ -1615,6 +1638,19 @@ export function AIComplianceAnalyzer() {
     },
     [addRecentJurisdiction],
   );
+
+  // The selector starts at "general". Seed it from the project row so a DC project
+  // is not stored as general just because nobody opened the dropdown.
+  const jurisdictionSeedProjectIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    if (jurisdictionSeedProjectIdRef.current === selectedProjectId) return;
+    const project = projects.find((item) => item.id === selectedProjectId);
+    if (!project) return;
+    jurisdictionSeedProjectIdRef.current = selectedProjectId;
+    const seeded = jurisdictionForAnalyzerProject(project);
+    if (seeded !== "general") handleJurisdictionChange(seeded);
+  }, [handleJurisdictionChange, projects, selectedProjectId]);
 
   // Handle project type change with recent tracking
   const handleProjectTypeChange = useCallback(
@@ -3263,8 +3299,8 @@ export function AIComplianceAnalyzer() {
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
             <span>{groupResult.summary.totalIssues ?? 0} issues</span>
-            <span className={`font-semibold ${getScoreColor(groupResult.summary.overallScore ?? 0)}`}>
-              {groupResult.summary.overallScore ?? 0}%
+            <span className={`font-semibold ${scoreToneClass(groupResult.summary)}`}>
+              {formatReviewScore(groupResult.summary)}
             </span>
             <span>{isExpanded ? "Hide" : "Show"}</span>
           </div>
@@ -3295,8 +3331,8 @@ export function AIComplianceAnalyzer() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className={cn("pilot-card border-border bg-card", "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
             <CardContent className="pt-6 text-center">
-              <div className={`text-4xl font-bold ${getScoreColor(groupResult.summary.overallScore ?? 0)}`}>
-                {groupResult.summary.overallScore ?? 0}%
+              <div className={`text-4xl font-bold ${scoreToneClass(groupResult.summary)}`}>
+                {formatReviewScore(groupResult.summary)}
               </div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Compliance Score</p>
             </CardContent>
@@ -3469,6 +3505,21 @@ export function AIComplianceAnalyzer() {
     if (score >= 80) return "text-emerald-600";
     if (score >= 60) return "text-amber-600";
     return "text-destructive";
+  };
+
+  const formatReviewScore = (summary?: { overallScore?: number | null; reviewState?: string | null }) => {
+    if (summary?.reviewState === "not_reviewed" || summary?.overallScore == null) {
+      return summary?.reviewState === "passed" ? "Passed" : "Not reviewed";
+    }
+    return `${summary.overallScore}%`;
+  };
+
+  const scoreToneClass = (summary?: { overallScore?: number | null; reviewState?: string | null }) => {
+    if (summary?.reviewState === "passed") return "text-emerald-600";
+    if (summary?.reviewState === "not_reviewed" || typeof summary?.overallScore !== "number") {
+      return "text-muted-foreground";
+    }
+    return getScoreColor(summary.overallScore);
   };
 
   const failedFileCount = countFailedBatchFiles(files);
@@ -3742,7 +3793,10 @@ export function AIComplianceAnalyzer() {
                                   <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm mb-3">
                                     <div className="flex items-center gap-1.5">
                                       <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                                      <span className="text-muted-foreground">{issue.location}</span>
+                                      <span className="text-muted-foreground">
+                                        {issue.sheetFileName ? `${issue.sheetFileName}${issue.location ? " · " : ""}` : ""}
+                                        {issue.location}
+                                      </span>
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                       <Scale className="h-3.5 w-3.5 text-muted-foreground" />
