@@ -1,8 +1,7 @@
 # Railway build for code-analyzer-worker.
 # The service root is the repository because lib/processSheetJob.js imports
 # scraper-service/app/services/compliance/findingQuality.js.
-# providers is pinned to node so the monorepo's reference Deno function is not selected.
-providers = ["node"]
+providers = []
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "python3", "pkg-config", "cairo", "pango", "libjpeg", "giflib", "librsvg"]
@@ -10,7 +9,7 @@ aptPkgs = ["build-essential", "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev",
 
 [phases.install]
 cmds = [
-  "mkdir -p /app/native-libs && (cp -a /usr/lib/x86_64-linux-gnu/libuuid.so.1 /app/native-libs/ || cp -a /lib/x86_64-linux-gnu/libuuid.so.1 /app/native-libs/) && ls -l /app/native-libs",
+  "mkdir -p /app/native-libs && cp -a /usr/lib/x86_64-linux-gnu/libuuid.so.1 /usr/lib/x86_64-linux-gnu/libuuid.so.1.3.0 /app/native-libs/ && ls -l /app/native-libs",
   "cd code-analyzer-worker && (npm ci || npm install)",
 ]
 
