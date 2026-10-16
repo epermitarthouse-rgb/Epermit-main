@@ -1,0 +1,14 @@
+# Railway build for code-analyzer-worker.
+# The service root is the repository because lib/processSheetJob.js imports
+# scraper-service/app/services/compliance/findingQuality.js.
+providers = []
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "python3", "pkg-config", "cairo", "pango", "libjpeg", "giflib", "librsvg"]
+aptPkgs = ["build-essential", "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev", "librsvg2-dev"]
+
+[phases.install]
+cmds = ["cd code-analyzer-worker && (npm ci || npm install)"]
+
+[start]
+cmd = "node code-analyzer-worker/worker.js"
