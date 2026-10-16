@@ -214,6 +214,24 @@ export function pickInProgressRun<T extends RunPickFields>(
   return scoped[0] ?? null;
 }
 
+export type AnalyzerCancelMode = "standard" | "code_modification";
+
+/**
+ * Run id for the Cancel control beside a stuck Analyzing / Running review state.
+ * Only queued and running runs are cancellable — not failed, cancelled, or completed.
+ */
+export function analyzerRunCancelTarget(input: {
+  v2Enabled: boolean;
+  mode: AnalyzerCancelMode;
+  standardRun?: { id: string; status: string } | null;
+  modificationRun?: { id: string; status: string } | null;
+}): string | null {
+  if (!input.v2Enabled) return null;
+  const run = input.mode === "code_modification" ? input.modificationRun : input.standardRun;
+  if (!run?.id || !isInProgressRunStatus(run.status)) return null;
+  return run.id;
+}
+
 /** Prefer the current run; otherwise the most recently completed stale run (last results). */
 export function pickDisplayRun<T extends RunPickFields>(
   runs: T[],

@@ -83,9 +83,15 @@ function statusShowsSpinner(status: ConsolidatedDocumentCardModel["status"]): bo
 function WorkflowSteps({
   activeStep,
   nextHint,
+  showCancelRun = false,
+  cancellingRun = false,
+  onCancelRun,
 }: {
   activeStep: number;
   nextHint: string;
+  showCancelRun?: boolean;
+  cancellingRun?: boolean;
+  onCancelRun?: () => void;
 }) {
   return (
     <div className="space-y-3" data-testid="code-analyzer-workflow-steps">
@@ -113,10 +119,25 @@ function WorkflowSteps({
           );
         })}
       </ol>
-      <p className="text-sm text-foreground" data-testid="workflow-next-hint">
-        <span className="font-medium">Next: </span>
-        {nextHint}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-foreground" data-testid="workflow-next-hint">
+          <span className="font-medium">Next: </span>
+          {nextHint}
+        </p>
+        {showCancelRun && onCancelRun ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onCancelRun}
+            disabled={cancellingRun}
+            data-testid="button-cancel-analyzer-run-workflow"
+            aria-label="Cancel analysis"
+          >
+            {cancellingRun ? "Cancelling…" : "Cancel"}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -270,6 +291,10 @@ export interface CodeAnalyzerDocumentWorkflowProps {
   ) => Promise<{ removed: string[]; failed: string[] }>;
   canAddMore: boolean;
   pendingUploadCapacityLabel?: string | null;
+  /** True while the active mode's V2 run is queued or running (stuck Analyzing). */
+  showCancelRun?: boolean;
+  cancellingRun?: boolean;
+  onCancelRun?: () => void;
 }
 
 export function CodeAnalyzerDocumentWorkflow({
@@ -299,6 +324,9 @@ export function CodeAnalyzerDocumentWorkflow({
   onBulkDeleteDrawings,
   canAddMore,
   pendingUploadCapacityLabel = null,
+  showCancelRun = false,
+  cancellingRun = false,
+  onCancelRun,
 }: CodeAnalyzerDocumentWorkflowProps) {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedDrawingIds, setSelectedDrawingIds] = useState<Set<string>>(() => new Set());
@@ -609,7 +637,13 @@ export function CodeAnalyzerDocumentWorkflow({
 
   return (
     <div className="space-y-4 text-left">
-      <WorkflowSteps activeStep={activeStep} nextHint={nextHint} />
+      <WorkflowSteps
+        activeStep={activeStep}
+        nextHint={nextHint}
+        showCancelRun={showCancelRun}
+        cancellingRun={cancellingRun}
+        onCancelRun={onCancelRun}
+      />
 
       {analysisStale && (
         <Alert>

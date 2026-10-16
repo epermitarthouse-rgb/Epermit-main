@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ANALYSIS_TYPE_DC_MODIFICATION,
   ANALYSIS_TYPE_STANDARD,
+  analyzerRunCancelTarget,
   allocateIncludedSheetKeys,
   computeSheetFingerprint,
   computeStandardRunFingerprint,
@@ -178,6 +179,81 @@ describe("pickDisplayRun / pickCurrentRun", () => {
     ];
     assert.equal(pickInProgressRun(runs)?.id, "active");
     assert.equal(pickDisplayRun(runs)?.id, "cur");
+  });
+
+  it("offers cancel for queued and running runs, not after failure or completion", () => {
+    assert.equal(
+      analyzerRunCancelTarget({
+        v2Enabled: true,
+        mode: "standard",
+        standardRun: { id: "std-queued", status: "queued" },
+        modificationRun: { id: "mod-running", status: "running" },
+      }),
+      "std-queued",
+    );
+    assert.equal(
+      analyzerRunCancelTarget({
+        v2Enabled: true,
+        mode: "standard",
+        standardRun: { id: "std-running", status: "running" },
+      }),
+      "std-running",
+    );
+    assert.equal(
+      analyzerRunCancelTarget({
+        v2Enabled: true,
+        mode: "code_modification",
+        standardRun: { id: "std-running", status: "running" },
+        modificationRun: { id: "mod-queued", status: "queued" },
+      }),
+      "mod-queued",
+    );
+    assert.equal(
+      analyzerRunCancelTarget({
+        v2Enabled: true,
+        mode: "code_modification",
+        modificationRun: { id: "mod-running", status: "running" },
+      }),
+      "mod-running",
+    );
+
+    for (const status of ["failed", "cancelled", "current", "partial", "stale", "superseded"] as const) {
+      assert.equal(
+        analyzerRunCancelTarget({
+          v2Enabled: true,
+          mode: "standard",
+          standardRun: { id: "std", status },
+        }),
+        null,
+        status,
+      );
+      assert.equal(
+        analyzerRunCancelTarget({
+          v2Enabled: true,
+          mode: "code_modification",
+          modificationRun: { id: "mod", status },
+        }),
+        null,
+        status,
+      );
+    }
+
+    assert.equal(
+      analyzerRunCancelTarget({
+        v2Enabled: false,
+        mode: "standard",
+        standardRun: { id: "std-running", status: "running" },
+      }),
+      null,
+    );
+    assert.equal(
+      analyzerRunCancelTarget({
+        v2Enabled: true,
+        mode: "standard",
+        standardRun: null,
+      }),
+      null,
+    );
   });
 
   it("scopes current/display runs by analysis type and treats missing type as standard", () => {

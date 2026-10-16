@@ -121,6 +121,19 @@ describe("documentWorkflowModel", () => {
     assert.equal(pending?.eligibleForBulkDelete, false);
   });
 
+  it("keeps Run analysis active while a queued or running analysis is in progress", () => {
+    const step = resolveActiveWorkflowStep({
+      hasAnyDocuments: true,
+      anyOrganizing: false,
+      includedSheetCount: 4,
+      analyzing: true,
+      hasResults: true,
+      analysisStale: false,
+    });
+    assert.equal(step.activeStep, 4);
+    assert.match(step.nextHint, /Analysis is running/);
+  });
+
   it("resolves workflow step for organizing vs review", () => {
     assert.equal(
       resolveActiveWorkflowStep({ hasAnyDocuments: true, anyOrganizing: true, includedSheetCount: 1, analyzing: false, hasResults: false, analysisStale: false }).activeStep,

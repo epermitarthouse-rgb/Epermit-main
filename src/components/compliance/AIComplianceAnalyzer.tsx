@@ -159,6 +159,7 @@ import {
   isCodeAnalyzerAsyncV2Enabled,
 } from "@/lib/codeAnalyzer/featureFlags";
 import {
+  cancelAsyncRun,
   createAsyncAnalyzerRun,
   fetchSheetJobsForRun,
   retryFailedSheetJobs,
@@ -168,7 +169,7 @@ import {
   metricsFromAsyncSheetJobs,
   pickActiveSheetJobSheetId,
 } from "@/lib/codeAnalyzer/asyncRunProgress";
-import { isInProgressRunStatus } from "@/lib/codeAnalyzer/model";
+import { analyzerRunCancelTarget, isInProgressRunStatus } from "@/lib/codeAnalyzer/model";
 import {
   collectAnalyzerWorkflowDocumentIds,
   isAsyncStandardRunInProgress,
@@ -360,6 +361,14 @@ interface ComplianceAnnotationData {
   codeYear_meta?: string;
 }
 
+function omitSuppressedRun<T extends { id: string }>(
+  run: T | null,
+  suppressedIds: ReadonlySet<string>,
+): T | null {
+  if (run && suppressedIds.has(run.id)) return null;
+  return run;
+}
+
 export function AIComplianceAnalyzer() {
   const { user } = useAuth();
   const { projects, loading: projectsLoading, createProject } = useProjects();
@@ -416,6 +425,9 @@ export function AIComplianceAnalyzer() {
   const [modificationDisplayRun, setModificationDisplayRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationCurrentRun, setModificationCurrentRun] = useState<CodeAnalyzerRun | null>(null);
   const [modificationInProgressRun, setModificationInProgressRun] = useState<CodeAnalyzerRun | null>(null);
+  const [cancellingAnalyzerRun, setCancellingAnalyzerRun] = useState(false);
+  /** Run ids cancelled in this session; stale polls must not put them back on Analyzing. */
+  const suppressedInProgressRunIdsRef = useRef<Set<string>>(new Set());
   const [modificationForms, setModificationForms] = useState<ProjectDocument[]>([]);
   const [uploadingFormNames, setUploadingFormNames] = useState<string[]>([]);
   const [modificationReview, setModificationReview] = useState<CodeModificationReview | null>(null);
@@ -734,10 +746,16 @@ export function AIComplianceAnalyzer() {
     const sheets = await fetchAnalyzerSheets(projectId);
     const display = displayRunFromList(runs, ANALYSIS_TYPE_STANDARD);
     const current = currentRunFromList(runs, ANALYSIS_TYPE_STANDARD);
-    const standardInProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+    const standardInProgress = omitSuppressedRun(
+      inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD),
+      suppressedInProgressRunIdsRef.current,
+    );
     const modificationDisplay = displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
     const modificationCurrent = currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
-    const modificationInProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+    const modificationInProgress = omitSuppressedRun(
+      inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION),
+      suppressedInProgressRunIdsRef.current,
+    );
     const hasStandardRuns = runs.some(isStandardComplianceRun);
     setHasAnalyzerRuns(hasStandardRuns);
     setAnalyzerRuns(runs.filter(isStandardComplianceRun));
@@ -821,7 +839,10 @@ export function AIComplianceAnalyzer() {
 
       if (needsStandardPoll) {
         const prevId = standardInProgressRun?.id;
-        const inProgress = inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD);
+        const inProgress = omitSuppressedRun(
+          inProgressRunFromList(runs, ANALYSIS_TYPE_STANDARD),
+          suppressedInProgressRunIdsRef.current,
+        );
         setStandardInProgressRun(inProgress);
         setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
         setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
@@ -841,7 +862,10 @@ export function AIComplianceAnalyzer() {
 
       if (needsModPoll) {
         const prevModId = modificationInProgressRun?.id;
-        const inProgressMod = inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION);
+        const inProgressMod = omitSuppressedRun(
+          inProgressRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION),
+          suppressedInProgressRunIdsRef.current,
+        );
         setModificationInProgressRun(inProgressMod);
         setModificationDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
         setModificationCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_DC_MODIFICATION));
@@ -861,6 +885,45 @@ export function AIComplianceAnalyzer() {
     modificationInProgressRun?.id,
     modificationInProgressRun?.status,
     reloadAnalyzerDataset,
+  ]);
+
+  const handleCancelAnalyzerRun = useCallback(async () => {
+    if (!user?.id || !selectedProjectId || cancellingAnalyzerRun) return;
+    const runId = analyzerRunCancelTarget({
+      v2Enabled: isCodeAnalyzerAsyncV2Enabled(),
+      mode: isModificationMode ? "code_modification" : "standard",
+      standardRun: standardInProgressRun,
+      modificationRun: modificationInProgressRun,
+    });
+    if (!runId) return;
+    setCancellingAnalyzerRun(true);
+    try {
+      try {
+        await cancelAsyncRun(runId, user.id);
+      } catch (err) {
+        console.error("Cancel analyzer run error:", err);
+        toast.error(err instanceof Error ? err.message : "Could not cancel analysis");
+        return;
+      }
+      suppressedInProgressRunIdsRef.current.add(runId);
+      setAnalyzing(false);
+      try {
+        await reloadAnalyzerDataset(selectedProjectId);
+      } catch (err) {
+        console.error("Reload after analyzer cancel failed:", err);
+      }
+      toast.success(isModificationMode ? "Review cancelled" : "Analysis cancelled");
+    } finally {
+      setCancellingAnalyzerRun(false);
+    }
+  }, [
+    cancellingAnalyzerRun,
+    isModificationMode,
+    modificationInProgressRun,
+    reloadAnalyzerDataset,
+    selectedProjectId,
+    standardInProgressRun,
+    user?.id,
   ]);
 
   const resolveAnalyzerSourceDocument = useCallback(
@@ -3447,14 +3510,28 @@ export function AIComplianceAnalyzer() {
     workflowDocumentsLatch,
   });
   const uploadSessionInProgress = showDrawingUploadProgress;
+  const v2Enabled = isCodeAnalyzerAsyncV2Enabled();
+  const modificationAsyncRunActive = isAsyncStandardRunInProgress(
+    v2Enabled,
+    modificationInProgressRun?.status,
+  );
   const complianceRunActive =
     !isModificationMode &&
     (isAsyncStandardRunInProgress(
-      isCodeAnalyzerAsyncV2Enabled(),
+      v2Enabled,
       standardInProgressRun?.status,
     ) ||
       analyzing);
-  const uiAnalyzing = uploadSessionInProgress || complianceRunActive;
+  const workflowComplianceRunActive =
+    complianceRunActive || (isModificationMode && modificationAsyncRunActive);
+  const uiAnalyzing = uploadSessionInProgress || workflowComplianceRunActive;
+  const cancelRunId = analyzerRunCancelTarget({
+    v2Enabled,
+    mode: isModificationMode ? "code_modification" : "standard",
+    standardRun: standardInProgressRun,
+    modificationRun: modificationInProgressRun,
+  });
+  const showAnalyzerRunCancel = Boolean(cancelRunId) || cancellingAnalyzerRun;
   const hasAnyResults =
     completedBatchFiles.length > 0 ||
     failedBatchFiles.length > 0 ||
@@ -4159,7 +4236,7 @@ export function AIComplianceAnalyzer() {
                   displayRun={workflowDisplayRun}
                   sheetJobs={workflowSheetJobs}
                   runMetrics={analyzerMetrics}
-                  complianceRunActive={complianceRunActive}
+                  complianceRunActive={workflowComplianceRunActive}
                   analysisStale={isModificationMode ? modificationStale : analysisStale}
                   staleActionLabel={isModificationMode ? "Update Review" : "Update Analysis"}
                   workflowMode={isModificationMode ? "code_modification" : "standard"}
@@ -4167,6 +4244,9 @@ export function AIComplianceAnalyzer() {
                   batchProgress={workflowBatchProgress}
                   currentAnalyzingSheetId={currentAnalyzingSheetId}
                   hasResults={hasAnyResults}
+                  showCancelRun={showAnalyzerRunCancel}
+                  cancellingRun={cancellingAnalyzerRun}
+                  onCancelRun={() => void handleCancelAnalyzerRun()}
                   onRefresh={() => {
                     void reloadAnalyzerDataset(selectedProjectId);
                   }}
@@ -4281,6 +4361,7 @@ export function AIComplianceAnalyzer() {
               onClick={analyzeDrawings}
               disabled={
                 uiAnalyzing ||
+                cancellingAnalyzerRun ||
                 (isModificationMode
                   ? modificationForms.length === 0 || uploadingFormNames.length > 0
                   : isCodeAnalyzerAsyncV2Enabled()
@@ -4325,6 +4406,26 @@ export function AIComplianceAnalyzer() {
                 </>
               )}
             </Button>
+            {showAnalyzerRunCancel ? (
+              <Button
+                type="button"
+                variant="outlineGold"
+                size="lg"
+                onClick={() => void handleCancelAnalyzerRun()}
+                disabled={cancellingAnalyzerRun}
+                data-testid="button-cancel-analyzer-run"
+                aria-label="Cancel analysis"
+              >
+                {cancellingAnalyzerRun ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Cancelling…
+                  </>
+                ) : (
+                  "Cancel"
+                )}
+              </Button>
+            ) : null}
             {failedFileCount > 0 && !analyzing && !isModificationMode && (
               <Button variant="outlineGold" size="lg" onClick={retryFailedFiles}>
                 Retry failed sheets ({failedFileCount})
