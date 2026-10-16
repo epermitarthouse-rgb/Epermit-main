@@ -3,8 +3,11 @@
 const {
   classifyDocument,
   countCsiSpecificationSignals,
+  isAmbiguousFormatTextDense,
   isArchitecturalSectionDetailDrawing,
   isArchitecturalSheetFileName,
+  isSmallFormatTextHeavy,
+  pageFormatFromInches,
 } = require("./classify");
 
 const FORM_PAGE_RE =
@@ -12,12 +15,30 @@ const FORM_PAGE_RE =
 const DRAWING_PAGE_RE = /\b([A-Z]{1,4}-\d+(?:\.\d+)*)\b/;
 
 /**
- * Classify a single PDF page from its text content.
+ * Classify a single PDF page from its MediaBox/CropBox size and text.
+ * File name is not allowed to turn a large sheet into a spec, or a letter-size spec into a drawing.
  */
-function classifyPage({ pageNumber, text, fileName, documentType }) {
+function classifyPage({ pageNumber, text, fileName, documentType, widthInches, heightInches }) {
   const body = String(text || "");
+  const format = pageFormatFromInches(widthInches, heightInches);
+
+  if (format === "large") {
+    return { analyzerClass: "drawing_set", source: "page_size", confidence: 0.95, pageNumber };
+  }
+
   if (FORM_PAGE_RE.test(body)) {
     return { analyzerClass: "code_modification_form", source: "auto", confidence: 0.8, pageNumber };
+  }
+
+  if (format === "small" && isSmallFormatTextHeavy(body)) {
+    return { analyzerClass: "specification", source: "page_size", confidence: 0.85, pageNumber };
+  }
+
+  if (format === "ambiguous") {
+    if (isAmbiguousFormatTextDense(body)) {
+      return { analyzerClass: "specification", source: "page_size", confidence: 0.8, pageNumber };
+    }
+    return { analyzerClass: "drawing_set", source: "page_size", confidence: 0.8, pageNumber };
   }
 
   if (isArchitecturalSectionDetailDrawing({ fileName, text: body })) {
@@ -109,11 +130,34 @@ function shouldIndexSpecForPage(pageClass) {
   return pageClass === "specification" || pageClass === "supporting" || pageClass === "report";
 }
 
+/**
+ * Auto document class follows per-page results so a file name cannot override page size.
+ * User-selected classes are applied by the caller before this runs.
+ */
+function resolveAutoAnalyzerClass({
+  segments,
+  fileName,
+  documentType,
+  samplePageTexts = [],
+  pageSizes = [],
+}) {
+  if (isMixedSegments(segments)) return "mixed";
+  const uniform = segments?.length === 1 ? segments[0].analyzer_class : null;
+  if (uniform && uniform !== "unknown") return uniform;
+  return classifyDocument({
+    fileName,
+    documentType,
+    samplePageTexts,
+    pageSizes,
+  }).analyzerClass;
+}
+
 module.exports = {
   classifyPage,
   buildSegmentsFromPageClasses,
   getPageClass,
   isMixedSegments,
+  resolveAutoAnalyzerClass,
   shouldCreateSheetsForPage,
   shouldRasterizeForPage,
   shouldIndexSpecForPage,

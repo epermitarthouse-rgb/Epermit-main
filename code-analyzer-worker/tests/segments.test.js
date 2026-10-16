@@ -7,9 +7,22 @@ const {
   buildSegmentsFromPageClasses,
   getPageClass,
   isMixedSegments,
+  resolveAutoAnalyzerClass,
   shouldCreateSheetsForPage,
   shouldIndexSpecForPage,
+  shouldRasterizeForPage,
 } = require("../lib/segments");
+
+const LETTER = { widthInches: 8.5, heightInches: 11 };
+const ARCH_D = { widthInches: 36, heightInches: 24 };
+const TABLOID = { widthInches: 11, heightInches: 17 };
+const LONG_TITLE_BLOCK = `${"GENERAL NOTES AND TITLE BLOCK ".repeat(80)}\nSCALE 1/8" = 1'-0"\nDRAWN BY`;
+const CSI_PAGE = `DIVISION 03 CONCRETE
+SECTION 03 30 00 CAST-IN-PLACE CONCRETE
+PART 1 GENERAL
+1.1 SUMMARY
+A. Section includes cast-in-place concrete for foundations, slabs, and structural elements.
+B. Related work is specified in Division 01 and Division 02 of the project manual.`;
 
 describe("mixed PDF page-level routing", () => {
   const mixedPageClasses = {
@@ -144,5 +157,92 @@ PART 1 GENERAL
     });
     assert.equal(csi01010.analyzerClass, "specification");
     assert.equal(shouldCreateSheetsForPage(csi01010.analyzerClass), false);
+  });
+
+  it("classifies a large-format page with long text as a drawing sheet", () => {
+    const page = classifyPage({
+      pageNumber: 1,
+      text: LONG_TITLE_BLOCK,
+      fileName: "Project Manual.pdf",
+      documentType: "specification",
+      ...ARCH_D,
+    });
+    assert.equal(page.analyzerClass, "drawing_set");
+    assert.equal(page.source, "page_size");
+    assert.equal(shouldCreateSheetsForPage(page.analyzerClass), true);
+    assert.equal(shouldRasterizeForPage(page.analyzerClass), true);
+    assert.equal(shouldIndexSpecForPage(page.analyzerClass), false);
+
+    const segments = buildSegmentsFromPageClasses({ 1: page.analyzerClass });
+    assert.equal(
+      resolveAutoAnalyzerClass({
+        segments,
+        fileName: "Project Manual.pdf",
+        documentType: "specification",
+        samplePageTexts: [LONG_TITLE_BLOCK],
+        pageSizes: [ARCH_D],
+      }),
+      "drawing_set",
+    );
+  });
+
+  it("keeps a letter-size text page as a specification and does not rasterize it", () => {
+    const page = classifyPage({
+      pageNumber: 1,
+      text: CSI_PAGE,
+      fileName: "notes.pdf",
+      documentType: "other",
+      ...LETTER,
+    });
+    assert.equal(page.analyzerClass, "specification");
+    assert.equal(shouldCreateSheetsForPage(page.analyzerClass), false);
+    assert.equal(shouldRasterizeForPage(page.analyzerClass), false);
+    assert.equal(shouldIndexSpecForPage(page.analyzerClass), true);
+  });
+
+  it("does not let the file name flip a large page to spec or a letter-size spec into the drawing set", () => {
+    const largeNamedAsSpec = classifyPage({
+      pageNumber: 1,
+      text: LONG_TITLE_BLOCK,
+      fileName: "Division 01 Technical Specifications.pdf",
+      documentType: "specification",
+      ...ARCH_D,
+    });
+    assert.equal(largeNamedAsSpec.analyzerClass, "drawing_set");
+    assert.equal(shouldCreateSheetsForPage(largeNamedAsSpec.analyzerClass), true);
+
+    const letterNamedAsDrawing = classifyPage({
+      pageNumber: 1,
+      text: CSI_PAGE,
+      fileName: "A-1.03-00.pdf",
+      documentType: "permit_drawing",
+      ...LETTER,
+    });
+    assert.equal(letterNamedAsDrawing.analyzerClass, "specification");
+    assert.equal(shouldCreateSheetsForPage(letterNamedAsDrawing.analyzerClass), false);
+    assert.equal(shouldIndexSpecForPage(letterNamedAsDrawing.analyzerClass), true);
+  });
+
+  it("treats tabloid pages as drawings when graphic and as specs when text-dense", () => {
+    const graphic = classifyPage({
+      pageNumber: 1,
+      text: "A-101 FLOOR PLAN\nSCALE 1/4\" = 1'-0\"\nDRAWN BY",
+      fileName: "Project Manual.pdf",
+      documentType: "specification",
+      ...TABLOID,
+    });
+    assert.equal(graphic.analyzerClass, "drawing_set");
+    assert.equal(shouldRasterizeForPage(graphic.analyzerClass), true);
+
+    const dense = classifyPage({
+      pageNumber: 1,
+      text: `${CSI_PAGE}\n${"The contractor shall provide materials and workmanship meeting the referenced standard. ".repeat(40)}`,
+      fileName: "A-101 FLOOR PLAN.pdf",
+      documentType: "permit_drawing",
+      ...TABLOID,
+    });
+    assert.equal(dense.analyzerClass, "specification");
+    assert.equal(shouldCreateSheetsForPage(dense.analyzerClass), false);
+    assert.equal(shouldIndexSpecForPage(dense.analyzerClass), true);
   });
 });

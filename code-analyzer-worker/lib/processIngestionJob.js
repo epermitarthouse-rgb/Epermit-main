@@ -12,6 +12,7 @@ const {
   buildSegmentsFromPageClasses,
   getPageClass,
   isMixedSegments,
+  resolveAutoAnalyzerClass,
   shouldCreateSheetsForPage,
   shouldRasterizeForPage,
   shouldIndexSpecForPage,
@@ -141,6 +142,8 @@ async function processIngestionJob({ supabase, job, workerId, workerVersion, hea
         text: page.text,
         fileName: doc.file_name,
         documentType: doc.document_type,
+        widthInches: page.widthInches,
+        heightInches: page.heightInches,
       }).analyzerClass;
     }
 
@@ -160,18 +163,18 @@ async function processIngestionJob({ supabase, job, workerId, workerVersion, hea
         : job.analyzer_class || doc.analyzer_class || null;
 
     if (!effectiveClass) {
-      if (isMixedSegments(segments)) {
-        effectiveClass = "mixed";
-      } else {
-        const docLevel = classifyDocument({
-          fileName: doc.file_name,
-          documentType: doc.document_type,
-          samplePageTexts: pages.slice(0, 5).map((p) => p.text),
-        });
-        effectiveClass = docLevel.analyzerClass;
-        if (segments.length === 0 && stats.totalPages > 0) {
-          segments = [{ page_start: 1, page_end: stats.totalPages, analyzer_class: effectiveClass }];
-        }
+      effectiveClass = resolveAutoAnalyzerClass({
+        segments,
+        fileName: doc.file_name,
+        documentType: doc.document_type,
+        samplePageTexts: pages.slice(0, 5).map((p) => p.text),
+        pageSizes: pages.slice(0, 5).map((p) => ({
+          widthInches: p.widthInches,
+          heightInches: p.heightInches,
+        })),
+      });
+      if (segments.length === 0 && stats.totalPages > 0) {
+        segments = [{ page_start: 1, page_end: stats.totalPages, analyzer_class: effectiveClass }];
       }
     }
 

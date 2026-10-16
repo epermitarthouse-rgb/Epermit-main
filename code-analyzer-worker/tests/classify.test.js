@@ -109,4 +109,38 @@ B. Remove all existing waterproofing membranes and prepare surfaces for new appl
     assert.equal(result.analyzerClass, "code_modification_form");
     assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), false);
   });
+
+  it("does not let a long title block or a spec file name turn a large-format page into a specification", () => {
+    const longTitleBlock = "GENERAL NOTES AND TITLE BLOCK ".repeat(80);
+    const result = classifyDocument({
+      fileName: "Project Manual.pdf",
+      documentType: "specification",
+      samplePageTexts: [longTitleBlock],
+      pageSizes: [{ widthInches: 36, heightInches: 24 }],
+    });
+    assert.equal(result.analyzerClass, "drawing_set");
+    assert.equal(result.source, "page_size");
+    assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), true);
+    assert.equal(shouldRasterizePage(result.analyzerClass), true);
+  });
+
+  it("keeps a letter-size text page as a specification even when the file name is a sheet id", () => {
+    const result = classifyDocument({
+      fileName: "A-101 FLOOR PLAN.pdf",
+      documentType: "permit_drawing",
+      samplePageTexts: [
+        `DIVISION 03 CONCRETE
+SECTION 03 30 00 CAST-IN-PLACE CONCRETE
+PART 1 GENERAL
+1.1 SUMMARY
+A. Section includes cast-in-place concrete for foundations and slabs.
+B. Related requirements are specified in Division 01.`,
+      ],
+      pageSizes: [{ widthInches: 8.5, heightInches: 11 }],
+    });
+    assert.equal(result.analyzerClass, "specification");
+    assert.equal(result.source, "page_size");
+    assert.equal(shouldCreateAnalyzerSheets(result.analyzerClass), false);
+    assert.equal(shouldRasterizePage(result.analyzerClass), false);
+  });
 });

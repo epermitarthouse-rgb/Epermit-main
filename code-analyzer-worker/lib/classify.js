@@ -106,9 +106,74 @@ function isDrawingDocumentHint({ fileName, documentType }) {
   );
 }
 
-function classifyDocument({ fileName, documentType, samplePageTexts = [] }) {
+/**
+ * Page format from the PDF page view (CropBox intersected with MediaBox), in inches.
+ * Short side >= ~17" is a drawing sheet (ANSI C / ARCH C and larger).
+ * Short side <= 11.5" is letter, legal, or A4, except 11x17 which is tabloid.
+ * Tabloid and other in-between sizes are ambiguous and use text density.
+ */
+const LARGE_FORMAT_MIN_SHORT_SIDE_IN = 16.5;
+const SMALL_FORMAT_MAX_SHORT_SIDE_IN = 11.5;
+const TABLOID_LONG_SIDE_MIN_IN = 16;
+const TABLOID_LONG_SIDE_MAX_IN = 19.5;
+const TABLOID_SHORT_SIDE_MIN_IN = 10;
+/** Letter/A4 only. Must not treat long title-block text on large sheets as a spec. */
+const SMALL_FORMAT_TEXT_HEAVY_CHARS = 500;
+/** 11x17 title blocks stay drawings; a full spec page is much longer. */
+const AMBIGUOUS_TEXT_DENSE_CHARS = 2000;
+const AMBIGUOUS_CSI_TEXT_DENSE_CHARS = 800;
+
+function pageFormatFromInches(widthInches, heightInches) {
+  const width = Number(widthInches);
+  const height = Number(heightInches);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+  const shortSide = Math.min(width, height);
+  const longSide = Math.max(width, height);
+  if (shortSide >= LARGE_FORMAT_MIN_SHORT_SIDE_IN) return "large";
+  const tabloid =
+    longSide >= TABLOID_LONG_SIDE_MIN_IN &&
+    longSide <= TABLOID_LONG_SIDE_MAX_IN &&
+    shortSide >= TABLOID_SHORT_SIDE_MIN_IN &&
+    shortSide < LARGE_FORMAT_MIN_SHORT_SIDE_IN;
+  if (tabloid) return "ambiguous";
+  if (shortSide <= SMALL_FORMAT_MAX_SHORT_SIDE_IN) return "small";
+  return "ambiguous";
+}
+
+function isSmallFormatTextHeavy(text) {
+  const body = String(text || "");
+  if (body.length >= SMALL_FORMAT_TEXT_HEAVY_CHARS) return true;
+  return countCsiSpecificationSignals(body) >= 2 && body.length > 200;
+}
+
+function isAmbiguousFormatTextDense(text) {
+  const body = String(text || "");
+  if (body.length >= AMBIGUOUS_TEXT_DENSE_CHARS) return true;
+  return countCsiSpecificationSignals(body) >= 2 && body.length >= AMBIGUOUS_CSI_TEXT_DENSE_CHARS;
+}
+
+function pageFormats(pageSizes) {
+  return (pageSizes || [])
+    .map((size) => pageFormatFromInches(size?.widthInches, size?.heightInches))
+    .filter(Boolean);
+}
+
+function classifyDocument({ fileName, documentType, samplePageTexts = [], pageSizes = [] }) {
   const name = String(fileName || "");
   const docType = String(documentType || "").toLowerCase();
+  const formats = pageFormats(pageSizes);
+  const combined = samplePageTexts.join("\n").slice(0, 8000);
+
+  // Measured page size outranks the file name. A 24x36 sheet named like a manual is a drawing.
+  if (formats.length > 0 && formats.every((format) => format === "large")) {
+    return { analyzerClass: "drawing_set", source: "page_size", confidence: 0.95 };
+  }
+  // A letter-size spec stays a spec even when the file name looks like a sheet.
+  if (formats.length > 0 && formats.every((format) => format === "small") && isSmallFormatTextHeavy(combined)) {
+    return { analyzerClass: "specification", source: "page_size", confidence: 0.85 };
+  }
 
   if (docType === "code_modification_application" || FORM_FILENAME_RE.test(name)) {
     return { analyzerClass: "code_modification_form", source: "filename", confidence: 0.95 };
@@ -123,7 +188,6 @@ function classifyDocument({ fileName, documentType, samplePageTexts = [] }) {
     return { analyzerClass: "specification", source: "filename", confidence: 0.9 };
   }
 
-  const combined = samplePageTexts.join("\n").slice(0, 8000);
   const specHits = countCsiSpecificationSignals(combined);
   const sheetHits = (combined.match(DRAWING_SHEET_RE) || []).length;
   const avgTextLen =
@@ -137,7 +201,8 @@ function classifyDocument({ fileName, documentType, samplePageTexts = [] }) {
   if (sheetHits >= 2 && avgTextLen < 400) {
     return { analyzerClass: "drawing_set", source: "auto", confidence: 0.7 };
   }
-  if (avgTextLen > 500) {
+  // Long extracted text is a spec signal only when no sampled page is large-format.
+  if (avgTextLen > 500 && !formats.includes("large")) {
     return { analyzerClass: "specification", source: "auto", confidence: 0.55 };
   }
 
@@ -164,6 +229,13 @@ module.exports = {
   countCsiSpecificationSignals,
   isArchitecturalSectionDetailDrawing,
   isArchitecturalSheetFileName,
+  pageFormatFromInches,
+  isSmallFormatTextHeavy,
+  isAmbiguousFormatTextDense,
+  LARGE_FORMAT_MIN_SHORT_SIDE_IN,
+  SMALL_FORMAT_MAX_SHORT_SIDE_IN,
+  SMALL_FORMAT_TEXT_HEAVY_CHARS,
+  AMBIGUOUS_TEXT_DENSE_CHARS,
   CSI_SECTION_HEADING_RE,
   ARCH_SECTION_DETAIL_TITLE_RE,
 };

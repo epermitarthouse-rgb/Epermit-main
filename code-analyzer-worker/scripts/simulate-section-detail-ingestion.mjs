@@ -35,6 +35,8 @@ async function simulate(fileName) {
       text: page.text,
       fileName,
       documentType: "specification",
+      widthInches: page.widthInches,
+      heightInches: page.heightInches,
     });
     pageClasses[page.pageNumber] = result.analyzerClass;
   }
