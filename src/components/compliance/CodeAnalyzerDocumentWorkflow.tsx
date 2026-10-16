@@ -28,6 +28,7 @@ import {
 import {
   buildConsolidatedDocumentCards,
   bulkDeletableDocumentIds,
+  isAnalyzerWorkflowDocument,
   isBulkSelectableDocumentCard,
   resolveActiveWorkflowStep,
   WORKFLOW_STEPS,
@@ -401,6 +402,36 @@ export function CodeAnalyzerDocumentWorkflow({
     runMetrics?.completedSheetIds ??
     new Set(included.filter((s) => !failedSheetIds.has(s.id)).map((s) => s.id));
 
+  const anyOrganizing = useMemo(() => {
+    return (
+      jobs.some((j) => j.status === "pending" || j.status === "processing") ||
+      documents.some(
+        (d) =>
+          d.analyzer_processing_status === "processing" || d.analyzer_processing_status === "queued",
+      ) ||
+      uploadQueueFiles.some((f) => f.status === "uploading" || f.status === "preparing")
+    );
+  }, [jobs, documents, uploadQueueFiles]);
+
+  const hasAnyDocuments =
+    normalizedDocuments.all.some(isAnalyzerWorkflowDocument) ||
+    uploadQueueFiles.some((f) => !handoffPendingIds.has(f.id));
+
+  const { activeStep, nextHint } = resolveActiveWorkflowStep({
+    hasAnyDocuments,
+    anyOrganizing,
+    includedSheetCount: included.length,
+    analyzing: complianceRunActive,
+    hasResults,
+    analysisStale,
+  });
+
+  const analysisSettled =
+    activeStep >= 5 &&
+    !complianceRunActive &&
+    !anyOrganizing &&
+    Boolean(displayRun?.status === "current" || displayRun?.status === "partial");
+
   const cards = useMemo(
     () =>
       buildConsolidatedDocumentCards({
@@ -456,32 +487,6 @@ export function CodeAnalyzerDocumentWorkflow({
       }),
     [normalizedDocuments, included.length, sheetSourceDocumentCount],
   );
-
-  const anyOrganizing = useMemo(() => {
-    return (
-      jobs.some((j) => j.status === "pending" || j.status === "processing") ||
-      documents.some(
-        (d) =>
-          d.analyzer_processing_status === "processing" || d.analyzer_processing_status === "queued",
-      ) ||
-      uploadQueueFiles.some((f) => f.status === "uploading" || f.status === "preparing")
-    );
-  }, [jobs, documents, uploadQueueFiles]);
-
-  const { activeStep, nextHint } = resolveActiveWorkflowStep({
-    hasAnyDocuments: cards.length > 0,
-    anyOrganizing,
-    includedSheetCount: included.length,
-    analyzing: complianceRunActive,
-    hasResults,
-    analysisStale,
-  });
-
-  const analysisSettled =
-    activeStep >= 5 &&
-    !complianceRunActive &&
-    !anyOrganizing &&
-    Boolean(displayRun?.status === "current" || displayRun?.status === "partial");
 
   const runtimeStatus = resolveAnalyzerRuntimeStatus({
     mode: workflowMode,
