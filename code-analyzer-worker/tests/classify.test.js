@@ -168,6 +168,30 @@ B. Related requirements are specified in Division 01.`,
     assert.equal(shouldRunVisualDefectChecks("schedule"), false);
     assert.equal(shouldRunVisualDefectChecks("form"), false);
     assert.equal(shouldRunVisualDefectChecks("floor_plan"), true);
+    assert.equal(shouldRunVisualDefectChecks("mep"), true);
+
+    assert.equal(
+      classifySheetContent({
+        text: "Job 12345\nCOMcheck\nEnergy Compliance Certificate\nEnvelope passes.",
+      }),
+      "form",
+    );
+    assert.equal(
+      classifySheetContent({
+        text: "S-301\nSCHEDULE OF SPECIAL INSPECTIONS\nSteel frame",
+      }),
+      "form",
+    );
+    assert.equal(
+      classifySheetContent({
+        text: "A-8.10\nROOM FINISH SCHEDULE\nFLOOR BASE WALL CEILING",
+      }),
+      "schedule",
+    );
+    assert.equal(
+      classifySheetContent({ text: "E-2.01\nELECTRICAL POWER PLAN\nPANEL LP1" }),
+      "mep",
+    );
 
     const largeScheduleNamedAsPlan = classifyDocument({
       fileName: "A-101 FLOOR PLAN.pdf",

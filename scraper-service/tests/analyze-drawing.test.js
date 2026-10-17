@@ -107,11 +107,25 @@ describe("analyze-drawing.service", () => {
     assert.equal(result.summary.overallScore, null);
   });
 
-  it("formatSingleResult passes when a checklist records the checks", () => {
+  it("formatSingleResult does not pass a checklist that has no evidence quote", () => {
     const result = formatSingleResult(
       {
         issues: [],
-        checklist: ["Egress width checked"],
+        checklist: ["Egress width checked, no failing condition"],
+        overallScore: 85,
+        jurisdictionNotes: "clean",
+      },
+      "2021",
+    );
+    assert.equal(result.summary.reviewState, "not_reviewed");
+    assert.equal(result.summary.overallScore, null);
+  });
+
+  it("formatSingleResult passes when every checklist item quotes a dimension or sheet reference", () => {
+    const result = formatSingleResult(
+      {
+        issues: [],
+        checklist: ['Corridor width: 44" labeled', "Exit sign: shown on sheet A-1.04"],
         overallScore: 85,
         jurisdictionNotes: "clean",
       },
@@ -119,6 +133,28 @@ describe("analyze-drawing.service", () => {
     );
     assert.equal(result.summary.reviewState, "passed");
     assert.equal(result.summary.overallScore, 100);
+  });
+
+  it("formatSingleResult does not keep a score of 100 when issues exist", () => {
+    const result = formatSingleResult(
+      {
+        issues: [
+          {
+            id: "a",
+            severity: "warning",
+            category: "Egress",
+            title: "t",
+            description: "d",
+            codeReference: "IBC 1005",
+          },
+        ],
+        overallScore: 100,
+        jurisdictionNotes: "",
+      },
+      "2021",
+    );
+    assert.equal(result.summary.totalIssues, 1);
+    assert.notEqual(result.summary.overallScore, 100);
   });
 
   it("buildPrompts does not tell the model to score an empty review as 100", () => {
@@ -223,6 +259,130 @@ describe("analyze-drawing.service", () => {
     assert.equal(outcome.result.summary.reviewState, "not_reviewed");
     assert.equal(outcome.result.summary.overallScore, null);
     assert.equal(openai.chat.completions.create.mock.calls.length, 1);
+    assert.equal(openai.chat.completions.create.mock.calls[0].arguments[0].model, "gpt-4o");
+  });
+
+  it("does not pass a generic checklist returned by the model", async () => {
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async () => ({
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content: JSON.stringify({
+                    issues: [],
+                    checklist: [
+                      {
+                        item: "Egress, fire separation, stairs, structural",
+                        result: "no failing condition",
+                      },
+                    ],
+                    jurisdictionNotes: "",
+                    overallScore: 100,
+                  }),
+                },
+              },
+            ],
+          })),
+        },
+      },
+    };
+    const outcome = await analyzeDrawingWithOpenAI({
+      openai,
+      imageBase64: "abc",
+      codeType: "ibc",
+      logInfo: () => {},
+      logError: () => {},
+    });
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(outcome.result.summary.overallScore, null);
+  });
+
+  it("drops a missing clearance when image understanding quotes the graphic dimension", async () => {
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async () => ({
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+            choices: [
+              {
+                finish_reason: "stop",
+                message: {
+                  content: JSON.stringify({
+                    issues: [
+                      {
+                        severity: "warning",
+                        category: "Accessibility",
+                        title: "Clearance not shown",
+                        description: "The clearance symbol is not shown.",
+                        codeReference: "ICC A117.1",
+                      },
+                    ],
+                    observedEvidence: ["54x60 clearance", "48x48"],
+                    checklist: [],
+                    overallScore: 100,
+                  }),
+                },
+              },
+            ],
+          })),
+        },
+      },
+    };
+    const outcome = await analyzeDrawingWithOpenAI({
+      openai,
+      imageBase64: "abc",
+      pageText: "ENLARGED PLAN",
+      codeType: "ibc",
+      logInfo: () => {},
+      logError: () => {},
+    });
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.result.issues.length, 0);
+    assert.notEqual(outcome.result.summary.overallScore, 100);
+  });
+
+  it("tells the model which other sheets own facts and keeps drawing review on gpt-4o", async () => {
+    let systemPrompt = "";
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async (body) => {
+            systemPrompt = body.messages[0].content;
+            return {
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+              choices: [
+                {
+                  finish_reason: "stop",
+                  message: {
+                    content: JSON.stringify({ issues: [], observedEvidence: [], overallScore: 100 }),
+                  },
+                },
+              ],
+            };
+          }),
+        },
+      },
+    };
+    await analyzeDrawingWithOpenAI({
+      openai,
+      imageBase64: "abc",
+      contentClass: "floor_plan",
+      sheetIndex: [
+        { fileName: "A-4.00.pdf", contentClass: "enlarged_plan", title: "Enlarged Restroom", excerpt: "ENLARGED TOILET PLAN" },
+      ],
+      codeType: "ibc",
+      logInfo: () => {},
+      logError: () => {},
+    });
+    assert.match(systemPrompt, /OTHER INCLUDED SHEETS/);
+    assert.match(systemPrompt, /A-4\.00\.pdf/);
+    assert.match(systemPrompt, /evidence quote/i);
+    assert.equal(openai.chat.completions.create.mock.calls[0].arguments[0].model, "gpt-4o");
   });
 
   it("does not send a schedule or form sheet through visual defect checks", async () => {

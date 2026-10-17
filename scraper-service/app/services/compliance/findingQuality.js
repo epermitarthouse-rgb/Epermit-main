@@ -131,8 +131,49 @@ const MISSING_FACT_RE =
 const MEASURED_DEFECT_RE =
   /\b(does not meet|non-?compliant|below|exceeds|less than|greater than|insufficient|too narrow|obstruct)\b/i;
 
+const HOUR_RATING_RE = /\b\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?)\b/i;
+const MINUTE_RATING_RE = /\b\d+\s*-?\s*minutes?\b/i;
+const CLEARANCE_PAIR_RE = /\b\d{2}\s*[x×]\s*\d{2}\b/i;
+const INCH_MARK_RE = /\b\d{2}\s*(?:(?:\"|″)|in(?:ch(?:es)?)?\b)/i;
+const AFF_HEIGHT_RE = /\b\d{2}\s*(?:(?:\"|″)|in(?:ch(?:es)?)?\b)?\s*(?:a\.?\s*f\.?\s*f\.?|aff)\b/i;
+
 /**
- * Drop a missing-information note when the sheet text already states the fact.
+ * Text the filter may treat as already visible: the PDF text layer plus graphic
+ * quotes from image understanding (observedEvidence) and checklist quotes.
+ * @param {{ pageText?: string | null; observedEvidence?: unknown; checklist?: unknown } | null | undefined} ctx
+ */
+function evidenceCorpus(ctx) {
+  const parts = [ctx?.pageText];
+  const observed = ctx?.observedEvidence;
+  if (Array.isArray(observed)) {
+    parts.push(observed.map((item) => (typeof item === "string" ? item : "")).filter(Boolean).join("\n"));
+  } else if (observed) {
+    parts.push(String(observed));
+  }
+  if (ctx?.checklist) parts.push(normalizeChecklist(ctx.checklist).join("\n"));
+  return parts.filter(Boolean).join("\n");
+}
+
+/**
+ * @param {Record<string, unknown>} issue
+ */
+function claimText(issue) {
+  return `${issue.title || ""} ${issue.description || ""}`;
+}
+
+/**
+ * @param {Record<string, unknown>} issue
+ */
+function claimsMissingFact(issue) {
+  const claim = claimText(issue);
+  if (MEASURED_DEFECT_RE.test(claim) && /\d/.test(claim) && !MISSING_FACT_RE.test(claim)) return false;
+  const findingType = String(issue.findingType || "").toLowerCase();
+  if (findingType === "confirmed_violation" && !MISSING_FACT_RE.test(claim)) return false;
+  return findingType === "missing_information" || findingType === "unverified" || MISSING_FACT_RE.test(claim);
+}
+
+/**
+ * Drop a missing-information note when the sheet text or graphic quotes already state the fact.
  * Measured defects stay.
  * @param {Record<string, unknown>} issue
  * @param {string | null | undefined} pageText
@@ -140,40 +181,202 @@ const MEASURED_DEFECT_RE =
 function pageTextSuppliesMissingFact(issue, pageText) {
   const body = String(pageText || "");
   if (!body.trim()) return false;
-  const claim = `${issue.title || ""} ${issue.description || ""}`;
-  const findingType = String(issue.findingType || "").toLowerCase();
-  if (findingType === "confirmed_violation") return false;
-  const claimsMissing = findingType === "missing_information" || MISSING_FACT_RE.test(claim);
-  if (!claimsMissing) return false;
+  const claim = claimText(issue);
+  if (!claimsMissingFact(issue)) return false;
   if (MEASURED_DEFECT_RE.test(claim) && /\d/.test(claim) && !/\bnot shown\b/i.test(claim)) return false;
 
-  const fireMissing =
-    /\b(fire\s*(rating|resistance|resist)|fire[\s-]*rated|hour\s+rating)\b/i.test(claim) &&
-    MISSING_FACT_RE.test(claim);
+  const fireOrRatedMissing =
+    /\b(fire[\s-]*(rating|resistance|resist)|fire[\s-]*rated|hour\s+rating|rated\s+(?:wall|partition|door)|minute\s+door|door\s+rating|hour\s+(?:wall|partition))\b/i.test(
+      claim,
+    );
+  if (fireOrRatedMissing && (HOUR_RATING_RE.test(body) || MINUTE_RATING_RE.test(body))) {
+    return true;
+  }
+
+  const seatingMissing = /\b(accessible\s+seating|ada\s+seats?|accessible\s+seats?|seat\s+counts?)\b/i.test(claim);
+  if (seatingMissing && (/\bada\b/i.test(body) || /\baccessible\b/i.test(body)) && /\bseats?\b/i.test(body)) {
+    return true;
+  }
+
+  const clearanceMissing =
+    /\b(clear[\s-]*floor(?:\s+space)?|turning\s+space|clearance|wheelchair\s+space|maneuvering)\b/i.test(claim);
   if (
-    fireMissing &&
-    (/\b\d+(?:\.\d+)?\s*-?\s*(?:h(?:ou)?r|hr)\b/i.test(body) || /\b\d+\s*-?\s*minute\b/i.test(body))
+    clearanceMissing &&
+    (CLEARANCE_PAIR_RE.test(body) ||
+      /\b\d+\s*(?:'|ft|\"|″|in(?:ch(?:es)?)?)\b/i.test(body) ||
+      /\d+\s*['′]\s*-?\s*\d+/.test(body))
   ) {
     return true;
   }
 
-  const seatingMissing = /\b(accessible\s+seating|ada\s+seats?|accessible\s+seats?)\b/i.test(claim);
-  if (seatingMissing && MISSING_FACT_RE.test(claim) && /\bada\b/i.test(body) && /\bseats?\b/i.test(body)) {
+  const counterMissing = /\b(counter(?:\s+height)?|work\s*surface|a\.?\s*f\.?\s*f\.?|above\s+finished\s+floor)\b/i.test(
+    claim,
+  );
+  if (counterMissing && (AFF_HEIGHT_RE.test(body) || (/\b(?:34|36)\s*(?:\"|″)/.test(body) && /\b(counter|aff|a\.?\s*f\.?\s*f)\b/i.test(body)))) {
     return true;
   }
 
-  const clearFloorMissing = /\b(clear[\s-]*floor(?:\s+space)?|turning\s+space)\b/i.test(claim);
+  const accessoryMissing = /\b(accessory|accessories|grab\s*bars?|mirror|coat\s*hooks?|dispenser)s?\s+heights?\b/i.test(
+    claim,
+  );
   if (
-    clearFloorMissing &&
-    MISSING_FACT_RE.test(claim) &&
-    (/\b\d+\s*(?:'|ft|\"|in(?:ch(?:es)?)?)\b/i.test(body) ||
-      /\d+\s*['′]\s*-?\s*\d+/.test(body) ||
-      /\b\d{2}\s*(?:x|×)\s*\d{2}\b/.test(body))
+    accessoryMissing &&
+    INCH_MARK_RE.test(body) &&
+    /\b(aff|a\.?\s*f\.?\s*f|height|mirror|grab|dispenser|hook|accessory)\b/i.test(body)
   ) {
     return true;
   }
+
+  const doorWidthMissing = /\bdoor\s+widths?\b/i.test(claim);
+  if (doorWidthMissing && INCH_MARK_RE.test(body)) return true;
 
   return false;
+}
+
+const SHOWN_ON_SHEET_RE = /\bshown\s+on\s+sheet\s+[A-Z]{1,4}(?:\s*[-.]?\s*\d|\d)/i;
+const CHECKLIST_DIMENSION_RE =
+  /\d+\s*(?:'|′|ft\b|\"|″|in(?:ch(?:es)?)?\b)|\b\d+\s*[x×]\s*\d+\b|\b\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?|minutes?|mins?)\b/i;
+const QUOTED_NOTE_RE = /[“"][^"”\n]{2,160}[”"]/;
+
+/**
+ * A checklist line is evidence only when it quotes something read from the sheet.
+ * @param {string} text
+ */
+function checklistItemHasEvidenceQuote(text) {
+  const value = String(text || "");
+  if (!value.trim()) return false;
+  if (SHOWN_ON_SHEET_RE.test(value)) return true;
+  if (CHECKLIST_DIMENSION_RE.test(value)) return true;
+  if (QUOTED_NOTE_RE.test(value)) return true;
+  if (/\b(?:label(?:ed|ling)?|annotation|note)\b\s*[:\-]?\s*[A-Z0-9"“][^.]{1,80}/i.test(value)) return true;
+  return false;
+}
+
+const ARCHITECTURAL_CHECK_RE =
+  /\b(egress|accessib|restroom|toilet|occupan|stair|maneuvering|clear\s*floor)\b/i;
+
+/**
+ * Forms and schedules never earn an architectural pass. MEP sheets cannot pass
+ * on an egress or accessibility checklist.
+ * @param {string[]} items
+ * @param {string | null | undefined} contentClass
+ */
+function checklistCountsForPass(items, contentClass) {
+  if (contentClass === "form" || contentClass === "schedule") return [];
+  if (contentClass === "mep") return items.filter((item) => !ARCHITECTURAL_CHECK_RE.test(item));
+  return items;
+}
+
+/**
+ * @param {Record<string, unknown>} issue
+ */
+function namesConditionDrawnOnThisSheet(issue) {
+  const claim = `${claimText(issue)} ${issue.location || ""}`;
+  if (/\b(?:shown|drawn|dimensioned|labeled)\s+(?:on this sheet|here)\b/i.test(claim)) return true;
+  if (/\bthis sheet shows\b/i.test(claim)) return true;
+  if (MEASURED_DEFECT_RE.test(claim) && /\d/.test(claim) && !MISSING_FACT_RE.test(claim)) return true;
+  return false;
+}
+
+/**
+ * @param {Record<string, unknown>} issue
+ */
+function namesWhereOnSheet(issue) {
+  const loc = String(issue.location || "").trim();
+  const blob = `${loc}\n${claimText(issue)}`;
+  if (
+    /\b(grid\s*[A-Z0-9]|room\s+[A-Z0-9]|door\s*(?:mark|no\.?|#)?\s*[A-Z]?\d+|detail\s+\d+|between\s+(?:col|grid)|stair\s*[A-Z0-9]|corridor\s+[A-Z0-9]|at\s+(?:the\s+)?(?:entry|lobby|kitchen|restroom|stair|corridor|counter))\b/i.test(
+      blob,
+    )
+  ) {
+    return true;
+  }
+  if (/\b(north|south|east|west)\b/i.test(loc)) return true;
+  if (loc && !/^(sheet|this sheet|the sheet|drawing|plan|the plan|the drawing|page|n\/a|na|unknown|not specified|general|overall)$/i.test(loc)) {
+    return loc.length >= 3;
+  }
+  return false;
+}
+
+const FACT_OWNED_BY_CLASS = [
+  {
+    claim:
+      /\b(restroom|toilet(?:\s+room)?|bath(?:room)?|lavator(?:y|ies))\b[\s\S]{0,80}\b(dimension|size|clearance|width|depth)s?\b|\b(restroom|toilet)\s+(?:room\s+)?(?:dimension|clearance|size)s?\b/i,
+    classes: new Set(["enlarged_plan"]),
+  },
+  {
+    claim: /\b(door\s+(?:size|width|hardware)|hardware\s+(?:set|group)|door\s+schedule)\b/i,
+    classes: new Set(["schedule"]),
+  },
+  {
+    claim: /\b(egress\s+(?:width|capacity)|exit\s+(?:width|capacity)|occupant\s+load)\b/i,
+    classes: new Set(["egress_plan"]),
+  },
+];
+
+/**
+ * @param {{ fileName?: string | null; sheetId?: string | null; title?: string | null }} entry
+ * @param {{ sheetTitle?: string | null; sheetId?: string | null }} ctx
+ */
+function isCurrentSheetEntry(entry, ctx) {
+  if (ctx.sheetId && entry.sheetId && String(ctx.sheetId) === String(entry.sheetId)) return true;
+  const current = String(ctx.sheetTitle || "").trim().toLowerCase();
+  const name = String(entry.fileName || "").trim().toLowerCase();
+  if (current && name && current === name) return true;
+  return false;
+}
+
+/**
+ * Drop "missing / not shown" when another included sheet of the owning class is in the set.
+ * A condition the finding says is drawn on this sheet stays.
+ * @param {Record<string, unknown>} issue
+ * @param {{ sheetIndex?: Array<{ fileName?: string | null; contentClass?: string | null; sheetId?: string | null }>; sheetTitle?: string | null; sheetId?: string | null }} ctx
+ */
+function otherSheetOwnsMissingFact(issue, ctx) {
+  if (!claimsMissingFact(issue)) return false;
+  if (namesConditionDrawnOnThisSheet(issue)) return false;
+  const index = Array.isArray(ctx.sheetIndex) ? ctx.sheetIndex : [];
+  if (!index.length) return false;
+  const claim = claimText(issue);
+  return FACT_OWNED_BY_CLASS.some((rule) => {
+    if (!rule.claim.test(claim)) return false;
+    return index.some(
+      (sheet) => rule.classes.has(String(sheet.contentClass || "")) && !isCurrentSheetEntry(sheet, ctx),
+    );
+  });
+}
+
+const CLASS_CANNOT_SHOW_MISSING = {
+  elevation:
+    /\b(restroom|toilet|egress\s+width|occupant\s+load|door\s+hardware|counter\s+height|clear(?:ance|\s+floor)|accessory\s+height)\b/i,
+  section: /\b(restroom|toilet|egress\s+width|occupant\s+load|door\s+hardware|door\s+schedule)\b/i,
+  egress_plan: /\b(restroom\s+dimension|counter\s+height|door\s+hardware|finish\s+schedule|accessory\s+height)\b/i,
+  enlarged_plan: /\b(egress\s+width|exit\s+capacity|occupant\s+load|travel\s+distance)\b/i,
+  mep: /\b(egress|accessib|restroom|toilet|occupant\s+load|stair\s+(?:width|rise)|ada)\b/i,
+};
+
+/**
+ * Missing-info findings for facts this sheet class cannot show are not defects.
+ * @param {Record<string, unknown>} issue
+ * @param {{ contentClass?: string | null }} ctx
+ */
+function missingOutsideClassScope(issue, ctx) {
+  const pattern = CLASS_CANNOT_SHOW_MISSING[String(ctx.contentClass || "")];
+  if (!pattern) return false;
+  if (!claimsMissingFact(issue)) return false;
+  if (namesConditionDrawnOnThisSheet(issue)) return false;
+  return pattern.test(claimText(issue));
+}
+
+/**
+ * MEP sheets do not take architectural egress or accessibility defect checks.
+ * @param {Record<string, unknown>} issue
+ * @param {{ contentClass?: string | null }} ctx
+ */
+function mepArchitecturalDefect(issue, ctx) {
+  if (ctx.contentClass !== "mep") return false;
+  const blob = `${issue.category || ""} ${claimText(issue)}`;
+  return /\b(egress|accessib|restroom|toilet|\bada\b|occupant\s+load)\b/i.test(blob);
 }
 
 /**
@@ -207,7 +410,7 @@ function referencedCitationBook(ref) {
   if (/\b(?:ICC\s*)?A117\.1\b/i.test(ref)) return "ICC A117.1";
   if (/\bADA(?:AG)?\b|\b2010\s+ADA\b/i.test(ref)) return "ADA";
   if (/\b604\.8\.1\.2\b/.test(ref) || /\b604\.8(?:\.\d+){1,3}\b/.test(ref)) return "ICC A117.1";
-  if (/\b12A\s*DCMR\b/i.test(ref)) return "12A DCMR";
+  if (/\b12A\s*DCMR\b/i.test(ref) || /\bD\.?C\.?\s+Building Code\b/i.test(ref)) return "12A DCMR";
   if (/\bIBC\b/i.test(ref)) return "IBC";
   return null;
 }
@@ -222,9 +425,13 @@ function correctCitationBook(issue, codeType) {
   const book = referencedCitationBook(ref);
   if (!book) return issue;
   const labeledIbc = codeType === "ibc" || /\bIBC\b/i.test(ref);
-  if ((book === "ICC A117.1" || book === "ADA") && labeledIbc) {
+  if ((book === "ICC A117.1" || book === "ADA" || book === "12A DCMR") && labeledIbc) {
     let nextRef = ref.replace(/\bIBC\b\s*/gi, "").trim();
-    if (!/\b(?:A117\.1|ADA)\b/i.test(nextRef)) {
+    const alreadyNamed =
+      book === "12A DCMR"
+        ? /\b(?:12A\s*DCMR|D\.?C\.?\s+Building Code)\b/i.test(nextRef)
+        : /\b(?:A117\.1|ADA)\b/i.test(nextRef);
+    if (!alreadyNamed) {
       nextRef = `${book} ${nextRef}`.replace(/\s+/g, " ").trim();
     }
     return { ...issue, codeReference: nextRef, citationBook: book };
@@ -259,11 +466,16 @@ function normalizeChecklist(raw) {
  * @param {{ sheetTitle?: string | null; specChunks?: unknown[]; pageText?: string | null; contentClass?: string | null }} ctx
  */
 function applyEvidenceGate(issue, ctx) {
-  if (pageTextSuppliesMissingFact(issue, ctx.pageText)) return null;
+  if (mepArchitecturalDefect(issue, ctx)) return null;
+  if (pageTextSuppliesMissingFact(issue, evidenceCorpus(ctx))) return null;
+  if (otherSheetOwnsMissingFact(issue, ctx)) return null;
+  if (missingOutsideClassScope(issue, ctx)) return null;
   if (isScheduleRequirementRestatement(issue, ctx)) return null;
 
   const strength = classifyEvidenceStrength(issue);
   const text = `${issue.title || ""} ${issue.description || ""}`;
+  const originallyMissing =
+    String(issue.findingType || "").toLowerCase() === "missing_information" || MISSING_FACT_RE.test(text);
   const needsMeasure = MEASURABLE_TOPIC_RE.test(text);
   const next = { ...issue, evidenceStrength: strength };
 
@@ -283,19 +495,37 @@ function applyEvidenceGate(issue, ctx) {
         ? issue.suggestedFix
         : "Confirm against dimensioned plans, schedules, or specifications; update drawings if a gap is confirmed.";
     next.measurableEvidence = false;
-    return next;
+    return markUnlocatedMissingAsUnverified(next, issue, originallyMissing);
   }
 
   if (strength === "weak") {
     next.findingType = "potential_concern";
     if (next.severity === "critical") next.severity = "warning";
-    return next;
+    return markUnlocatedMissingAsUnverified(next, issue, originallyMissing);
   }
 
   next.findingType = "confirmed_violation";
   if (next.severity === "critical" && strength !== "strong") {
     next.severity = "warning";
   }
+  return next;
+}
+
+/**
+ * A missing-information finding that never says where on the sheet it looked
+ * is unverified. It is not a confirmed defect.
+ * @param {Record<string, unknown>} next
+ * @param {Record<string, unknown>} issue
+ * @param {boolean} originallyMissing
+ */
+function markUnlocatedMissingAsUnverified(next, issue, originallyMissing) {
+  if (!originallyMissing || namesWhereOnSheet(issue) || next.findingType === "confirmed_violation") {
+    return next;
+  }
+  next.findingType = "unverified";
+  next.severity = "advisory";
+  next.evidenceTier = "verification";
+  next.measurableEvidence = false;
   return next;
 }
 
@@ -312,7 +542,11 @@ function sheetContextAllowsIssue(issue, sheetCtx) {
   if (sheetCtx.role === "site_plan" && /\b(stair|rise|run|riser|tread)\b/i.test(`${issue.title} ${issue.description}`)) {
     return false;
   }
-  return sheetCtx.allowedCategories.has(cat) || issue.findingType === "missing_information";
+  return (
+    sheetCtx.allowedCategories.has(cat) ||
+    issue.findingType === "missing_information" ||
+    issue.findingType === "unverified"
+  );
 }
 
 /** @param {string} s */
@@ -370,6 +604,9 @@ function dedupAgainstRun(existingSemanticKeys, issues) {
  */
 function hardenIssues(issues, ctx) {
   const sheetCtx = inferSheetReviewContext(ctx.sheetTitle);
+  if (ctx.contentClass === "form" || ctx.contentClass === "schedule") {
+    return { issues: [], sheetReviewContext: sheetCtx };
+  }
   const seen = new Set();
   const out = [];
 
@@ -403,12 +640,12 @@ function hardenIssues(issues, ctx) {
  * @param {{ sheetTitle?: string | null; specChunks?: unknown[] }} ctx
  */
 function hardenIssueBundle(bundle, ctx) {
+  const checklist = bundle.checklist ?? bundle.summary?.checklist;
   const { issues, sheetReviewContext } = hardenIssues(
     /** @type {Array<Record<string, unknown>>} */ (bundle.issues || []),
-    ctx,
+    { ...ctx, checklist },
   );
-  const checklist = bundle.checklist ?? bundle.summary?.checklist;
-  const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist);
+  const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist, ctx.contentClass);
   return {
     issues,
     summary,
@@ -422,31 +659,37 @@ function hardenIssueBundle(bundle, ctx) {
  * @param {number | undefined | null} overallScore
  * @param {unknown} checklist
  */
-function buildSummaryFromIssues(issues, overallScore, checklist) {
-  const items = normalizeChecklist(checklist);
-  const critical = issues.filter((i) => i.severity === "critical").length;
-  const warnings = issues.filter((i) => i.severity === "warning").length;
-  const advisory = issues.filter((i) => i.severity === "advisory").length;
+function buildSummaryFromIssues(issues, overallScore, checklist, contentClass) {
+  const stored = issues || [];
+  const passItems = checklistCountsForPass(normalizeChecklist(checklist), contentClass);
+  const scoringIssues = stored.filter((i) => i.findingType !== "unverified");
+  const critical = scoringIssues.filter((i) => i.severity === "critical").length;
+  const warnings = scoringIssues.filter((i) => i.severity === "warning").length;
+  const advisory = scoringIssues.filter((i) => i.severity === "advisory").length;
   const computed = Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
+  const evidenceBacked = passItems.length > 0 && passItems.every(checklistItemHasEvidenceQuote);
   let reviewState = null;
   let score;
-  if (issues.length === 0 && items.length > 0) {
+  if (scoringIssues.length === 0 && stored.length === 0 && evidenceBacked) {
     reviewState = "passed";
     score = 100;
-  } else if (issues.length === 0) {
+  } else if (scoringIssues.length === 0) {
     reviewState = "not_reviewed";
     score = null;
   } else {
-    score = typeof overallScore === "number" ? overallScore : computed;
+    const modelScore =
+      typeof overallScore === "number" && Number.isFinite(overallScore) ? overallScore : computed;
+    score = modelScore >= 100 ? (computed >= 100 ? 99 : computed) : modelScore;
   }
   return {
-    totalIssues: issues.length,
+    totalIssues: stored.length,
     critical,
     warnings,
     advisory,
-    confirmedViolations: issues.filter((i) => i.findingType === "confirmed_violation").length,
-    verificationRequired: issues.filter((i) => i.findingType === "missing_information").length,
-    checklist: items,
+    confirmedViolations: scoringIssues.filter((i) => i.findingType === "confirmed_violation").length,
+    verificationRequired: scoringIssues.filter((i) => i.findingType === "missing_information").length,
+    unverified: stored.filter((i) => i.findingType === "unverified").length,
+    checklist: passItems,
     reviewState,
     overallScore: score,
   };
@@ -503,9 +746,33 @@ function canonicalJurisdictionKey(value) {
 }
 
 /**
- * Run jurisdiction wins when it is specific. A "general" run uses the project
- * jurisdiction (or city/state) already stored on the project.
- * @param {{ runJurisdiction?: string | null; projectJurisdiction?: string | null; projectCity?: string | null; projectState?: string | null }} input
+ * Jurisdiction named in title-block or code notes. Does not invent a code book
+ * from a bare city name other than the jurisdictions this service already reviews.
+ * Washington State is not Washington, D.C.
+ * @param {string | null | undefined} text
+ * @returns {string | null}
+ */
+function jurisdictionFromDrawingText(text) {
+  const body = String(text || "");
+  if (!body.trim()) return null;
+  const dcNamed =
+    /\bwashington,?\s*d\.?\s*c\.?\b/i.test(body) ||
+    /\bdistrict of columbia\b/i.test(body) ||
+    /\bd\.?\s*c\.?\s+building code\b/i.test(body) ||
+    /\bdc building code\b/i.test(body) ||
+    /\b12a\s*dcmr\b/i.test(body);
+  if (dcNamed) return "dc";
+  if (/\bnew york city\b|\bnyc building code\b|\bnyc\s*bc\b/i.test(body)) return "new-york";
+  if (/\bcalifornia building code\b/i.test(body)) return "california";
+  if (/\bflorida building code\b/i.test(body)) return "florida";
+  if (/\bchicago building code\b/i.test(body)) return "chicago";
+  return null;
+}
+
+/**
+ * Run jurisdiction wins when it is specific. A "general" or empty run uses the
+ * project record, then title-block / code notes on the drawings.
+ * @param {{ runJurisdiction?: string | null; projectJurisdiction?: string | null; projectCity?: string | null; projectState?: string | null; drawingText?: string | null; pageText?: string | null }} input
  */
 function resolveAnalysisJurisdiction(input = {}) {
   const runKey = canonicalJurisdictionKey(input.runJurisdiction);
@@ -517,6 +784,8 @@ function resolveAnalysisJurisdiction(input = {}) {
   const stateIsDc = state === "dc" || state === "district of columbia";
   const cityIsWashington = !city || city === "washington" || city === "washington dc";
   if (stateIsDc && cityIsWashington) return "dc";
+  const fromDrawing = jurisdictionFromDrawingText(input.drawingText || input.pageText);
+  if (fromDrawing) return fromDrawing;
   return "general";
 }
 
@@ -551,8 +820,11 @@ module.exports = {
   buildJurisdictionDiagnostics,
   canonicalJurisdictionKey,
   resolveAnalysisJurisdiction,
+  jurisdictionFromDrawingText,
   correctCitationBook,
   pageTextSuppliesMissingFact,
+  checklistItemHasEvidenceQuote,
+  evidenceCorpus,
   isScheduleRequirementRestatement,
   normalizeChecklist,
   dedupKey,

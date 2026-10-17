@@ -140,11 +140,35 @@ describe("empty review is not a pass", () => {
     assert.equal(hardened.summary.checklist.length, 0);
   });
 
-  it("marks a recorded checklist with no failing item as passed", () => {
+  it("does not pass a generic checklist that has no evidence quote", () => {
     const hardened = hardenAnalysisResult(
       {
         issues: [],
-        checklist: [{ item: "Egress width", result: "checked, no failing condition" }],
+        checklist: [
+          {
+            item: "Egress, fire separation, stairs, structural",
+            result: "no failing condition",
+          },
+        ],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {},
+    );
+    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.overallScore, null);
+    assert.notEqual(hardened.summary.overallScore, 100);
+  });
+
+  it("passes only when every checklist item quotes evidence from the sheet", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [],
+        checklist: [
+          { item: "Corridor width", result: '44" clear labeled at grid B' },
+          { item: "Wall rating", result: "shown on sheet A-1.01" },
+        ],
         summary: { overallScore: 85 },
         jurisdictionNotes: "",
       },
@@ -153,7 +177,32 @@ describe("empty review is not a pass", () => {
     );
     assert.equal(hardened.summary.reviewState, "passed");
     assert.equal(hardened.summary.overallScore, 100);
-    assert.match(hardened.summary.checklist[0], /Egress width/);
+  });
+
+  it("does not keep overallScore 100 when any issue remains", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Corridor width",
+            description: 'Dimension note shows 36" clear, which does not meet the 44" minimum.',
+            codeReference: "IBC 1020.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+            location: "Corridor B",
+          },
+        ],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { sheetTitle: "A-101 Floor Plan" },
+    );
+    assert.equal(hardened.issues.length, 1);
+    assert.notEqual(hardened.summary.overallScore, 100);
+    assert.ok(hardened.summary.overallScore < 100);
   });
 });
 
@@ -198,6 +247,130 @@ describe("page text drops missing-information notes that the sheet already state
       { pageText: "ASSEMBLY SEATING ADA SEATS PROVIDED 12" },
     );
     assert.equal(hardened.issues.length, 0);
+  });
+
+  it("drops hour-rating and minute-door notes when the sheet text states them", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Fire Safety",
+            title: "Fire-resistance rating not shown",
+            description: "The 1-hour wall rating is not indicated.",
+            codeReference: "IBC 703",
+          },
+          {
+            severity: "warning",
+            category: "Fire Safety",
+            title: "Door rating missing",
+            description: "The 45-minute door rating is not shown.",
+            codeReference: "IBC 716",
+          },
+        ],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { pageText: "PARTITION 1-hour wall / DOOR 45-minute" },
+    );
+    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.overallScore, null);
+  });
+
+  it("drops clearance, counter-height, and door-width notes the page already states", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Accessibility",
+            title: "Clearance not shown",
+            description: "The 54x60 and 48x48 clearance symbols are not shown.",
+            codeReference: "ICC A117.1",
+          },
+          {
+            severity: "advisory",
+            category: "Accessibility",
+            title: "Accessory heights not shown",
+            description: "Accessory heights are not indicated.",
+            codeReference: "ICC A117.1",
+          },
+          {
+            severity: "warning",
+            category: "Accessibility",
+            title: "Counter height not shown",
+            description: "Counter dimensions A.F.F. are not shown.",
+            codeReference: "IBC 1109",
+          },
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Door width not shown",
+            description: "The door width in inches is not shown.",
+            codeReference: "IBC 1010",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        pageText:
+          'CLEARANCE 54x60 AND 48x48\nMIRROR 40" A.F.F. DISPENSER HEIGHT\nCOUNTER 34" A.F.F. AND 36" A.F.F.\nDOOR 101 36"',
+      },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+
+  it("uses graphic quotes from image understanding when the text layer omitted the dimension", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Accessibility",
+            title: "Clear floor space not shown",
+            description: "Turning clearance is not shown on this plan.",
+            codeReference: "ICC A117.1",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { pageText: "ENLARGED TOILET PLAN", observedEvidence: ["54 × 60 clearance", "48 x 48"] },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+
+  it("stores an unlocated missing note as unverified and does not fail the sheet", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "critical",
+            category: "Fire Safety",
+            title: "Fire rating missing",
+            description: "The fire-resistance rating is not shown.",
+            codeReference: "IBC 703",
+          },
+        ],
+        checklist: [{ item: "Fire rating", result: "no failing condition" }],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { pageText: "FIRST FLOOR PLAN", sheetTitle: "A-1.01 Floor Plan" },
+    );
+    assert.equal(hardened.issues.length, 1);
+    assert.equal(hardened.issues[0].findingType, "unverified");
+    assert.equal(hardened.issues[0].severity, "advisory");
+    assert.equal(hardened.summary.confirmedViolations, 0);
+    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.overallScore, null);
+    assert.notEqual(hardened.summary.overallScore, 100);
   });
 
   it("keeps a measured defect even when other ratings appear in the text", () => {
@@ -278,6 +451,154 @@ describe("schedule restatement and citation book", () => {
   });
 });
 
+describe("set-level sheet index", () => {
+  const floorAndEnlarged = [
+    {
+      fileName: "A-1.01.pdf",
+      contentClass: "floor_plan",
+      title: "First Floor Plan",
+      excerpt: "FIRST FLOOR PLAN",
+    },
+    {
+      fileName: "A-4.00.pdf",
+      contentClass: "enlarged_plan",
+      title: "Enlarged Restroom Plan",
+      excerpt: "ENLARGED TOILET PLAN 54x60",
+    },
+  ];
+
+  it("drops a missing restroom dimension when another included sheet is the enlarged plan", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Accessibility",
+            title: "Restroom dimensions not shown",
+            description: "Toilet room dimensions are not shown.",
+            codeReference: "IBC 1109",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        sheetTitle: "A-1.01.pdf",
+        contentClass: "floor_plan",
+        pageText: "FIRST FLOOR PLAN",
+        sheetIndex: floorAndEnlarged,
+      },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+
+  it("keeps a missing note that names a condition drawn on this sheet", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Accessibility",
+            title: "Restroom clearance",
+            description: "The restroom drawn on this sheet is not dimensioned.",
+            codeReference: "IBC 1109",
+            location: "Toilet room A",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        sheetTitle: "A-1.01.pdf",
+        contentClass: "floor_plan",
+        pageText: "FIRST FLOOR PLAN",
+        sheetIndex: floorAndEnlarged,
+      },
+    );
+    assert.equal(hardened.issues.length, 1);
+  });
+
+  it("drops door hardware and egress width when a schedule and egress plan are included", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Door hardware not shown",
+            description: "Door size and hardware are not shown.",
+            codeReference: "IBC 1010",
+          },
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Egress width not shown",
+            description: "Egress width and capacity are not shown.",
+            codeReference: "IBC 1005",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        sheetTitle: "A-2.01.pdf",
+        contentClass: "floor_plan",
+        sheetIndex: [
+          { fileName: "A-2.01.pdf", contentClass: "floor_plan", excerpt: "FLOOR PLAN" },
+          { fileName: "A-6.00.pdf", contentClass: "schedule", title: "Door Schedule", excerpt: "DOOR SCHEDULE" },
+          { fileName: "A-1.04.pdf", contentClass: "egress_plan", title: "Egress Plan", excerpt: "EGRESS PLAN" },
+        ],
+      },
+    );
+    assert.equal(hardened.issues.length, 0);
+  });
+});
+
+describe("content class limits which defects are kept", () => {
+  it("does not keep architectural egress findings or an architectural pass on an MEP sheet", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Egress width not shown",
+            description: "Egress width is not shown.",
+            codeReference: "IBC 1005",
+          },
+        ],
+        checklist: [{ item: "Egress width", result: '44" clear, no failing condition' }],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { contentClass: "mep", sheetTitle: "E-101 Electrical Power Plan" },
+    );
+    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.overallScore, null);
+  });
+
+  it("does not pass a form from an architectural checklist", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [],
+        checklist: [{ item: "Egress", result: '44" shown, no failing condition' }],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { contentClass: "form", sheetTitle: "EN-1.00.pdf" },
+    );
+    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.overallScore, null);
+    assert.equal(hardened.issues.length, 0);
+  });
+});
+
 describe("resolveAnalysisJurisdiction", () => {
   it("uses a stored DC project jurisdiction when the run is general", () => {
     assert.equal(
@@ -311,6 +632,84 @@ describe("resolveAnalysisJurisdiction", () => {
       resolveAnalysisJurisdiction({ runJurisdiction: "general", projectJurisdiction: null }),
       "general",
     );
+  });
+
+  it("reads Washington, D.C. and the DC Building Code from drawing text when the project record is empty", () => {
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: "general",
+        projectJurisdiction: null,
+        projectCity: null,
+        projectState: null,
+        drawingText: "PROJECT LOCATION Washington, D.C.\nAPPLICABLE CODE: 2017 DC Building Code",
+      }),
+      "dc",
+    );
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: null,
+        projectJurisdiction: null,
+        pageText: "Washington State Building Code",
+      }),
+      "general",
+    );
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: "new-york-city",
+        projectJurisdiction: null,
+        drawingText: "Washington, D.C. DC Building Code",
+      }),
+      "new-york-city",
+    );
+  });
+
+  it("keeps an IBC section labeled IBC and a DC section labeled DC", () => {
+    const ibc = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Corridor width",
+            description: 'Dimension note shows 36" clear, which does not meet the 44" minimum.',
+            codeReference: "IBC 1020.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+            location: "Corridor A",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "local",
+      { sheetTitle: "A-101 Floor Plan" },
+    );
+    assert.match(ibc.issues[0].codeReference, /\bIBC\b/);
+    assert.notEqual(ibc.issues[0].citationBook, "12A DCMR");
+
+    const dc = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Corridor width",
+            description: 'Dimension note shows 36" clear, which does not meet the 48" minimum.',
+            codeReference: "IBC DC Building Code 1017.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+            location: "Corridor A",
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "local",
+      { sheetTitle: "A-101 Floor Plan" },
+    );
+    assert.equal(dc.issues[0].citationBook, "12A DCMR");
+    assert.doesNotMatch(dc.issues[0].codeReference, /\bIBC\b/);
+    assert.match(dc.issues[0].codeReference, /1017\.2/);
   });
 });
 

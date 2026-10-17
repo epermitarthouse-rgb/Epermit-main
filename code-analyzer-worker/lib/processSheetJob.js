@@ -3,7 +3,7 @@
 const { BUCKET } = require("./derivedAssets");
 const { completeSheetJob, heartbeatSheetJob } = require("./sheetClaim");
 const { downloadToTempFile, removeTempFile } = require("./download");
-const { extractPdfPageText } = require("./pdfExtract");
+const { extractPdfPageText, extractPdfPagesFromFile } = require("./pdfExtract");
 const { classifySheetContent } = require("./classify");
 const { isPdfFile } = require("./mediaType");
 const {
@@ -15,6 +15,89 @@ const {
 
 const SCRAPER_BASE_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3000";
 const SHEET_CONCURRENCY = Math.max(1, Number(process.env.CODE_ANALYZER_SHEET_CONCURRENCY) || 3);
+const SHEET_INDEX_EXCERPT_CHARS = 400;
+
+/** @type {Map<string, { fullText: string; excerpt: string; contentClass: string }>} */
+const sheetExcerptCache = new Map();
+/** @type {Map<string, Promise<void>>} */
+const runWarmPromises = new Map();
+
+function sheetCacheKey(runId, sheetId) {
+  return `${runId}:${sheetId}`;
+}
+
+/**
+ * Short index entry for one included sheet. Content class comes from page text
+ * when an excerpt was already extracted, otherwise from the sheet title and file name.
+ * @param {Array<Record<string, unknown>>} sheets
+ * @param {Record<string, { excerpt?: string | null; contentClass?: string | null; fullText?: string | null }>} extrasById
+ */
+function assembleSheetIndex(sheets, extrasById = {}) {
+  return (sheets || [])
+    .filter((sheet) => !sheet.excluded)
+    .map((sheet) => {
+      const extra = extrasById[sheet.id] || {};
+      const title = sheet.sheet_label || extra.title || null;
+      const fileName = sheet.file_name || null;
+      const excerptSource = extra.excerpt || extra.fullText || title || null;
+      const excerpt = excerptSource
+        ? String(excerptSource).replace(/\s+/g, " ").trim().slice(0, SHEET_INDEX_EXCERPT_CHARS)
+        : null;
+      const text = [extra.fullText || extra.excerpt, title, fileName].filter(Boolean).join("\n");
+      return {
+        sheetId: sheet.id || null,
+        fileName,
+        contentClass: extra.contentClass || classifySheetContent({ text }),
+        title,
+        excerpt,
+      };
+    });
+}
+
+/**
+ * @param {string | null | undefined} pageText
+ * @param {Array<{ title?: string | null; excerpt?: string | null }> | null | undefined} sheetIndex
+ */
+function drawingTextForJurisdiction(pageText, sheetIndex) {
+  const excerpts = (sheetIndex || [])
+    .map((sheet) => [sheet.title, sheet.excerpt].filter(Boolean).join(" "))
+    .filter(Boolean);
+  return [pageText, ...excerpts].filter(Boolean).join("\n");
+}
+
+function rememberSheetText(runId, sheetId, fullText) {
+  if (!runId || !sheetId) return;
+  const text = String(fullText || "");
+  sheetExcerptCache.set(sheetCacheKey(runId, sheetId), {
+    fullText: text,
+    excerpt: text.replace(/\s+/g, " ").trim().slice(0, SHEET_INDEX_EXCERPT_CHARS),
+    contentClass: classifySheetContent({ text }),
+  });
+}
+
+function cachedSheetText(runId, sheetId) {
+  return sheetExcerptCache.get(sheetCacheKey(runId, sheetId)) || null;
+}
+
+function forgetRunSheetIndex(runId) {
+  const prefix = `${runId}:`;
+  for (const key of sheetExcerptCache.keys()) {
+    if (key.startsWith(prefix)) sheetExcerptCache.delete(key);
+  }
+  runWarmPromises.delete(runId);
+}
+
+async function extractPageTextMap(filePath, pageNumbers) {
+  const wanted = new Set(pageNumbers.filter((n) => Number(n) >= 1));
+  const out = {};
+  if (!wanted.size) return out;
+  for await (const page of extractPdfPagesFromFile(filePath)) {
+    if (!wanted.has(page.pageNumber)) continue;
+    out[page.pageNumber] = page.text || "";
+    if (Object.keys(out).length >= wanted.size) break;
+  }
+  return out;
+}
 
 async function downloadDerivedAssetBuffer(supabase, storagePath) {
   const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
@@ -116,6 +199,91 @@ async function loadSheetPageText(supabase, sheet) {
     );
     return "";
   }
+}
+
+async function fetchIncludedSheets(supabase, runId) {
+  const { data: jobs } = await supabase
+    .from("code_analyzer_sheet_jobs")
+    .select("sheet_id")
+    .eq("run_id", runId);
+  const ids = [...new Set((jobs || []).map((job) => job.sheet_id).filter(Boolean))];
+  if (!ids.length) return [];
+  const { data: sheets } = await supabase
+    .from("code_analyzer_sheets")
+    .select("id, file_name, sheet_label, excluded, page_number, source_document_id")
+    .in("id", ids);
+  return (sheets || []).filter((sheet) => !sheet.excluded);
+}
+
+async function warmRunSheetIndexUncached(supabase, runId) {
+  const sheets = await fetchIncludedSheets(supabase, runId);
+  const byDocument = new Map();
+  for (const sheet of sheets) {
+    if (cachedSheetText(runId, sheet.id)) continue;
+    if (!sheet.source_document_id) continue;
+    if (!byDocument.has(sheet.source_document_id)) byDocument.set(sheet.source_document_id, []);
+    byDocument.get(sheet.source_document_id).push(sheet);
+  }
+
+  for (const [documentId, docSheets] of byDocument) {
+    try {
+      const { data: doc } = await supabase
+        .from("project_documents")
+        .select("file_path, file_name, file_type")
+        .eq("id", documentId)
+        .maybeSingle();
+      if (!doc?.file_path || !isPdfFile(doc.file_name, doc.file_type)) continue;
+      const tempPath = await downloadToTempFile(supabase, doc.file_path, doc.file_name || "sheet.pdf");
+      try {
+        const texts = await extractPageTextMap(
+          tempPath,
+          docSheets.map((sheet) => sheet.page_number || 1),
+        );
+        for (const sheet of docSheets) {
+          const text = texts[sheet.page_number || 1];
+          if (typeof text === "string") rememberSheetText(runId, sheet.id, text);
+        }
+      } finally {
+        await removeTempFile(tempPath);
+      }
+    } catch (err) {
+      console.warn(
+        "[code-analyzer-worker] sheet index excerpt failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+}
+
+function warmRunSheetIndex(supabase, runId) {
+  const existing = runWarmPromises.get(runId);
+  if (existing) return existing;
+  const pending = warmRunSheetIndexUncached(supabase, runId).catch((err) => {
+    runWarmPromises.delete(runId);
+    console.warn(
+      "[code-analyzer-worker] sheet index warm failed:",
+      err instanceof Error ? err.message : err,
+    );
+  });
+  runWarmPromises.set(runId, pending);
+  return pending;
+}
+
+function sheetIndexForRun(runId, sheets, currentSheet, pageText, contentClass) {
+  const extras = {};
+  for (const sheet of sheets) {
+    const cached = cachedSheetText(runId, sheet.id);
+    if (cached) extras[sheet.id] = cached;
+  }
+  if (currentSheet?.id) {
+    extras[currentSheet.id] = {
+      ...(extras[currentSheet.id] || {}),
+      fullText: pageText,
+      excerpt: pageText,
+      contentClass,
+    };
+  }
+  return assembleSheetIndex(sheets, extras);
 }
 
 async function fetchProjectDocumentNameHints(supabase, projectId) {
@@ -443,16 +611,25 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
   const specChunks = await fetchSpecChunksForSheet(supabase, job.project_id, queryText, null);
   const documentNameHints = await fetchProjectDocumentNameHints(supabase, job.project_id);
   const projectJurisdiction = await fetchProjectJurisdiction(supabase, job.project_id);
+  await warmRunSheetIndex(supabase, run.id);
+  const includedSheets = await fetchIncludedSheets(supabase, run.id);
+  const cachedPage = cachedSheetText(run.id, sheet.id);
+  const pageText = cachedPage?.fullText || (await loadSheetPageText(supabase, sheet));
+  if (!cachedPage?.fullText && pageText) rememberSheetText(run.id, sheet.id, pageText);
+  const contentClass = classifySheetContent({ text: pageText });
+  const sheetFileName = sheetFileNameFromRow(sheet);
+  const sheetIndex = sheetIndexForRun(run.id, includedSheets, sheet, pageText, contentClass);
   const jurisdiction = resolveAnalysisJurisdiction({
     runJurisdiction: run.jurisdiction,
     projectJurisdiction: projectJurisdiction.jurisdiction,
     projectCity: projectJurisdiction.city,
     projectState: projectJurisdiction.state,
+    drawingText: drawingTextForJurisdiction(pageText, sheetIndex),
   });
-  const jurisdictionDiagnostics = buildJurisdictionDiagnostics(jurisdiction, documentNameHints);
-  const pageText = await loadSheetPageText(supabase, sheet);
-  const contentClass = classifySheetContent({ text: pageText });
-  const sheetFileName = sheetFileNameFromRow(sheet);
+  const jurisdictionDiagnostics = buildJurisdictionDiagnostics(jurisdiction, [
+    ...documentNameHints,
+    pageText,
+  ]);
 
   const result = await callAnalyzeDrawing({
     imageBase64,
@@ -470,9 +647,11 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       text: c.chunk_text,
     })),
     sheetTitle: sheetFileName,
+    sheetId: sheet.id,
     discipline: sheet.discipline,
     pageText,
     contentClass,
+    sheetIndex,
     jurisdictionDiagnostics,
   });
 
@@ -508,6 +687,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     (remaining || []).every((j) => j.status === "completed" || j.status === "failed");
   if (allTerminal) {
     await refreshRunAnalysisCoverage(supabase, run.id, job.project_id);
+    forgetRunSheetIndex(run.id);
   }
 }
 
@@ -518,4 +698,6 @@ module.exports = {
   refreshRunAnalysisCoverage,
   buildIssueAnnotationData,
   sheetFileNameFromRow,
+  assembleSheetIndex,
+  drawingTextForJurisdiction,
 };

@@ -162,26 +162,55 @@ const SHEET_CONTENT_CLASSES = [
   "section",
   "schedule",
   "form",
+  "mep",
   "drawing",
 ];
 
+/**
+ * Certificates and inspection forms, matched from page text for any file name.
+ * Phrases are specific so a plan note that merely mentions a certificate does not
+ * reclass the sheet when the title zone is already a plan, elevation, or section.
+ */
 const FORM_CONTENT_RE =
-  /\b(special\s+inspections?|statement\s+of\s+special\s+inspections|energy\s+(?:code\s+)?certificate|certificate\s+of\s+(?:compliance|occupancy)|comcheck|energy\s+code\s+compliance)\b/i;
+  /\b(?:com[\s-]*check|energy(?:\s+code)?\s+compliance\s+certificate|certificate\s+of\s+energy(?:\s+code)?\s+compliance|statement\s+of\s+special\s+inspections|schedule\s+of\s+special\s+inspections|special\s+inspections?\s+statement)\b/i;
 const SCHEDULE_TITLE_RE =
-  /\b(?:door|hardware|window|finish|room(?:\s+finish)?|equipment|panel|fixture|lighting)\s+schedules?\b|\bhardware\s+sets?\b/i;
+  /\b(?:door|hardware|window|finish|room(?:\s+finish)?|equipment|panel|fixture|lighting)\s+schedules?\b|\bhardware\s+sets?\b|\bdoor\s+and\s+hardware\b/i;
+const MEP_TITLE_RE =
+  /\b(?:electrical|mechanical|plumbing|equipment)\s+(?:power\s+|lighting\s+|floor\s+)?plans?\b|\b(?:electrical|mechanical|plumbing)\s+(?:drawing|riser|layout|sheet)s?\b|\b(?:power|lighting|hvac|piping|duct)\s+plans?\b|\bequipment\s+plan\b/i;
+
+function normalizeClassifierText(text) {
+  return String(text || "").replace(/[\u00ad\u200b\u200c\u200d\ufeff]/g, "");
+}
+
+function hasArchitecturalPlanTitle(text) {
+  return (
+    (/\benlarged\b/i.test(text) && /\bplan\b/i.test(text)) ||
+    /\b(?:egress|life\s+safety|exit)\s+plan\b/i.test(text) ||
+    /\b(?:building|exterior|interior)\s+elevations?\b/i.test(text) ||
+    (/\b(?:building|wall|typical)\s+sections?\b/i.test(text) || /\bsection\s+details?\b/i.test(text)) ||
+    /\b(?:floor|level|plaza|roof|site)\s+plans?\b/i.test(text)
+  );
+}
 
 /**
  * Content class chooses which checks run. Page size still decides raster vs spec.
  * Classification uses page text and simple drawing-title signals, never the file name.
  * @param {{ text?: string | null }} input
- * @returns {"floor_plan"|"egress_plan"|"enlarged_plan"|"elevation"|"section"|"schedule"|"form"|"drawing"}
+ * @returns {"floor_plan"|"egress_plan"|"enlarged_plan"|"elevation"|"section"|"schedule"|"form"|"mep"|"drawing"}
  */
 function classifySheetContent({ text }) {
-  const body = String(text || "");
-  const header = body.slice(0, 1800);
+  const body = normalizeClassifierText(text);
+  const header = body.slice(0, 4000);
+  const titleZone = body.slice(0, 700);
   if (!header.trim()) return "drawing";
 
-  if (FORM_CONTENT_RE.test(header)) return "form";
+  if (
+    FORM_CONTENT_RE.test(header) &&
+    !hasArchitecturalPlanTitle(titleZone) &&
+    !MEP_TITLE_RE.test(titleZone)
+  ) {
+    return "form";
+  }
 
   const schedule = SCHEDULE_TITLE_RE.test(header);
   if (/\benlarged\b/i.test(header) && /\bplan\b/i.test(header)) return "enlarged_plan";
@@ -193,6 +222,7 @@ function classifySheetContent({ text }) {
   ) {
     return "section";
   }
+  if (MEP_TITLE_RE.test(header) && !SCHEDULE_TITLE_RE.test(titleZone)) return "mep";
   if (/\b(?:floor|level|plaza|roof|site)\s+plans?\b/i.test(header)) return "floor_plan";
   if (schedule) return "schedule";
   if (/\belevations?\b/i.test(header) && !/\bplan\b/i.test(header)) return "elevation";

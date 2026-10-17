@@ -155,7 +155,41 @@ function formatExtractedPageText(pageText) {
 
 EXTRACTED PDF TEXT LAYER (evidence already read from this sheet; it may be incomplete):
 ${text.slice(0, 12000)}
-If this text contains a fire-resistance label, accessible-seating count, or clear-floor dimension, do not report that fact as missing.`;
+If this text contains a fire-resistance or hour rating, a minute door rating, an accessible seat count, a counter height A.F.F., a clearance such as 54x60 or 48x48, or a door width in inches, do not report that fact as missing.`;
+}
+
+function formatContentClassBlock(contentClass) {
+  switch (contentClass) {
+    case "mep":
+      return "\nThis is an MEP sheet (electrical, mechanical, plumbing, or equipment). Do not report architectural egress or accessibility defects.\n";
+    case "egress_plan":
+      return "\nThis is an egress plan. Limit the review to egress width, capacity, exits, and travel distance this sheet can show.\n";
+    case "enlarged_plan":
+      return "\nThis is an enlarged plan. Limit the review to dimensions, clearances, and accessories shown at this scale.\n";
+    case "elevation":
+      return "\nThis is an elevation. Limit the review to heights, openings, and exterior conditions this view can show.\n";
+    case "section":
+      return "\nThis is a section. Limit the review to assemblies, ratings, and heights this section can show.\n";
+    case "floor_plan":
+      return "\nThis is a floor plan. Review only conditions this plan can show.\n";
+    default:
+      return "";
+  }
+}
+
+function formatSheetIndexBlock(sheetIndex) {
+  if (!Array.isArray(sheetIndex) || sheetIndex.length === 0) return "";
+  const lines = sheetIndex.slice(0, 40).map((sheet) => {
+    const bits = [sheet.fileName, sheet.contentClass, sheet.title, sheet.excerpt]
+      .map((part) => (part == null ? "" : String(part).replace(/\s+/g, " ").trim()))
+      .filter(Boolean);
+    return `- ${bits.join(" | ").slice(0, 280)}`;
+  });
+  return `
+
+OTHER INCLUDED SHEETS IN THIS SET (file name, content class, title or excerpt):
+${lines.join("\n")}
+Do not report a fact as missing on this sheet when another included sheet of the right class owns it: restroom dimensions on an enlarged plan, door size or hardware on a schedule, egress width or capacity on an egress plan. A condition drawn on THIS sheet still counts.`;
 }
 
 function shouldRunVisualDefectChecks(contentClass) {
@@ -192,6 +226,8 @@ ${lines.join("\n\n")}`;
  *   sheetTitle?: string | null;
  *   discipline?: string | null;
  *   pageText?: string | null;
+ *   contentClass?: string | null;
+ *   sheetIndex?: Array<{ fileName?: string | null; contentClass?: string | null; title?: string | null; excerpt?: string | null }> | null;
  * }} params
  */
 function buildPrompts(params) {
@@ -205,6 +241,8 @@ function buildPrompts(params) {
     sheetTitle = null,
     discipline = null,
     pageText = null,
+    contentClass = null,
+    sheetIndex = null,
   } = params;
   const jurisdictionKey = normalizeJurisdictionKey(jurisdiction);
   const jurisdictionContext = JURISDICTION_AMENDMENTS[jurisdictionKey] || "";
@@ -242,7 +280,8 @@ EVIDENCE RULES (mandatory):
 Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national standard sections.`;
     jsonFormat = `{
   "issues": [${issueSchema}],
-  "checklist": [{"item": "What was checked on this sheet", "result": "no failing condition"}],
+  "checklist": [{"item": "Corridor clear width", "result": "44 in labeled at the corridor", "evidence": "44 in"}],
+  "observedEvidence": ["44 in clear", "1-hour wall"],
   "jurisdictionNotes": "Notes about base code requirements reviewed",
   "overallScore": 100
 }`;
@@ -254,7 +293,8 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
     }
     jsonFormat = `{
   "issues": [${issueSchema}],
-  "checklist": [{"item": "What was checked on this sheet", "result": "no failing condition"}],
+  "checklist": [{"item": "Corridor clear width", "result": "44 in labeled at the corridor", "evidence": "44 in"}],
+  "observedEvidence": ["44 in clear"],
   "jurisdictionNotes": "Notes about local amendment requirements reviewed",
   "overallScore": 100
 }`;
@@ -266,8 +306,9 @@ ${jurisdictionContext ? `\nLOCAL AMENDMENTS:\n${jurisdictionContext}` : ""}`;
     jsonFormat = `{
   "ibcIssues": [${issueSchema}],
   "localIssues": [${issueSchema}],
-  "ibcChecklist": [{"item": "What was checked against the base code", "result": "no failing condition"}],
-  "localChecklist": [{"item": "What was checked against the local code", "result": "no failing condition"}],
+  "ibcChecklist": [{"item": "Corridor clear width", "result": "44 in labeled at the corridor", "evidence": "44 in"}],
+  "localChecklist": [{"item": "Local corridor width", "result": "shown on sheet A-1.04", "evidence": "shown on sheet A-1.04"}],
+  "observedEvidence": ["44 in clear"],
   "ibcJurisdictionNotes": "Notes about base IBC requirements",
   "localJurisdictionNotes": "Notes about local amendment requirements",
   "ibcOverallScore": 100,
@@ -299,17 +340,36 @@ Be thorough but avoid false positives. Only report genuine code compliance conce
 When project specification context is provided, note spec-drawing mismatches but NEVER treat spec text as proof the drawing shows something.
 ${evidenceRules}
 - Do not label an ICC A117.1 or ADA section (for example 604.8.1.2) as IBC. Put the book that owns the section in codeReference.
-- If the extracted text layer already states a rating, count, or dimension, do not report that fact as missing.
-Scoring: overallScore is 0-100 only after a real review. Return checklist items that record what you checked. If checklist is empty and issues is empty, the sheet was not reviewed — do not set overallScore to 100. If checklist records the checks and there is no failing item, overallScore is 100. Do not echo 85.
-${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
+- Do not label a 12A DCMR or DC Building Code section as IBC. Do not invent code sections that are not in the amendment summaries or on the sheet.
+- If the extracted text or a graphic label already states a rating, count, clearance, counter height, or door width, do not report that fact as missing.
+- observedEvidence must quote dimensions, labels, and notes you can actually read, including graphic dimensions.
+- A missing-information finding must name the place on this sheet you looked. If you cannot name that place, do not file it as a violation.
+Scoring: overallScore is 0-100 only after a real review. Every checklist item must include a non-empty evidence quote from this sheet (a dimension, a label, a note, or "shown on sheet <id>"). If checklist is empty and issues is empty, the sheet was not reviewed — do not set overallScore to 100. A generic checklist or "no failing condition" without that quote is not a pass. If any issue remains, overallScore must not be 100. Do not echo 85.
+${formatContentClassBlock(contentClass)}${formatSheetIndexBlock(sheetIndex)}${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
 ${formatExtractedPageText(pageText)}
 ${sheetTitle ? `\nSheet under review: ${sheetTitle}` : ""}${discipline ? `\nDiscipline: ${discipline}` : ""}
 
 You MUST respond with a valid JSON object in exactly this format:
 ${jsonFormat}`;
 
-  const userPrompt =
-    resolvedCodeType === "local"
+  const scopedReview =
+    contentClass === "mep"
+      ? "Review this MEP sheet only for conditions this discipline shows. Do not report architectural egress or accessibility defects."
+      : contentClass === "elevation"
+        ? "Review this elevation only for heights, openings, and exterior conditions this view can show."
+        : contentClass === "section"
+          ? "Review this section only for assemblies, ratings, and heights this section can show."
+          : contentClass === "egress_plan"
+            ? "Review this egress plan for egress width, capacity, exits, and travel distance shown on this sheet."
+            : contentClass === "enlarged_plan"
+              ? "Review this enlarged plan for dimensions, clearances, and accessories shown at this scale."
+              : contentClass === "floor_plan"
+                ? "Review this floor plan for egress, fire separation, accessibility, and occupancy conditions this plan can show."
+                : null;
+
+  const userPrompt = scopedReview
+    ? `${scopedReview} Return ONLY valid JSON.`
+    : resolvedCodeType === "local"
       ? `Review this architectural plan sheet for building code compliance in the local-amendment scope described above. Report only concerns visible in the drawing with citation labels from the reference summaries when applicable. Return ONLY valid JSON.`
       : resolvedCodeType === "both"
         ? `Review this architectural plan sheet for building code compliance (base code and local amendments as described above). Report only concerns visible in the drawing with specific code citations. Return ONLY valid JSON.`
@@ -523,6 +583,26 @@ function formatBothResult(analysisData, codeYear) {
 }
 
 /**
+ * Graphic quotes returned by image understanding. These are evidence, not findings.
+ * @param {Record<string, unknown>} analysisData
+ * @returns {string[]}
+ */
+function collectObservedEvidence(analysisData) {
+  const quotes = [];
+  for (const key of ["observedEvidence", "graphicEvidence", "ibcObservedEvidence", "localObservedEvidence"]) {
+    const value = analysisData?.[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" && item.trim()) quotes.push(item.trim());
+      }
+    } else if (typeof value === "string" && value.trim()) {
+      quotes.push(value.trim());
+    }
+  }
+  return quotes;
+}
+
+/**
  * @param {import("openai").OpenAI} openai
  * @param {{
  *   imageBase64: string;
@@ -537,6 +617,8 @@ function formatBothResult(analysisData, codeYear) {
  *   discipline?: string | null;
  *   pageText?: string | null;
  *   contentClass?: string | null;
+ *   sheetIndex?: Array<{ fileName?: string | null; contentClass?: string | null; title?: string | null; excerpt?: string | null; sheetId?: string | null }> | null;
+ *   sheetId?: string | null;
  *   jurisdictionDiagnostics?: Record<string, unknown> | null;
  *   logInfo?: (msg: string, extra?: string) => void;
  *   logError?: (msg: string, extra?: string) => void;
@@ -558,6 +640,8 @@ async function analyzeDrawingWithOpenAI(params) {
     discipline = null,
     pageText = null,
     contentClass = null,
+    sheetIndex = null,
+    sheetId = null,
     jurisdictionDiagnostics = null,
     logInfo = console.log,
     logError = console.error,
@@ -567,9 +651,11 @@ async function analyzeDrawingWithOpenAI(params) {
   const resolvedCodeType = codeType === "local" || codeType === "both" ? codeType : "ibc";
   const qualityCtx = {
     sheetTitle,
+    sheetId,
     specChunks,
     pageText,
     contentClass,
+    sheetIndex,
     jurisdictionDiagnostics,
   };
 
@@ -598,6 +684,8 @@ async function analyzeDrawingWithOpenAI(params) {
     sheetTitle,
     discipline,
     pageText,
+    contentClass,
+    sheetIndex,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
@@ -678,7 +766,10 @@ async function analyzeDrawingWithOpenAI(params) {
       ? formatBothResult(analysisData, codeYear)
       : formatSingleResult(analysisData, codeYear);
 
-  const result = hardenAnalysisResult(rawResult, promptedCodeType, qualityCtx);
+  const result = hardenAnalysisResult(rawResult, promptedCodeType, {
+    ...qualityCtx,
+    observedEvidence: collectObservedEvidence(analysisData),
+  });
 
   const issueCount =
     promptedCodeType === "both"

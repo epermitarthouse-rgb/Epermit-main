@@ -344,4 +344,28 @@ PART 1 GENERAL
     assert.equal(section.contentClass, "section");
     assert.equal(section.analyzerClass, "drawing_set");
   });
+
+  it("classifies a COMcheck certificate from page text when the file name does not match", () => {
+    const certificate = classifyPage({
+      pageNumber: 1,
+      text: "EN-1.00\nCOMcheck\nEnergy Compliance Certificate\nProject complies with the energy code.",
+      fileName: "upload-set.pdf",
+      documentType: "permit_drawing",
+      ...ARCH_D,
+    });
+    assert.equal(certificate.contentClass, "form");
+    assert.equal(certificate.analyzerClass, "drawing_set");
+    assert.equal(shouldRasterizeForPage(certificate.analyzerClass), true);
+    assert.equal(shouldRunVisualDefectChecks(certificate.contentClass), false);
+
+    const electrical = classifyPage({
+      pageNumber: 2,
+      text: "E-1.01\nELECTRICAL POWER PLAN",
+      fileName: "A-101 FLOOR PLAN.pdf",
+      documentType: "permit_drawing",
+      ...ARCH_D,
+    });
+    assert.equal(electrical.contentClass, "mep");
+    assert.equal(electrical.analyzerClass, "drawing_set");
+  });
 });
