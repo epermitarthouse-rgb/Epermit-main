@@ -557,45 +557,92 @@ describe("set-level sheet index", () => {
   });
 });
 
-describe("content class limits which defects are kept", () => {
-  it("does not keep architectural egress findings or an architectural pass on an MEP sheet", () => {
+describe("content class does not discard a reviewed sheet", () => {
+  it("keeps a measured architectural defect on an MEP sheet", () => {
     const hardened = hardenAnalysisResult(
       {
         issues: [
           {
             severity: "warning",
             category: "Egress",
-            title: "Egress width not shown",
-            description: "Egress width is not shown.",
-            codeReference: "IBC 1005",
+            title: "Corridor width below minimum",
+            description: 'Dimension note shows 36" clear, which does not meet the 44" minimum.',
+            codeReference: "IBC 1020.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+            location: "Corridor B",
           },
         ],
-        checklist: [{ item: "Egress width", result: '44" clear, no failing condition' }],
         summary: { overallScore: 100 },
         jurisdictionNotes: "",
       },
       "ibc",
-      { contentClass: "mep", sheetTitle: "E-101 Electrical Power Plan" },
+      { contentClass: "mep", sheetTitle: "E-1.2 Electrical Power Plan" },
     );
-    assert.equal(hardened.issues.length, 0);
-    assert.equal(hardened.summary.reviewState, "not_reviewed");
-    assert.equal(hardened.summary.overallScore, null);
+    assert.equal(hardened.issues.length, 1);
+    assert.notEqual(hardened.summary.overallScore, 100);
   });
 
-  it("does not pass a form from an architectural checklist", () => {
+  it("keeps a measured door-detail defect on a door schedule", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Door width below minimum",
+            description: 'Door detail shows 30" clear, which does not meet the 32" minimum.',
+            codeReference: "IBC 1010.1.1",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+            location: "Door 101 detail",
+          },
+        ],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        contentClass: "schedule",
+        pageText: "DOOR AND HARDWARE SCHEDULE\nDOOR DETAILS\nWINDOW ELEVATIONS",
+        sheetTitle: "A-6.00.pdf",
+      },
+    );
+    assert.equal(hardened.issues.length, 1);
+    assert.notEqual(hardened.summary.overallScore, 100);
+  });
+
+  it("does not treat a not-labeled checklist line as a pass", () => {
+    for (const result of ["not labeled", "not labeled E-1.2", "not labeled P-1.3"]) {
+      const hardened = hardenAnalysisResult(
+        {
+          issues: [],
+          checklist: [{ item: "Equipment", result }],
+          summary: { overallScore: 100 },
+          jurisdictionNotes: "",
+        },
+        "ibc",
+        { contentClass: "mep", sheetTitle: "E-1.2.pdf" },
+      );
+      assert.equal(hardened.summary.reviewState, "not_reviewed");
+      assert.equal(hardened.summary.overallScore, null);
+      assert.notEqual(hardened.summary.overallScore, 100);
+    }
+  });
+
+  it("still passes a checklist that quotes a label on the sheet", () => {
     const hardened = hardenAnalysisResult(
       {
         issues: [],
-        checklist: [{ item: "Egress", result: '44" shown, no failing condition' }],
-        summary: { overallScore: 100 },
+        checklist: [{ item: "Door 101", result: "labeled HW-3" }],
+        summary: { overallScore: 85 },
         jurisdictionNotes: "",
       },
       "ibc",
-      { contentClass: "form", sheetTitle: "EN-1.00.pdf" },
+      { contentClass: "schedule", sheetTitle: "A-6.00.pdf" },
     );
-    assert.equal(hardened.summary.reviewState, "not_reviewed");
-    assert.equal(hardened.summary.overallScore, null);
-    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.summary.reviewState, "passed");
+    assert.equal(hardened.summary.overallScore, 100);
   });
 });
 

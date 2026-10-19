@@ -158,23 +158,69 @@ ${text.slice(0, 12000)}
 If this text contains a fire-resistance or hour rating, a minute door rating, an accessible seat count, a counter height A.F.F., a clearance such as 54x60 or 48x48, or a door width in inches, do not report that fact as missing.`;
 }
 
-function formatContentClassBlock(contentClass) {
-  switch (contentClass) {
-    case "mep":
-      return "\nThis is an MEP sheet (electrical, mechanical, plumbing, or equipment). Do not report architectural egress or accessibility defects.\n";
-    case "egress_plan":
-      return "\nThis is an egress plan. Limit the review to egress width, capacity, exits, and travel distance this sheet can show.\n";
-    case "enlarged_plan":
-      return "\nThis is an enlarged plan. Limit the review to dimensions, clearances, and accessories shown at this scale.\n";
-    case "elevation":
-      return "\nThis is an elevation. Limit the review to heights, openings, and exterior conditions this view can show.\n";
-    case "section":
-      return "\nThis is a section. Limit the review to assemblies, ratings, and heights this section can show.\n";
-    case "floor_plan":
-      return "\nThis is a floor plan. Review only conditions this plan can show.\n";
-    default:
-      return "";
-  }
+function joinPhrase(items) {
+  if (items.length <= 1) return items[0] || "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+/**
+ * Short description of what the page contains. Class is context, not a skip instruction.
+ * @param {string | null | undefined} contentClass
+ * @param {string | null | undefined} pageText
+ */
+function describeSheetContent(contentClass, pageText) {
+  const header = String(pageText || "").replace(/\s+/g, " ").trim();
+  const found = {
+    details: /\bdetails?\b/i.test(header),
+    elevations: /\belevations?\b/i.test(header),
+    sections: /\bsections?\b/i.test(header),
+  };
+  let label = "";
+  if (contentClass === "schedule") {
+    if (/\bdoor\b/i.test(header)) label = "door schedule";
+    else if (/\bfinish\b/i.test(header)) label = "finish schedule";
+    else if (/\bwindow\b/i.test(header)) label = "window schedule";
+    else if (/\bhardware\b/i.test(header)) label = "hardware schedule";
+    else if (/\broom\b/i.test(header)) label = "room schedule";
+    else label = "schedule";
+  } else if (contentClass === "form") {
+    if (/\bcom[\s-]*check\b/i.test(header) || /\benergy(?:\s+code)?\s+compliance\b/i.test(header)) {
+      label = "COMcheck or energy compliance certificate";
+    } else if (/\bspecial\s+inspections?\b/i.test(header)) {
+      label = "special inspections form";
+    } else {
+      label = "form or certificate";
+    }
+  } else if (contentClass === "mep") label = "MEP sheet";
+  else if (contentClass === "floor_plan") label = "floor plan";
+  else if (contentClass === "egress_plan") label = "egress plan";
+  else if (contentClass === "enlarged_plan") label = "enlarged plan";
+  else if (contentClass === "elevation") label = "elevation";
+  else if (contentClass === "section") label = "section";
+  else if (contentClass === "drawing") label = "drawing";
+  else if (contentClass) label = String(contentClass).replace(/_/g, " ");
+  if (!label) return "";
+
+  const order =
+    label === "finish schedule"
+      ? ["sections", "details", "elevations"]
+      : ["details", "elevations", "sections"];
+  const also = order.filter((key) => found[key]);
+  const article = /^[aeiou]/i.test(label) ? "an" : "a";
+  if (!also.length) return `this page is ${article} ${label}`;
+  return `this page is ${article} ${label} that also contains ${joinPhrase(also)}`;
+}
+
+function formatContentClassBlock(contentClass, pageText) {
+  const description = describeSheetContent(contentClass, pageText);
+  if (!description) return "";
+  return `
+
+PAGE CONTENT (context only):
+${description}.
+Review the whole page, including tables and the drawn details, elevations, and sections on this same sheet.
+`;
 }
 
 function formatSheetIndexBlock(sheetIndex) {
@@ -192,8 +238,12 @@ ${lines.join("\n")}
 Do not report a fact as missing on this sheet when another included sheet of the right class owns it: restroom dimensions on an enlarged plan, door size or hardware on a schedule, egress width or capacity on an egress plan. A condition drawn on THIS sheet still counts.`;
 }
 
-function shouldRunVisualDefectChecks(contentClass) {
-  return contentClass !== "schedule" && contentClass !== "form";
+/**
+ * Every included sheet is analyzed. Schedule, form, certificate, and MEP are not skipped.
+ * @param {string | null | undefined} _contentClass
+ */
+function shouldRunVisualDefectChecks(_contentClass) {
+  return true;
 }
 
 function formatSpecContextBlock(specChunks) {
@@ -345,36 +395,21 @@ ${evidenceRules}
 - observedEvidence must quote dimensions, labels, and notes you can actually read, including graphic dimensions.
 - A missing-information finding must name the place on this sheet you looked. If you cannot name that place, do not file it as a violation.
 Scoring: overallScore is 0-100 only after a real review. Every checklist item must include a non-empty evidence quote from this sheet (a dimension, a label, a note, or "shown on sheet <id>"). If checklist is empty and issues is empty, the sheet was not reviewed — do not set overallScore to 100. A generic checklist or "no failing condition" without that quote is not a pass. If any issue remains, overallScore must not be 100. Do not echo 85.
-${formatContentClassBlock(contentClass)}${formatSheetIndexBlock(sheetIndex)}${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
+${formatContentClassBlock(contentClass, pageText)}${formatSheetIndexBlock(sheetIndex)}${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
 ${formatExtractedPageText(pageText)}
 ${sheetTitle ? `\nSheet under review: ${sheetTitle}` : ""}${discipline ? `\nDiscipline: ${discipline}` : ""}
 
 You MUST respond with a valid JSON object in exactly this format:
 ${jsonFormat}`;
 
-  const scopedReview =
-    contentClass === "mep"
-      ? "Review this MEP sheet only for conditions this discipline shows. Do not report architectural egress or accessibility defects."
-      : contentClass === "elevation"
-        ? "Review this elevation only for heights, openings, and exterior conditions this view can show."
-        : contentClass === "section"
-          ? "Review this section only for assemblies, ratings, and heights this section can show."
-          : contentClass === "egress_plan"
-            ? "Review this egress plan for egress width, capacity, exits, and travel distance shown on this sheet."
-            : contentClass === "enlarged_plan"
-              ? "Review this enlarged plan for dimensions, clearances, and accessories shown at this scale."
-              : contentClass === "floor_plan"
-                ? "Review this floor plan for egress, fire separation, accessibility, and occupancy conditions this plan can show."
-                : null;
-
-  const userPrompt = scopedReview
-    ? `${scopedReview} Return ONLY valid JSON.`
-    : resolvedCodeType === "local"
-      ? `Review this architectural plan sheet for building code compliance in the local-amendment scope described above. Report only concerns visible in the drawing with citation labels from the reference summaries when applicable. Return ONLY valid JSON.`
+  const userPrompt =
+    resolvedCodeType === "local"
+      ? `Review this sheet for building code compliance in the local-amendment scope described above. Look at the whole page, including tables and any drawn details, elevations, and sections. Report concerns visible on the page with citation labels from the reference summaries when applicable. Return ONLY valid JSON.`
       : resolvedCodeType === "both"
-        ? `Review this architectural plan sheet for building code compliance (base code and local amendments as described above). Report only concerns visible in the drawing with specific code citations. Return ONLY valid JSON.`
-        : `Analyze this architectural drawing for building code compliance issues.
-Look for violations related to egress, fire separation, accessibility, occupancy, stairs, emergency systems, and structural concerns visible in the plans.
+        ? `Review this sheet for building code compliance (base code and local amendments as described above). Look at the whole page, including tables and any drawn details, elevations, and sections. Report concerns visible on the page with specific code citations. Return ONLY valid JSON.`
+        : `Analyze this sheet for building code compliance issues.
+Look at the whole page, including tables and any drawn details, elevations, and sections.
+Look for violations related to egress, fire separation, accessibility, occupancy, stairs, emergency systems, and structural concerns visible on the sheet.
 Provide a comprehensive analysis with specific code citations. Return ONLY valid JSON.`;
 
   return { systemPrompt, userPrompt, codeType: resolvedCodeType };
@@ -658,21 +693,6 @@ async function analyzeDrawingWithOpenAI(params) {
     sheetIndex,
     jurisdictionDiagnostics,
   };
-
-  if (!shouldRunVisualDefectChecks(contentClass)) {
-    const note =
-      contentClass === "schedule"
-        ? "This sheet is a schedule. It was not sent through visual architectural-defect checks."
-        : "This sheet is a form or certificate. It was not sent through visual architectural-defect checks.";
-    const emptyBundle = { issues: [], checklist: [], summary: {}, jurisdictionNotes: note };
-    const rawResult =
-      resolvedCodeType === "both"
-        ? { ibc: { ...emptyBundle }, local: { ...emptyBundle } }
-        : emptyBundle;
-    const result = hardenAnalysisResult(rawResult, resolvedCodeType, qualityCtx);
-    logInfo(`[analyze-drawing] Skipped visual checks for content class ${contentClass}`);
-    return { ok: true, status: 200, result, codeType: resolvedCodeType };
-  }
 
   const { systemPrompt, userPrompt, codeType: promptedCodeType } = buildPrompts({
     jurisdiction,

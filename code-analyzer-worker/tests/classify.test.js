@@ -165,8 +165,8 @@ B. Related requirements are specified in Division 01.`,
       classifySheetContent({ text: "FIRST FLOOR PLAN\nSCALE 1/8\" = 1'-0\"" }),
       "floor_plan",
     );
-    assert.equal(shouldRunVisualDefectChecks("schedule"), false);
-    assert.equal(shouldRunVisualDefectChecks("form"), false);
+    assert.equal(shouldRunVisualDefectChecks("schedule"), true);
+    assert.equal(shouldRunVisualDefectChecks("form"), true);
     assert.equal(shouldRunVisualDefectChecks("floor_plan"), true);
     assert.equal(shouldRunVisualDefectChecks("mep"), true);
 

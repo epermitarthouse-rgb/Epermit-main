@@ -247,7 +247,7 @@ PART 1 GENERAL
     assert.equal(shouldIndexSpecForPage(dense.analyzerClass), true);
   });
 
-  it("keeps large-format schedules and forms as rasterized drawing sheets but skips visual defect checks", () => {
+  it("keeps large-format schedules and forms as rasterized drawing sheets and still reviews them", () => {
     const schedule = classifyPage({
       pageNumber: 1,
       text: "A-6.00\nDOOR SCHEDULE\nHARDWARE SCHEDULE\nMARK TYPE HARDWARE SET WIDTH",
@@ -260,7 +260,7 @@ PART 1 GENERAL
     assert.equal(schedule.contentClass, "schedule");
     assert.equal(shouldRasterizeForPage(schedule.analyzerClass), true);
     assert.equal(shouldCreateSheetsForPage(schedule.analyzerClass), true);
-    assert.equal(shouldRunVisualDefectChecks(schedule.contentClass), false);
+    assert.equal(shouldRunVisualDefectChecks(schedule.contentClass), true);
 
     const inspections = classifyPage({
       pageNumber: 2,
@@ -282,7 +282,7 @@ PART 1 GENERAL
     });
     assert.equal(energy.contentClass, "form");
     assert.equal(energy.analyzerClass, "drawing_set");
-    assert.equal(shouldRunVisualDefectChecks(energy.contentClass), false);
+    assert.equal(shouldRunVisualDefectChecks(energy.contentClass), true);
   });
 
   it("classifies plan content from the page text and ignores the file name", () => {
@@ -305,7 +305,7 @@ PART 1 GENERAL
       ...ARCH_D,
     });
     assert.equal(scheduleFromPlanName.contentClass, "schedule");
-    assert.equal(shouldRunVisualDefectChecks(scheduleFromPlanName.contentClass), false);
+    assert.equal(shouldRunVisualDefectChecks(scheduleFromPlanName.contentClass), true);
 
     const egress = classifyPage({
       pageNumber: 1,
@@ -356,7 +356,7 @@ PART 1 GENERAL
     assert.equal(certificate.contentClass, "form");
     assert.equal(certificate.analyzerClass, "drawing_set");
     assert.equal(shouldRasterizeForPage(certificate.analyzerClass), true);
-    assert.equal(shouldRunVisualDefectChecks(certificate.contentClass), false);
+    assert.equal(shouldRunVisualDefectChecks(certificate.contentClass), true);
 
     const electrical = classifyPage({
       pageNumber: 2,

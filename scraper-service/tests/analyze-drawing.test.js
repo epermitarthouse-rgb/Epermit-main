@@ -14,6 +14,36 @@ const {
   analyzeDrawingWithOpenAI,
 } = require("../app/services/compliance/analyze-drawing.service.js");
 
+async function captureSheetReview(params) {
+  let system = "";
+  let user = "";
+  let model = "";
+  const create = mock.fn(async (body) => {
+    system = body.messages[0].content;
+    user = body.messages[1].content[0].text;
+    model = body.model;
+    return {
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+      choices: [
+        {
+          finish_reason: "stop",
+          message: {
+            content: JSON.stringify({ issues: [], checklist: [], overallScore: 100 }),
+          },
+        },
+      ],
+    };
+  });
+  const outcome = await analyzeDrawingWithOpenAI({
+    openai: { chat: { completions: { create } } },
+    imageBase64: "abc",
+    logInfo: () => {},
+    logError: () => {},
+    ...params,
+  });
+  return { system, user, model, calls: create.mock.calls.length, outcome };
+}
+
 describe("analyze-drawing.service", () => {
   it("buildPrompts uses distinct schemas per codeType", () => {
     const ibc = buildPrompts({ codeType: "ibc", codeYear: "2021" });
@@ -385,23 +415,62 @@ describe("analyze-drawing.service", () => {
     assert.equal(openai.chat.completions.create.mock.calls[0].arguments[0].model, "gpt-4o");
   });
 
-  it("does not send a schedule or form sheet through visual defect checks", async () => {
-    const create = mock.fn(async () => {
-      throw new Error("vision should not be called");
-    });
-    const outcome = await analyzeDrawingWithOpenAI({
-      openai: { chat: { completions: { create } } },
-      imageBase64: "abc",
+  it("sends a door schedule that also contains details to gpt-4o", async () => {
+    const captured = await captureSheetReview({
       contentClass: "schedule",
-      pageText: "DOOR SCHEDULE\nHARDWARE SET 3 CLOSER",
+      pageText: "A-6.00\nDOOR AND HARDWARE SCHEDULE\nDOOR DETAILS\nWINDOW ELEVATIONS",
       codeType: "ibc",
-      logInfo: () => {},
-      logError: () => {},
     });
-    assert.equal(outcome.ok, true);
-    assert.equal(create.mock.calls.length, 0);
-    assert.equal(outcome.result.summary.reviewState, "not_reviewed");
-    assert.match(outcome.result.jurisdictionNotes, /schedule/i);
+    assert.equal(captured.calls, 1);
+    assert.equal(captured.model, "gpt-4o");
+    assert.match(captured.system, /this page is a door schedule that also contains details/i);
+    assert.match(captured.system, /whole page/i);
+    assert.doesNotMatch(captured.system, /not sent through/i);
+    assert.doesNotMatch(captured.user, /do not report architectural/i);
+    assert.equal(captured.outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(captured.outcome.result.summary.overallScore, null);
+  });
+
+  it("sends a finish schedule that also contains sections to gpt-4o", async () => {
+    const captured = await captureSheetReview({
+      contentClass: "schedule",
+      pageText: "A-6.01\nFINISH SCHEDULE\nFLOOR AND WALL SECTIONS\nPEDIMAT DETAIL",
+      codeType: "ibc",
+    });
+    assert.equal(captured.calls, 1);
+    assert.equal(captured.model, "gpt-4o");
+    assert.match(captured.system, /this page is a finish schedule that also contains sections/i);
+    assert.match(captured.system, /whole page/i);
+    assert.doesNotMatch(captured.system, /not sent through/i);
+  });
+
+  it("sends a COMcheck form through the local code-type review", async () => {
+    const captured = await captureSheetReview({
+      contentClass: "form",
+      pageText: "EN-1.00\nCOMcheck\nEnergy Compliance Certificate",
+      codeType: "local",
+      jurisdiction: "dc",
+    });
+    assert.equal(captured.calls, 1);
+    assert.equal(captured.model, "gpt-4o");
+    assert.match(captured.system, /COMcheck or energy compliance certificate/i);
+    assert.match(captured.system, /whole page/i);
+    assert.doesNotMatch(captured.system, /not sent through/i);
+    assert.equal(captured.outcome.result.summary.reviewState, "not_reviewed");
+  });
+
+  it("sends a floor plan through architectural review", async () => {
+    const captured = await captureSheetReview({
+      contentClass: "floor_plan",
+      pageText: "A-2.01\nFIRST FLOOR PLAN",
+      codeType: "ibc",
+    });
+    assert.equal(captured.calls, 1);
+    assert.equal(captured.model, "gpt-4o");
+    assert.match(captured.system, /this page is a floor plan/i);
+    assert.match(captured.user, /whole page/i);
+    assert.doesNotMatch(captured.system, /not sent through/i);
+    assert.doesNotMatch(captured.user, /do not report architectural/i);
   });
 
   it("returns 422 when refusal is present after retry", async () => {

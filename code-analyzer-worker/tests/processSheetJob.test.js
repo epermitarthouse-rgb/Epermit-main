@@ -77,6 +77,30 @@ describe("assembleSheetIndex", () => {
     assert.match(index[1].title, /Enlarged Toilet/);
   });
 
+  it("keeps schedule, form, certificate, and MEP sheets in the set index", () => {
+    const index = assembleSheetIndex(
+      [
+        { id: "door", file_name: "A-6.00.pdf", sheet_label: "Door Schedule", excluded: false },
+        { id: "finish", file_name: "A-6.01.pdf", sheet_label: "Finish Schedule", excluded: false },
+        { id: "form", file_name: "EN-1.00.pdf", sheet_label: null, excluded: false },
+        { id: "mep", file_name: "E-1.2.pdf", sheet_label: "Electrical Power Plan", excluded: false },
+        { id: "plan", file_name: "A-2.01.pdf", sheet_label: "First Floor Plan", excluded: false },
+      ],
+      {
+        door: { excerpt: "DOOR AND HARDWARE SCHEDULE DOOR DETAILS", contentClass: "schedule" },
+        finish: { excerpt: "FINISH SCHEDULE WALL SECTIONS", contentClass: "schedule" },
+        form: { excerpt: "COMcheck Energy Compliance Certificate" },
+        mep: { excerpt: "ELECTRICAL POWER PLAN", contentClass: "mep" },
+        plan: { excerpt: "FIRST FLOOR PLAN", contentClass: "floor_plan" },
+      },
+    );
+    assert.deepEqual(
+      index.map((sheet) => sheet.contentClass),
+      ["schedule", "schedule", "form", "mep", "floor_plan"],
+    );
+    assert.equal(index.length, 5);
+  });
+
   it("classifies the index entry from extracted text when the file name does not say what the sheet is", () => {
     const index = assembleSheetIndex(
       [{ id: "cert", file_name: "upload-set.pdf", sheet_label: null, excluded: false }],

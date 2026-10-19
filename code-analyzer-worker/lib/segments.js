@@ -23,6 +23,7 @@ function classifyPage({ pageNumber, text, fileName, documentType, widthInches, h
   const body = String(text || "");
   const format = pageFormatFromInches(widthInches, heightInches);
   const contentClass = classifySheetContent({ text: body });
+  // Context for the model. Page size still decides raster vs spec, and class does not drop the sheet.
   const finish = (result) => ({ ...result, contentClass });
 
   if (format === "large") {

@@ -193,7 +193,8 @@ function hasArchitecturalPlanTitle(text) {
 }
 
 /**
- * Content class chooses which checks run. Page size still decides raster vs spec.
+ * Content class is context for the model. It does not decide whether a sheet is reviewed.
+ * Page size still decides raster vs spec.
  * Classification uses page text and simple drawing-title signals, never the file name.
  * @param {{ text?: string | null }} input
  * @returns {"floor_plan"|"egress_plan"|"enlarged_plan"|"elevation"|"section"|"schedule"|"form"|"mep"|"drawing"}
@@ -229,9 +230,13 @@ function classifySheetContent({ text }) {
   return "drawing";
 }
 
-/** Schedules and forms are not visual architectural-defect checks. */
-function shouldRunVisualDefectChecks(contentClass) {
-  return contentClass !== "schedule" && contentClass !== "form";
+/**
+ * Every content class is reviewed, including schedule, form, certificate, and MEP.
+ * The class is prompt context. It must not skip the model call.
+ * @param {string | null | undefined} _contentClass
+ */
+function shouldRunVisualDefectChecks(_contentClass) {
+  return true;
 }
 
 function pageFormats(pageSizes) {

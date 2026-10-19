@@ -631,6 +631,8 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     pageText,
   ]);
 
+  // Every included sheet is posted for the requested code type. Content class is
+  // prompt context and must not be replaced with a not_reviewed row.
   const result = await callAnalyzeDrawing({
     imageBase64,
     imageType,

@@ -237,9 +237,25 @@ const SHOWN_ON_SHEET_RE = /\bshown\s+on\s+sheet\s+[A-Z]{1,4}(?:\s*[-.]?\s*\d|\d)
 const CHECKLIST_DIMENSION_RE =
   /\d+\s*(?:'|′|ft\b|\"|″|in(?:ch(?:es)?)?\b)|\b\d+\s*[x×]\s*\d+\b|\b\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?|minutes?|mins?)\b/i;
 const QUOTED_NOTE_RE = /[“"][^"”\n]{2,160}[”"]/;
+const NEGATED_LABEL_BEFORE_RE = /(?:n't|\b(?:not|no|without|missing|absent|never|un))[\s-]*$/i;
+
+/**
+ * "labeled HW-3" can be a quote. "not labeled" and "not labeled E-1.2" cannot.
+ * @param {string} value
+ */
+function hasAffirmativeLabelQuote(value) {
+  const pattern = /\b(?:label(?:ed|ling)?|annotation|note)\b\s*[:\-]?\s*[A-Z0-9"“][^.]{1,80}/gi;
+  for (const match of value.matchAll(pattern)) {
+    const before = value.slice(Math.max(0, match.index - 48), match.index);
+    if (NEGATED_LABEL_BEFORE_RE.test(before)) continue;
+    return true;
+  }
+  return false;
+}
 
 /**
  * A checklist line is evidence only when it quotes something read from the sheet.
+ * A sentence whose claim is that an item is not labeled is not that quote.
  * @param {string} text
  */
 function checklistItemHasEvidenceQuote(text) {
@@ -248,23 +264,8 @@ function checklistItemHasEvidenceQuote(text) {
   if (SHOWN_ON_SHEET_RE.test(value)) return true;
   if (CHECKLIST_DIMENSION_RE.test(value)) return true;
   if (QUOTED_NOTE_RE.test(value)) return true;
-  if (/\b(?:label(?:ed|ling)?|annotation|note)\b\s*[:\-]?\s*[A-Z0-9"“][^.]{1,80}/i.test(value)) return true;
+  if (hasAffirmativeLabelQuote(value)) return true;
   return false;
-}
-
-const ARCHITECTURAL_CHECK_RE =
-  /\b(egress|accessib|restroom|toilet|occupan|stair|maneuvering|clear\s*floor)\b/i;
-
-/**
- * Forms and schedules never earn an architectural pass. MEP sheets cannot pass
- * on an egress or accessibility checklist.
- * @param {string[]} items
- * @param {string | null | undefined} contentClass
- */
-function checklistCountsForPass(items, contentClass) {
-  if (contentClass === "form" || contentClass === "schedule") return [];
-  if (contentClass === "mep") return items.filter((item) => !ARCHITECTURAL_CHECK_RE.test(item));
-  return items;
 }
 
 /**
@@ -344,39 +345,6 @@ function otherSheetOwnsMissingFact(issue, ctx) {
       (sheet) => rule.classes.has(String(sheet.contentClass || "")) && !isCurrentSheetEntry(sheet, ctx),
     );
   });
-}
-
-const CLASS_CANNOT_SHOW_MISSING = {
-  elevation:
-    /\b(restroom|toilet|egress\s+width|occupant\s+load|door\s+hardware|counter\s+height|clear(?:ance|\s+floor)|accessory\s+height)\b/i,
-  section: /\b(restroom|toilet|egress\s+width|occupant\s+load|door\s+hardware|door\s+schedule)\b/i,
-  egress_plan: /\b(restroom\s+dimension|counter\s+height|door\s+hardware|finish\s+schedule|accessory\s+height)\b/i,
-  enlarged_plan: /\b(egress\s+width|exit\s+capacity|occupant\s+load|travel\s+distance)\b/i,
-  mep: /\b(egress|accessib|restroom|toilet|occupant\s+load|stair\s+(?:width|rise)|ada)\b/i,
-};
-
-/**
- * Missing-info findings for facts this sheet class cannot show are not defects.
- * @param {Record<string, unknown>} issue
- * @param {{ contentClass?: string | null }} ctx
- */
-function missingOutsideClassScope(issue, ctx) {
-  const pattern = CLASS_CANNOT_SHOW_MISSING[String(ctx.contentClass || "")];
-  if (!pattern) return false;
-  if (!claimsMissingFact(issue)) return false;
-  if (namesConditionDrawnOnThisSheet(issue)) return false;
-  return pattern.test(claimText(issue));
-}
-
-/**
- * MEP sheets do not take architectural egress or accessibility defect checks.
- * @param {Record<string, unknown>} issue
- * @param {{ contentClass?: string | null }} ctx
- */
-function mepArchitecturalDefect(issue, ctx) {
-  if (ctx.contentClass !== "mep") return false;
-  const blob = `${issue.category || ""} ${claimText(issue)}`;
-  return /\b(egress|accessib|restroom|toilet|\bada\b|occupant\s+load)\b/i.test(blob);
 }
 
 /**
@@ -466,10 +434,8 @@ function normalizeChecklist(raw) {
  * @param {{ sheetTitle?: string | null; specChunks?: unknown[]; pageText?: string | null; contentClass?: string | null }} ctx
  */
 function applyEvidenceGate(issue, ctx) {
-  if (mepArchitecturalDefect(issue, ctx)) return null;
   if (pageTextSuppliesMissingFact(issue, evidenceCorpus(ctx))) return null;
   if (otherSheetOwnsMissingFact(issue, ctx)) return null;
-  if (missingOutsideClassScope(issue, ctx)) return null;
   if (isScheduleRequirementRestatement(issue, ctx)) return null;
 
   const strength = classifyEvidenceStrength(issue);
@@ -604,9 +570,6 @@ function dedupAgainstRun(existingSemanticKeys, issues) {
  */
 function hardenIssues(issues, ctx) {
   const sheetCtx = inferSheetReviewContext(ctx.sheetTitle);
-  if (ctx.contentClass === "form" || ctx.contentClass === "schedule") {
-    return { issues: [], sheetReviewContext: sheetCtx };
-  }
   const seen = new Set();
   const out = [];
 
@@ -645,7 +608,7 @@ function hardenIssueBundle(bundle, ctx) {
     /** @type {Array<Record<string, unknown>>} */ (bundle.issues || []),
     { ...ctx, checklist },
   );
-  const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist, ctx.contentClass);
+  const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist);
   return {
     issues,
     summary,
@@ -659,9 +622,9 @@ function hardenIssueBundle(bundle, ctx) {
  * @param {number | undefined | null} overallScore
  * @param {unknown} checklist
  */
-function buildSummaryFromIssues(issues, overallScore, checklist, contentClass) {
+function buildSummaryFromIssues(issues, overallScore, checklist) {
   const stored = issues || [];
-  const passItems = checklistCountsForPass(normalizeChecklist(checklist), contentClass);
+  const passItems = normalizeChecklist(checklist);
   const scoringIssues = stored.filter((i) => i.findingType !== "unverified");
   const critical = scoringIssues.filter((i) => i.severity === "critical").length;
   const warnings = scoringIssues.filter((i) => i.severity === "warning").length;

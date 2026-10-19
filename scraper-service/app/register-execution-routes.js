@@ -957,6 +957,7 @@ app.post("/api/analyze-drawing", async (req, res) => {
       return res.status(400).json({ error: "Image data is required" });
     }
 
+    // contentClass is prompt context. This route always runs the model for the requested code type.
     const outcome = await analyzeDrawingWithOpenAI({
       openai,
       imageBase64,
