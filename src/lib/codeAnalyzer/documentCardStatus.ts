@@ -1,5 +1,6 @@
 import type { CodeAnalyzerSheet } from "./model";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
+import { formatUniqueSheetProgress } from "./uniqueSheetProgress";
 
 export type DocumentCardStatus =
   | "uploading"
@@ -18,12 +19,14 @@ export interface DocumentSheetCounts {
   failed: number;
   pending: number;
   analyzing: number;
+  cancelled: number;
 }
 
 export interface DocumentCardStatusInput {
   includedSheets: CodeAnalyzerSheet[];
   completedSheetIds: Set<string>;
   failedSheetIds: Set<string>;
+  cancelledSheetIds?: Set<string>;
   analyzing: boolean;
   currentAnalyzingSheetId?: string | null;
   analysisStale?: boolean;
@@ -46,26 +49,43 @@ export function countDocumentSheetStates(input: {
   includedSheets: CodeAnalyzerSheet[];
   completedSheetIds: Set<string>;
   failedSheetIds: Set<string>;
+  cancelledSheetIds?: Set<string>;
   currentAnalyzingSheetId?: string | null;
 }): DocumentSheetCounts {
   const included = input.includedSheets.filter((s) => !s.excluded);
   let completed = 0;
   let failed = 0;
   let analyzing = 0;
+  let cancelled = 0;
 
   for (const sheet of included) {
     if (input.currentAnalyzingSheetId && sheet.id === input.currentAnalyzingSheetId) {
       analyzing += 1;
     } else if (input.failedSheetIds.has(sheet.id)) {
       failed += 1;
+    } else if (input.cancelledSheetIds?.has(sheet.id)) {
+      cancelled += 1;
     } else if (input.completedSheetIds.has(sheet.id)) {
       completed += 1;
     }
   }
 
   const total = included.length;
-  const pending = Math.max(0, total - completed - failed - analyzing);
-  return { total, completed, failed, pending, analyzing };
+  const pending = Math.max(0, total - completed - failed - cancelled - analyzing);
+  return { total, completed, failed, pending, analyzing, cancelled };
+}
+
+function sheetAnalysisProgressLabel(
+  completed: number,
+  total: number,
+  extras?: { failed?: number; cancelled?: number },
+): string {
+  const progress = formatUniqueSheetProgress(completed, total);
+  const suffix = [
+    extras?.failed ? `${extras.failed} failed` : null,
+    extras?.cancelled ? `${extras.cancelled} cancelled` : null,
+  ].filter(Boolean);
+  return suffix.length > 0 ? `${progress.combinedLabel} · ${suffix.join(" · ")}` : progress.combinedLabel;
 }
 
 export function deriveSheetChipStatus(
@@ -126,7 +146,7 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
     };
   }
 
-  const { total, completed, failed, pending, analyzing: analyzingCount } = counts;
+  const { total, completed, failed, pending, analyzing: analyzingCount, cancelled } = counts;
 
   if (total === 0) {
     if (input.analysisSettled) {
@@ -153,16 +173,28 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
     input.analyzing &&
     (analyzingCount > 0 ||
       pending > 0 ||
-      completed + failed < total);
+      cancelled > 0 ||
+      completed + failed + cancelled < total);
 
   if (runInProgress) {
     return {
       status: "analyzing",
       counts,
       badgeLabel: "Analyzing",
-      progressLabel: `${completed} of ${total} sheet${total === 1 ? "" : "s"} analyzed`,
+      progressLabel: sheetAnalysisProgressLabel(completed, total, { failed, cancelled }),
       borderClass: "border-gold/45 bg-gold/[0.05]",
       badgeVariant: "brand",
+    };
+  }
+
+  if (cancelled === total && failed === 0) {
+    return {
+      status: "failed",
+      counts,
+      badgeLabel: "Cancelled",
+      progressLabel: sheetAnalysisProgressLabel(completed, total, { cancelled }),
+      borderClass: "border-destructive/40 bg-destructive/[0.04]",
+      badgeVariant: "destructive",
     };
   }
 
@@ -171,29 +203,29 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
       status: "failed",
       counts,
       badgeLabel: "Failed",
-      progressLabel: `${failed} of ${total} failed`,
+      progressLabel: sheetAnalysisProgressLabel(completed, total, { failed, cancelled }),
       borderClass: "border-destructive/40 bg-destructive/[0.04]",
       badgeVariant: "destructive",
     };
   }
 
-  if (completed === total && failed === 0) {
+  if (completed === total && failed === 0 && cancelled === 0) {
     return {
       status: "completed",
       counts,
       badgeLabel: "Completed",
-      progressLabel: `${total} of ${total} completed`,
+      progressLabel: sheetAnalysisProgressLabel(completed, total),
       borderClass: "border-success/35 bg-success/[0.03]",
       badgeVariant: "success",
     };
   }
 
-  if (completed > 0 && failed > 0) {
+  if (completed > 0 && (failed > 0 || cancelled > 0)) {
     return {
       status: "partial",
       counts,
       badgeLabel: "Partial",
-      progressLabel: `${completed} completed · ${failed} failed`,
+      progressLabel: sheetAnalysisProgressLabel(completed, total, { failed, cancelled }),
       borderClass: "border-warning/40 bg-warning/[0.04]",
       badgeVariant: "warning",
     };
@@ -210,25 +242,27 @@ export function deriveDocumentCardStatus(input: DocumentCardStatusInput): Docume
     };
   }
 
-  if (completed > 0 && pending > 0) {
+  if (completed > 0 && (pending > 0 || cancelled > 0)) {
     return {
       status: "analyzing",
       counts,
       badgeLabel: "Analyzing",
-      progressLabel: `${completed} of ${total} sheet${total === 1 ? "" : "s"} analyzed`,
+      progressLabel: sheetAnalysisProgressLabel(completed, total, { failed, cancelled }),
       borderClass: "border-gold/45 bg-gold/[0.05]",
       badgeVariant: "brand",
     };
   }
 
-  if (failed > 0) {
+  if (failed > 0 || cancelled > 0) {
     return {
       status: "partial",
       counts,
-      badgeLabel: "Partial",
-      progressLabel: `${completed} completed · ${failed} failed`,
-      borderClass: "border-warning/40 bg-warning/[0.04]",
-      badgeVariant: "warning",
+      badgeLabel: cancelled > 0 && failed === 0 ? "Cancelled" : "Partial",
+      progressLabel: sheetAnalysisProgressLabel(completed, total, { failed, cancelled }),
+      borderClass: cancelled > 0 && failed === 0
+        ? "border-destructive/40 bg-destructive/[0.04]"
+        : "border-warning/40 bg-warning/[0.04]",
+      badgeVariant: cancelled > 0 && failed === 0 ? "destructive" : "warning",
     };
   }
 

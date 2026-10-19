@@ -98,7 +98,10 @@ describe("analyzerRuntimeStatus", () => {
       stale: false,
       batchProgress: { completed: 4, total: 7 },
     });
-    assert.equal(lines.statusLine, "Analyzing 4 of 7 sheets…");
+    assert.equal(
+      lines.statusLine,
+      "Sheets Analyzed: 4 / 7 · 4 completed · 3 remaining · 57%",
+    );
   });
 
   it("H: standard partial and stale", () => {

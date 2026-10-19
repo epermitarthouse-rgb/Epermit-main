@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DISCIPLINE_OPTIONS, type DocumentDiscipline } from "@/types/document";
 import { Loader2, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
+import { AnalyzerDisclosure } from "@/components/compliance/AnalyzerDisclosure";
 import type { CodeAnalyzerRun, CodeAnalyzerSheet } from "@/lib/codeAnalyzer/model";
 import {
   augmentWorkflowDocumentsFromSheets,
@@ -50,6 +52,12 @@ import {
 } from "@/lib/codeAnalyzer/retryWorkflow";
 import { toast } from "sonner";
 import { resolveAnalyzerRuntimeStatus, type AnalyzerWorkflowMode } from "@/lib/codeAnalyzer/analyzerRuntimeStatus";
+import { uniqueSheetAnalysisProgress, formatUniqueSheetProgress } from "@/lib/codeAnalyzer/uniqueSheetProgress";
+import {
+  reconcileProjectDocumentsDisclosure,
+  resolveProjectDocumentsPhase,
+  type ProjectDocumentsDisclosureState,
+} from "@/lib/codeAnalyzer/projectDocumentsDisclosure";
 import type { AnalyzerPendingFile } from "./AnalyzerDrawingSet";
 
 const INGESTION_POLL_MS = 5000;
@@ -64,6 +72,7 @@ function statusBadgeVariant(
     case "Excluded from analysis":
       return "secondary";
     case "Failed":
+    case "Cancelled":
       return "destructive";
     case "Needs attention":
       return "outline";
@@ -585,6 +594,44 @@ export function CodeAnalyzerDocumentWorkflow({
 
   const deletableDocumentIds = useMemo(() => bulkDeletableDocumentIds(cards), [cards]);
 
+  const documentsPhase = resolveProjectDocumentsPhase({
+    activeStep,
+    complianceRunActive,
+    anyOrganizing,
+  });
+  const documentsRunId = displayRun?.id ?? null;
+  const [documentsDisclosure, setDocumentsDisclosure] = useState<ProjectDocumentsDisclosureState>(() =>
+    reconcileProjectDocumentsDisclosure(null, { phase: documentsPhase, runId: documentsRunId }),
+  );
+  const nextDocumentsDisclosure = reconcileProjectDocumentsDisclosure(documentsDisclosure, {
+    phase: documentsPhase,
+    runId: documentsRunId,
+  });
+  if (nextDocumentsDisclosure !== documentsDisclosure) {
+    setDocumentsDisclosure(nextDocumentsDisclosure);
+  }
+  const documentsExpanded = nextDocumentsDisclosure.expanded;
+  const sheetProgress = useMemo(() => {
+    const sheetIds = included.map((sheet) => sheet.id);
+    if (sheetJobs.length > 0) {
+      return uniqueSheetAnalysisProgress({ jobs: sheetJobs, sheetIds });
+    }
+    return formatUniqueSheetProgress(
+      runMetrics?.analyzedCompletedCount ?? 0,
+      runMetrics?.analysisTotalCount || sheetIds.length,
+    );
+  }, [sheetJobs, included, runMetrics]);
+
+  const setDocumentsExpanded = (expanded: boolean) => {
+    setDocumentsDisclosure((current) => {
+      const base = reconcileProjectDocumentsDisclosure(current, {
+        phase: documentsPhase,
+        runId: documentsRunId,
+      });
+      return { ...base, expanded };
+    });
+  };
+
   useEffect(() => {
     setSelectedDrawingIds((prev) => {
       const allowed = new Set(deletableDocumentIds);
@@ -697,12 +744,33 @@ export function CodeAnalyzerDocumentWorkflow({
       </div>
 
       {cards.length > 0 ? (
-        <div className="space-y-2">
+        <AnalyzerDisclosure
+          expanded={documentsExpanded}
+          onExpandedChange={setDocumentsExpanded}
+          testId="project-documents-disclosure"
+          header={
+            <>
+              <span className="text-sm font-medium text-foreground" data-testid="project-documents-count">
+                Project Documents ({cards.length})
+              </span>
+              <span className="text-xs text-muted-foreground" data-testid="project-documents-progress">
+                {sheetProgress.sheetsAnalyzedLabel}
+              </span>
+              <span className="text-xs text-muted-foreground">{sheetProgress.breakdownLabel}</span>
+              <span className="text-xs tabular-nums text-foreground">{sheetProgress.percent}%</span>
+              <Progress
+                value={sheetProgress.percent}
+                className="h-1.5 w-16 sm:w-24"
+                aria-label={sheetProgress.combinedLabel}
+              />
+            </>
+          }
+        >
+        <div className="space-y-2 pt-2">
           <div
-            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+            className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1"
             data-testid="analyzer-document-bulk-actions"
           >
-            <p className="text-xs font-medium text-muted-foreground">Project documents</p>
             {deletableDocumentIds.length > 0 ? (
               <div className="flex flex-wrap items-center gap-1">
                 {selectionMode ? (
@@ -737,7 +805,10 @@ export function CodeAnalyzerDocumentWorkflow({
                       size="sm"
                       className="h-7 px-2 text-xs text-muted-foreground"
                       disabled={complianceRunActive || bulkDeleting}
-                      onClick={() => setSelectionMode(true)}
+                      onClick={() => {
+                        setSelectionMode(true);
+                        setDocumentsExpanded(true);
+                      }}
                     >
                       Select
                     </Button>
@@ -823,6 +894,7 @@ export function CodeAnalyzerDocumentWorkflow({
           })}
         </div>
         </div>
+        </AnalyzerDisclosure>
       ) : (
         <p className="text-sm text-muted-foreground">No documents yet — use the upload area below.</p>
       )}

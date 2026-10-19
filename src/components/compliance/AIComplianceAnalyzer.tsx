@@ -142,7 +142,6 @@ import {
 } from "@/lib/codeAnalyzer/analyzerUiStability";
 import {
   computeRunAnalysisMetrics,
-  formatAnalysisProgressSummary,
   newSincePreviousRun,
 } from "@/lib/codeAnalyzer/sheetState";
 import {
@@ -172,6 +171,7 @@ import {
   metricsFromAsyncSheetJobs,
   pickActiveSheetJobSheetId,
 } from "@/lib/codeAnalyzer/asyncRunProgress";
+import { formatUniqueSheetProgress } from "@/lib/codeAnalyzer/uniqueSheetProgress";
 import { analyzerRunCancelTarget, isInProgressRunStatus } from "@/lib/codeAnalyzer/model";
 import {
   collectAnalyzerWorkflowDocumentIds,
@@ -3116,10 +3116,18 @@ export function AIComplianceAnalyzer() {
     isModificationMode,
   ]);
 
+  const includedProgressSheetIds = useMemo(
+    () => persistedSheets.filter((sheet) => !sheet.excluded).map((sheet) => sheet.id),
+    [persistedSheets],
+  );
+
   const asyncStandardJobMetrics = useMemo(() => {
     if (workflowSheetJobs.length === 0) return null;
-    return metricsFromAsyncSheetJobs(workflowSheetJobs);
-  }, [workflowSheetJobs]);
+    return metricsFromAsyncSheetJobs(
+      workflowSheetJobs,
+      includedProgressSheetIds.length > 0 ? includedProgressSheetIds : undefined,
+    );
+  }, [workflowSheetJobs, includedProgressSheetIds]);
 
   const analyzerMetrics = useMemo(() => {
     const sheetsForMetrics =
@@ -3148,6 +3156,7 @@ export function AIComplianceAnalyzer() {
       ...base,
       analyzedCompletedCount: asyncStandardJobMetrics.completed,
       analyzedFailedCount: asyncStandardJobMetrics.failed,
+      analysisTotalCount: asyncStandardJobMetrics.total,
       completedSheetIds: asyncStandardJobMetrics.completedSheetIds,
       failedSheetIds,
     };
@@ -3297,6 +3306,7 @@ export function AIComplianceAnalyzer() {
 
   const [fileResultTabs, setFileResultTabs] = useState<Record<string, "ibc" | "local">>({});
   const [expandedResultGroups, setExpandedResultGroups] = useState<Record<string, boolean>>({});
+  const [reviewEvidenceExpanded, setReviewEvidenceExpanded] = useState<Record<string, boolean>>({});
 
   const toggleResultGroupExpanded = (groupId: string) => {
     setExpandedResultGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -3440,7 +3450,18 @@ export function AIComplianceAnalyzer() {
           </Card>
         )}
 
-        {groupResult.reviewReport ? <ReviewEvidenceReport view={groupResult.reviewReport} /> : null}
+        {groupResult.reviewReport ? (
+          <ReviewEvidenceReport
+            view={groupResult.reviewReport}
+            sourceFileName={group.fileName}
+            reviewState={groupResult.summary.reviewState ?? null}
+            overallScore={groupResult.summary.overallScore ?? null}
+            expanded={reviewEvidenceExpanded[group.id] ?? false}
+            onExpandedChange={(open) =>
+              setReviewEvidenceExpanded((prev) => ({ ...prev, [group.id]: open }))
+            }
+          />
+        ) : null}
 
         {renderIssuesList(group.id, groupResult, group.fileName)}
           </div>
@@ -3625,6 +3646,17 @@ export function AIComplianceAnalyzer() {
       analyzing);
   const workflowComplianceRunActive =
     complianceRunActive || (isModificationMode && modificationAsyncRunActive);
+  const reviewAnalysisWasActiveRef = useRef(false);
+  useEffect(() => {
+    if (workflowComplianceRunActive && !reviewAnalysisWasActiveRef.current) {
+      setReviewEvidenceExpanded({});
+    }
+    reviewAnalysisWasActiveRef.current = workflowComplianceRunActive;
+  }, [workflowComplianceRunActive]);
+  const dashboardSheetProgress = formatUniqueSheetProgress(
+    analyzerMetrics.analyzedCompletedCount,
+    analyzerMetrics.analysisTotalCount,
+  );
   const uiAnalyzing = uploadSessionInProgress || workflowComplianceRunActive;
   const cancelRunId = analyzerRunCancelTarget({
     v2Enabled,
@@ -4495,7 +4527,9 @@ export function AIComplianceAnalyzer() {
                       : "Running review..."
                     : showDrawingUploadProgress
                       ? drawingUploadProgressLabel || "Uploading documents..."
-                      : batchProgressLabel || "Analyzing..."}
+                      : workflowComplianceRunActive && dashboardSheetProgress.total > 0
+                        ? dashboardSheetProgress.sheetsAnalyzedLabel
+                        : batchProgressLabel || "Analyzing..."}
                 </>
               ) : (
                 <>
@@ -4556,7 +4590,28 @@ export function AIComplianceAnalyzer() {
                 ) : null}
               </motion.div>
             )}
-            {analyzing && batchProgress && !showDrawingUploadProgress && (
+            {!showDrawingUploadProgress &&
+            (workflowComplianceRunActive || analyzing) &&
+            dashboardSheetProgress.total > 0 ? (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2"
+                data-testid="analyzer-sheet-progress"
+              >
+                <Progress value={dashboardSheetProgress.percent} className="h-2" />
+                <p className="text-sm text-center text-foreground">
+                  {dashboardSheetProgress.sheetsAnalyzedLabel}
+                </p>
+                <p className="text-xs text-center text-muted-foreground">
+                  {dashboardSheetProgress.breakdownLabel} · {dashboardSheetProgress.percent}%
+                  {analyzerMetrics.analyzedFailedCount > 0
+                    ? ` · ${analyzerMetrics.analyzedFailedCount} failed`
+                    : ""}
+                </p>
+              </motion.div>
+            ) : analyzing && batchProgress && !showDrawingUploadProgress ? (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
@@ -4569,7 +4624,7 @@ export function AIComplianceAnalyzer() {
                   {batchProgress.currentFileName ? ` — ${batchProgress.currentFileName}` : ""}
                 </p>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </CardContent>
       </Card>
@@ -4609,21 +4664,18 @@ export function AIComplianceAnalyzer() {
                 detail="Informational, non-blocking notes"
               />
               <MetricCard
-                label="Sheets analyzed"
-                value={analyzerMetrics.analyzedCompletedCount}
+                label="Sheets Analyzed"
+                value={`${dashboardSheetProgress.completed} / ${dashboardSheetProgress.total}`}
                 icon={FileText}
-                detail={formatAnalysisProgressSummary(analyzerMetrics, {
-                  inProgress: complianceRunActive || analyzing,
-                  pendingCount: workflowBatchProgress
-                    ? Math.max(
-                        0,
-                        workflowBatchProgress.total - workflowBatchProgress.completed,
-                      )
-                    : batchProgress
-                      ? Math.max(0, batchProgress.total - batchProgress.completed)
-                      : undefined,
-                  currentSheetName: batchProgress?.currentFileName ?? null,
-                })}
+                detail={[
+                  dashboardSheetProgress.breakdownLabel,
+                  `${dashboardSheetProgress.percent}%`,
+                  analyzerMetrics.analyzedFailedCount > 0
+                    ? `${analyzerMetrics.analyzedFailedCount} failed`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               />
             </div>
             ) : null}

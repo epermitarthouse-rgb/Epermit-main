@@ -8,6 +8,7 @@ import { deriveDocumentCardStatus } from "./documentCardStatus";
 import type { ComplianceBatchFileStatus } from "@/lib/complianceBatchProcessor";
 import type { SheetJobSummary } from "./asyncRun";
 import { failedSheetIdsForDocument } from "./retryWorkflow";
+import { uniqueSheetAnalysisProgress } from "./uniqueSheetProgress";
 
 export type DocumentPurposeLabel =
   | "Drawing"
@@ -25,7 +26,8 @@ export type DocumentUserStatusLabel =
   | "Not analyzed"
   | "Excluded from analysis"
   | "Needs attention"
-  | "Failed";
+  | "Failed"
+  | "Cancelled";
 
 export type WorkflowStepId = 1 | 2 | 3 | 4 | 5;
 
@@ -194,6 +196,8 @@ export function resolveDocumentUserStatus(input: {
   analysisStale?: boolean;
   /** True when a terminal compliance run finished and results are in effect (Step 5). */
   analysisSettled?: boolean;
+  /** Durable analysis jobs for this drawing. When present, sheet completion follows uniqueSheetAnalysisProgress. */
+  sheetJobs?: SheetJobSummary[];
 }): DocumentStatusFields {
   const { doc, job } = input;
 
@@ -291,19 +295,34 @@ export function resolveDocumentUserStatus(input: {
       }
     }
 
+    const includedIds = included.filter((sheet) => !sheet.excluded).map((sheet) => sheet.id);
+    const docJobs = (input.sheetJobs ?? []).filter((job) => includedIds.includes(job.sheet_id));
+    const sheetProgress =
+      docJobs.length > 0
+        ? uniqueSheetAnalysisProgress({ jobs: docJobs, sheetIds: includedIds })
+        : null;
     const card = deriveDocumentCardStatus({
       includedSheets: input.includedSheets,
-      completedSheetIds: input.completedSheetIds,
-      failedSheetIds: input.failedSheetIds,
+      completedSheetIds: sheetProgress?.completedSheetIds ?? input.completedSheetIds,
+      failedSheetIds: sheetProgress?.failedSheetIds ?? input.failedSheetIds,
+      cancelledSheetIds: sheetProgress?.cancelledSheetIds,
       analyzing: input.analyzing,
       currentAnalyzingSheetId: input.currentAnalyzingSheetId,
       analysisStale: input.analysisStale,
       analysisSettled: input.analysisSettled,
     });
 
-    const failedSheetIdsOnDoc = input.includedSheets
-      .filter((s) => !s.excluded && input.failedSheetIds.has(s.id))
+    const failedSheetIdsOnDoc = included
+      .filter((s) => (sheetProgress?.failedSheetIds ?? input.failedSheetIds).has(s.id))
       .map((s) => s.id);
+
+    if (card.badgeLabel === "Cancelled") {
+      return withRetryDefaults({
+        status: "Cancelled",
+        statusDetail: card.progressLabel,
+        borderClass: card.borderClass,
+      });
+    }
 
     if (card.status === "failed" || (card.counts.failed > 0 && card.counts.completed === 0)) {
       return withRetryDefaults({
@@ -469,6 +488,7 @@ export function buildConsolidatedDocumentCards(input: {
       currentAnalyzingSheetId: input.currentAnalyzingSheetId,
       analysisStale: input.analysisStale,
       analysisSettled: input.analysisSettled,
+      sheetJobs: input.sheetJobs,
     });
     const isPdf =
       docSheets.length > 1 || doc.file_name.toLowerCase().endsWith(".pdf") || doc.document_type === "specification";

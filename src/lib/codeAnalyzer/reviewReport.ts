@@ -66,6 +66,14 @@ export type ReviewReportView = {
   withheldReasons: string[];
 };
 
+export type ReviewEvidenceStripSummary = {
+  sourceFileName: string;
+  codeLabel: string;
+  jurisdictionLabel: string;
+  reviewStateLabel: string;
+  countLabel: string;
+};
+
 const CONFIRMED = new Set(["confirmed_violation"]);
 const QUESTION = new Set(["missing_information", "unverified", "potential_concern"]);
 
@@ -163,5 +171,36 @@ export function buildReviewReportView(
     unreviewable,
     evidence: evidence.slice(0, 12),
     withheldReasons: withheld,
+  };
+}
+
+/** Collapsed Review Evidence strip. Expanded details stay on the full view. */
+export function reviewEvidenceStripSummary(
+  view: ReviewReportView,
+  context?: {
+    sourceFileName?: string | null;
+    reviewState?: string | null;
+    overallScore?: number | null;
+  },
+): ReviewEvidenceStripSummary {
+  const sourceFileName =
+    context?.sourceFileName?.trim() ||
+    view.documentsReviewed[0] ||
+    "This sheet";
+  const jurisdictionLabel = view.amendmentsEnforced
+    ? view.detectedLocation
+    : `${view.detectedLocation} · amendments not enforced`;
+  const countLabel =
+    view.evidence.length > 0
+      ? `${view.evidence.length} evidence`
+      : view.verificationQuestions.length === 1
+        ? "1 verification question"
+        : `${view.verificationQuestions.length} verification questions`;
+  return {
+    sourceFileName,
+    codeLabel: view.selectedScope,
+    jurisdictionLabel,
+    reviewStateLabel: reviewStateLabel(context?.reviewState, context?.overallScore),
+    countLabel,
   };
 }

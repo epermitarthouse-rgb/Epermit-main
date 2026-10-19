@@ -4,6 +4,7 @@
  */
 import { COMPLIANCE_MAX_INCLUDED_SHEETS, type CodeAnalyzerRunStatus } from "./model";
 import type { AnalyzerDatasetMetrics } from "./sheetState";
+import { formatUniqueSheetProgress } from "./uniqueSheetProgress";
 
 /** Show capacity usage only when approaching the included-sheet cap. */
 export const ANALYZER_CAPACITY_WARNING_THRESHOLD = 35;
@@ -91,7 +92,7 @@ export function resolveAnalyzerRuntimeStatus(
     if (progress && progress.total > 0) {
       return {
         datasetLine,
-        statusLine: `Analyzing ${progress.completed} of ${progress.total} sheets…`,
+        statusLine: formatUniqueSheetProgress(progress.completed, progress.total).combinedLabel,
         capacityLine,
       };
     }

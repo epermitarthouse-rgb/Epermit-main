@@ -77,7 +77,10 @@ describe("documentCardStatus", () => {
       currentAnalyzingSheetId: sheets[10]?.id,
     });
     assert.equal(card.status, "analyzing");
-    assert.equal(card.progressLabel, "10 of 20 sheets analyzed");
+    assert.equal(
+      card.progressLabel,
+      "Sheets Analyzed: 10 / 20 · 10 completed · 10 remaining · 50%",
+    );
     const counts = countDocumentSheetStates({
       includedSheets: sheets,
       completedSheetIds: completed,
@@ -99,7 +102,10 @@ describe("documentCardStatus", () => {
       analyzing: false,
     });
     assert.equal(card.status, "completed");
-    assert.equal(card.progressLabel, "20 of 20 completed");
+    assert.equal(
+      card.progressLabel,
+      "Sheets Analyzed: 20 / 20 · 20 completed · 0 remaining · 100%",
+    );
   });
 
   it("D: 15 completed + 5 failed → Partial", () => {
@@ -113,7 +119,10 @@ describe("documentCardStatus", () => {
       analyzing: false,
     });
     assert.equal(card.status, "partial");
-    assert.equal(card.progressLabel, "15 completed · 5 failed");
+    assert.equal(
+      card.progressLabel,
+      "Sheets Analyzed: 15 / 20 · 15 completed · 5 remaining · 75% · 5 failed",
+    );
   });
 
   it("E: 20 failed → Failed", () => {
@@ -126,7 +135,10 @@ describe("documentCardStatus", () => {
       analyzing: false,
     });
     assert.equal(card.status, "failed");
-    assert.equal(card.progressLabel, "20 of 20 failed");
+    assert.equal(
+      card.progressLabel,
+      "Sheets Analyzed: 0 / 20 · 0 completed · 20 remaining · 0% · 20 failed",
+    );
   });
 
   it("F: retry flow Partial → Analyzing → Partial → Completed", () => {
@@ -189,7 +201,10 @@ describe("documentCardStatus", () => {
       analyzing: false,
     });
     assert.equal(card.status, "partial");
-    assert.equal(card.progressLabel, "15 completed · 5 failed");
+    assert.equal(
+      card.progressLabel,
+      "Sheets Analyzed: 15 / 20 · 15 completed · 5 remaining · 75% · 5 failed",
+    );
   });
 
   it("does not show Ready when some sheets completed but others pending (interrupted run)", () => {
