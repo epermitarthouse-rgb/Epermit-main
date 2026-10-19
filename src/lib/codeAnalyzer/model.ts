@@ -4,6 +4,7 @@
  */
 import type { DocumentDiscipline } from "@/types/document";
 import type { IndexCompletenessResult } from "./indexCompleteness";
+import type { CodeReviewScope, PermitApplicabilityFacts } from "./jurisdictionEditionVerification";
 
 export type IndexCompletenessSnapshot = IndexCompletenessResult;
 
@@ -42,6 +43,9 @@ export interface CodeAnalyzerRun {
   analysis_instructions?: string | null;
   /** Deterministic drawing index prescreen snapshot for this run. */
   index_completeness?: IndexCompletenessSnapshot | null;
+  requested_review_scope?: CodeReviewScope | null;
+  permit_facts?: PermitApplicabilityFacts | null;
+  reference_review_confirmed?: boolean | null;
   source_fingerprint: string;
   created_at: string;
   updated_at: string;

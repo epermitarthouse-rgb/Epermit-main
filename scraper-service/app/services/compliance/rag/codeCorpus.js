@@ -1,10 +1,13 @@
 "use strict";
 
+const {
+  bundledAuthoritativeProvisions,
+} = require("./jurisdictionEditionRegistry.js");
+
 /**
- * Authoritative code text is empty on purpose.
- * This repository does not contain verified IBC or DCMR section text.
- * Amendment summaries that already live in analyze-drawing.service.js are
- * indexed only as unverified summaries and cannot support a confirmed violation.
+ * Review policy remains separate from authoritative code text. Verified,
+ * permitted excerpts are loaded through the jurisdiction/edition registry and
+ * deterministically filtered before topic matching.
  */
 const CODE_PROVISIONS = [
   {
@@ -78,7 +81,15 @@ const CODE_PROVISIONS = [
 ];
 
 /**
- * @param {{ topics?: string[]; jurisdiction?: string | null; authoritativeOnly?: boolean }} query
+ * @param {{
+ *   topics?: string[];
+ *   jurisdiction?: string | null;
+ *   edition?: string | null;
+ *   registryRecordId?: string | null;
+ *   effectiveOn?: string | null;
+ *   authoritativeOnly?: boolean;
+ *   provisions?: Array<Record<string, unknown>>;
+ * }} query
  */
 function provisionIsVerified(provision) {
   return Boolean(
@@ -92,13 +103,40 @@ function provisionIsVerified(provision) {
 
 function retrieveCodeProvisions(query) {
   const topics = (query.topics || []).map((topic) => topic.toLowerCase());
-  const source = [...CODE_PROVISIONS, ...(Array.isArray(query.provisions) ? query.provisions : [])];
+  const bundled = bundledAuthoritativeProvisions({
+    jurisdiction: query.jurisdiction,
+    selectedEdition: query.edition,
+    registryRecordId: query.registryRecordId,
+  });
+  const source = [
+    ...new Map(
+      [
+        ...CODE_PROVISIONS,
+        ...bundled,
+        ...(Array.isArray(query.provisions) ? query.provisions : []),
+      ].map((item) => [item.id, item]),
+    ).values(),
+  ];
   const hits = [];
   for (const provision of source) {
     const verified = provisionIsVerified(provision);
     if (query.authoritativeOnly && !verified) continue;
     const jurisdiction = provision.jurisdiction || "any";
     if (jurisdiction !== "any" && query.jurisdiction && jurisdiction !== query.jurisdiction) {
+      continue;
+    }
+    if (query.edition && provision.edition &&
+        provision.edition !== query.edition &&
+        provision.baseCodeEdition !== query.edition &&
+        provision.jurisdictionCodeEdition !== query.edition) {
+      continue;
+    }
+    if (query.registryRecordId && provision.registryRecordId &&
+        provision.registryRecordId !== query.registryRecordId) {
+      continue;
+    }
+    if (query.effectiveOn && provision.applicability?.effectiveFrom &&
+        query.effectiveOn < provision.applicability.effectiveFrom) {
       continue;
     }
     const provisionTopics = Array.isArray(provision.topics) ? provision.topics : [];
@@ -116,23 +154,51 @@ function retrieveCodeProvisions(query) {
       jurisdiction: provision.jurisdiction,
       section: verified ? provision.section : null,
       quote: provision.text || provision.requirement,
+      text: provision.text || provision.requirement,
+      heading: provision.heading || null,
+      provisionType: provision.provisionType || "review_policy",
       applicability: provision.applicability,
       exceptions: provision.exceptions,
+      thresholds: provision.thresholds || [],
       requiredEvidence: provision.requiredEvidence,
       elementTypes: provision.elementTypes,
       sourceStatus: verified ? "verified_text" : (provision.sourceStatus || "unverified"),
       authoritative: verified,
+      supportsConfirmedViolation: Boolean(verified && provision.supportsConfirmedViolation === true),
+      sourceUrl: provision.sourceUrl || null,
+      sourceLocator: provision.sourceLocator || null,
+      verificationDate: provision.verificationDate || null,
+      licenseStatus: provision.licenseStatus || null,
+      registryRecordId: provision.registryRecordId || null,
       provesRequirementSatisfied: false,
       provenance: {
         method: "code-library",
         sourceStatus: provision.sourceStatus,
+        sourceUrl: provision.sourceUrl || null,
+        sourceLocator: provision.sourceLocator || null,
+        verificationDate: provision.verificationDate || null,
+        licenseStatus: provision.licenseStatus || null,
         note: verified
           ? "Retrieved from verified code text."
           : "Review policy or unverified summary. Not authoritative code text.",
       },
     });
   }
-  return hits;
+  const locallyAmendedSections = new Set(
+    hits
+      .filter((hit) => hit.jurisdiction && hit.jurisdiction !== "any" && hit.section)
+      .map((hit) => `${hit.codeBook || ""}:${hit.section}`),
+  );
+  const amendedSectionNumbers = new Set(
+    hits
+      .filter((hit) => hit.jurisdiction && hit.jurisdiction !== "any" && hit.section)
+      .map((hit) => hit.section),
+  );
+  return hits.filter((hit) => {
+    if (hit.jurisdiction !== "any" || !hit.section) return true;
+    if (locallyAmendedSections.has(`${hit.codeBook || ""}:${hit.section}`)) return false;
+    return !amendedSectionNumbers.has(hit.section);
+  });
 }
 
 module.exports = {

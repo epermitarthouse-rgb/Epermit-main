@@ -14,6 +14,10 @@ const MAX_PROMPT_CHARS = 4000;
  *   questions: Array<{ id: string; topics?: string[]; identifiers?: string[]; discipline?: string | null; disciplines?: string[] }>;
  *   specChunks?: Array<Record<string, unknown>>;
  *   jurisdiction?: string | null;
+ *   edition?: string | null;
+ *   registryRecordId?: string | null;
+ *   effectiveOn?: string | null;
+ *   codeProvisions?: Array<Record<string, unknown>>;
  *   currentSheetId?: string | null;
  *   queryEmbedding?: number[] | null;
  *   queryEmbeddings?: Record<string, number[]>;
@@ -34,6 +38,10 @@ function retrieveForQuestions(input) {
     const code = retrieveCodeProvisions({
       topics: question.topics,
       jurisdiction: input.jurisdiction,
+      edition: input.edition,
+      registryRecordId: input.registryRecordId,
+      effectiveOn: input.effectiveOn,
+      provisions: input.codeProvisions,
       authoritativeOnly: false,
     });
     const spec = retrieveSpecEvidence(input.specChunks, {

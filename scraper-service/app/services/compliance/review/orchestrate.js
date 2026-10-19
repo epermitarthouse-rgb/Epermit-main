@@ -23,6 +23,12 @@ const { establishReviewContext } = require("./applicability.js");
  *   jurisdictionScope?: Record<string, unknown> | null;
  *   analysisInstructions?: string | null;
  *   revision?: string | null;
+ *   codeYear?: string | null;
+ *   codeVerification?: {
+ *     legalApplicability?: Record<string, unknown>;
+ *     provisions?: Array<Record<string, unknown>>;
+ *     coverage?: Record<string, unknown>;
+ *   } | null;
  * }} input
  */
 function prepareSheetReview(input) {
@@ -72,6 +78,10 @@ function prepareSheetReview(input) {
     questions,
     specChunks: input.specChunks,
     jurisdiction: input.jurisdictionScope?.enforcedJurisdiction || null,
+    edition: input.codeYear || null,
+    registryRecordId: input.codeVerification?.legalApplicability?.registryRecordId || null,
+    effectiveOn: input.codeVerification?.legalApplicability?.permitFacts?.applicationDate || null,
+    codeProvisions: input.codeVerification?.provisions || null,
     currentSheetId: record.sheetId,
   });
   const rules = evaluateRules({
@@ -83,6 +93,14 @@ function prepareSheetReview(input) {
 
   const emphasis = String(input.analysisInstructions || "").trim();
   const scope = input.jurisdictionScope;
+  const authoritativeCode = [
+    ...new Map(
+      retrieval.packages
+        .flatMap((pack) => pack.code || [])
+        .map((item) => [item.id, item]),
+    ).values(),
+  ];
+  const legal = input.codeVerification?.legalApplicability || null;
   const projectContext = establishReviewContext({
     projectType: input.projectType,
     pageText: input.pageText,
@@ -108,7 +126,12 @@ function prepareSheetReview(input) {
     retrieval.promptEvidence
       ? `RETRIEVED EVIDENCE (quotes from other sheets, code policy, or specs; a hit is not proof the requirement is satisfied):\n${retrieval.promptEvidence}`
       : "",
-    "CODE LIMITATION: no verified code section text is available. Review policy is not a citation and cannot confirm compliance.",
+    legal
+      ? `LEGAL APPLICABILITY: ${legal.reviewScope || "reference_only"}; determination ${legal.status || "unavailable"}; selected edition ${legal.selectedEdition || input.codeYear || "unselected"}; verified adopted base ${legal.adoptedBaseCode || "unavailable"}. ${legal.warning || ""}`.trim()
+      : "",
+    authoritativeCode.length
+      ? `AUTHORITATIVE CODE COVERAGE: ${authoritativeCode.length} verified official excerpt(s) retrieved. Only cited excerpts marked supportsConfirmedViolation may support a confirmed violation.`
+      : "CODE LIMITATION: no verified code section text is available for these questions. Review policy is not a citation and cannot confirm compliance.",
     observations.length
       ? `STRUCTURED OBSERVATIONS FROM THIS SHEET:\n${observations
           .slice(0, 24)
@@ -127,6 +150,8 @@ function prepareSheetReview(input) {
     questions: questions.map((question) => question.id),
     questionRecords: questions,
     retrieval,
+    authoritativeCode,
+    codeVerification: input.codeVerification || null,
     rules,
     record,
     projectContext,

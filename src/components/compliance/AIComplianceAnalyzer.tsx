@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { SearchableCombobox, ComboboxOption } from "@/components/ui/searchable-combobox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -127,6 +128,12 @@ import {
 } from "@/lib/codeAnalyzer/model";
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
 import { buildJurisdictionDiagnostics } from "@/lib/codeAnalyzer/jurisdictionDiagnostics";
+import {
+  currentVerifiedRecord,
+  resolveJurisdictionEditionVerification,
+  type CodeReviewScope,
+  type PermitApplicabilityFacts,
+} from "@/lib/codeAnalyzer/jurisdictionEditionVerification";
 import { jurisdictionForAnalyzerProject } from "@/lib/codeAnalyzer/analyzerJurisdiction";
 import { reviewStateLabel } from "@/lib/codeAnalyzer/reviewReport";
 import {
@@ -296,22 +303,6 @@ const batchStatusColors: Record<ComplianceBatchFileStatus, string> = {
   completed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
   failed: "bg-destructive/15 text-destructive",
 };
-
-// Jurisdictions with local amendments
-const JURISDICTIONS_WITH_AMENDMENTS = [
-  "dc",
-  "new-york-city",
-  "california",
-  "los-angeles",
-  "san-francisco",
-  "florida",
-  "miami-dade",
-  "chicago",
-  "boston",
-  "massachusetts",
-  "seattle",
-  "portland",
-];
 
 const severityConfig = {
   critical: {
@@ -511,12 +502,60 @@ export function AIComplianceAnalyzer() {
 
   // Dual code analysis options
   const [analysisMode, setAnalysisMode] = useState<"both" | "ibc" | "local">("both");
+  const [requestedReviewScope, setRequestedReviewScope] = useState<CodeReviewScope>("reference_only");
+  const [permitApplicationDate, setPermitApplicationDate] = useState("");
+  const [permitIssuedDate, setPermitIssuedDate] = useState("");
+  const [applicationDepositPaidDate, setApplicationDepositPaidDate] = useState("");
+  const [applicationComplete, setApplicationComplete] = useState(false);
+  const [workScope, setWorkScope] = useState("");
+  const [originalPermitCodeEdition, setOriginalPermitCodeEdition] = useState("");
+  const [priorPermitActive, setPriorPermitActive] = useState(false);
+  const [referenceReviewConfirmed, setReferenceReviewConfirmed] = useState(false);
   const [analysisInstructions, setAnalysisInstructions] = useState("");
   const [indexCompleteness, setIndexCompleteness] = useState<IndexCompletenessResult | null>(null);
   const [indexPrescreenLoading, setIndexPrescreenLoading] = useState(false);
   const [activeResultTab, setActiveResultTab] = useState<"ibc" | "local">("ibc");
 
-  const hasLocalAmendments = JURISDICTIONS_WITH_AMENDMENTS.includes(jurisdiction);
+  const verifiedRegistryRecord = useMemo(() => currentVerifiedRecord(jurisdiction), [jurisdiction]);
+  const hasLocalAmendments = Boolean(verifiedRegistryRecord);
+  const permitFacts = useMemo<PermitApplicabilityFacts>(
+    () => ({
+      applicationDate: permitApplicationDate || null,
+      permitIssuedDate: permitIssuedDate || null,
+      workScope: workScope || null,
+      occupancy: projectType || null,
+      originalPermitCodeEdition: originalPermitCodeEdition || null,
+      priorPermitActive: priorPermitActive || null,
+      applicationDepositPaidDate: applicationDepositPaidDate || null,
+      applicationComplete: applicationComplete || null,
+    }),
+    [
+      permitApplicationDate,
+      permitIssuedDate,
+      workScope,
+      projectType,
+      originalPermitCodeEdition,
+      priorPermitActive,
+      applicationDepositPaidDate,
+      applicationComplete,
+    ],
+  );
+  const editionVerification = useMemo(
+    () =>
+      resolveJurisdictionEditionVerification({
+        jurisdiction,
+        selectedEdition: codeYear,
+        requestedReviewScope,
+        permitFacts,
+        referenceReviewConfirmed,
+      }),
+    [jurisdiction, codeYear, requestedReviewScope, permitFacts, referenceReviewConfirmed],
+  );
+  const requiresPreAdoptionFacts = Boolean(
+    verifiedRegistryRecord
+    && permitApplicationDate
+    && permitApplicationDate < verifiedRegistryRecord.effectiveFrom,
+  );
 
   const jurisdictionRunDiagnostics = useMemo(
     () =>
@@ -1486,11 +1525,12 @@ export function AIComplianceAnalyzer() {
         setAnalysisKind("standard");
       }
       // Auto-set mode to both if jurisdiction has amendments
-      if (JURISDICTIONS_WITH_AMENDMENTS.includes(value)) {
+      if (currentVerifiedRecord(value)) {
         setAnalysisMode("both");
       } else {
         setAnalysisMode("ibc");
       }
+      setReferenceReviewConfirmed(false);
     },
     [addRecentJurisdiction],
   );
@@ -2414,6 +2454,19 @@ export function AIComplianceAnalyzer() {
           if (jurisdictionRunDiagnostics.mismatch) {
             toast.warning(jurisdictionRunDiagnostics.message ?? "Jurisdiction mismatch detected.");
           }
+          if (editionVerification.requiresReferenceConfirmation && !referenceReviewConfirmed) {
+            toast.error("Confirm the reference-only edition mismatch before starting analysis.");
+            return;
+          }
+          if (
+            requestedReviewScope === "permit_compliance"
+            && editionVerification.status !== "verified"
+          ) {
+            toast.warning(
+              editionVerification.warning
+                || "Permit-code applicability is unresolved; this run will remain reference-only.",
+            );
+          }
           if (localAnalysisWillBeEmpty && analysisMode !== "ibc") {
             toast.info(
               "Local amendment analysis requires a jurisdiction with loaded amendments (e.g. DC). Only IBC findings will be produced with the current settings.",
@@ -2427,12 +2480,23 @@ export function AIComplianceAnalyzer() {
             projectType,
             codeYear,
             analysisMode,
-            sourceFingerprint: computeStandardRunFingerprint(sheets, analysisInstructions),
+            sourceFingerprint: computeStandardRunFingerprint(
+              sheets,
+              [
+                analysisInstructions,
+                requestedReviewScope,
+                JSON.stringify(permitFacts),
+                String(referenceReviewConfirmed),
+              ].join("|"),
+            ),
             sheetIds: included.map((s) => s.id),
             analysisModes:
               analysisMode === "both" ? ["ibc", "local"] : analysisMode === "local" ? ["local"] : ["ibc"],
             analysisInstructions,
             indexCompleteness: indexCompleteness ?? undefined,
+            requestedReviewScope,
+            permitFacts,
+            referenceReviewConfirmed,
           });
           analysisRunIdRef.current = run.run.id;
           setStandardInProgressRun(run.run);
@@ -2465,6 +2529,10 @@ export function AIComplianceAnalyzer() {
     [
       analysisMode,
       analysisInstructions,
+      requestedReviewScope,
+      permitFacts,
+      referenceReviewConfirmed,
+      editionVerification,
       indexCompleteness,
       codeYear,
       displayRun?.id,
@@ -4055,7 +4123,13 @@ export function AIComplianceAnalyzer() {
                 <Calendar className="h-4 w-4" />
                 Code Year
               </Label>
-              <Select value={codeYear} onValueChange={setCodeYear}>
+              <Select
+                value={codeYear}
+                onValueChange={(value) => {
+                  setCodeYear(value);
+                  setReferenceReviewConfirmed(false);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -4063,10 +4137,171 @@ export function AIComplianceAnalyzer() {
                   <SelectItem value="2024">2024</SelectItem>
                   <SelectItem value="2021">2021</SelectItem>
                   <SelectItem value="2018">2018</SelectItem>
+                  <SelectItem value="2015">2015</SelectItem>
+                  <SelectItem value="2012">2012</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          <Card className="border-border bg-card">
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge variant="outline">Selected: {jurisdiction} · {codeYear}</Badge>
+                <Badge variant="outline">
+                  {editionVerification.adoptedBaseCode
+                    ? `Verified adopted: ${editionVerification.adoptedBaseCode}`
+                    : "Adoption unavailable"}
+                </Badge>
+                <Badge variant={editionVerification.reviewScope === "permit_compliance" ? "default" : "secondary"}>
+                  {editionVerification.reviewScope === "permit_compliance"
+                    ? "Permit-compliance scope"
+                    : "Reference-only scope"}
+                </Badge>
+                <Badge variant="outline">
+                  Source coverage: {editionVerification.sourceCoverage.replace(/_/g, " ")}
+                </Badge>
+              </div>
+
+              {editionVerification.warning || editionVerification.unresolvedReasons.length > 0 ? (
+                <Alert variant={editionVerification.status === "conflict" ? "destructive" : "default"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    {editionVerification.warning}
+                    {editionVerification.unresolvedReasons.length > 0
+                      ? ` ${editionVerification.unresolvedReasons.join(" ")}`
+                      : ""}
+                    {editionVerification.officialSourceUrl ? (
+                      <>
+                        {" "}
+                        <a
+                          href={editionVerification.officialSourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          Official source
+                        </a>
+                      </>
+                    ) : null}
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Review scope</Label>
+                  <Select
+                    value={requestedReviewScope}
+                    onValueChange={(value: CodeReviewScope) => {
+                      setRequestedReviewScope(value);
+                      setReferenceReviewConfirmed(false);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="reference_only">Selected-edition reference</SelectItem>
+                      <SelectItem value="permit_compliance">Jurisdictional permit compliance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="permit-application-date">Permit/application date</Label>
+                  <Input
+                    id="permit-application-date"
+                    type="date"
+                    value={permitApplicationDate}
+                    onChange={(event) => setPermitApplicationDate(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="permit-issued-date">Permit issue date</Label>
+                  <Input
+                    id="permit-issued-date"
+                    type="date"
+                    value={permitIssuedDate}
+                    onChange={(event) => setPermitIssuedDate(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Construction scope</Label>
+                  <Select value={workScope || "unselected"} onValueChange={(value) => setWorkScope(value === "unselected" ? "" : value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unselected">Not provided</SelectItem>
+                      <SelectItem value="new_construction">New construction</SelectItem>
+                      <SelectItem value="alteration">Alteration</SelectItem>
+                      <SelectItem value="existing_building">Existing building</SelectItem>
+                      <SelectItem value="existing_permit">Work under existing permit</SelectItem>
+                      <SelectItem value="revision">Revision to prior permit</SelectItem>
+                      <SelectItem value="tenant_layout">Tenant layout</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {requiresPreAdoptionFacts ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="application-deposit-date">Application filing-deposit date</Label>
+                    <Input
+                      id="application-deposit-date"
+                      type="date"
+                      value={applicationDepositPaidDate}
+                      onChange={(event) => setApplicationDepositPaidDate(event.target.value)}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 self-end pb-2 text-sm text-foreground">
+                    <Checkbox
+                      checked={applicationComplete}
+                      onCheckedChange={(checked) => setApplicationComplete(checked === true)}
+                    />
+                    Pre-adoption application documents were complete enough to process without substantial change
+                  </label>
+                </div>
+              ) : null}
+
+              {workScope === "revision" || workScope === "tenant_layout" ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="original-permit-edition">Original permit code edition</Label>
+                    <Input
+                      id="original-permit-edition"
+                      value={originalPermitCodeEdition}
+                      onChange={(event) => setOriginalPermitCodeEdition(event.target.value)}
+                      placeholder="e.g. 2012"
+                    />
+                  </div>
+                  {workScope === "revision" ? (
+                    <label className="flex items-center gap-2 self-end pb-2 text-sm text-foreground">
+                      <Checkbox
+                        checked={priorPermitActive}
+                        onCheckedChange={(checked) => setPriorPermitActive(checked === true)}
+                      />
+                      Prior permit is active, unexpired, and unrevoked
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {editionVerification.requiresReferenceConfirmation ? (
+                <label className="flex items-start gap-2 text-sm text-foreground">
+                  <Checkbox
+                    checked={referenceReviewConfirmed}
+                    onCheckedChange={(checked) => setReferenceReviewConfirmed(checked === true)}
+                  />
+                  <span>
+                    I understand the selected edition conflicts with the verified adoption. Run it only as a
+                    selected-edition reference review; do not present it as legally applicable permit compliance.
+                  </span>
+                </label>
+              ) : null}
+              <p className="text-xs text-muted-foreground">
+                Verification date: {editionVerification.verificationDate || "unavailable"}.
+                Missing permit facts remain unresolved; the analyzer never assumes a date, transition, or exception.
+              </p>
+            </CardContent>
+          </Card>
 
           {/* Analysis Mode Toggle - only show for jurisdictions with amendments */}
           {hasLocalAmendments && !isModificationMode && (

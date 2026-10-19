@@ -342,8 +342,11 @@ export type Database = {
           id: string
           index_completeness: Json | null
           jurisdiction: string | null
+          permit_facts: Json
           project_id: string
           project_type: string | null
+          reference_review_confirmed: boolean
+          requested_review_scope: string
           source_fingerprint: string
           status: string
           updated_at: string
@@ -360,8 +363,11 @@ export type Database = {
           id?: string
           index_completeness?: Json | null
           jurisdiction?: string | null
+          permit_facts?: Json
           project_id: string
           project_type?: string | null
+          reference_review_confirmed?: boolean
+          requested_review_scope?: string
           source_fingerprint?: string
           status?: string
           updated_at?: string
@@ -378,8 +384,11 @@ export type Database = {
           id?: string
           index_completeness?: Json | null
           jurisdiction?: string | null
+          permit_facts?: Json
           project_id?: string
           project_type?: string | null
+          reference_review_confirmed?: boolean
+          requested_review_scope?: string
           source_fingerprint?: string
           status?: string
           updated_at?: string

@@ -48,6 +48,24 @@ export type ReviewMetadataLike = {
     drawing?: Array<{ fileName?: string | null; quote?: string | null; pageNumber?: number | null; region?: unknown }>;
   }>;
   rejectedCandidates?: Array<{ validationReason?: string; validationDetail?: string; title?: string }>;
+  legalApplicability?: {
+    status?: string | null;
+    reviewScope?: string | null;
+    selectedEdition?: string | null;
+    adoptedEdition?: string | null;
+    adoptedBaseCode?: string | null;
+    officialSourceUrl?: string | null;
+    verificationDate?: string | null;
+    sourceStatus?: string | null;
+    warning?: string | null;
+    unresolvedReasons?: string[] | null;
+  } | null;
+  codeCoverage?: {
+    status?: string | null;
+    authoritativeProvisionCount?: number | null;
+    enforceableProvisionCount?: number | null;
+    registrySource?: string | null;
+  } | null;
 };
 
 export type ReviewReportView = {
@@ -64,6 +82,8 @@ export type ReviewReportView = {
   unreviewable: string[];
   evidence: Array<{ where: string; quote: string; hasRegion: boolean }>;
   withheldReasons: string[];
+  legalApplicability: NonNullable<ReviewMetadataLike["legalApplicability"]> | null;
+  codeCoverage: NonNullable<ReviewMetadataLike["codeCoverage"]> | null;
 };
 
 export type ReviewEvidenceStripSummary = {
@@ -98,6 +118,8 @@ export function buildReviewReportView(
 ): ReviewReportView {
   const scope = metadata.map((item) => item.jurisdictionScope).find(Boolean) || null;
   const diagnostics = metadata.map((item) => item.jurisdictionDiagnostics).find(Boolean) || null;
+  const legalApplicability = metadata.map((item) => item.legalApplicability).find(Boolean) || null;
+  const codeCoverage = metadata.map((item) => item.codeCoverage).find(Boolean) || null;
   const selectedScope = scope?.selectedScope || diagnostics?.selectedScope || "Unselected";
   const detectedLocation = scope?.detectedLocation || diagnostics?.detectedLocation || "None recorded";
   const amendmentsEnforced = Boolean(scope?.amendmentsEnforced ?? diagnostics?.amendmentsEnforced);
@@ -156,7 +178,7 @@ export function buildReviewReportView(
     selectedScope,
     detectedLocation,
     amendmentsEnforced,
-    disclosure: diagnostics?.message || null,
+    disclosure: legalApplicability?.warning || diagnostics?.message || null,
     userEmphasis: metadata.map((item) => item.userEmphasis).find((value) => value && value.trim()) || null,
     documentsReviewed: documents,
     disciplines,
@@ -171,6 +193,8 @@ export function buildReviewReportView(
     unreviewable,
     evidence: evidence.slice(0, 12),
     withheldReasons: withheld,
+    legalApplicability,
+    codeCoverage,
   };
 }
 
@@ -198,7 +222,9 @@ export function reviewEvidenceStripSummary(
         : `${view.verificationQuestions.length} verification questions`;
   return {
     sourceFileName,
-    codeLabel: view.selectedScope,
+    codeLabel: view.legalApplicability?.selectedEdition
+      ? `${view.legalApplicability.selectedEdition} · ${view.legalApplicability.reviewScope || "reference_only"}`
+      : view.selectedScope,
     jurisdictionLabel,
     reviewStateLabel: reviewStateLabel(context?.reviewState, context?.overallScore),
     countLabel,

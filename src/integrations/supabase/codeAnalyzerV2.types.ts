@@ -179,6 +179,9 @@ export interface CodeAnalyzerV2Functions {
       p_form_document_id?: string | null;
       p_analysis_instructions?: string | null;
       p_index_completeness?: Json | null;
+      p_requested_review_scope?: "reference_only" | "permit_compliance";
+      p_permit_facts?: Json;
+      p_reference_review_confirmed?: boolean;
     };
     Returns: Array<{ run: Record<string, unknown>; jobs_created: number }>;
   };

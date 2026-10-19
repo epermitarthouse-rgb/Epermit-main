@@ -199,14 +199,17 @@ describe("analyze-drawing.service", () => {
     assert.match(ibc.systemPrompt, /1 HR WALL/);
   });
 
-  it("buildPrompts uses DC Building Code summaries for a Washington DC jurisdiction", () => {
+  it("buildPrompts discloses verified DC adoption coverage without fabricated thresholds", () => {
     const local = buildPrompts({
       codeType: "local",
       jurisdiction: "Washington, D.C.",
       codeYear: "2021",
     });
     assert.match(local.systemPrompt, /12A DCMR/);
-    assert.match(local.systemPrompt, /WASHINGTON D\.C\. BUILDING CODE AMENDMENTS/i);
+    assert.match(local.systemPrompt, /2017 DC Construction Codes/i);
+    assert.match(local.systemPrompt, /2015 ICC family/i);
+    assert.match(local.systemPrompt, /No comprehensive licensed ICC base-code text/i);
+    assert.doesNotMatch(local.systemPrompt, /corridor width minimum 48/i);
   });
 
   it("buildPrompts injects staff guidance as non-evidence focus", () => {

@@ -1,6 +1,7 @@
 "use strict";
 
 const { assessApplicability, finalizeMissingQuestion, claimsMissing, composePublication } = require("./applicability.js");
+const { verifyAuthoritativeCitation } = require("./codeCitationVerification.js");
 
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;
@@ -199,13 +200,7 @@ function supplyingRecord(records, currentFile, element, token) {
 }
 
 function authoritativeThreshold(ctx, issue) {
-  const chunks = Array.isArray(ctx.authoritativeCode) ? ctx.authoritativeCode : [];
-  const tokens = measureTokens(claimText(issue));
-  return chunks.some((chunk) => {
-    if (!chunk || chunk.authoritative !== true || !chunk.text) return false;
-    const text = String(chunk.text);
-    return tokens.some((token) => text.includes(String(token).replace(/\s+/g, "")));
-  });
+  return verifyAuthoritativeCitation(issue, ctx, measureTokens);
 }
 
 function cleanTopic(title) {
@@ -382,8 +377,13 @@ function decideCandidate(issue, ctx) {
     String(issue.findingType || "") === "confirmed_violation" ||
     /\b(does not meet|non-?compliant|insufficient|too narrow|below)\b/i.test(claimText(issue));
   const currentFile = ctx.fileName || ctx.sheetTitle || null;
-  const authoritative = authoritativeThreshold(ctx, issue);
+  const codeVerification = authoritativeThreshold(ctx, issue);
+  const authoritative = codeVerification.verified;
   provenance.codeSourceStatus = authoritative ? "authoritative" : "unverified";
+  provenance.codeVerificationReason = codeVerification.reason;
+  provenance.codeProvisionId = codeVerification.provision?.id || null;
+  provenance.codeSourceUrl = codeVerification.provision?.sourceUrl || null;
+  provenance.codeSourceLocator = codeVerification.provision?.sourceLocator || null;
 
   if (element && !sheetAllows(roles, element)) {
     const other = supplyingRecord(ctx.drawingRecords, currentFile, element, tokens[0]);

@@ -695,6 +695,7 @@ function hardenIssues(issues, ctx) {
       sheetIndex: ctx.sheetIndex || [],
       observations: ctx.observations || [],
       authoritativeCode: ctx.authoritativeCode || [],
+      legalApplicability: ctx.legalApplicability || null,
     });
     issue = applyDecision(issue, decision);
     if (issue.validationDisposition === "reject") {
@@ -749,9 +750,17 @@ function hardenIssueBundle(bundle, ctx) {
  * @param {number | undefined | null} overallScore
  * @param {unknown} checklist
  */
-function codeCoverageVerified(checklistItems, authoritativeCode) {
+function codeCoverageVerified(checklistItems, authoritativeCode, legalApplicability) {
+  if (legalApplicability?.status !== "verified" ||
+      legalApplicability?.reviewScope !== "permit_compliance") {
+    return false;
+  }
   const chunks = (Array.isArray(authoritativeCode) ? authoritativeCode : []).filter(
-    (chunk) => chunk && chunk.authoritative === true && String(chunk.text || "").trim().length >= 12,
+    (chunk) =>
+      chunk
+      && chunk.authoritative === true
+      && chunk.supportsConfirmedViolation === true
+      && String(chunk.text || "").trim().length >= 12,
   );
   if (!chunks.length || !checklistItems.length) return false;
   return checklistItems.every((item) => {
@@ -786,7 +795,11 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
   const computed = Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
   const backedItems = corpus ? passItems.filter(quoteBacked) : [];
   const evidenceBacked = passItems.length > 0 && backedItems.length === passItems.length;
-  const coverageVerified = evidenceBacked && codeCoverageVerified(backedItems, options.corpusCtx?.authoritativeCode);
+  const coverageVerified = evidenceBacked && codeCoverageVerified(
+    backedItems,
+    options.corpusCtx?.authoritativeCode,
+    options.corpusCtx?.legalApplicability,
+  );
   const decision = resolveReviewState({
     callStatus: options.callStatus || "completed",
     confirmedCount: confirmed.length,

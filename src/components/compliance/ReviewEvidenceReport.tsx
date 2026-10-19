@@ -69,7 +69,53 @@ export function ReviewEvidenceReport({
               {view.amendmentsEnforced ? "" : " · local amendments not enforced"}
             </dd>
           </div>
+          {view.legalApplicability ? (
+            <>
+              <div className="min-w-0">
+                <dt className="text-[11px] text-muted-foreground">Legal review scope</dt>
+                <dd className="text-foreground">
+                  {view.legalApplicability.reviewScope || "reference_only"} · {view.legalApplicability.status || "unavailable"}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[11px] text-muted-foreground">Verified adopted edition</dt>
+                <dd className="text-foreground">
+                  {view.legalApplicability.adoptedEdition || "Unavailable"}
+                  {view.legalApplicability.adoptedBaseCode
+                    ? ` · ${view.legalApplicability.adoptedBaseCode}`
+                    : ""}
+                </dd>
+              </div>
+            </>
+          ) : null}
         </dl>
+        {view.codeCoverage ? (
+          <p className="text-muted-foreground">
+            Code source coverage: {view.codeCoverage.status || "unavailable"} ·{" "}
+            {view.codeCoverage.authoritativeProvisionCount ?? 0} authoritative excerpts ·{" "}
+            {view.codeCoverage.enforceableProvisionCount ?? 0} enforceable provisions
+          </p>
+        ) : null}
+        {view.legalApplicability?.officialSourceUrl ? (
+          <p>
+            <a
+              href={view.legalApplicability.officialSourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline"
+            >
+              Official adoption source
+            </a>
+            {view.legalApplicability.verificationDate
+              ? ` · verified ${view.legalApplicability.verificationDate}`
+              : ""}
+          </p>
+        ) : null}
+        {view.legalApplicability?.unresolvedReasons?.length ? (
+          <p className="text-muted-foreground">
+            Unresolved applicability: {view.legalApplicability.unresolvedReasons.join(" ")}
+          </p>
+        ) : null}
         {view.disclosure ? <p className="text-muted-foreground">{view.disclosure}</p> : null}
         {view.userEmphasis ? (
           <p className="text-foreground">

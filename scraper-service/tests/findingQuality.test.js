@@ -193,7 +193,15 @@ describe("empty review is not a pass", () => {
       "ibc",
       {
         pageText: '44" clear labeled at grid B',
-        authoritativeCode: [{ authoritative: true, text: "Section 1020.2 minimum corridor width is 44 inches." }],
+        authoritativeCode: [{
+          authoritative: true,
+          supportsConfirmedViolation: true,
+          text: "Section 1020.2 minimum corridor width is 44 inches.",
+        }],
+        legalApplicability: {
+          status: "verified",
+          reviewScope: "permit_compliance",
+        },
       },
     );
     assert.equal(hardened.summary.reviewState, "reviewed_clear");
@@ -445,7 +453,22 @@ describe("page text drops missing-information notes that the sheet already state
       {
         sheetTitle: "A-101 Floor Plan",
         pageText: 'CORRIDOR 36" CLEAR',
-        authoritativeCode: [{ authoritative: true, text: 'Section 1020.2 minimum corridor width 44"' }],
+        authoritativeCode: [{
+          id: "fixture-corridor",
+          registryRecordId: "fixture-ibc-2021",
+          authoritative: true,
+          supportsConfirmedViolation: true,
+          sourceStatus: "verified_text",
+          codeBook: "IBC",
+          section: "1020.2",
+          text: 'IBC Section 1020.2 minimum corridor width 44"',
+          exceptions: [],
+        }],
+        legalApplicability: {
+          status: "verified",
+          reviewScope: "permit_compliance",
+          registryRecordId: "fixture-ibc-2021",
+        },
       },
     );
     assert.equal(hardened.issues[0].findingType, "confirmed_violation");

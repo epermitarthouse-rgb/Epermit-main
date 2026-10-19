@@ -933,6 +933,9 @@ async function rebuildDcPlanReviewProjectSession(session, project) {
 // ─── Analyze Drawing (AI Compliance) endpoint ──────────────────────────────
 const { analyzeDrawingWithOpenAI } = require("./services/compliance/analyze-drawing.service.js");
 const {
+  buildCodeVerificationBundle,
+} = require("./services/compliance/rag/jurisdictionEditionRegistry.js");
+const {
   authenticateComplianceServiceRequest,
 } = require("./services/compliance/compliance-service-auth.js");
 
@@ -951,11 +954,20 @@ app.post("/api/analyze-drawing", async (req, res) => {
     const OpenAI = require("openai").default || require("openai");
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, analysisInstructions, specChunks, sheetTitle, discipline, jurisdictionDiagnostics, pageText, contentClass, sheetIndex, sheetId, reviewContext, jurisdictionScope, drawingRecords, drawingRetrieval, observations, regions, regionImages, fileName } = req.body;
+    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, analysisInstructions, specChunks, sheetTitle, discipline, jurisdictionDiagnostics, pageText, contentClass, sheetIndex, sheetId, reviewContext, jurisdictionScope, drawingRecords, drawingRetrieval, observations, regions, regionImages, fileName, requestedReviewScope, permitFacts, referenceReviewConfirmed } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: "Image data is required" });
     }
+
+    const codeVerification = await buildCodeVerificationBundle({
+      supabase,
+      jurisdiction,
+      selectedEdition: codeYear,
+      requestedReviewScope,
+      permitFacts,
+      referenceReviewConfirmed,
+    });
 
     // contentClass is prompt context. This route always runs the model for the requested code type.
     const outcome = await analyzeDrawingWithOpenAI({
@@ -979,6 +991,7 @@ app.post("/api/analyze-drawing", async (req, res) => {
       jurisdictionScope,
       drawingRecords,
       drawingRetrieval,
+      codeVerification,
       observations,
       regions,
       regionImages,

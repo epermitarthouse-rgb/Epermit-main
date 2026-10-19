@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Search, 
   Book, 
@@ -304,27 +305,22 @@ const jurisdictionCodes: JurisdictionCode[] = [
   {
     id: 'dc',
     name: 'Washington D.C. Construction Codes',
-    abbreviation: '12A DCMR',
-    baseCode: 'IBC 2021 with D.C. amendments',
-    adoptedYear: '2021',
+    abbreviation: '2017 DC Construction Codes',
+    baseCode: '2015 ICC family with DCMR Title 12 amendments',
+    adoptedYear: '2017 (effective 2020)',
     state: 'District of Columbia',
     codeType: 'state',
-    description: 'D.C. adopts IBC with significant local amendments for accessibility and historic preservation.',
-    officialUrl: 'https://dcra.dc.gov/construction-codes',
+    description: 'Verified against DC DOB: the published 2017 DC Construction Codes use the 2015 ICC family, 2014 NEC, and ASHRAE 90.1-2013 with DCMR Title 12 amendments. Comprehensive enforceable provision text is not bundled.',
+    officialUrl: 'https://dob.dc.gov/page/dc-construction-codes',
     keyDifferences: [
-      'Corridor width minimum 48" (vs IBC 44")',
-      '10% Type A accessible units (vs IBC 2%)',
-      'Sprinklers required in buildings over 5,000 sq ft',
-      'Fire alarm required at 3 stories (vs IBC 4)',
-      'Historic preservation requirements in L\'Enfant Plan zones',
-      'DOEE stormwater management requirements'
+      '2017 DC code edition is based on the 2015 ICC family',
+      'DCMR Title 12 subtitles A–M contain local amendments',
+      'Effective May 29, 2020',
+      '12-A DCMR Section 123 governs documented transition cases',
+      'IBC 2021 is not represented as the verified adopted DC building code'
     ],
     sections: [
-      { id: 'dc-1017', section: '12A DCMR 1017.2', title: 'Corridor Width', summary: 'Minimum corridor width increased to 48 inches.', details: 'D.C. requires 48-inch corridor width for all occupancies, stricter than IBC 44-inch.', category: 'Egress', keywords: ['corridor', 'width', 'egress', 'passageway'] },
-      { id: 'dc-903', section: '12A DCMR 903.2.1', title: 'Automatic Sprinklers', summary: 'Sprinklers in all new buildings over 5,000 sq ft.', details: 'Automatic sprinklers required in all new buildings exceeding 5,000 sq ft regardless of occupancy.', category: 'Fire Safety', keywords: ['sprinkler', 'fire protection', 'automatic'] },
-      { id: 'dc-1103', section: '12A DCMR 1103.2.2', title: 'Type A Accessible Units', summary: '10% of dwelling units must be Type A accessible.', details: '10% of dwelling units in multi-family must be Type A accessible. Most stringent in U.S.', category: 'Accessibility', keywords: ['accessible units', 'Type A', 'dwelling', 'multifamily'] },
-      { id: 'dc-3412', section: '12A DCMR 3412', title: 'Historic Buildings', summary: 'HPRB approval required in historic districts.', details: 'Work in Historic Districts requires HPRB approval. Additional requirements in L\'Enfant Plan zones.', category: 'General', keywords: ['historic', 'preservation', 'HPRB', 'landmark'] },
-      { id: 'dc-stormwater', section: '21 DCMR 5', title: 'Stormwater Management', summary: 'DOEE stormwater requirements.', details: 'Stormwater retention, green infrastructure, and erosion control requirements for construction sites.', category: 'General', keywords: ['stormwater', 'DOEE', 'retention', 'green infrastructure'] },
+      { id: 'dc-123', section: '12-A DCMR 123', title: 'Transitory Provisions', summary: 'Controls documented use of prior code editions.', details: 'Covers permits issued before adoption, applications filed before adoption, certain design contracts, tenant layouts, and revisions. Applicability depends on documented dates, permit status, completeness, and stated exceptions.', category: 'General', keywords: ['transition', 'permit date', 'application date', 'prior edition', 'revision', 'tenant layout'] },
     ]
   },
   {
@@ -958,15 +954,24 @@ export default function CodeReferenceLibrary() {
     <>
       <Helmet>
         <title>Building Code Reference Library | PermitPilot</title>
-        <meta name="description" content="Comprehensive building code database covering 35+ jurisdictions. Quick reference for IBC, state codes, and city amendments." />
+        <meta name="description" content="Building-code reference summaries with explicit jurisdiction and source-verification limits." />
       </Helmet>
 
       <div className="space-y-6">
         <PageHeader
           eyebrow="Code Reference"
           title="Code Reference Library"
-          body={`Comprehensive building code database covering ${jurisdictionCodes.length} jurisdictions. Quick reference for IBC, state codes, major city amendments, and more.`}
+          body={`Reference summaries covering ${jurisdictionCodes.length} jurisdictions. Adoption and source verification are shown separately in Code Analyzer.`}
         />
+
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            These summaries are reference material, not an authoritative code corpus. Only records marked verified
+            by Code Analyzer with an official source may support a jurisdictional applicability determination.
+            Model-generated summaries never support a confirmed violation.
+          </AlertDescription>
+        </Alert>
 
         <div className="grid gap-4 md:grid-cols-4">
           <MetricCard label="Jurisdictions" value={jurisdictionCodes.length} icon={Book} />

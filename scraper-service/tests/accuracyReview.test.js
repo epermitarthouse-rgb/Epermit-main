@@ -236,9 +236,14 @@ describe("cross-sheet verification and citation limits", () => {
       id: "fixture-riser",
       authoritative: true,
       sourceStatus: "verified_text",
+      codeBook: "IBC",
+      edition: "2021",
       section: "1011.5.2",
         text: 'Section 1011.5.2 maximum riser height is 7".',
       jurisdiction: "any",
+      registryRecordId: "fixture-ibc-2021",
+      supportsConfirmedViolation: true,
+      exceptions: [],
       topics: ["riser", "stair"],
       requirement: 'Section 1011.5.2 maximum riser height is 7".',
     };
@@ -272,7 +277,12 @@ describe("cross-sheet verification and citation limits", () => {
         fileName: "floor-plan.pdf",
         contentClass: "floor_plan",
         pageText: 'FLOOR PLAN\nSTAIR A RISER 8"',
-        authoritativeCode: [{ authoritative: true, text: verified.text }],
+        authoritativeCode: [verified],
+        legalApplicability: {
+          status: "verified",
+          reviewScope: "permit_compliance",
+          registryRecordId: "fixture-ibc-2021",
+        },
       },
     );
     assert.equal(hardened.issues.length, 1);

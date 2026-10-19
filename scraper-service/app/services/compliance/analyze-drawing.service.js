@@ -19,35 +19,10 @@ const JURISDICTION_ALIASES = {
 };
 
 const JURISDICTION_AMENDMENTS = {
-  dc: `WASHINGTON D.C. BUILDING CODE AMENDMENTS (12A DCMR):
-The District of Columbia adopts the IBC with the following key amendments:
-
-EGRESS & EXITS:
-- 12A DCMR 1004.5: Occupant load calculations for assembly spaces require additional 15% capacity factor
-- 12A DCMR 1006.3: Exit access travel distance reduced to 200 ft (unsprinklered) and 250 ft (sprinklered) for B occupancy
-- 12A DCMR 1017.2: Corridor width minimum 48" for all occupancies (stricter than IBC 44")
-
-FIRE SAFETY:
-- 12A DCMR 903.2.1: Automatic sprinkler systems required in all new buildings over 5,000 sq ft
-- 12A DCMR 903.2.9: Group R-2 occupancies require NFPA 13R systems minimum (no 13D allowed in D.C.)
-- 12A DCMR 907.2: Fire alarm systems required in buildings over 3 stories (not 4 as in IBC)
-
-ACCESSIBILITY (D.C. Human Rights Act compliance):
-- 12A DCMR 1103.2.2: 10% of dwelling units in multi-family must be Type A units (IBC requires 2%)
-- 12A DCMR 1107.6: All primary entrances must be accessible (no exemptions for grade changes)
-- 12A DCMR 1109.2: D.C. requires grab bars at all water closets in public restrooms
-
-STRUCTURAL:
-- 12A DCMR 1604.5: Snow load minimum 30 psf (higher than standard IBC for region)
-- 12A DCMR 1609.3: Wind design per ASCE 7 with 115 mph basic wind speed minimum
-
-HISTORIC PRESERVATION (unique to D.C.):
-- 12A DCMR 3412: Historic buildings within Historic Districts require HPRB approval
-- Work in L'Enfant Plan zones requires additional Historic Preservation Review Board compliance
-
-ENERGY:
-- D.C. Green Building Act: Buildings over 10,000 sq ft must meet LEED certification or equivalent
-- 12A DCMR C402: Envelope requirements 10% more stringent than IECC`,
+  dc: `WASHINGTON, DC SOURCE COVERAGE:
+The jurisdiction registry verifies the published 2017 DC Construction Codes, based on the 2015 ICC family and amended by DCMR Title 12, effective May 29, 2020.
+Only the official applicability and transition excerpts supplied in the authoritative review context may be cited as verified.
+No comprehensive licensed ICC base-code text or comprehensive enforceable DC amendment corpus is bundled. Do not invent a DC threshold or treat an AI summary as authoritative.`,
   "new-york": `NEW YORK CITY BUILDING CODE (NYC BC):
 NYC has its own building code separate from IBC with significant differences:
 
@@ -727,6 +702,7 @@ async function analyzeDrawingWithOpenAI(params) {
     jurisdictionScope = null,
     drawingRecords = null,
     drawingRetrieval = null,
+    codeVerification = null,
     observations = null,
     regions = null,
     regionImages = null,
@@ -749,11 +725,32 @@ async function analyzeDrawingWithOpenAI(params) {
     jurisdictionScope,
     drawingRecords,
     drawingRetrieval,
+    authoritativeCode: (codeVerification?.provisions || []).filter(
+      (item) => item.authoritative === true && item.sourceStatus === "verified_text",
+    ),
+    legalApplicability: codeVerification?.legalApplicability || null,
+    codeCoverage: codeVerification?.coverage || null,
     projectType,
     observations,
     regions,
   };
 
+  const legal = codeVerification?.legalApplicability || null;
+  const verifiedContext = legal
+    ? [
+        `Review scope: ${legal.reviewScope || "reference_only"}.`,
+        `Legal determination: ${legal.status || "unavailable"}.`,
+        `Selected edition: ${legal.selectedEdition || codeYear}.`,
+        `Verified adopted code: ${legal.adoptedEdition || "unavailable"}; base code: ${legal.adoptedBaseCode || "unavailable"}.`,
+        legal.officialSourceUrl ? `Official source: ${legal.officialSourceUrl}.` : "",
+        legal.warning || "",
+        codeVerification?.coverage
+          ? `Authoritative source coverage: ${codeVerification.coverage.status}; enforceable provisions loaded: ${codeVerification.coverage.enforceableProvisionCount || 0}.`
+          : "",
+        "Do not describe this review as legally applicable permit compliance unless review scope is permit_compliance and legal determination is verified.",
+      ].filter(Boolean).join("\n")
+    : "";
+  const combinedReviewContext = [reviewContext, verifiedContext].filter(Boolean).join("\n\n");
   const { systemPrompt, userPrompt, codeType: promptedCodeType } = buildPrompts({
     jurisdiction,
     projectType,
@@ -766,7 +763,7 @@ async function analyzeDrawingWithOpenAI(params) {
     pageText,
     contentClass,
     sheetIndex,
-    reviewContext,
+    reviewContext: combinedReviewContext,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
@@ -852,6 +849,7 @@ async function analyzeDrawingWithOpenAI(params) {
     ...qualityCtx,
     observedEvidence: collectObservedEvidence(analysisData),
   });
+  result.codeVerification = codeVerification || null;
 
   const issueCount =
     promptedCodeType === "both"

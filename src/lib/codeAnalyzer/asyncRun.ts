@@ -3,6 +3,7 @@
  */
 import { supabase } from "@/lib/supabase";
 import type { CodeAnalyzerRun } from "./model";
+import type { CodeReviewScope, PermitApplicabilityFacts } from "./jurisdictionEditionVerification";
 
 export interface AsyncRunCreateParams {
   projectId: string;
@@ -18,6 +19,9 @@ export interface AsyncRunCreateParams {
   formDocumentId?: string | null;
   analysisInstructions?: string | null;
   indexCompleteness?: Record<string, unknown> | null;
+  requestedReviewScope?: CodeReviewScope;
+  permitFacts?: PermitApplicabilityFacts;
+  referenceReviewConfirmed?: boolean;
 }
 
 export async function createAsyncAnalyzerRun(
@@ -37,6 +41,9 @@ export async function createAsyncAnalyzerRun(
     p_form_document_id: params.formDocumentId ?? null,
     p_analysis_instructions: params.analysisInstructions ?? null,
     p_index_completeness: params.indexCompleteness ?? null,
+    p_requested_review_scope: params.requestedReviewScope ?? "reference_only",
+    p_permit_facts: params.permitFacts ?? {},
+    p_reference_review_confirmed: params.referenceReviewConfirmed ?? false,
   });
 
   if (error) throw new Error(error.message);

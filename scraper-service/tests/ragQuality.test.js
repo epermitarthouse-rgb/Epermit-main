@@ -233,13 +233,20 @@ describe("published questions and false findings", () => {
 
   it("keeps a measured violation when the fixture supplies verified threshold text", () => {
     const verified = {
+      id: "riser",
+      registryRecordId: "fixture-city-2021",
       authoritative: true,
-      text: 'Section 1011.5.2 maximum riser height is 7".',
+      supportsConfirmedViolation: true,
+      sourceStatus: "verified_text",
+      codeBook: "IBC",
+      edition: "2021",
+      text: 'IBC Section 1011.5.2 maximum riser height is 7".',
       section: "1011.5.2",
+      exceptions: [],
     };
     const hits = retrieveCodeProvisions({
       topics: ["riser"],
-      provisions: [{ ...verified, id: "riser", sourceStatus: "verified_text", jurisdiction: "any", topics: ["riser"] }],
+      provisions: [{ ...verified, jurisdiction: "fixture-city", topics: ["riser"] }],
       authoritativeOnly: true,
     });
     assert.equal(hits.length, 1);
@@ -266,12 +273,17 @@ describe("published questions and false findings", () => {
         sheetTitle: "Floor plan",
         pageText: 'FLOOR PLAN STAIR B RISER 8"',
         authoritativeCode: [verified],
+        legalApplicability: {
+          status: "verified",
+          reviewScope: "permit_compliance",
+          registryRecordId: "fixture-city-2021",
+        },
         codeYear: "2021",
         jurisdictionScope: {
           selectionSource: "explicit",
-          selectedScope: "general-ibc",
-          enforcedJurisdiction: "general",
-          amendmentsEnforced: false,
+          selectedScope: "fixture-city",
+          enforcedJurisdiction: "fixture-city",
+          amendmentsEnforced: true,
         },
       },
     );
