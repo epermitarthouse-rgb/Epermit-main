@@ -10,6 +10,7 @@ const {
   createGuardedDrawingStore,
   recordToRow,
 } = require("../lib/drawingRagStore.js");
+const { rehydrateDrawingIndex, evidenceIndexForRun, clearRunEvidenceIndex } = require("../lib/prepareSheetEvidence.js");
 const { createDrawingIndex, hybridRetrieveDrawings } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
 
 describe("drawing evidence store", () => {
@@ -104,6 +105,145 @@ describe("drawing evidence store", () => {
       assert.equal(result.reason, "table_unavailable");
       assert.equal(writes, 0);
       assert.deepEqual(await store.listActive("proj-a"), []);
+    } finally {
+      if (previous === undefined) delete process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST;
+      else process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST = previous;
+    }
+  });
+
+  it("writes, retrieves, and recovers through a fake supabase client", async () => {
+    const previous = process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST;
+    process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST = "1";
+    const rows = new Map();
+    function builder() {
+      const state = { filters: [], patch: null, op: "select" };
+      const api = {
+        select() {
+          state.op = "select";
+          return api;
+        },
+        limit() {
+          return { data: [], error: null };
+        },
+        upsert(payload) {
+          for (const row of payload) rows.set(`${row.project_id}:${row.chunk_key}`, { ...row, id: "row-1" });
+          return { error: null };
+        },
+        update(patch) {
+          state.patch = patch;
+          state.op = "update";
+          return api;
+        },
+        eq(column, value) {
+          state.filters.push([column, value]);
+          return api;
+        },
+        neq() {
+          return api;
+        },
+        is() {
+          return api;
+        },
+        then(resolve, reject) {
+          try {
+            if (state.op === "update") {
+              resolve({ error: null });
+              return;
+            }
+            const project = state.filters.find((filter) => filter[0] === "project_id");
+            const data = [...rows.values()].filter((row) => !project || row.project_id === project[1]);
+            resolve({ data, error: null });
+          } catch (err) {
+            reject(err);
+          }
+        },
+      };
+      return api;
+    }
+    const supabase = { from: builder };
+    try {
+      const first = createGuardedDrawingStore(supabase);
+      const written = await first.upsertRecords([
+        {
+          projectId: "11111111-1111-4111-8111-111111111111",
+          fileName: "life-safety-plan.pdf",
+          sheetNumber: "LS-1",
+          text: "EXIT ACCESS CORRIDOR 44 IN CLEAR",
+          pageNumber: 1,
+          revision: "2",
+        },
+      ]);
+      assert.equal(written.persisted, true);
+      assert.equal(written.liveSupabase, true);
+      assert.equal(rows.size, 1);
+      await first.upsertRecords([
+        {
+          projectId: "11111111-1111-4111-8111-111111111111",
+          fileName: "life-safety-plan.pdf",
+          sheetNumber: "LS-1",
+          text: "EXIT ACCESS CORRIDOR 44 IN CLEAR",
+          pageNumber: 1,
+          revision: "2",
+        },
+      ]);
+      assert.equal(rows.size, 1);
+
+      const restarted = createGuardedDrawingStore(supabase);
+      clearRunEvidenceIndex("restart-run");
+      const hydrated = await rehydrateDrawingIndex(
+        "restart-run",
+        "11111111-1111-4111-8111-111111111111",
+        restarted,
+      );
+      assert.equal(hydrated.error, undefined);
+      assert.equal(hydrated.rehydrated, 1);
+      const hits = hybridRetrieveDrawings(evidenceIndexForRun("restart-run"), {
+        topics: ["corridor"],
+        currentSheetId: "other-sheet",
+      });
+      assert.equal(hits.length, 1);
+      assert.match(hits[0].quote, /44 IN CLEAR/);
+      const otherProject = await restarted.listActive("22222222-2222-4222-8222-222222222222");
+      assert.equal(otherProject.length, 0);
+    } finally {
+      clearRunEvidenceIndex("restart-run");
+      if (previous === undefined) delete process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST;
+      else process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST = previous;
+    }
+  });
+
+  it("reports a failed write when persistence is enabled", async () => {
+    const previous = process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST;
+    process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST = " 1 ";
+    const logs = [];
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return this;
+          },
+          limit() {
+            return { error: null };
+          },
+          upsert() {
+            return { error: { code: "23514", message: "drawing chunk check failed" } };
+          },
+        };
+      },
+    };
+    try {
+      const store = createGuardedDrawingStore(supabase, {
+        logger: (message, extra) => logs.push({ message, extra }),
+      });
+      const result = await store.upsertRecords([
+        { projectId: "proj-a", fileName: "plan.pdf", text: "corridor", pageNumber: 1 },
+      ]);
+      assert.equal(result.persisted, false);
+      assert.equal(result.reason, "write_failed");
+      assert.equal(result.reported, true);
+      assert.equal(result.code, "23514");
+      assert.equal(logs.length, 1);
+      assert.equal(logs[0].extra.reason, "write_failed");
     } finally {
       if (previous === undefined) delete process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST;
       else process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST = previous;

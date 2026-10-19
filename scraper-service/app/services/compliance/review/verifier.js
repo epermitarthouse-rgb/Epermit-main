@@ -1,5 +1,7 @@
 "use strict";
 
+const { assessApplicability, finalizeMissingQuestion, claimsMissing } = require("./applicability.js");
+
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;
 const MEASURE_TOKEN_RE = /\d+(?:\.\d+)?(?:\s*(?:["″])|(?:\s|-)?(?:in(?:ch(?:es)?)?|ft|feet|'))/gi;
@@ -235,15 +237,55 @@ function citesUnenforcedLocalAmendment(issue, scope) {
  *   regions?: Array<Record<string, unknown>>;
  * }} ctx
  */
+function isVagueUnsupported(issue) {
+  if (claimsMissing(issue) && String(issue.location || "").trim().length >= 3) return false;
+  const claim = `${issue.title || ""} ${issue.description || ""}`;
+  if (/\b(door|stair|corridor|compartment|clearance|riser|width|rating)\b/i.test(claim)) return false;
+  return true;
+}
+
+function unsupportedCodeAssertion(issue) {
+  const original = `${issue.diagnostics?.originalTitle || issue.title || ""} ${issue.diagnostics?.originalDescription || issue.description || ""}`;
+  const asserts = /\b(does not meet|non-?compliant|insufficient|violation|below minimum)\b/i.test(original);
+  if (!asserts) return false;
+  if (measureTokens(original).length) return false;
+  if (/\b(door|stair|corridor|compartment|clearance|riser|width|parking|route|separation|rating|egress|exit|ramp|handrail|guard)\b/i.test(original)) return false;
+  if (String(issue.location || "").trim().length >= 3) return false;
+  return true;
+}
+
+function withProjectContext(decision, projectContext) {
+  if (!projectContext) return decision;
+  return {
+    ...decision,
+    provenance: { ...(decision.provenance || {}), projectContext },
+  };
+}
+
 function decideCandidate(issue, ctx) {
   const corpus = String(ctx.corpus || "");
   const roles = sheetRoles(ctx);
+  const applicability = assessApplicability(issue, ctx);
   const provenance = {
     verifier: "deterministic-evidence",
     sheetRole: [...roles].join(","),
     regionCount: Array.isArray(ctx.regions) ? ctx.regions.length : 0,
     codeAuthoritative: false,
+    projectContext: applicability.projectContext || null,
   };
+
+  if (applicability.disposition === "reject" || applicability.disposition === "retain_limitation") {
+    return withProjectContext({ ...applicability, provenance }, applicability.projectContext);
+  }
+
+  if (unsupportedCodeAssertion(issue)) {
+    return {
+      disposition: "reject",
+      reason: "unsupported_allegation",
+      detail: "An unsupported code assertion is not published as a confirmed violation or as a question.",
+      provenance,
+    };
+  }
 
   if (isExitSign(issue) && roles.has("wall_section") && !roles.has("plan")) {
     return {
@@ -353,7 +395,7 @@ function decideCandidate(issue, ctx) {
       return {
         disposition: "downgrade",
         reason: "unverified_threshold",
-        detail: "The element and number are on this sheet. No verified code threshold is available, so this is not a violation.",
+        detail: `${cleanTopic(issue.title)} remains unresolved against a verified code threshold. It matters because the number on this sheet is not itself a violation. Look at the dimension note on this sheet and the code edition selected for the run.`,
         provenance,
       };
     }
@@ -393,13 +435,35 @@ function decideCandidate(issue, ctx) {
   if (wantsConfirmation) {
     const linked = Boolean(element && tokens.some((token) => linkedSpan(corpus, element.re, token)));
     if (!linked || !authoritative) {
+      const missingQuestion = finalizeMissingQuestion(issue, ctx);
+      if (!linked && isVagueUnsupported(issue)) {
+        return {
+          disposition: "reject",
+          reason: "unsupported_allegation",
+          detail: "The allegation does not name the element, the measured value, and where it was read, so it is not published.",
+          provenance,
+        };
+      }
+      if (!linked) {
+        return {
+          disposition: "downgrade",
+          reason: "unsupported_confirmed_finding",
+          detail: `${cleanTopic(issue.title)} remains unresolved. It matters because a confirmed violation needs the element and a number read from the sheet. Look at the sheet note for that element and the selected code edition.`,
+          provenance,
+        };
+      }
       return {
         disposition: "downgrade",
-        reason: !linked ? "unsupported_confirmed_finding" : "unverified_threshold",
-        detail: "A confirmed violation needs a deficiency tied to the element and authoritative code text for the threshold.",
+        reason: "unverified_threshold",
+        detail: `${cleanTopic(issue.title)} remains unresolved against a verified code threshold. It matters because the number on this sheet is not itself a violation. Look at the dimension note on this sheet and the code edition selected for the run.`,
         provenance,
       };
     }
+  }
+
+  const missingQuestion = finalizeMissingQuestion(issue, ctx);
+  if (missingQuestion) {
+    return { ...missingQuestion, provenance: { ...provenance, ...(missingQuestion.provenance || {}) } };
   }
 
   return {
@@ -433,6 +497,25 @@ function applyDecision(issue, decision) {
       provenance: decision.provenance,
       diagnostics: originalDiagnostics(issue),
       userVisible: false,
+    };
+  }
+  if (decision.disposition === "retain_limitation" || decision.disposition === "accept_question") {
+    const topic = cleanTopic(issue.title);
+    return {
+      ...issue,
+      validationDisposition: decision.disposition === "retain_limitation" ? "limitation" : "accept",
+      validationReason: decision.reason,
+      validationDetail: decision.detail,
+      provenance: { ...decision.provenance, codeSourceStatus },
+      codeSourceStatus,
+      diagnostics: originalDiagnostics(issue),
+      title: decision.disposition === "accept_question" ? issue.title : `${topic} — verification required`,
+      description: decision.detail,
+      findingType: issue.findingType === "unverified" ? "unverified" : "missing_information",
+      evidenceTier: "verification",
+      severity: "advisory",
+      measurableEvidence: false,
+      userVisible: true,
     };
   }
   if (decision.disposition === "downgrade") {

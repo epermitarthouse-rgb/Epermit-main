@@ -164,33 +164,65 @@ function missingTable(error) {
   return /does not exist|schema cache|42P01|PGRST205|PGRST204|Could not find the table/i.test(message);
 }
 
-function createSupabaseDrawingStore(supabase) {
+function persistenceRequested() {
+  return String(process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST || "").trim() === "1";
+}
+
+function reportPersistenceFailure(logger, result) {
+  const log = logger || console.error;
+  log("[code-analyzer-worker] drawing RAG persistence failed", {
+    reason: result.reason || "write_failed",
+    code: result.code || null,
+    message: result.message ? String(result.message).slice(0, 300) : null,
+  });
+}
+
+function createSupabaseDrawingStore(supabase, options = {}) {
+  const logger = options.logger;
+  const state = { lastFailure: null };
   let available;
+  let probeFailure = null;
   async function probe() {
     if (available !== undefined) return available;
     try {
       const { error } = await supabase.from(TABLE).select("id").limit(0);
-      available = !error || !missingTable(error) ? !error : false;
-      if (error && !missingTable(error)) available = false;
-    } catch {
+      if (!error) {
+        available = true;
+        return true;
+      }
       available = false;
+      probeFailure = missingTable(error)
+        ? { reason: "table_unavailable", code: error.code || null, message: error.message || null }
+        : { reason: "probe_failed", code: error.code || null, message: error.message || null };
+    } catch (err) {
+      available = false;
+      probeFailure = { reason: "probe_failed", code: err?.code || null, message: err instanceof Error ? err.message : String(err) };
     }
+    state.lastFailure = probeFailure;
     return available;
+  }
+  function failed(result) {
+    const outcome = { persisted: false, liveSupabase: false, reported: true, ...result };
+    reportPersistenceFailure(logger, outcome);
+    return outcome;
   }
   return {
     kind: "supabase",
+    get lastFailure() {
+      return state.lastFailure;
+    },
     rowToRecord,
     async probe() {
       return probe();
     },
     async upsertRecords(records) {
-      if (!(await probe())) return { persisted: false, reason: "table_unavailable", liveSupabase: false };
+      if (!(await probe())) return failed(probeFailure || { reason: "table_unavailable" });
       const rows = (records || []).filter((record) => record?.projectId).map(recordToRow);
       if (!rows.length) return { persisted: false, reason: "empty" };
       const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: "project_id,chunk_key" });
       if (error) {
-        if (missingTable(error)) return { persisted: false, reason: "table_unavailable", liveSupabase: false };
-        throw error;
+        if (missingTable(error)) return failed({ reason: "table_unavailable", code: error.code || null, message: error.message || null });
+        return failed({ reason: "write_failed", code: error.code || null, message: error.message || null });
       }
       for (const row of rows) {
         if (!row.revision) continue;
@@ -217,6 +249,7 @@ function createSupabaseDrawingStore(supabase) {
         .eq("superseded", false);
       if (error) {
         if (missingTable(error)) return [];
+        reportPersistenceFailure(logger, { reason: "read_failed", code: error.code || null, message: error.message || null });
         throw error;
       }
       return data || [];
@@ -229,8 +262,8 @@ function createSupabaseDrawingStore(supabase) {
  * A missing table does not fail the review.
  * @param {{ from: Function }} supabase
  */
-function createGuardedDrawingStore(supabase) {
-  if (process.env.CODE_ANALYZER_DRAWING_RAG_PERSIST !== "1") {
+function createGuardedDrawingStore(supabase, options = {}) {
+  if (!persistenceRequested()) {
     return {
       kind: "disabled",
       available: false,
@@ -243,7 +276,7 @@ function createGuardedDrawingStore(supabase) {
       },
     };
   }
-  return createSupabaseDrawingStore(supabase);
+  return createSupabaseDrawingStore(supabase, options);
 }
 
 module.exports = {
@@ -251,6 +284,7 @@ module.exports = {
   createMemoryDrawingStore,
   createSupabaseDrawingStore,
   createGuardedDrawingStore,
+  persistenceRequested,
   recordToRow,
   rowToRecord,
   chunkKey,

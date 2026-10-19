@@ -9,6 +9,7 @@ const { processIngestionJob } = require("./lib/processIngestionJob");
 const { claimSheetJob } = require("./lib/sheetClaim");
 const { processSheetJob, SHEET_CONCURRENCY } = require("./lib/processSheetJob");
 const { claimCodeModJob, processCodeModJob } = require("./lib/processCodeModJob");
+const { persistenceRequested } = require("./lib/drawingRagStore");
 
 const POLL_MS = Number(process.env.CODE_ANALYZER_POLL_INTERVAL_MS) || 3000;
 const INGESTION_CONCURRENCY = Math.max(1, Number(process.env.CODE_ANALYZER_CONCURRENCY) || 2);
@@ -150,6 +151,7 @@ async function main() {
     ingestionConcurrency: INGESTION_CONCURRENCY,
     sheetConcurrency: SHEET_CONCURRENCY,
     version: WORKER_VERSION,
+    drawingRagPersist: persistenceRequested(),
   });
 
   // eslint-disable-next-line no-constant-condition

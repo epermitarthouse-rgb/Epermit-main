@@ -86,6 +86,8 @@ function verifierRecords(index) {
  *   specChunks?: Array<Record<string, unknown>>;
  *   jurisdictionScope?: Record<string, unknown> | null;
  *   analysisInstructions?: string | null;
+ *   projectType?: string | null;
+ *   codeYear?: string | null;
  *   renderRegions?: boolean;
  * }} input
  */
@@ -132,6 +134,8 @@ async function prepareEvidenceForSheet(input) {
     specChunks: input.specChunks,
     jurisdictionScope: input.jurisdictionScope,
     analysisInstructions: input.analysisInstructions,
+    projectType: input.projectType || null,
+    codeYear: input.codeYear || null,
     revision: input.sheet?.revision || null,
   });
 
@@ -185,7 +189,10 @@ async function rehydrateDrawingIndex(runId, projectId, store) {
   try {
     rows = await store.listActive(projectId);
   } catch {
-    return { rehydrated: 0, error: true };
+    return { rehydrated: 0, error: true, reason: "read_failed" };
+  }
+  if (store.lastFailure) {
+    return { rehydrated: 0, error: true, reason: store.lastFailure.reason || "read_failed" };
   }
   const index = evidenceIndexForRun(runId);
   for (const row of rows || []) index.upsert(store.rowToRecord ? store.rowToRecord(row) : row);
@@ -194,11 +201,25 @@ async function rehydrateDrawingIndex(runId, projectId, store) {
 }
 
 async function persistDrawingRecord(store, record) {
-  if (!store || store.available === false || !record?.projectId) return { persisted: false, reason: "disabled" };
+  if (!store || store.kind === "disabled" || store.available === false || !record?.projectId) {
+    return { persisted: false, reason: store?.kind === "disabled" || store?.available === false ? "disabled" : "no_project" };
+  }
   try {
     return await store.upsertRecords([record]);
-  } catch {
-    return { persisted: false, reason: "write_failed" };
+  } catch (err) {
+    const result = {
+      persisted: false,
+      reason: "write_failed",
+      reported: true,
+      code: err?.code || null,
+      message: err instanceof Error ? err.message : String(err),
+    };
+    console.error("[code-analyzer-worker] drawing RAG persistence failed", {
+      reason: result.reason,
+      code: result.code,
+      message: result.message ? String(result.message).slice(0, 300) : null,
+    });
+    return result;
   }
 }
 
