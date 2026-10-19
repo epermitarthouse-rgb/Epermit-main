@@ -1,7 +1,22 @@
 "use strict";
 
-const bundledEditions = require("../../../../../shared/code-registry/jurisdiction-editions.json");
-const bundledProvisions = require("../../../../../shared/code-registry/authoritative-provisions.json");
+const fs = require("fs");
+const path = require("path");
+
+function readBundledRegistry(filename) {
+  const candidates = [
+    path.join(__dirname, "../../../../../shared/code-registry", filename),
+    path.join(__dirname, "bundled-registry", filename),
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!found) {
+    throw new Error(`Authoritative code registry file is missing: ${filename}`);
+  }
+  return JSON.parse(fs.readFileSync(found, "utf8"));
+}
+
+const bundledEditions = readBundledRegistry("jurisdiction-editions.json");
+const bundledProvisions = readBundledRegistry("authoritative-provisions.json");
 
 const VERIFIED = "verified";
 const REFERENCE_ONLY = "reference_only";

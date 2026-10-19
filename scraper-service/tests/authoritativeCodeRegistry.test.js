@@ -326,3 +326,18 @@ describe("confirmed-violation gate", () => {
     }
   });
 });
+
+describe("scraper image registry bundle", () => {
+  it("matches the canonical shared registry files included in the Docker context", () => {
+    const fs = require("fs");
+    const path = require("path");
+    for (const filename of ["jurisdiction-editions.json", "authoritative-provisions.json"]) {
+      const canonical = fs.readFileSync(path.join(__dirname, "../../shared/code-registry", filename), "utf8");
+      const bundled = fs.readFileSync(
+        path.join(__dirname, "../app/services/compliance/rag/bundled-registry", filename),
+        "utf8",
+      );
+      assert.deepEqual(JSON.parse(bundled), JSON.parse(canonical));
+    }
+  });
+});
