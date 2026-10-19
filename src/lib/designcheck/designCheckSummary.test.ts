@@ -25,6 +25,21 @@ describe("designCheckSummary helpers", () => {
       recomputeOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0, reviewState: "passed" }),
       100,
     );
+    assert.equal(
+      recomputeOverallScore({ critical: 0, warnings: 0, advisory: 0, totalIssues: 0, reviewState: "reviewed_clear" }),
+      null,
+    );
+    assert.equal(
+      recomputeOverallScore({
+        critical: 0,
+        warnings: 0,
+        advisory: 0,
+        totalIssues: 0,
+        reviewState: "reviewed_clear",
+        codeCoverageVerified: true,
+      }),
+      100,
+    );
     assert.equal(recomputeOverallScore({ critical: 2, warnings: 1, advisory: 1, totalIssues: 4 }), 63);
     assert.equal(recomputeOverallScore({ critical: 10, warnings: 0, advisory: 0, totalIssues: 10 }), 0);
   });

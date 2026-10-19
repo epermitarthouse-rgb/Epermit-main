@@ -2,7 +2,13 @@
 
 const { createDrawingIndex } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
 const { prepareSheetReview } = require("../../scraper-service/app/services/compliance/review/orchestrate.js");
-const { comprehendPdfPage, rankRegionsForQuestions, renderCropsFromFile } = require("./comprehension.js");
+const {
+  comprehendPdfPage,
+  rankRegionsForQuestions,
+  questionLineRegions,
+  visualFallbackRegions,
+  renderCropsFromFile,
+} = require("./comprehension.js");
 const { createGuardedDrawingStore } = require("./drawingRagStore.js");
 
 /** @type {Map<string, ReturnType<createDrawingIndex>>} */
@@ -129,7 +135,18 @@ async function prepareEvidenceForSheet(input) {
     revision: input.sheet?.revision || null,
   });
 
-  const selection = rankRegionsForQuestions(regions, { questions: prepared.questions });
+  let selection = rankRegionsForQuestions(regions, { questions: prepared.questions });
+  if (!selection.regions.length && prepared.questions?.length) {
+    const lines = questionLineRegions(items, prepared.questions);
+    if (lines.length) {
+      selection = { regions: lines, limitation: null };
+    } else if (pageMeta.pageWidth > 0 && pageMeta.pageHeight > 0) {
+      selection = {
+        regions: visualFallbackRegions(pageMeta.pageWidth, pageMeta.pageHeight, prepared.questions),
+        limitation: "question_visual_fallback_unreadable",
+      };
+    }
+  }
   const pageNumber = input.sheet?.page_number || input.sheet?.pageNumber || 1;
   if (input.renderRegions && input.pdfPath && selection.regions.length) {
     try {
@@ -144,7 +161,10 @@ async function prepareEvidenceForSheet(input) {
     regionImages = [];
   }
   if (selection.limitation && prepared.promptBlock) {
-    prepared.promptBlock = `${prepared.promptBlock}\n\nCROP LIMITATION: ${selection.limitation}. The full sheet is still attached. No crop was confident enough for the active questions.`.slice(0, 6000);
+    const note = selection.limitation === "question_visual_fallback_unreadable"
+      ? "CROP LIMITATION: question_visual_fallback_unreadable. An interior crop was attached with no invented quote. The full sheet is still attached."
+      : `CROP LIMITATION: ${selection.limitation}. The full sheet is still attached. No crop was confident enough for the active questions.`;
+    prepared.promptBlock = `${prepared.promptBlock}\n\n${note}`.slice(0, 6000);
   }
 
   return {

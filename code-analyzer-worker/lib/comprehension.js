@@ -392,6 +392,114 @@ function rankRegionsForQuestions(regions, context = {}) {
   };
 }
 
+function questionIds(questions) {
+  return (Array.isArray(questions) ? questions : [])
+    .map((question) => (typeof question === "string" ? question : question?.id))
+    .filter(Boolean);
+}
+
+function unionBox(items) {
+  const boxes = items.map((item) => item.region);
+  const x = Math.min(...boxes.map((box) => box.x));
+  const y = Math.min(...boxes.map((box) => box.y));
+  const right = Math.max(...boxes.map((box) => box.x + box.width));
+  const top = Math.max(...boxes.map((box) => box.y + box.height));
+  const sample = boxes[0];
+  return {
+    x,
+    y,
+    width: right - x,
+    height: top - y,
+    pageWidth: sample.pageWidth,
+    pageHeight: sample.pageHeight,
+    unit: "pdf-point",
+    origin: "bottom-left",
+  };
+}
+
+/**
+ * Join nearby positioned text items into lines and keep a line that matches the question.
+ * Title-block, address, and scale lines are skipped unless the question cue is in that line.
+ * @param {Array<Record<string, unknown>>} items
+ * @param {Array<string | { id?: string }>} questions
+ */
+function questionLineRegions(items, questions) {
+  const cues = QUESTION_CUES.filter((cue) => questionIds(questions).includes(cue.id));
+  if (!cues.length) return [];
+  const positioned = [];
+  for (const item of items || []) {
+    const text = String(item.str || item.quote || "").trim();
+    if (!text || !item.region || !(item.region.width > 0) || !(item.region.height > 0)) continue;
+    positioned.push({ text, region: item.region });
+  }
+  positioned.sort((a, b) => b.region.y - a.region.y || a.region.x - b.region.x);
+  const lines = [];
+  for (const item of positioned) {
+    const line = lines.find((existing) => Math.abs(existing.y - item.region.y) <= 8 && item.region.x <= existing.maxX + 40);
+    if (!line) {
+      lines.push({ y: item.region.y, maxX: item.region.x + item.region.width, items: [item] });
+      continue;
+    }
+    line.items.push(item);
+    line.maxX = Math.max(line.maxX, item.region.x + item.region.width);
+    line.y = (line.y + item.region.y) / 2;
+  }
+  const regions = [];
+  for (const line of lines) {
+    line.items.sort((a, b) => a.region.x - b.region.x);
+    const quote = line.items.map((item) => item.text).join(" ");
+    const matched = cues.filter((cue) => cue.quote.test(quote)).map((cue) => cue.id);
+    if (!matched.length || boilerplateKind(quote)) continue;
+    regions.push({
+      ...unionBox(line.items),
+      quote: quote.slice(0, 180),
+      reason: "note",
+      readable: true,
+      matchedQuestions: matched,
+      boilerplate: null,
+      extractionMethod: "pdfjs-text-line",
+      source: "question-line",
+      limitations: null,
+    });
+  }
+  regions.sort((a, b) => String(b.quote || "").length - String(a.quote || "").length);
+  return regions.slice(0, MAX_REGION_IMAGES);
+}
+
+/**
+ * Interior bands from the original page when no positioned line covers the question.
+ * The right and bottom title-block edges are left out. No quote is invented.
+ * @param {number} pageWidth
+ * @param {number} pageHeight
+ * @param {Array<string | { id?: string }>} questions
+ */
+function visualFallbackRegions(pageWidth, pageHeight, questions) {
+  const ids = questionIds(questions);
+  if (!ids.length || !(pageWidth > 0) || !(pageHeight > 0)) return [];
+  const bands = [
+    { x: pageWidth * 0.08, y: pageHeight * 0.48, width: pageWidth * 0.5, height: pageHeight * 0.12 },
+    { x: pageWidth * 0.08, y: pageHeight * 0.28, width: pageWidth * 0.5, height: pageHeight * 0.12 },
+  ];
+  return bands.map((band) => ({
+    x: band.x,
+    y: band.y,
+    width: band.width,
+    height: band.height,
+    pageWidth,
+    pageHeight,
+    unit: "pdf-point",
+    origin: "bottom-left",
+    quote: null,
+    reason: "question-fallback",
+    readable: false,
+    matchedQuestions: ids,
+    boilerplate: null,
+    extractionMethod: "question-visual-fallback",
+    source: "original-pdf",
+    limitations: "region_unreadable",
+  }));
+}
+
 async function renderRegionCrops(page, regions) {
   const crops = [];
   for (const region of regions) {
@@ -575,6 +683,8 @@ module.exports = {
   boxFromTextItem,
   selectInspectionRegions,
   rankRegionsForQuestions,
+  questionLineRegions,
+  visualFallbackRegions,
   boilerplateKind,
   comprehendPdfPage,
   renderCropsFromFile,

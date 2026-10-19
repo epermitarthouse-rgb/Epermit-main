@@ -43,6 +43,7 @@ function hydrateStoredReviewState(state) {
  *   confirmedCount: number;
  *   openQuestionCount: number;
  *   evidenceBacked: boolean;
+ *   codeCoverageVerified?: boolean;
  * }} input
  */
 function resolveReviewState(input) {
@@ -56,8 +57,11 @@ function resolveReviewState(input) {
   if (input.confirmedCount > 0) {
     return { reviewState: REVIEW_STATES.reviewedFindings, overallScore: null, scored: true };
   }
-  if (input.evidenceBacked && input.openQuestionCount === 0) {
+  if (input.evidenceBacked && input.openQuestionCount === 0 && input.codeCoverageVerified) {
     return { reviewState: REVIEW_STATES.reviewedClear, overallScore: 100, scored: true };
+  }
+  if (input.evidenceBacked && input.openQuestionCount === 0) {
+    return { reviewState: REVIEW_STATES.reviewedClear, overallScore: null, scored: false };
   }
   return { reviewState: REVIEW_STATES.reviewedPartial, overallScore: null, scored: false };
 }

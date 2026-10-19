@@ -176,7 +176,29 @@ describe("empty review is not a pass", () => {
       { pageText: '44" clear labeled at grid B\nshown on sheet A-1.01' },
     );
     assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.overallScore, null);
+    assert.notEqual(hardened.summary.codeCoverageVerified, true);
+  });
+
+  it("scores 100 only when sheet quotes and authoritative code cover the checks", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [],
+        checklist: [
+          { item: "Corridor width", result: '44" clear labeled at grid B' },
+        ],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        pageText: '44" clear labeled at grid B',
+        authoritativeCode: [{ authoritative: true, text: "Section 1020.2 minimum corridor width is 44 inches." }],
+      },
+    );
+    assert.equal(hardened.summary.reviewState, "reviewed_clear");
     assert.equal(hardened.summary.overallScore, 100);
+    assert.equal(hardened.summary.codeCoverageVerified, true);
   });
 
   it("does not keep overallScore 100 when any issue remains", () => {
@@ -430,6 +452,59 @@ describe("page text drops missing-information notes that the sheet already state
     assert.equal(hardened.issues[0].findingType, "confirmed_violation");
     assert.equal(hardened.issues[0].codeSourceStatus, "authoritative");
   });
+
+  it("rejects a design provision the sheet already states instead of confirming it", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            title: "Emergency Lighting Installation and Compliance",
+            description: "The sheet indicates that emergency lighting must comply with NFPA 101 for maintaining 1 foot-candle in the path of egress.",
+            severity: "advisory",
+            findingType: "confirmed_violation",
+            codeReference: "NFPA 101",
+            measurableEvidence: true,
+            evidenceTier: "drawing",
+          },
+        ],
+        checklist: [
+          {
+            item: "Emergency lighting",
+            result: "Designed per NFPA 101",
+            evidence: "EMERGENCY LIGHTING HAS BEEN DESIGNED PER NFPA 101 TO MAINTAIN 1 FOOT-CANDLE",
+          },
+        ],
+        summary: { overallScore: 85 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        sheetTitle: "Lighting plan",
+        fileName: "lighting.pdf",
+        pageText: "EMERGENCY LIGHTING HAS BEEN DESIGNED PER NFPA 101 TO MAINTAIN 1 FOOT-CANDLE IN PATH OF EGRESS",
+      },
+    );
+    assert.equal(hardened.issues.filter((issue) => issue.findingType === "confirmed_violation").length, 0);
+    assert.equal(hardened.rejectedCandidates[0].validationReason, "documented_design_provision");
+    assert.notEqual(hardened.summary.overallScore, 100);
+  });
+
+  it("does not score 100 for plumbing evidence when no verified code text covers the check", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [],
+        checklist: [
+          { item: "Grease interceptor", result: "GREASE OUTPUT SELECT GREASE INTERCEPTOR", evidence: "GREASE OUTPUT SELECT GREASE INTERCEPTOR" },
+        ],
+        summary: { overallScore: 100 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { sheetTitle: "Plumbing details", fileName: "plumbing.pdf", pageText: "GREASE OUTPUT SELECT GREASE INTERCEPTOR. BACKFLOW PREVENTION SHALL COMPLY." },
+    );
+    assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.overallScore, null);
+  });
 });
 
 describe("schedule restatement and citation book", () => {
@@ -677,7 +752,7 @@ describe("content class does not discard a reviewed sheet", () => {
       { contentClass: "schedule", sheetTitle: "A-6.00.pdf", pageText: "Door 101 labeled HW-3" },
     );
     assert.equal(hardened.summary.reviewState, "reviewed_clear");
-    assert.equal(hardened.summary.overallScore, 100);
+    assert.equal(hardened.summary.overallScore, null);
   });
 });
 

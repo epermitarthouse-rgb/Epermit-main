@@ -32,6 +32,7 @@ export interface ComplianceBatchAnalysisResult {
     warnings: number;
     advisory: number;
     overallScore: number | null;
+    codeCoverageVerified?: boolean;
     reviewState?:
       | "not_reviewed"
       | "passed"
@@ -159,9 +160,12 @@ export function computeComplianceOverallScore(counts: {
     | "reviewed_partial"
     | "failed"
     | null;
+  codeCoverageVerified?: boolean;
 }): number | null {
   if (counts.totalIssues === 0) {
-    return counts.reviewState === "passed" || counts.reviewState === "reviewed_clear" ? 100 : null;
+    if (counts.reviewState === "passed") return 100;
+    if (counts.reviewState === "reviewed_clear" && counts.codeCoverageVerified) return 100;
+    return null;
   }
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
 }
@@ -233,15 +237,20 @@ export function normalizeComplianceAnalysisResult(
     advisory,
     checklist,
     reviewState,
+    codeCoverageVerified: sum?.codeCoverageVerified === true,
     overallScore:
       reviewState === "reviewed_partial" || reviewState === "failed" || reviewState === "not_reviewed"
         ? null
-        : reviewState === "reviewed_clear" || reviewState === "passed"
+        : reviewState === "passed"
           ? issues.length === 0
             ? 100
             : typeof sum?.overallScore === "number"
               ? sum.overallScore
               : recomputedScore
+          : reviewState === "reviewed_clear"
+          ? sum?.codeCoverageVerified === true && issues.length === 0
+            ? 100
+            : null
           : issues.length === 0
             ? recomputedScore
             : typeof sum?.overallScore === "number"

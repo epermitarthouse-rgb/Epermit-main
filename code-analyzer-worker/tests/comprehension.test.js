@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { boxFromTextItem, selectInspectionRegions, pdfBoxFromNormalized, shouldAttachRegionImages, rankRegionsForQuestions } = require("../lib/comprehension.js");
+const { boxFromTextItem, selectInspectionRegions, pdfBoxFromNormalized, shouldAttachRegionImages, rankRegionsForQuestions, questionLineRegions, visualFallbackRegions } = require("../lib/comprehension.js");
 
 describe("selective page regions", () => {
   it("keeps a real text-item box in PDF points and normalized page space", () => {
@@ -81,5 +81,35 @@ describe("question-driven crops", () => {
     const picked = rankRegionsForQuestions(regions.slice(0, 2), { questions: ["emergency-lighting"] });
     assert.equal(picked.regions.length, 0);
     assert.equal(picked.limitation, "crop_selection_unconfident");
+  });
+
+  it("builds a crop from split text items instead of the title block", () => {
+    const page = { pageWidth: 2000, pageHeight: 1400 };
+    const items = [
+      { str: "3700", region: { ...page, x: 1600, y: 40, width: 40, height: 8 } },
+      { str: "Street", region: { ...page, x: 1650, y: 40, width: 50, height: 8 } },
+      { str: 'SCALE: 1/4" = 1\'-0"', region: { ...page, x: 1600, y: 20, width: 80, height: 8 } },
+      { str: "EMERGENCY", region: { ...page, x: 200, y: 700, width: 70, height: 8 } },
+      { str: "LIGHTING", region: { ...page, x: 280, y: 700, width: 60, height: 8 } },
+      { str: "HAS BEEN DESIGNED PER NFPA 101", region: { ...page, x: 350, y: 702, width: 180, height: 8 } },
+    ];
+    const lines = questionLineRegions(items, ["emergency-lighting"]);
+    assert.equal(lines.length, 1);
+    assert.match(lines[0].quote, /EMERGENCY LIGHTING/);
+    assert.equal(lines[0].readable, true);
+    assert.ok(lines[0].x < 1000);
+    assert.equal(lines[0].quote.includes("Street"), false);
+  });
+
+  it("keeps an unreadable interior fallback out of the title-block corner", () => {
+    const boxes = visualFallbackRegions(2000, 1400, ["plumbing-details"]);
+    assert.equal(boxes.length, 2);
+    for (const box of boxes) {
+      assert.equal(box.quote, null);
+      assert.equal(box.readable, false);
+      assert.equal(box.limitations, "region_unreadable");
+      assert.ok(box.x + box.width < 2000 * 0.7);
+      assert.ok(box.y > 1400 * 0.2);
+    }
   });
 });

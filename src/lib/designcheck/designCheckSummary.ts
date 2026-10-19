@@ -32,6 +32,7 @@ export type DesignCheckSummaryCounts = {
   warnings: number;
   advisory: number;
   overallScore: number | null;
+  codeCoverageVerified?: boolean;
   reviewState?:
     | "not_reviewed"
     | "passed"
@@ -135,9 +136,12 @@ export function recomputeOverallScore(counts: {
     | "reviewed_partial"
     | "failed"
     | null;
+  codeCoverageVerified?: boolean;
 }): number | null {
   if (counts.totalIssues === 0) {
-    return counts.reviewState === "passed" || counts.reviewState === "reviewed_clear" ? 100 : null;
+    if (counts.reviewState === "passed") return 100;
+    if (counts.reviewState === "reviewed_clear" && counts.codeCoverageVerified) return 100;
+    return null;
   }
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
 }
@@ -210,6 +214,7 @@ export function buildDesignCheckSummary(
     | "reviewed_partial"
     | "failed"
     | null = null;
+  let codeCoverageVerified = false;
 
   for (const ann of annotations) {
     const d = (ann.data ?? {}) as DesignCheckAnnotationData;
@@ -237,6 +242,7 @@ export function buildDesignCheckSummary(
       };
       if (typeof state === "string" && rank[state] && (!metadataReviewState || rank[state] >= rank[metadataReviewState])) {
         metadataReviewState = state as typeof metadataReviewState;
+        codeCoverageVerified = d.summary?.codeCoverageVerified === true;
       }
       continue;
     }
@@ -277,7 +283,7 @@ export function buildDesignCheckSummary(
   const computed = summarizeFindings(findings);
   const overallScore =
     findings.length === 0
-      ? recomputeOverallScore({ ...computed, reviewState })
+      ? recomputeOverallScore({ ...computed, reviewState, codeCoverageVerified })
       : computed.overallScore;
 
   return {

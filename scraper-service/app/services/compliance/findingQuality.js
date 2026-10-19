@@ -739,6 +739,21 @@ function hardenIssueBundle(bundle, ctx) {
  * @param {number | undefined | null} overallScore
  * @param {unknown} checklist
  */
+function codeCoverageVerified(checklistItems, authoritativeCode) {
+  const chunks = (Array.isArray(authoritativeCode) ? authoritativeCode : []).filter(
+    (chunk) => chunk && chunk.authoritative === true && String(chunk.text || "").trim().length >= 12,
+  );
+  if (!chunks.length || !checklistItems.length) return false;
+  return checklistItems.every((item) => {
+    const words = String(item).toLowerCase().match(/[a-z][a-z0-9-]{4,}/g) || [];
+    if (!words.length) return false;
+    return chunks.some((chunk) => {
+      const text = String(chunk.text).toLowerCase();
+      return words.some((word) => text.includes(word));
+    });
+  });
+}
+
 function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
   const stored = issues || [];
   const corpus = sheetEvidenceText(options.corpusCtx || {}).toLowerCase().replace(/\s+/g, " ");
@@ -761,11 +776,13 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
   const computed = Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
   const backedItems = corpus ? passItems.filter(quoteBacked) : [];
   const evidenceBacked = passItems.length > 0 && backedItems.length === passItems.length;
+  const coverageVerified = evidenceBacked && codeCoverageVerified(backedItems, options.corpusCtx?.authoritativeCode);
   const decision = resolveReviewState({
     callStatus: options.callStatus || "completed",
     confirmedCount: confirmed.length,
     openQuestionCount: openQuestions.length,
     evidenceBacked,
+    codeCoverageVerified: coverageVerified,
   });
   let score = decision.overallScore;
   if (decision.reviewState === "reviewed_findings") {
@@ -786,6 +803,7 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     cleanChecks: evidenceBacked ? passItems : [],
     reviewState: decision.reviewState,
     overallScore: score,
+    codeCoverageVerified: coverageVerified,
   };
 }
 

@@ -72,6 +72,63 @@ function isExitSign(issue) {
   return /\bexit\s*signs?\b/i.test(claimText(issue));
 }
 
+const PROVISION_RE = /\b(shall|must|required|designed|comply|compliance|maintain|provide[sd]?|in accordance)\b/i;
+const DEFICIENCY_RE =
+  /\b(does not meet|do not meet|non-?compliant|insufficient|too narrow|below minimum|not shown|not provided|not indicated|not labeled|missing|fails to|narrower than|less than)\b/i;
+const PROVISION_STOP = new Set([
+  "this", "that", "with", "from", "have", "been", "sheet", "indicate", "indicates", "indicated",
+  "required", "requirement", "compliance", "comply", "design", "designed", "provide", "provided",
+  "maintain", "maintaining", "section", "code", "note", "notes", "which", "shall", "must", "will",
+  "only", "also", "into", "over", "under", "than", "then", "them", "they", "their", "there",
+  "where", "when", "what", "your", "about", "after", "before", "while", "specific",
+]);
+
+function distinctiveTokens(text) {
+  return [...new Set((String(text || "").toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) || []).filter((token) => !PROVISION_STOP.has(token) && token.length >= 4))];
+}
+
+function tokenInWindow(window, token) {
+  if (window.includes(token)) return true;
+  const stem = token.endsWith("s") ? token.slice(0, -1) : token;
+  return stem.length >= 4 && (window.includes(stem) || window.includes(`${stem}s`));
+}
+
+/**
+ * The sheet already states this requirement in its own note.
+ * A paraphrased "shall / designed / comply" sentence is not a deficiency.
+ */
+function isDocumentedProvision(issue, corpus) {
+  const claim = claimText(issue);
+  const element = elementClaim(issue);
+  const tokens = measureTokens(claim);
+  const linked = Boolean(element && tokens.some((token) => linkedSpan(corpus, element.re, token)));
+  if (/\b(not shown|not provided|not indicated|not labeled|missing|fails to)\b/i.test(claim)) return false;
+  if (DEFICIENCY_RE.test(claim) && linked) return false;
+  const words = distinctiveTokens(claim);
+  if (words.length < 2) return false;
+  const hay = String(corpus || "").toLowerCase();
+  if (!hay || (!PROVISION_RE.test(claim) && !PROVISION_RE.test(hay))) return false;
+  let best = 0;
+  let bestWindow = "";
+  for (const word of words) {
+    const stem = word.endsWith("s") ? word.slice(0, -1) : word;
+    let from = 0;
+    while (from < hay.length) {
+      const at = hay.indexOf(stem, from);
+      if (at < 0) break;
+      const window = hay.slice(Math.max(0, at - 90), at + stem.length + 120);
+      const hits = words.filter((token) => tokenInWindow(window, token)).length;
+      if (hits > best) {
+        best = hits;
+        bestWindow = window;
+      }
+      from = at + stem.length;
+    }
+  }
+  if (best < 2 || !PROVISION_RE.test(bestWindow)) return false;
+  return PROVISION_RE.test(claim) || PROVISION_RE.test(bestWindow);
+}
+
 function isRestatement(issue, corpus) {
   const claim = claimText(issue);
   const traced = traceMeasures(issue, corpus);
@@ -225,6 +282,15 @@ function decideCandidate(issue, ctx) {
     };
   }
 
+  if (isDocumentedProvision(issue, corpus)) {
+    return {
+      disposition: "reject",
+      reason: "documented_design_provision",
+      detail: "The sheet already states this design provision. That note is not a deficiency and it is not a violation.",
+      provenance,
+    };
+  }
+
   if (isRestatement(issue, corpus)) {
     return {
       disposition: "reject",
@@ -323,6 +389,19 @@ function decideCandidate(issue, ctx) {
     }
   }
 
+  const wantsConfirmation = String(issue.findingType || "") === "confirmed_violation" || assertsDefect;
+  if (wantsConfirmation) {
+    const linked = Boolean(element && tokens.some((token) => linkedSpan(corpus, element.re, token)));
+    if (!linked || !authoritative) {
+      return {
+        disposition: "downgrade",
+        reason: !linked ? "unsupported_confirmed_finding" : "unverified_threshold",
+        detail: "A confirmed violation needs a deficiency tied to the element and authoritative code text for the threshold.",
+        provenance,
+      };
+    }
+  }
+
   return {
     disposition: "accept",
     reason: "evidence_chain",
@@ -395,4 +474,5 @@ module.exports = {
   corpusHasToken,
   linkedSpan,
   cleanTopic,
+  isDocumentedProvision,
 };

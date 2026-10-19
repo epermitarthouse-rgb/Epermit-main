@@ -57,7 +57,8 @@ function resultLooksNonCompliant(result: ComplianceScoreGroupRef["ibcResult"]): 
   if (result.summary?.reviewState === "not_reviewed") return true;
   if (result.summary?.reviewState === "reviewed_partial") return true;
   if (result.summary?.reviewState === "failed") return true;
-  if (result.summary?.reviewState === "passed" || result.summary?.reviewState === "reviewed_clear") return false;
+  if (result.summary?.reviewState === "passed") return false;
+  if (result.summary?.reviewState === "reviewed_clear") return result.summary?.overallScore !== 100;
   const score = result.summary?.overallScore;
   if (typeof score === "number" && score < 100) return true;
   const total = result.summary?.totalIssues;

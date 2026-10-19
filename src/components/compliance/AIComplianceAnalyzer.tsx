@@ -1151,15 +1151,17 @@ export function AIComplianceAnalyzer() {
           const stored = meta?.summary?.reviewState;
           const checklist = Array.isArray(meta?.summary?.checklist) ? meta.summary.checklist : [];
           if (stored === "reviewed_clear") {
+            const verified = meta?.summary?.codeCoverageVerified === true && meta?.summary?.overallScore === 100;
             return {
               totalIssues: 0,
               critical: 0,
               warnings: 0,
               advisory: 0,
-              overallScore: 100,
+              overallScore: verified ? 100 : null,
               reviewState: "reviewed_clear",
               checklist,
               cleanChecks: meta?.summary?.cleanChecks,
+              codeCoverageVerified: meta?.summary?.codeCoverageVerified === true,
             };
           }
           if (stored === "reviewed_partial" || stored === "failed" || stored === "reviewed_findings") {
