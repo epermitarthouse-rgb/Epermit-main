@@ -51,7 +51,11 @@ function prepareSheetReview(input) {
     contentClass: input.contentClass || null,
     regions: input.regions || [],
     observations,
-    extractionMethod: input.items?.length ? "pdfjs-text-layer" : "pdf-text",
+    extractionMethod: input.items?.some((item) => /vision|ocr|tesseract/.test(String(item.extractionMethod || "")))
+      ? "pdfjs-text-layer+ocr-crop"
+      : input.items?.length
+        ? "pdfjs-text-layer"
+        : "pdf-text",
   };
   index.upsert(record);
 
@@ -89,10 +93,15 @@ function prepareSheetReview(input) {
     retrieval.promptEvidence
       ? `RETRIEVED EVIDENCE (quotes from other sheets, code policy, or specs; a hit is not proof the requirement is satisfied):\n${retrieval.promptEvidence}`
       : "",
+    "CODE LIMITATION: no verified code section text is available. Review policy is not a citation and cannot confirm compliance.",
     observations.length
       ? `STRUCTURED OBSERVATIONS FROM THIS SHEET:\n${observations
           .slice(0, 24)
-          .map((item) => `- ${item.element}: ${item.quote}`)
+          .map((item) =>
+            item.quote
+              ? `- ${item.element}: ${item.quote}`
+              : `- ${item.element}: unreadable region${item.limitations ? ` (${item.limitations})` : ""}`,
+          )
           .join("\n")}`
       : "",
   ].filter(Boolean);

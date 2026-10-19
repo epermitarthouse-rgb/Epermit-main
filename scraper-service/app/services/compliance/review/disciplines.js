@@ -77,7 +77,7 @@ const QUESTIONS = [
   {
     id: "fire-rated-partition",
     disciplines: ["architectural", "fire_protection"],
-    topics: ["fire rating", "partition", "wall type", "legend", "1 hr", "1-hour"],
+    topics: ["fire rating", "partition", "wall type", "legend", "1 hr", "1-hour", "one hour", "1h"],
     identifiers: [],
   },
   {

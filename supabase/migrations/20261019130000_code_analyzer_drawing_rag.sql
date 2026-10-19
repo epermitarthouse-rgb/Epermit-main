@@ -1,8 +1,8 @@
--- Proposed, not applied.
--- Drawing evidence index for Code Analyzer hybrid retrieval, plus a nullable
--- annotation review_status for a later accept/reject/correct control.
--- Rollback: drop the function and table, then drop document_annotations.review_status.
--- Do not supabase db push this file with the rest of the backlog.
+-- Proposed, not applied. Do not supabase db push this file with the backlog.
+-- Project-scoped drawing evidence for hybrid retrieval.
+-- Stores text, observations, identifiers, and PDF region coordinates.
+-- Does not store raster bytes. Embeddings are optional.
+-- Rollback: drop the function, drop the table, then drop document_annotations.review_status.
 
 CREATE TABLE IF NOT EXISTS public.code_analyzer_drawing_chunks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -14,28 +14,58 @@ CREATE TABLE IF NOT EXISTS public.code_analyzer_drawing_chunks (
   sheet_title TEXT,
   discipline TEXT,
   revision TEXT,
+  content_class TEXT,
   page_number INTEGER NOT NULL DEFAULT 1 CHECK (page_number >= 1),
+  chunk_key TEXT NOT NULL,
   content_fingerprint TEXT NOT NULL DEFAULT '',
-  chunk_text TEXT NOT NULL,
+  chunk_text TEXT NOT NULL CHECK (octet_length(chunk_text) <= 24000),
   source_type TEXT NOT NULL DEFAULT 'drawing',
   extraction_method TEXT NOT NULL DEFAULT 'pdfjs-text-layer',
+  observations JSONB NOT NULL DEFAULT '[]'::jsonb,
+  identifiers TEXT[] NOT NULL DEFAULT '{}',
+  cross_sheet_refs TEXT[] NOT NULL DEFAULT '{}',
   region JSONB,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   embedding vector(1536),
+  superseded BOOLEAN NOT NULL DEFAULT false,
+  superseded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT code_analyzer_drawing_chunks_unique
-    UNIQUE (project_id, document_id, sheet_id, page_number, content_fingerprint)
+  CONSTRAINT code_analyzer_drawing_chunks_key UNIQUE (project_id, chunk_key),
+  CONSTRAINT code_analyzer_drawing_chunks_observations_array
+    CHECK (jsonb_typeof(observations) = 'array'),
+  CONSTRAINT code_analyzer_drawing_chunks_no_raster CHECK (
+    (region IS NULL OR (
+      jsonb_typeof(region) = 'object'
+      AND NOT (region ? 'imageBase64')
+      AND NOT (region ? 'image')
+    ))
+    AND NOT (metadata ? 'imageBase64')
+    AND NOT (metadata ? 'image')
+  )
 );
 
-CREATE INDEX IF NOT EXISTS idx_code_analyzer_drawing_chunks_project
-  ON public.code_analyzer_drawing_chunks (project_id, document_id, page_number);
+COMMENT ON TABLE public.code_analyzer_drawing_chunks IS
+  'Drawing evidence chunks. Coordinates and text only. No PDF image bytes. Embedding may be null.';
+
+CREATE INDEX IF NOT EXISTS idx_code_analyzer_drawing_chunks_active
+  ON public.code_analyzer_drawing_chunks (project_id, document_id, page_number)
+  WHERE superseded = false;
 
 CREATE INDEX IF NOT EXISTS idx_code_analyzer_drawing_chunks_sheet_number
-  ON public.code_analyzer_drawing_chunks (project_id, sheet_number);
+  ON public.code_analyzer_drawing_chunks (project_id, sheet_number)
+  WHERE superseded = false;
 
--- An ANN index can be added after the table has rows. It is omitted here so an
--- empty table does not fail index build. Exact sheet numbers use the btree above.
+CREATE INDEX IF NOT EXISTS idx_code_analyzer_drawing_chunks_identifiers
+  ON public.code_analyzer_drawing_chunks USING gin (identifiers)
+  WHERE superseded = false;
+
+CREATE INDEX IF NOT EXISTS idx_code_analyzer_drawing_chunks_refs
+  ON public.code_analyzer_drawing_chunks USING gin (cross_sheet_refs)
+  WHERE superseded = false;
+
+-- An ANN index can be added after rows exist. Exact identifiers do not need it.
+-- CREATE INDEX ... USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50) WHERE embedding IS NOT NULL AND superseded = false;
 
 ALTER TABLE public.code_analyzer_drawing_chunks ENABLE ROW LEVEL SECURITY;
 
@@ -57,12 +87,19 @@ CREATE TRIGGER update_code_analyzer_drawing_chunks_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
+REVOKE ALL ON public.code_analyzer_drawing_chunks FROM PUBLIC, anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.code_analyzer_drawing_chunks TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.code_analyzer_drawing_chunks TO service_role;
+
 CREATE OR REPLACE FUNCTION public.match_analyzer_drawing_chunks(
   p_project_id UUID,
   p_query_embedding vector(1536) DEFAULT NULL,
   p_identifiers TEXT[] DEFAULT NULL,
   p_discipline TEXT DEFAULT NULL,
-  p_match_count INT DEFAULT 8
+  p_match_count INT DEFAULT 8,
+  p_revision TEXT DEFAULT NULL,
+  p_document_ids UUID[] DEFAULT NULL,
+  p_content_class TEXT DEFAULT NULL
 )
 RETURNS TABLE (
   id UUID,
@@ -75,7 +112,9 @@ RETURNS TABLE (
   region JSONB,
   discipline TEXT,
   revision TEXT,
+  content_class TEXT,
   extraction_method TEXT,
+  observations JSONB,
   similarity FLOAT
 )
 LANGUAGE plpgsql
@@ -102,26 +141,60 @@ BEGIN
     c.region,
     c.discipline,
     c.revision,
+    c.content_class,
     c.extraction_method,
+    c.observations,
     CASE
-      WHEN p_query_embedding IS NULL OR c.embedding IS NULL THEN 0
+      WHEN p_query_embedding IS NULL OR c.embedding IS NULL THEN 0::FLOAT
       ELSE (1 - (c.embedding <=> p_query_embedding))::FLOAT
     END AS similarity
   FROM public.code_analyzer_drawing_chunks c
   WHERE c.project_id = p_project_id
+    AND c.superseded = false
+    AND (p_revision IS NULL OR c.revision = p_revision)
     AND (p_discipline IS NULL OR c.discipline = p_discipline)
+    AND (p_content_class IS NULL OR c.content_class = p_content_class)
+    AND (p_document_ids IS NULL OR c.document_id = ANY(p_document_ids))
     AND (
-      (p_identifiers IS NOT NULL AND c.sheet_number = ANY(p_identifiers))
-      OR (p_query_embedding IS NOT NULL AND c.embedding IS NOT NULL)
+      (
+        p_identifiers IS NOT NULL
+        AND cardinality(p_identifiers) > 0
+        AND EXISTS (
+          SELECT 1
+          FROM unnest(p_identifiers) AS q(ident)
+          WHERE upper(COALESCE(c.sheet_number, '')) = upper(ident)
+             OR upper(ident) = ANY (SELECT upper(x) FROM unnest(c.identifiers) AS x)
+             OR upper(ident) = ANY (SELECT upper(y) FROM unnest(c.cross_sheet_refs) AS y)
+        )
+      )
+      OR (
+        p_query_embedding IS NOT NULL
+        AND c.embedding IS NOT NULL
+        AND (1 - (c.embedding <=> p_query_embedding)) >= 0.25
+      )
     )
   ORDER BY
-    CASE WHEN p_identifiers IS NOT NULL AND c.sheet_number = ANY(p_identifiers) THEN 0 ELSE 1 END,
-    c.embedding <=> p_query_embedding NULLS LAST
+    CASE
+      WHEN p_identifiers IS NOT NULL
+        AND cardinality(p_identifiers) > 0
+        AND (
+          upper(COALESCE(c.sheet_number, '')) = ANY (SELECT upper(ident) FROM unnest(p_identifiers) AS ident)
+          OR c.identifiers && p_identifiers
+        )
+      THEN 0
+      ELSE 1
+    END,
+    CASE
+      WHEN p_query_embedding IS NULL OR c.embedding IS NULL THEN 1000000::FLOAT
+      ELSE (c.embedding <=> p_query_embedding)::FLOAT
+    END ASC
   LIMIT GREATEST(1, LEAST(COALESCE(p_match_count, 8), 20));
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.match_analyzer_drawing_chunks(UUID, vector(1536), TEXT[], TEXT, INT)
+REVOKE ALL ON FUNCTION public.match_analyzer_drawing_chunks(UUID, vector(1536), TEXT[], TEXT, INT, TEXT, UUID[], TEXT)
+  FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.match_analyzer_drawing_chunks(UUID, vector(1536), TEXT[], TEXT, INT, TEXT, UUID[], TEXT)
   TO authenticated, service_role;
 
 ALTER TABLE public.document_annotations

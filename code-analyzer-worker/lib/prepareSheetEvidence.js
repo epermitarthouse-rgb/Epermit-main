@@ -3,9 +3,12 @@
 const { createDrawingIndex } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
 const { prepareSheetReview } = require("../../scraper-service/app/services/compliance/review/orchestrate.js");
 const { comprehendPdfPage } = require("./comprehension.js");
+const { createGuardedDrawingStore } = require("./drawingRagStore.js");
 
 /** @type {Map<string, ReturnType<createDrawingIndex>>} */
 const indexes = new Map();
+/** @type {Set<string>} */
+const hydratedRuns = new Set();
 
 function evidenceIndexForRun(runId) {
   const key = String(runId || "run");
@@ -14,7 +17,11 @@ function evidenceIndexForRun(runId) {
 }
 
 function clearRunEvidenceIndex(runId) {
-  indexes.delete(String(runId || "run"));
+  const key = String(runId || "run");
+  indexes.delete(key);
+  for (const mark of hydratedRuns) {
+    if (mark.startsWith(`${key}:`)) hydratedRuns.delete(mark);
+  }
 }
 
 /**
@@ -82,15 +89,24 @@ async function prepareEvidenceForSheet(input) {
   let regions = [];
   let regionImages = [];
   let pageText = input.pageText || "";
+  let pageMeta = { pageWidth: 0, pageHeight: 0, graphicalReadStatus: null, sourcePdf: false };
   if (input.pdfPath) {
     try {
       const page = await comprehendPdfPage(input.pdfPath, input.sheet.page_number || input.sheet.pageNumber || 1, {
         render: Boolean(input.renderRegions),
+        ocr: input.ocr,
+        discoverGraphics: input.discoverGraphics,
       });
       items = page.items || [];
       regions = page.regions || [];
       regionImages = page.regionImages || [];
       if (page.text && page.text.length > pageText.length) pageText = page.text;
+      pageMeta = {
+        pageWidth: page.pageWidth,
+        pageHeight: page.pageHeight,
+        graphicalReadStatus: page.graphicalReadStatus || null,
+        sourcePdf: true,
+      };
     } catch (err) {
       console.warn(
         "[code-analyzer-worker] page comprehension failed:",
@@ -110,14 +126,45 @@ async function prepareEvidenceForSheet(input) {
     specChunks: input.specChunks,
     jurisdictionScope: input.jurisdictionScope,
     analysisInstructions: input.analysisInstructions,
+    revision: input.sheet?.revision || null,
   });
 
   return {
     ...prepared,
     pageText,
+    ...pageMeta,
     regionImages: regionImages.slice(0, 2),
     drawingRecords: verifierRecords(index),
   };
+}
+
+async function rehydrateDrawingIndex(runId, projectId, store) {
+  if (!store || store.available === false || !projectId) return { rehydrated: 0 };
+  const mark = `${runId}:${projectId}`;
+  if (hydratedRuns.has(mark)) return { rehydrated: 0, cached: true };
+  let rows = [];
+  try {
+    rows = await store.listActive(projectId);
+  } catch {
+    return { rehydrated: 0, error: true };
+  }
+  const index = evidenceIndexForRun(runId);
+  for (const row of rows || []) index.upsert(store.rowToRecord ? store.rowToRecord(row) : row);
+  hydratedRuns.add(mark);
+  return { rehydrated: (rows || []).length };
+}
+
+async function persistDrawingRecord(store, record) {
+  if (!store || store.available === false || !record?.projectId) return { persisted: false, reason: "disabled" };
+  try {
+    return await store.upsertRecords([record]);
+  } catch {
+    return { persisted: false, reason: "write_failed" };
+  }
+}
+
+function drawingStoreFor(supabase) {
+  return createGuardedDrawingStore(supabase);
 }
 
 module.exports = {
@@ -126,4 +173,7 @@ module.exports = {
   seedDrawingIndex,
   prepareEvidenceForSheet,
   verifierRecords,
+  rehydrateDrawingIndex,
+  persistDrawingRecord,
+  drawingStoreFor,
 };

@@ -41,7 +41,7 @@ function ruleFires(rule, corpus, ctx) {
     return /\bEQ[-.\s]?\d/i.test(name) || /\bequipment\s+plan\b/i.test(name);
   }
   if (rule.id === "fire-rating-tag-on-plan") {
-    return /\b\d+\s*-?\s*(?:hour|hr)\b|\b1\s*hr\b/i.test(corpus);
+    return /\bone\s+hours?\b|\b[1I]\s*h(?:r)?\b|\b\d+\s*-?\s*(?:hour|hr)\b/i.test(corpus);
   }
   if (rule.id === "emergency-lighting-note") {
     return /\bemergency\s+light/i.test(corpus);

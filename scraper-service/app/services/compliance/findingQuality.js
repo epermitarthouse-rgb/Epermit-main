@@ -139,7 +139,7 @@ const MISSING_FACT_RE =
 const MEASURED_DEFECT_RE =
   /\b(does not meet|non-?compliant|below|exceeds|less than|greater than|insufficient|too narrow|obstruct)\b/i;
 
-const HOUR_RATING_RE = /\b\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?)\b/i;
+const HOUR_RATING_RE = /\bone\s+hours?\b|\b[1I]\s*h(?:r)?\b|\b\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?)\b/i;
 const MINUTE_RATING_RE = /\b\d+\s*-?\s*minutes?\b/i;
 const CLEARANCE_PAIR_RE = /\b\d{2}\s*[x×]\s*\d{2}\b/i;
 const INCH_MARK_RE = /\b\d{2}\s*(?:(?:\"|″)|in(?:ch(?:es)?)?\b)/i;

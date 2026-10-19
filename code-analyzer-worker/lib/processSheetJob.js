@@ -16,7 +16,12 @@ const {
   clearRunEvidenceIndex,
   seedDrawingIndex,
   prepareEvidenceForSheet,
+  rehydrateDrawingIndex,
+  persistDrawingRecord,
+  drawingStoreFor,
 } = require("./prepareSheetEvidence.js");
+const { shouldAttachRegionImages } = require("./comprehension.js");
+const sharp = require("sharp");
 
 const SCRAPER_BASE_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3000";
 const SHEET_CONCURRENCY = Math.max(1, Number(process.env.CODE_ANALYZER_SHEET_CONCURRENCY) || 3);
@@ -686,6 +691,8 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
   }
 
   seedDrawingIndex(run.id, includedSheets, (sheetId) => cachedSheetText(run.id, sheetId));
+  const drawingStore = drawingStoreFor(supabase);
+  await rehydrateDrawingIndex(run.id, job.project_id, drawingStore);
   const prepared = await withSourcePdf(supabase, sheet, (pdfPath) =>
     prepareEvidenceForSheet({
       runId: run.id,
@@ -700,6 +707,19 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       renderRegions: true,
     }),
   );
+  await persistDrawingRecord(drawingStore, prepared.record);
+
+  let regionImages = prepared.regionImages || [];
+  if (regionImages.length && imageBase64) {
+    try {
+      const meta = await sharp(Buffer.from(imageBase64, "base64")).metadata();
+      if (!shouldAttachRegionImages(meta.width || 0, meta.height || 0, prepared.pageWidth, prepared.pageHeight)) {
+        regionImages = [];
+      }
+    } catch {
+      // Keep the crops when the full-sheet raster size cannot be read.
+    }
+  }
 
   // Every included sheet is posted for the requested code type. Content class is
   // prompt context and must not be replaced with a not_reviewed row.
@@ -729,7 +749,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     drawingRecords: prepared.drawingRecords,
     observations: prepared.observations,
     regions: prepared.record?.regions || [],
-    regionImages: prepared.regionImages,
+    regionImages,
     fileName: sheetFileName,
     pageText: prepared.pageText || pageText,
   });

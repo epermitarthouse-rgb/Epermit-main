@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { boxFromTextItem, selectInspectionRegions } = require("../lib/comprehension.js");
+const { boxFromTextItem, selectInspectionRegions, pdfBoxFromNormalized, shouldAttachRegionImages } = require("../lib/comprehension.js");
 
 describe("selective page regions", () => {
   it("keeps a real text-item box in PDF points and normalized page space", () => {
@@ -34,5 +34,23 @@ describe("selective page regions", () => {
     assert.ok(regions.every((region) => region.width < 500));
     assert.ok(regions.some((region) => region.reason === "rating"));
     assert.ok(regions.some((region) => region.quote === "1 HR"));
+  });
+});
+
+describe("crop coordinate mapping", () => {
+  it("maps a normalized OCR word back onto the PDF tile", () => {
+    const box = pdfBoxFromNormalized(
+      { x: 100, y: 200, width: 400, height: 300 },
+      { x: 0.5, y: 0.25, width: 0.1, height: 0.05 },
+    );
+    assert.equal(box.x, 300);
+    assert.equal(box.y, 275);
+    assert.equal(box.width, 40);
+    assert.equal(box.height, 15);
+  });
+
+  it("attaches crops when the full-sheet raster is too coarse to read tags", () => {
+    assert.equal(shouldAttachRegionImages(1200, 800, 2592, 1728), true);
+    assert.equal(shouldAttachRegionImages(8000, 5400, 2592, 1728), false);
   });
 });

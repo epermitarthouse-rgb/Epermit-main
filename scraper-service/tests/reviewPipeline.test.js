@@ -429,3 +429,40 @@ describe("discipline orchestration", () => {
     assert.notEqual(rule.effect, "violate");
   });
 });
+
+describe("graphical rating evidence", () => {
+  it("does not confirm a missing fire rating when a crop quote states the hour rating", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            issueTitle: "Fire rating missing",
+            description: "The 1-hour partition rating is not shown.",
+            location: "A-1.00",
+            codeReference: "IBC 716",
+            severity: "critical",
+            findingType: "missing_information",
+          },
+        ],
+        summary: { overallScore: 40 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        fileName: "A-1.00-00.pdf",
+        pageText: "FLOOR PLAN\n— 1H — ONE HOUR FIRE RATED WALLS",
+        observations: [
+          {
+            element: "fire_rating",
+            quote: "— 1H — ONE HOUR FIRE RATED WALLS",
+            evidenceType: "ocr_crop",
+            extractionMethod: "macos-vision",
+          },
+        ],
+      },
+    );
+    assert.equal(hardened.issues.length, 0);
+    assert.notEqual(hardened.summary.reviewState, "reviewed_clear");
+    assert.notEqual(hardened.summary.overallScore, 100);
+  });
+});
