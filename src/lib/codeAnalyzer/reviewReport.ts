@@ -103,7 +103,7 @@ export function reviewStateLabel(state: string | null | undefined, score: number
   if (state === "not_reviewed") return "Not reviewed";
   if (state === "reviewed_clear") return typeof score === "number" ? `${score}%` : "Clear";
   if (state === "passed") return typeof score === "number" ? `${score}%` : "Passed";
-  if (state === "reviewed_findings" && typeof score === "number") return `${score}%`;
+  if (state === "reviewed_findings") return typeof score === "number" ? `${score}%` : "Findings";
   if (typeof score === "number") return `${score}%`;
   return "Not reviewed";
 }

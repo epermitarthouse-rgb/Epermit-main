@@ -22,6 +22,8 @@ export interface ComplianceBatchIssue {
   findingType?: string;
   validationDisposition?: string;
   sheetFileName?: string;
+  /** authoritative | unverified. Absent means the stored finding did not record it. */
+  codeSourceStatus?: string | null;
 }
 
 export interface ComplianceBatchAnalysisResult {

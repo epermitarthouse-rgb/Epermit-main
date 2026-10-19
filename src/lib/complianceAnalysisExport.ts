@@ -1,10 +1,14 @@
 /**
- * Pure helpers to build Code Analyzer PDF/JSON export payloads from the
- * currently displayed result groups (All + score filter, or a single file).
+ * Pure helpers to build Code Analyzer PDF/JSON export payloads.
+ * Export All uses every sheet on the active run. A single sheet payload
+ * includes both IBC and Local findings, labeled for the report.
  */
 
-import { computeComplianceOverallScore } from "./complianceBatchProcessor";
-import { reviewStateLabel, type ReviewReportView, type ReviewStateName } from "./codeAnalyzer/reviewReport";
+import {
+  combineSheetSummaries,
+  rollupSheetSummaries,
+  type CombinedModeResult,
+} from "./codeAnalyzer/combinedSheetSummary";
 
 export interface ComplianceExportIssue {
   id: string;
@@ -17,10 +21,13 @@ export interface ComplianceExportIssue {
   location: string;
   suggestedFix: string;
   codeType?: "ibc" | "local";
-  scopeLabel?: "IBC" | "Local";
-  findingType?: string;
-  validationDisposition?: string;
+  codeSourceStatus?: string | null;
   sheetFileName?: string;
+  sheet?: string;
+  codeScope?: string;
+  codeEdition?: string;
+  citationVerificationStatus?: string;
+  reviewerResponse?: string;
 }
 
 export interface ComplianceExportAnalysisResult {
@@ -31,12 +38,18 @@ export interface ComplianceExportAnalysisResult {
     warnings: number;
     advisory: number;
     overallScore: number | null;
-    reviewState?: ReviewStateName;
+    reviewState?:
+      | "not_reviewed"
+      | "passed"
+      | "reviewed_clear"
+      | "reviewed_findings"
+      | "reviewed_partial"
+      | "failed"
+      | null;
     codeCoverageVerified?: boolean;
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";
-  reviewReport?: ReviewReportView | null;
 }
 
 export interface ComplianceExportResultGroup {
@@ -59,7 +72,6 @@ export interface ComplianceExportFileSection {
   summary: ComplianceExportAnalysisResult["summary"];
   issues: ComplianceExportIssue[];
   jurisdictionNotes: string;
-  scopes: ComplianceExportScopeSection[];
 }
 
 export interface AggregatedComplianceExport {
@@ -71,55 +83,8 @@ export interface AggregatedComplianceExport {
   jurisdictionNotes: string;
 }
 
-export interface ComplianceExportScopeSection {
-  codeType: "ibc" | "local";
-  scopeLabel: "IBC" | "Local";
-  summary: ComplianceExportAnalysisResult["summary"];
-  issueCount: number;
-  evidence: ReviewReportView["evidence"];
-  legalApplicability: ReviewReportView["legalApplicability"];
-  codeCoverage: ReviewReportView["codeCoverage"];
-}
-
 export function complianceIssueResponseKey(fileId: string, issueId: string): string {
   return `${fileId}:${issueId}`;
-}
-
-export function selectComplianceExportGroups<T>(groups: T[]): T[] {
-  return groups;
-}
-
-export function formatComplianceScoreLabel(summary?: {
-  overallScore?: number | null;
-  reviewState?: string | null;
-} | null): string {
-  return reviewStateLabel(summary?.reviewState, summary?.overallScore);
-}
-
-export function combineComplianceScopeSummaries(
-  results: Array<ComplianceExportAnalysisResult | null | undefined>,
-): ComplianceExportAnalysisResult["summary"] {
-  return finalizeSummary(results.filter((result): result is ComplianceExportAnalysisResult => Boolean(result)));
-}
-
-const UNRESOLVED_REVIEW_STATES = new Set(["not_reviewed", "reviewed_partial", "failed"]);
-
-function combinedReviewState(
-  results: ComplianceExportAnalysisResult[],
-  totalIssues: number,
-): ReviewStateName {
-  const states = results
-    .map((result) => result.summary.reviewState)
-    .filter((state): state is Exclude<ReviewStateName, null> => Boolean(state));
-  if (states.length === 0) return totalIssues > 0 ? "reviewed_findings" : "not_reviewed";
-  if (states.some((state) => state === "failed")) return "failed";
-  if (states.some((state) => state === "not_reviewed" || state === "reviewed_partial")) {
-    return "reviewed_partial";
-  }
-  if (totalIssues > 0) return "reviewed_findings";
-  if (states.every((state) => state === "reviewed_clear")) return "reviewed_clear";
-  if (states.every((state) => state === "passed" || state === "reviewed_clear")) return "passed";
-  return "reviewed_partial";
 }
 
 function emptySummary(): ComplianceExportAnalysisResult["summary"] {
@@ -130,74 +95,100 @@ function emptySummary(): ComplianceExportAnalysisResult["summary"] {
     advisory: 0,
     overallScore: null,
     reviewState: "not_reviewed",
+    codeCoverageVerified: false,
   };
 }
 
-function countsFromResults(results: ComplianceExportAnalysisResult[]) {
-  return results.reduce(
-    (counts, result) => ({
-      totalIssues: counts.totalIssues + (result.summary.totalIssues ?? 0),
-      critical: counts.critical + (result.summary.critical ?? 0),
-      warnings: counts.warnings + (result.summary.warnings ?? 0),
-      advisory: counts.advisory + (result.summary.advisory ?? 0),
-    }),
-    { totalIssues: 0, critical: 0, warnings: 0, advisory: 0 },
-  );
+export type ReviewerResponseLabel = "Accept" | "Modify" | "N/A" | "Unreviewed" | string;
+
+export function mapReviewerResponse(response: { status?: string } | null | undefined): ReviewerResponseLabel {
+  if (!response?.status) return "Unreviewed";
+  if (response.status === "accepted") return "Accept";
+  if (response.status === "modified") return "Modify";
+  if (response.status === "rejected") return "N/A";
+  return response.status;
 }
 
-function overallScoreFromResults(
-  results: ComplianceExportAnalysisResult[],
-  counts: ReturnType<typeof countsFromResults>,
-  reviewState: ReviewStateName,
-): number | null {
-  const scoreUnknown = results.some((result) => {
-    const state = result.summary.reviewState;
-    if (state && UNRESOLVED_REVIEW_STATES.has(state)) return true;
-    return result.summary.overallScore == null
-      && state !== "passed"
-      && state !== "reviewed_clear";
-  });
-  if (scoreUnknown) return null;
-  return computeComplianceOverallScore({
-    ...counts,
-    reviewState,
-    codeCoverageVerified: results.length > 0 && results.every((result) => result.summary.codeCoverageVerified === true),
-  });
+export function citationVerificationLabel(status: unknown): string {
+  if (status === "authoritative") return "Verified";
+  if (status === "unverified") return "Unverified";
+  if (typeof status === "string" && status.trim()) return status.trim();
+  return "Not recorded";
 }
 
-function finalizeSummary(
-  results: ComplianceExportAnalysisResult[],
-): ComplianceExportAnalysisResult["summary"] {
-  const counts = countsFromResults(results);
-  const reviewState = combinedReviewState(results, counts.totalIssues);
+export function codeScopeLabel(codeType: string | null | undefined): "General IBC" | "Local Amendments" {
+  return codeType === "local" ? "Local Amendments" : "General IBC";
+}
+
+export interface ExportFindingLabels {
+  codeScope: string;
+  codeEdition: string;
+  sheet: string;
+  citationVerificationStatus: string;
+  reviewerResponse: ReviewerResponseLabel;
+}
+
+export function describeExportFinding(
+  issue: {
+    codeType?: string | null;
+    codeYear?: string | null;
+    codeEdition?: string | null;
+    sheet?: string | null;
+    sheetFileName?: string | null;
+    codeSourceStatus?: string | null;
+    citationVerificationStatus?: string | null;
+  },
+  response: { status?: string } | null | undefined,
+): ExportFindingLabels {
+  const edition = issue.codeEdition?.trim() || issue.codeYear?.trim() || "Not recorded";
+  const sheet = issue.sheet?.trim() || issue.sheetFileName?.trim() || "Not recorded";
   return {
-    ...counts,
-    reviewState,
-    codeCoverageVerified: results.length > 0 && results.every((result) => result.summary.codeCoverageVerified === true),
-    overallScore: overallScoreFromResults(results, counts, reviewState),
+    codeScope: codeScopeLabel(issue.codeType),
+    codeEdition: edition,
+    sheet,
+    citationVerificationStatus:
+      issue.citationVerificationStatus?.trim() || citationVerificationLabel(issue.codeSourceStatus),
+    reviewerResponse: mapReviewerResponse(response),
   };
 }
 
-function scopeLabelFor(codeType: ComplianceExportAnalysisResult["codeType"] | undefined): "IBC" | "Local" {
-  return codeType === "local" ? "Local" : "IBC";
+export function findingCaptionLines(
+  issue: Parameters<typeof describeExportFinding>[0],
+  response: { status?: string } | null | undefined,
+): string[] {
+  const labels = describeExportFinding(issue, response);
+  return [
+    `Scope: ${labels.codeScope} · Edition: ${labels.codeEdition} · Sheet: ${labels.sheet}`,
+    `Citation: ${labels.citationVerificationStatus} · Response: ${labels.reviewerResponse}`,
+  ];
 }
 
-function scopeSection(result: ComplianceExportAnalysisResult): ComplianceExportScopeSection {
-  const codeType = result.codeType === "local" ? "local" : "ibc";
-  return {
-    codeType,
-    scopeLabel: scopeLabelFor(codeType),
-    summary: result.summary,
-    issueCount: result.summary.totalIssues ?? result.issues?.length ?? 0,
-    evidence: result.reviewReport?.evidence ?? [],
-    legalApplicability: result.reviewReport?.legalApplicability ?? null,
-    codeCoverage: result.reviewReport?.codeCoverage ?? null,
-  };
+export function exportReportButtonLabel(format: "pdf" | "json", scope: "all" | "filtered"): string {
+  if (scope === "filtered") {
+    return format === "pdf"
+      ? "Export only the filtered sheets (PDF)"
+      : "Export only the filtered sheets (JSON)";
+  }
+  return format === "pdf" ? "Export All PDF" : "Export All JSON";
+}
+
+/** Export All reads the active run. Filtered scope is a separate, explicitly labeled action. */
+export function selectSheetsForExport<T>(
+  activeRunGroups: T[],
+  displayedGroups: T[],
+  scope: "all" | "filtered",
+): T[] {
+  return scope === "filtered" ? displayedGroups : activeRunGroups;
+}
+
+function asCombinedMode(result: ComplianceExportAnalysisResult | null): CombinedModeResult | null {
+  if (!result) return null;
+  return result;
 }
 
 /**
  * Merge IBC + local results for one file into a single export section.
- * Matches KPI aggregation (both code types contribute to counts).
+ * Findings are concatenated. Shared issue ids stay on both scopes.
  */
 function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportFileSection | null {
   if (group.failed && !group.ibcResult && !group.localResult) {
@@ -211,12 +202,11 @@ function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportF
       summary: emptySummary(),
       issues: [],
       jurisdictionNotes: "",
-      scopes: [],
     };
   }
 
   const results = [group.ibcResult, group.localResult].filter(
-    (r): r is ComplianceExportAnalysisResult => Boolean(r),
+    (result): result is ComplianceExportAnalysisResult => Boolean(result),
   );
   if (results.length === 0) return null;
 
@@ -224,12 +214,17 @@ function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportF
   const notes: string[] = [];
 
   for (const result of results) {
-    const codeType = result.codeType === "local" ? "local" : "ibc";
     for (const issue of result.issues ?? []) {
+      const codeType = issue.codeType === "local" || result.codeType === "local" ? "local" : "ibc";
+      const sheet = issue.sheet?.trim() || issue.sheetFileName?.trim() || group.fileName;
       issues.push({
         ...issue,
-        codeType: issue.codeType ?? codeType,
-        scopeLabel: scopeLabelFor(issue.codeType ?? codeType),
+        codeType,
+        sheet,
+        sheetFileName: issue.sheetFileName || sheet,
+        codeScope: codeScopeLabel(codeType),
+        codeEdition: issue.codeYear?.trim() || "Not recorded",
+        citationVerificationStatus: citationVerificationLabel(issue.codeSourceStatus),
       });
     }
     if (result.jurisdictionNotes?.trim()) {
@@ -251,16 +246,15 @@ function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportF
     failed: Boolean(group.failed),
     error: group.error,
     codeType,
-    summary: finalizeSummary(results),
+    summary: combineSheetSummaries(asCombinedMode(group.ibcResult), asCombinedMode(group.localResult)),
     issues,
     jurisdictionNotes: [...new Set(notes)].join("\n\n"),
-    scopes: results.map(scopeSection),
   };
 }
 
 /**
- * Build an export payload from every sheet in the selected run.
- * Callers must pass the unfiltered run groups, not the search/score view.
+ * Build an export payload from the groups the caller selects.
+ * Export All passes every sheet on the active run, including filtered-out rows.
  */
 export function buildAggregatedComplianceExport(
   groups: ComplianceExportResultGroup[],
@@ -269,7 +263,7 @@ export function buildAggregatedComplianceExport(
   let filesAnalyzed = 0;
   const flatIssues: AggregatedComplianceExport["issues"] = [];
   const notes: string[] = [];
-  const scoredResults: ComplianceExportAnalysisResult[] = [];
+  const scoredSummaries: ComplianceExportAnalysisResult["summary"][] = [];
 
   for (const group of groups) {
     const section = sectionFromGroup(group);
@@ -277,9 +271,9 @@ export function buildAggregatedComplianceExport(
     files.push(section);
 
     const hasResults = Boolean(group.ibcResult || group.localResult);
-    if (hasResults) filesAnalyzed += 1;
-    for (const result of [group.ibcResult, group.localResult]) {
-      if (result) scoredResults.push(result);
+    if (hasResults) {
+      filesAnalyzed += 1;
+      scoredSummaries.push(section.summary);
     }
 
     for (const issue of section.issues) {
@@ -287,7 +281,7 @@ export function buildAggregatedComplianceExport(
         ...issue,
         sourceFile: section.fileName,
         sourceFileId: section.fileId,
-        // Keep location readable when flattened for PDF category view.
+        sheet: issue.sheet || section.fileName,
         location: issue.location
           ? `${section.fileName} — ${issue.location}`
           : section.fileName,
@@ -301,7 +295,7 @@ export function buildAggregatedComplianceExport(
 
   return {
     filesAnalyzed,
-    summary: finalizeSummary(scoredResults),
+    summary: scoredSummaries.length > 0 ? rollupSheetSummaries(scoredSummaries) : emptySummary(),
     files,
     issues: flatIssues,
     jurisdictionNotes: notes.join("\n\n"),
@@ -325,7 +319,6 @@ export interface ComplianceExportJsonReport {
     summary: ComplianceExportAnalysisResult["summary"];
     issues: Array<ComplianceExportIssue & { response: unknown }>;
     jurisdictionNotes: string;
-    scopes: ComplianceExportScopeSection[];
   }>;
   jurisdictionNotes: string;
 }
@@ -354,15 +347,27 @@ export function buildComplianceExportJsonReport(opts: {
       error: file.error,
       codeType: file.codeType,
       summary: file.summary,
-      issues: file.issues.map((issue) => ({
-        ...issue,
-        response:
+      issues: file.issues.map((issue) => {
+        const raw =
           responses[complianceIssueResponseKey(file.fileId, issue.id)] ??
           responses[issue.id] ??
-          null,
-      })),
+          null;
+        const response =
+          raw && typeof raw === "object" ? (raw as { status?: string }) : null;
+        return {
+          ...issue,
+          ...describeExportFinding(
+            {
+              ...issue,
+              codeEdition: issue.codeEdition || issue.codeYear || codeYear,
+              sheet: issue.sheet || issue.sheetFileName || file.fileName,
+            },
+            response,
+          ),
+          response,
+        };
+      }),
       jurisdictionNotes: file.jurisdictionNotes,
-      scopes: file.scopes,
     })),
     jurisdictionNotes: aggregated.jurisdictionNotes,
   };

@@ -156,3 +156,50 @@ describe("active-run paging versus the 1000-row cap", () => {
     assert.equal(sheets.some((sheet) => (sheet.ibcResult?.issues.length ?? 0) > 0), true);
   });
 });
+
+describe("stored finding labels", () => {
+  it("keeps citation verification status and a nullable findings score", () => {
+    const sheets = aggregateSheetAnalysisResults([
+      {
+        id: "meta",
+        document_id: "doc-1",
+        analysis_run_id: ACTIVE_RUN,
+        data: {
+          compliance_metadata: true,
+          codeType: "ibc",
+          sheet_id: "sheet-1",
+          sheet_file_name: "Plumbing Plan",
+          summary: {
+            reviewState: "reviewed_findings",
+            totalIssues: 1,
+            critical: 0,
+            warnings: 1,
+            advisory: 0,
+            overallScore: null,
+          },
+        },
+      },
+      {
+        id: "issue-1",
+        document_id: "doc-1",
+        analysis_run_id: ACTIVE_RUN,
+        data: {
+          compliance_issue: true,
+          codeType: "ibc",
+          sheet_id: "sheet-1",
+          id: "finding-1",
+          title: "Vent size",
+          severity: "warning",
+          codeYear: "2021",
+          codeSourceStatus: "unverified",
+          sheet_file_name: "Plumbing Plan",
+        },
+      },
+    ]);
+    assert.equal(sheets.length, 1);
+    assert.equal(sheets[0].ibcResult?.issues[0].codeSourceStatus, "unverified");
+    assert.equal(sheets[0].ibcResult?.issues[0].codeYear, "2021");
+    assert.equal(sheets[0].ibcResult?.summary.reviewState, "reviewed_findings");
+    assert.equal(sheets[0].ibcResult?.summary.overallScore, null);
+  });
+});

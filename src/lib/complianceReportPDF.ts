@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
-import { formatComplianceScoreLabel } from './complianceAnalysisExport';
+import { exportScoreText, fileSectionScoreLabel } from './codeAnalyzer/combinedSheetSummary';
+import { findingCaptionLines } from './complianceAnalysisExport';
 
 interface ComplianceIssue {
   id: string;
@@ -12,8 +13,12 @@ interface ComplianceIssue {
   codeYear: string;
   location: string;
   suggestedFix: string;
-  codeType?: 'ibc' | 'local';
-  scopeLabel?: 'IBC' | 'Local';
+  codeType?: string;
+  sheet?: string;
+  sheetFileName?: string;
+  codeEdition?: string;
+  codeSourceStatus?: string | null;
+  citationVerificationStatus?: string;
 }
 
 interface AnalysisSummary {
@@ -201,10 +206,10 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   
   // Score indicator
   const overallScore = summary.overallScore;
-  if (overallScore == null) {
+  if (typeof overallScore !== "number") {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(formatComplianceScoreLabel(summary), margin, y + 18);
+    doc.text(exportScoreText(summary), margin, y + 18);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text("Compliance Score", margin, y + 38);
@@ -338,7 +343,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   y += 15;
 
   const renderIssueCard = (issue: ComplianceIssue, fileId?: string) => {
-    checkPageBreak(60);
+    checkPageBreak(84);
 
     const response = resolveResponse(issue, fileId);
     const severity = safeText(issue.severity) || 'advisory';
@@ -347,7 +352,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     // Issue card
     doc.setDrawColor(severityColor[0], severityColor[1], severityColor[2]);
     doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, contentWidth, 50, 3, 3, 'S');
+    doc.roundedRect(margin, y, contentWidth, 72, 3, 3, 'S');
 
     // Severity badge
     doc.setFillColor(severityColor[0], severityColor[1], severityColor[2]);
@@ -357,15 +362,10 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     doc.setFont('helvetica', 'bold');
     doc.text(safeText(issue.severity).toUpperCase(), margin + 30, y + 11, { align: 'center' });
 
-    // Issue title, prefixed with its code scope.
-    const scopeLabel = issue.scopeLabel || (issue.codeType === 'local' ? 'Local' : issue.codeType === 'ibc' ? 'IBC' : '');
+    // Issue title
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(10);
-    doc.text(
-      scopeLabel ? `${scopeLabel}: ${safeText(issue.title)}` : safeText(issue.title),
-      margin + 60,
-      y + 11,
-    );
+    doc.text(safeText(issue.title), margin + 60, y + 11);
 
     // Code reference
     doc.setFillColor(219, 234, 254); // blue-100
@@ -384,27 +384,17 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     // Location
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(8);
-    doc.text(`Location: ${safeText(issue.location)}`, margin + 5, y + 38);
+    doc.text(`Location: ${safeText(issue.location)}`, margin + 5, y + 36);
 
-    // Resolution status
-    if (response) {
-      const statusColor = response.status === 'accepted'
-        ? [16, 185, 129]
-        : response.status === 'modified'
-          ? [37, 99, 235]
-          : [156, 163, 175];
-      doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-      doc.circle(pageWidth - margin - 10, y + 44, 4, 'F');
-      doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
-      doc.setFontSize(7);
-      doc.text(
-        safeText(response.status === 'accepted' ? 'RESOLVED' : response.status === 'modified' ? 'MODIFIED' : 'N/A'),
-        pageWidth - margin - 18,
-        y + 46
-      );
-    }
+    const caption = findingCaptionLines(issue, response ?? null);
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+    const scopeLine = doc.splitTextToSize(caption[0], contentWidth - 12);
+    const responseLine = doc.splitTextToSize(caption[1], contentWidth - 12);
+    doc.text(scopeLine.slice(0, 1).map(safeText), margin + 5, y + 48);
+    doc.text(responseLine.slice(0, 1).map(safeText), margin + 5, y + 58);
 
-    y += 55;
+    y += 78;
   };
 
   const renderIssuesByCategory = (sectionIssues: ComplianceIssue[], fileId?: string) => {
@@ -446,10 +436,13 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      const scoreLabel =
-        section.failed
-          ? 'FAILED'
-          : `${formatComplianceScoreLabel(section.summary)} · ${safeText(section.summary?.totalIssues ?? section.issues?.length ?? 0)} issues`;
+      const scoreLabel = section.failed
+        ? 'FAILED'
+        : fileSectionScoreLabel({
+            overallScore: section.summary?.overallScore,
+            reviewState: section.summary?.reviewState,
+            totalIssues: section.summary?.totalIssues ?? section.issues?.length ?? 0,
+          });
       doc.text(
         `${safeText(section.fileName)}  (${scoreLabel})`,
         margin + 5,

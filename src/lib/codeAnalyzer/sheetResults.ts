@@ -47,6 +47,8 @@ interface AnnotationData extends ReviewMetadataLike {
   jurisdictionNotes?: string;
   findingType?: string;
   validationDisposition?: string;
+  codeSourceStatus?: string | null;
+  provenance?: { codeSourceStatus?: string | null } | null;
   sheet_id?: string;
 }
 
@@ -124,6 +126,33 @@ export function sheetResultKey(row: SheetAnnotationRow): string | null {
   return null;
 }
 
+function citationStatusFrom(data: AnnotationData): string | undefined {
+  if (typeof data.codeSourceStatus === "string" && data.codeSourceStatus.trim()) {
+    return data.codeSourceStatus;
+  }
+  const nested = data.provenance?.codeSourceStatus;
+  if (typeof nested === "string" && nested.trim()) return nested;
+  return undefined;
+}
+
+function preservedIssueScore(
+  summary: AnnotationData["summary"] | undefined,
+  recomputed: number | null,
+): number | null {
+  if (!summary) return recomputed;
+  if (typeof summary.overallScore === "number") return summary.overallScore;
+  if (
+    summary.reviewState === "reviewed_partial" ||
+    summary.reviewState === "failed" ||
+    summary.reviewState === "not_reviewed" ||
+    summary.reviewState === "reviewed_clear" ||
+    summary.reviewState === "reviewed_findings"
+  ) {
+    return null;
+  }
+  return recomputed;
+}
+
 function sheetFileName(rows: SheetAnnotationRow[]): string {
   for (const row of rows) {
     const data = annotationData(row);
@@ -159,6 +188,7 @@ function buildModeResult(
         sheetFileName: data.sheet_file_name || data.file_name || undefined,
         findingType: data.findingType,
         validationDisposition: data.validationDisposition,
+        codeSourceStatus: citationStatusFrom(data),
       };
       const list = issuesByCodeType.get(data.codeType) || [];
       list.push(issue);
@@ -227,8 +257,7 @@ function buildModeResult(
         critical,
         warnings,
         advisory,
-        overallScore:
-          typeof meta.summary.overallScore === "number" ? meta.summary.overallScore : recomputed,
+        overallScore: preservedIssueScore(meta.summary, recomputed),
       };
     }
     return {

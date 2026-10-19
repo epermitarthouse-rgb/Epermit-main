@@ -8,6 +8,10 @@ describe("review report hydration", () => {
     assert.equal(reviewStateLabel("not_reviewed", null), "Not reviewed");
     assert.equal(reviewStateLabel("reviewed_partial", null), "Partial");
     assert.equal(reviewStateLabel("failed", null), "Failed");
+    assert.equal(reviewStateLabel("reviewed_clear", null), "Clear");
+    assert.notEqual(reviewStateLabel("reviewed_clear", null), "0%");
+    assert.equal(reviewStateLabel("reviewed_findings", null), "Findings");
+    assert.equal(reviewStateLabel("reviewed_findings", 82), "82%");
 
     const view = buildReviewReportView(
       [

@@ -99,10 +99,11 @@ import {
 import {
   buildAggregatedComplianceExport,
   buildComplianceExportJsonReport,
-  combineComplianceScopeSummaries,
   complianceIssueResponseKey,
-  selectComplianceExportGroups,
+  exportReportButtonLabel,
+  selectSheetsForExport,
 } from "@/lib/complianceAnalysisExport";
+import { sheetResultPresentation } from "@/lib/codeAnalyzer/combinedSheetSummary";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -3211,16 +3212,10 @@ export function AIComplianceAnalyzer() {
     }
 
     const tab = fileResultTabs[group.id] ?? (group.ibcResult ? "ibc" : "local");
-    const groupResult =
-      (tab === "local" ? group.localResult : group.ibcResult) ?? group.localResult ?? group.ibcResult;
+    const presentation = sheetResultPresentation(group, tab, responses, group.id);
+    const groupResult = presentation.findingsResult;
     if (!groupResult) return null;
-
-    const combinedSummary = combineComplianceScopeSummaries([group.ibcResult, group.localResult]);
-    const combinedIssues = [
-      ...(group.ibcResult?.issues ?? []),
-      ...(group.localResult?.issues ?? []),
-    ];
-    const resolvedInGroup = combinedIssues.filter((issue) => responses[issueResponseKey(group.id, issue.id)]).length;
+    const combinedSummary = presentation.summary;
     const isExpanded = expandedResultGroups[group.id] ?? false;
 
     return (
@@ -3254,11 +3249,11 @@ export function AIComplianceAnalyzer() {
               <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent p-0 h-auto shadow-none border-0">
                 <TabsTrigger value="ibc" className="flex items-center gap-2">
                   <Scale className="h-4 w-4" />
-                  General IBC ({group.ibcResult.summary.totalIssues} issues)
+                  General IBC ({presentation.ibcCount} issues)
                 </TabsTrigger>
                 <TabsTrigger value="local" className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
-                  Local Amendments ({group.localResult.summary.totalIssues} issues)
+                  Local Amendments ({presentation.localCount} issues)
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -3302,16 +3297,16 @@ export function AIComplianceAnalyzer() {
           </Card>
         </div>
 
-        {combinedIssues.length > 0 && (
+        {presentation.resolution.total > 0 && (
           <Card className={"pilot-card border-border bg-card"}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-foreground dark:text-foreground">Resolution Progress</span>
                 <span className="text-sm text-muted-foreground dark:text-muted-foreground">
-                  {resolvedInGroup} / {combinedIssues.length} resolved
+                  {presentation.resolution.resolved} / {presentation.resolution.total} resolved
                 </span>
               </div>
-              <Progress value={(resolvedInGroup / combinedIssues.length) * 100} className="h-2" />
+              <Progress value={presentation.resolution.percent} className="h-2" />
             </CardContent>
           </Card>
         )}
@@ -3343,19 +3338,23 @@ export function AIComplianceAnalyzer() {
           />
         ) : null}
 
-        {renderIssuesList(group.id, groupResult, group.fileName)}
+        {renderIssuesList(group.id, groupResult, group.fileName, presentation.resolution)}
           </div>
         ) : null}
       </div>
     );
   };
 
-  /** Export All uses every sheet in the selected run, including sheets hidden by search or score filters. */
-  const exportAggregated = useMemo(
-    () => buildAggregatedComplianceExport(selectComplianceExportGroups(resultGroups)),
-    [resultGroups],
+  /** Export All uses every sheet on the active run and ignores search and score filters. */
+  const exportAllGroups = useMemo(
+    () => selectSheetsForExport(resultGroups, displayedResultGroups, "all"),
+    [resultGroups, displayedResultGroups],
   );
-  const canExportReport = exportAggregated.filesAnalyzed > 0 || exportAggregated.files.some((f) => f.failed);
+  const exportAggregated = useMemo(
+    () => buildAggregatedComplianceExport(exportAllGroups),
+    [exportAllGroups],
+  );
+  const canExportReport = exportAggregated.files.length > 0;
 
   const selectedProjectName = useMemo(() => {
     if (!selectedProjectId) return null;
@@ -3377,11 +3376,10 @@ export function AIComplianceAnalyzer() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const scope = `all-${exportAggregated.files.length}sheets`;
-    a.download = `compliance-report-${scope}-${new Date().toISOString().split("T")[0]}.json`;
+    a.download = `compliance-report-all-${exportAggregated.files.length}sheets-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(`JSON report exported (${exportAggregated.files.length} sheets in this run)`);
+    toast.success(`JSON report exported (all ${exportAggregated.files.length} sheets)`);
   };
 
   const exportReportPDF = () => {
@@ -3433,7 +3431,7 @@ export function AIComplianceAnalyzer() {
         responseKeyForIssue: (issue, fileId) =>
           fileId ? complianceIssueResponseKey(fileId, issue.id) : issue.id,
       });
-      toast.success(`PDF report exported (${exportAggregated.files.length} sheets in this run)`);
+      toast.success(`PDF report exported (all ${exportAggregated.files.length} sheets)`);
     } catch (err) {
       console.error("PDF export error:", err);
       toast.error("Failed to export PDF. Please try again.");
@@ -3584,14 +3582,22 @@ export function AIComplianceAnalyzer() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const renderIssuesList = (fileId: string, result: AnalysisResult, fileName: string) => {
+  const renderIssuesList = (
+    fileId: string,
+    result: AnalysisResult,
+    fileName: string,
+    resolutionOverride?: { resolved: number; total: number },
+  ) => {
     const issues = result?.issues ?? [];
     const summary = result?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: null };
     const filteredIssues = (tab: string) =>
       issues.filter((issue) => tab === "all" || issue.severity === tab);
 
-    const resolvedInResult = issues.filter((issue) => responses[issueResponseKey(fileId, issue.id)]).length;
-    const progressPercent = issues.length > 0 ? (resolvedInResult / issues.length) * 100 : 0;
+    const resolvedInResult =
+      resolutionOverride?.resolved ??
+      issues.filter((issue) => responses[issueResponseKey(fileId, issue.id)]).length;
+    const progressTotal = resolutionOverride?.total ?? issues.length;
+    const progressPercent = progressTotal > 0 ? (resolvedInResult / progressTotal) * 100 : 0;
 
     return (
       <Card className={cn("pilot-card border-border bg-card", "overflow-hidden shadow-lg")}>
@@ -3609,7 +3615,7 @@ export function AIComplianceAnalyzer() {
               </CardDescription>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-primary-deep">{resolvedInResult}/{issues.length}</div>
+              <div className="text-2xl font-bold text-primary-deep">{resolvedInResult}/{progressTotal}</div>
               <div className="text-xs text-muted-foreground dark:text-muted-foreground">Issues Resolved</div>
             </div>
           </div>
@@ -4796,7 +4802,7 @@ export function AIComplianceAnalyzer() {
                       disabled={!canExportReport}
                     >
                       <FileDown className="h-4 w-4 mr-2" />
-                      Export All PDF
+                      {exportReportButtonLabel("pdf", "all")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -4805,7 +4811,7 @@ export function AIComplianceAnalyzer() {
                       disabled={!canExportReport}
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      Export All JSON
+                      {exportReportButtonLabel("json", "all")}
                     </Button>
                   </div>
                 </Panel>
