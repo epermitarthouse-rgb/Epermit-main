@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { exportScoreText, fileSectionScoreLabel } from './codeAnalyzer/combinedSheetSummary';
 import { findingCaptionLines } from './complianceAnalysisExport';
+import { isUnresolvedCheck, reviewOutcome } from './codeAnalyzer/reviewReport';
 
 interface ComplianceIssue {
   id: string;
@@ -29,7 +30,7 @@ interface AnalysisSummary {
   overallScore: number | null;
   reviewState?: string | null;
   codeCoverageVerified?: boolean;
-  limitations?: Array<{ code?: string; detail?: string }>;
+  limitations?: Array<{ code: string; detail: string }>;
 }
 
 interface IssueResponse {
@@ -125,10 +126,8 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
       const keyed = responses[responseKeyForIssue(issue, fileId)];
       if (keyed) return keyed;
     }
-    if (fileId) {
-      const scoped = responses[`${fileId}:${issue.id}`];
-      if (scoped) return scoped;
-    }
+    // Issue ids repeat across sheets, so a file-scoped finding never inherits another sheet's decision.
+    if (fileId) return responses[`${fileId}:${issue.id}`];
     return responses[issue.id];
   };
 
@@ -208,13 +207,13 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   
   // Score indicator
   const overallScore = summary.overallScore;
-  if (typeof overallScore !== "number") {
+  if (typeof overallScore !== "number" || reviewOutcome(summary) !== "verified_compliant") {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(exportScoreText(summary), margin, y + 18);
+    doc.text(doc.splitTextToSize(exportScoreText(summary), 60).map(safeText), margin, y + 12);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.text("Compliance Score", margin, y + 38);
+    doc.text("Review outcome", margin, y + 38);
   } else {
   const scoreColor = overallScore >= 80 
     ? [16, 185, 129] // emerald
@@ -424,6 +423,24 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     });
   };
 
+  const renderReasons = (title: string, items: Array<{ detail?: string }>) => {
+    const reasons = items.map((item) => safeText(item?.detail)).filter(Boolean);
+    if (reasons.length === 0) return;
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    checkPageBreak(14);
+    doc.text(title, margin + 2, y);
+    y += 10;
+    for (const reason of reasons.slice(0, 5)) {
+      checkPageBreak(12);
+      const lines = doc.splitTextToSize(`- ${reason}`, contentWidth - 8);
+      doc.text(lines.slice(0, 2).map(safeText), margin + 4, y);
+      y += 10 * Math.min(lines.length, 2);
+    }
+    y += 4;
+  };
+
   const sections = fileSections ?? [];
 
   if (sections.length > 1) {
@@ -445,6 +462,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
             reviewState: section.summary?.reviewState,
             totalIssues: section.issues?.length ?? section.summary?.totalIssues ?? 0,
             codeCoverageVerified: section.summary?.codeCoverageVerified,
+            limitations: section.summary?.limitations,
           });
       doc.text(
         `${safeText(section.fileName)}  (${scoreLabel})`,
@@ -470,23 +488,11 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
         doc.setTextColor(100, 116, 139);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text('No issues found for this file.', margin + 2, y);
+        doc.text('No findings identified for this file.', margin + 2, y);
         y += 14;
-        const reasons = (section.summary?.limitations ?? [])
-          .map((item) => safeText(item?.detail))
-          .filter(Boolean);
-        if (reasons.length > 0) {
-          doc.setFontSize(8);
-          doc.text('Why verification is incomplete:', margin + 2, y);
-          y += 10;
-          for (const reason of reasons.slice(0, 4)) {
-            checkPageBreak(12);
-            const lines = doc.splitTextToSize(`- ${reason}`, contentWidth - 8);
-            doc.text(lines.slice(0, 2).map(safeText), margin + 4, y);
-            y += 10 * Math.min(lines.length, 2);
-          }
-          y += 4;
-        }
+        const limitations = section.summary?.limitations ?? [];
+        renderReasons('Unresolved checks:', limitations.filter((item) => isUnresolvedCheck(item)));
+        renderReasons('Why code compliance is unverified:', limitations.filter((item) => !isUnresolvedCheck(item)));
         return;
       }
 

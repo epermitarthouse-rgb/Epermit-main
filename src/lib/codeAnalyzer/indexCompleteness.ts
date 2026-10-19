@@ -51,6 +51,10 @@ export interface IndexCompletenessResult {
   comparedSheetCount: number;
   /** Filled incrementally during async V2 analysis runs. */
   analysisCoverage?: AnalysisCoverageSnapshot | null;
+  /** Where the index rows came from: the sheet's text layer or the multimodal reader. */
+  indexSource?: "text" | "vision" | null;
+  /** Why rows could not be read when the index sheet was found. */
+  indexReadError?: string | null;
 }
 
 export interface ActualSheetLabel {
@@ -113,14 +117,28 @@ function indexCoverEntryFromText(text: string | null | undefined): IndexSheetEnt
   return null;
 }
 
-/** Remove project/spec number tokens (e.g. SPEC #24-070, Project 24-070) before sheet-number inference. */
+/**
+ * Remove project/spec number tokens (e.g. SPEC #24-070, Project 24-070) before sheet-number inference.
+ * A number joined to a sheet token ("A-1.01-00", "E-1.0-00") is part of that token, not a project number.
+ */
 function stripProjectSpecNumberFragments(label: string): string {
   return label
     .replace(/#\d{1,4}-\d{2,4}\b/gi, " ")
     .replace(/\b(?:SPEC|PROJECT|JOB(?:\s+NO\.?)?)\s*#?\d{1,4}-\d{2,4}\b/gi, " ")
-    .replace(/\b\d{1,4}-\d{2,4}\b/g, " ")
+    .replace(/(?<![-.\dA-Za-z])\d{1,4}-\d{2,4}\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Trailing all-zero revision groups ("S-001.00", "A-1.00-00", "E-1.0-00") do not change the drawing. */
+function stripRevisionSuffix(label: string): string {
+  return label.trim().replace(/(?<=\d)(?:[.-]0{1,2}){1,2}$/, "");
+}
+
+/** One comparable key for a printed or uploaded sheet number: separators and zero revision groups removed. */
+export function canonicalSheetNumber(label: string | null | undefined): string {
+  if (typeof label !== "string") return "";
+  return normalizeSheetNumber(stripRevisionSuffix(label));
 }
 
 /** True when a normalized token is a drawing sheet number, not a project/spec id fragment. */
@@ -170,14 +188,16 @@ function pickBestSheetNumberToken(label: string): string | null {
   const leading = matches.find((m) => (m.index ?? 0) <= 2);
   const token = (leading ?? matches[0])?.[1];
   if (!token) return null;
-  const normalized = normalizeSheetNumber(token);
+  const normalized = canonicalSheetNumber(token);
   return normalized || null;
 }
 
 /** Pull the first plausible sheet number token from a filename or label. */
 export function inferSheetNumberFromLabel(label: string | null | undefined): string | null {
   if (typeof label !== "string" || !label.trim()) return null;
-  const base = label.replace(/\.[^.]+$/, "").replace(/-page\d+$/i, "");
+  const base = stripRevisionSuffix(
+    label.trim().replace(/\.(?:pdf|png|jpe?g|tiff?|gif|webp|dwg)$/i, "").replace(/-page\d+$/i, ""),
+  );
   const stripped = stripProjectSpecNumberFragments(base);
   if (!stripped) return null;
   return pickBestSheetNumberToken(stripped);
@@ -258,7 +278,7 @@ export function parseIndexEntriesFromText(text: string | null | undefined): Inde
     }
 
     if (!sheetToken) continue;
-    const sheetNumber = normalizeSheetNumber(sheetToken);
+    const sheetNumber = canonicalSheetNumber(sheetToken);
     if (!sheetNumber || seen.has(sheetNumber)) continue;
     seen.add(sheetNumber);
     entries.push({
@@ -292,13 +312,10 @@ export function actualLabelsFromSheets(
 
     const inferredFromFile = inferSheetNumberFromLabel(sheet.file_name);
     const inferredFromLabel = sheet.sheet_label?.trim()
-      ? normalizeSheetNumber(sheet.sheet_label)
+      ? canonicalSheetNumber(sheet.sheet_label)
       : null;
     const indexCoverNumber = indexCoverEntry?.sheetNumber ?? null;
-    const sheetNumberCandidate =
-      inferredFromLabel ||
-      indexCoverNumber ||
-      (inferredFromFile ? normalizeSheetNumber(inferredFromFile) : null);
+    const sheetNumberCandidate = inferredFromLabel || indexCoverNumber || inferredFromFile || null;
     const comparable = Boolean(
       sheetNumberCandidate && isCredibleDrawingSheetNumber(sheetNumberCandidate),
     );
@@ -365,6 +382,11 @@ export function compareIndexCompleteness(
     };
   }
 
+  // Rows from text, vision, or a stored snapshot are compared on one canonical key.
+  expected = expected.map((entry) => {
+    const key = canonicalSheetNumber(entry.rawLabel || entry.sheetNumber) || entry.sheetNumber;
+    return key === entry.sheetNumber ? entry : { ...entry, sheetNumber: key };
+  });
   const indexSheetId = opts?.indexSheetId ?? null;
   const indexSheetRow =
     indexSheetId != null ? actual.find((a) => a.sheetId === indexSheetId) : undefined;

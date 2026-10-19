@@ -186,9 +186,37 @@ describe("combined sheet summary", () => {
     const summary = combineSheetSummaries(clear, clear);
     assert.equal(summary.reviewState, "reviewed_clear");
     assert.equal(summary.overallScore, null);
-    assert.equal(exportScoreText(summary), "No findings · Verification incomplete");
-    assert.equal(fileSectionScoreLabel(summary), "No findings · Verification incomplete");
+    assert.equal(exportScoreText(summary), "No findings identified · Code compliance unverified");
+    assert.equal(fileSectionScoreLabel(summary), "No findings identified · Code compliance unverified");
+    assert.equal(summary.outcome, "no_findings_unverified");
     assert.notEqual(exportScoreText(summary), "0%");
+  });
+
+  it("shows Verification incomplete only when a mode names an unresolved check, and lists it", () => {
+    const open = {
+      issues: [],
+      summary: {
+        totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: null,
+        reviewState: "reviewed_partial" as const,
+        limitations: [
+          { code: "reference_only_scope", detail: "Reference-only scope." },
+          { code: "open_check", detail: "Equipment grounding: the note restates the requirement. Withholding it is not proof of compliance." },
+        ],
+      },
+    };
+    const clear = {
+      issues: [],
+      summary: {
+        totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: null,
+        reviewState: "reviewed_clear" as const,
+        limitations: [{ code: "reference_only_scope", detail: "Reference-only scope." }],
+      },
+    };
+    const summary = combineSheetSummaries(clear, open);
+    assert.equal(summary.outcome, "verification_incomplete");
+    assert.equal(summary.outcomeLabel, "Verification incomplete");
+    assert.equal(summary.limitations?.length, 2);
+    assert.equal(combineSheetSummaries(clear, clear).outcomeLabel, "No findings identified · Code compliance unverified");
   });
 
   it("keeps reviewed_partial and reviewed_findings nullable", () => {
@@ -208,7 +236,7 @@ describe("combined sheet summary", () => {
     );
     assert.equal(partial.reviewState, "reviewed_partial");
     assert.equal(partial.overallScore, null);
-    assert.equal(exportScoreText(partial), "No findings · Verification incomplete");
+    assert.equal(exportScoreText(partial), "No findings identified · Code compliance unverified");
 
     const findings = combineSheetSummaries(
       {
@@ -227,7 +255,7 @@ describe("combined sheet summary", () => {
     assert.equal(findings.totalIssues, 1);
     assert.equal(findings.reviewState, "reviewed_findings");
     assert.equal(findings.overallScore, null);
-    assert.equal(exportScoreText(findings), "Findings");
+    assert.equal(exportScoreText(findings), "Potential issue");
     assert.notEqual(exportScoreText(findings), "0%");
   });
 });

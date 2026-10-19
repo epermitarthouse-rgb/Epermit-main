@@ -410,3 +410,45 @@ describe("isLikelyIndexSheet", () => {
     );
   });
 });
+
+describe("drawing identity from uploaded names with revision suffixes", () => {
+  const names = [
+    "A-1.00-00.pdf", "A-1.01-00.pdf", "A-1.02-00.pdf", "A-1.04.00.pdf", "A-6.01.00.pdf",
+    "CV-1.00-00.pdf", "DM-1.01-00.pdf", "E-1.0-00.pdf", "E-1.1-00.pdf", "E-1.2-00.pdf",
+    "EN-1.00-0.pdf", "EQ-1.00-0.pdf", "EQ-2.00-0.pdf", "FP100.pdf", "FP200 .pdf",
+    "G-0.00-0.pdf", "M-1.1.pdf", "M-2.0.pdf", "MD-1.1.pdf", "P-1.0-00.pdf", "P-1.1-00.pdf",
+    "S-001.00.pdf", "S-201.00.pdf",
+  ];
+  const sheets = names.map((file_name, i) => sheet({ id: `s${i}`, file_name, source_document_id: `d${i}` }));
+
+  it("keeps distinct drawings distinct (no false duplicates from revision groups)", () => {
+    const actual = actualLabelsFromSheets(sheets, { indexSheetId: "s5" });
+    const numbers = actual.filter((row) => row.sheetId !== "s5").map((row) => row.sheetNumber);
+    assert.equal(new Set(numbers).size, numbers.length, numbers.join(","));
+    assert.equal(inferSheetNumberFromLabel("E-1.0-00.pdf"), inferSheetNumberFromLabel("E-1.0"));
+    assert.equal(inferSheetNumberFromLabel("S-001.00.pdf"), inferSheetNumberFromLabel("S-001"));
+    assert.equal(inferSheetNumberFromLabel("A-1.01-00.pdf"), "A101");
+    assert.notEqual(inferSheetNumberFromLabel("A-1.01-00.pdf"), inferSheetNumberFromLabel("A-1.02-00.pdf"));
+    assert.equal(inferSheetNumberFromLabel("SPEC #24-070 A-101.pdf"), "A101");
+  });
+
+  it("reconciles printed index labels against uploads and reports missing and extra sheets", () => {
+    const printed = names
+      .filter((name) => !name.startsWith("CV"))
+      .map((name) => name.replace(/\.pdf$/i, "").trim().replace(/(?:[.-]0{1,2}){1,2}$/, ""));
+    const entries = [...printed.filter((label) => label !== "MD-1.1"), "A-5.00"].map((rawLabel) => ({
+      sheetNumber: normalizeSheetNumber(rawLabel),
+      rawLabel,
+      title: null,
+    }));
+    const result = runIndexCompletenessPrescreen(sheets, {
+      pageTextBySheetId: { s5: "COVER SHEET INDEX OF SHEETS N.T.S." },
+      indexEntries: entries,
+    });
+    assert.equal(result.hasIndex, true);
+    assert.equal(result.indexSheetId, "s5");
+    assert.equal(result.duplicates.length, 0);
+    assert.deepEqual(result.missing.map((row) => row.rawLabel), ["A-5.00"]);
+    assert.deepEqual(result.extra.map((row) => row.sheetNumber), ["MD11"]);
+  });
+});

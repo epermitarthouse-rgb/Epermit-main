@@ -3412,24 +3412,13 @@ export function AIComplianceAnalyzer() {
         exportAggregated.files.length === 1
           ? exportAggregated.files[0].fileName.replace(/\.[^/.]+$/, "")
           : null;
-      // PDF response lookup uses bare issue ids; remap file-scoped UI keys.
-      const pdfResponses: Record<string, IssueResponse> = { ...responses };
-      for (const file of exportAggregated.files) {
-        for (const issue of file.issues) {
-          const scoped = responses[complianceIssueResponseKey(file.fileId, issue.id)];
-          if (scoped && !pdfResponses[issue.id]) {
-            pdfResponses[issue.id] = scoped;
-          }
-        }
-      }
-
       exportComplianceReportPDF({
         jurisdiction,
         projectType,
         codeYear,
         summary: exportAggregated.summary,
         issues: exportAggregated.issues,
-        responses: pdfResponses,
+        responses,
         jurisdictionNotes: exportAggregated.jurisdictionNotes,
         projectName:
           selectedProjectName ||

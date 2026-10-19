@@ -57,6 +57,39 @@ function sheetIdentity(row) {
   ].join("|");
 }
 
+/**
+ * Drawing identity across documents: the sheet number when known, otherwise the file
+ * name and page. A newer document with the same identity replaces the older one.
+ */
+function drawingIdentity(row) {
+  const number = String(row.sheet_number || "").toUpperCase().replace(/[\s\-_.]/g, "");
+  if (number) return `${row.project_id}|n:${number}`;
+  const name = String(row.file_name || "").toLowerCase().replace(/\.[a-z0-9]+$/, "").trim();
+  if (!name) return null;
+  return `${row.project_id}|f:${name}|p:${row.page_number || 1}`;
+}
+
+/**
+ * Active rows can still hold an older document for the same drawing (written before
+ * replacement retirement existed). Keep only the most recently written document per drawing.
+ * @param {Array<Record<string, unknown>>} rows
+ */
+function latestDocumentPerDrawing(rows) {
+  const newest = new Map();
+  for (const row of rows) {
+    const identity = drawingIdentity(row);
+    if (!identity || !row.document_id) continue;
+    const at = String(row.updated_at || row.created_at || "");
+    const prior = newest.get(identity);
+    if (!prior || at > prior.at) newest.set(identity, { documentId: row.document_id, at });
+  }
+  return rows.filter((row) => {
+    const identity = drawingIdentity(row);
+    if (!identity || !row.document_id) return true;
+    return newest.get(identity)?.documentId === row.document_id;
+  });
+}
+
 function summarizeEmbeddings(records) {
   if (!records.length) return "unavailable";
   if (records.every((record) => record.embeddingStatus === "present")) return "present";
@@ -108,14 +141,14 @@ async function applyEmbeddings(records, embedTexts) {
  * Attach a stored embedding when the chunk key and text fingerprint are unchanged,
  * so a rerun on the same drawings does not pay to embed the same text again.
  * @param {Array<Record<string, unknown>>} expanded
- * @param {Map<string, { content_fingerprint?: string; embedding?: unknown }>} existingByKey
+ * @param {Map<string, { content_fingerprint?: string; embedding?: unknown }>} existingByKey keyed by `${project_id}:${chunk_key}`
  */
 function reuseStoredEmbeddings(expanded, existingByKey) {
   let reused = 0;
   const next = expanded.map((record) => {
     if (embeddingValue(record)) return record;
     const row = recordToRow(record);
-    const prior = existingByKey.get(row.chunk_key);
+    const prior = existingByKey.get(`${row.project_id}:${row.chunk_key}`);
     if (!prior || prior.content_fingerprint !== row.content_fingerprint) return record;
     const embedding = Array.isArray(prior.embedding) ? prior.embedding : parseEmbedding(prior.embedding);
     if (!Array.isArray(embedding) || embedding.length !== 1536) return record;
@@ -274,17 +307,28 @@ function createMemoryBackend() {
 
 function retireMemoryRows(backend, written) {
   const keysBySheet = new Map();
+  const documentByDrawing = new Map();
   for (const row of written) {
     const identity = sheetIdentity(row);
     if (!keysBySheet.has(identity)) keysBySheet.set(identity, new Set());
     keysBySheet.get(identity).add(row.chunk_key);
+    const drawing = drawingIdentity(row);
+    if (drawing && row.document_id) documentByDrawing.set(drawing, row.document_id);
   }
+  const now = new Date().toISOString();
   for (const existing of backend.rows.values()) {
     if (existing.superseded) continue;
     const keys = keysBySheet.get(sheetIdentity(existing));
-    if (!keys || keys.has(existing.chunk_key)) continue;
-    existing.superseded = true;
-    existing.superseded_at = new Date().toISOString();
+    if (keys && !keys.has(existing.chunk_key)) {
+      existing.superseded = true;
+      existing.superseded_at = now;
+      continue;
+    }
+    const replacing = documentByDrawing.get(drawingIdentity(existing));
+    if (replacing && existing.document_id && existing.document_id !== replacing) {
+      existing.superseded = true;
+      existing.superseded_at = now;
+    }
   }
 }
 
@@ -298,7 +342,7 @@ function createMemoryDrawingStore(backend = createMemoryBackend(), options = {})
       const fresh = expandRecords(records);
       const existing = new Map();
       for (const row of backend.rows.values()) {
-        if (!row.superseded) existing.set(row.chunk_key, row);
+        if (!row.superseded) existing.set(`${row.project_id}:${row.chunk_key}`, row);
       }
       const reuse = reuseStoredEmbeddings(fresh, existing);
       const expanded = await applyEmbeddings(reuse.records, options.embedTexts);
@@ -313,7 +357,7 @@ function createMemoryDrawingStore(backend = createMemoryBackend(), options = {})
       };
     },
     async listActive(projectId) {
-      return backend.listActive(projectId);
+      return latestDocumentPerDrawing(backend.listActive(projectId));
     },
   };
 }
@@ -365,6 +409,32 @@ async function retireSupabaseRows(supabase, rows) {
         .update({ superseded: true, superseded_at: new Date().toISOString() })
         .eq("project_id", sample.project_id)
         .eq("chunk_key", existing.chunk_key);
+    }
+  }
+  await retireReplacedDocuments(supabase, rows);
+}
+
+/** A newer document for the same drawing retires the older document's active chunks. */
+async function retireReplacedDocuments(supabase, rows) {
+  const seen = new Set();
+  for (const row of rows) {
+    if (!row.document_id) continue;
+    const identity = drawingIdentity(row);
+    if (!identity || seen.has(identity)) continue;
+    seen.add(identity);
+    try {
+      let query = supabase
+        .from(TABLE)
+        .update({ superseded: true, superseded_at: new Date().toISOString() })
+        .eq("project_id", row.project_id)
+        .eq("superseded", false)
+        .neq("document_id", row.document_id);
+      query = row.sheet_number
+        ? query.eq("sheet_number", row.sheet_number)
+        : query.eq("file_name", row.file_name).eq("page_number", row.page_number || 1);
+      await query;
+    } catch {
+      // Retirement failure leaves older chunks active; reads still keep the newest document.
     }
   }
 }
@@ -426,7 +496,7 @@ function createSupabaseDrawingStore(supabase, options = {}) {
             .eq("superseded", false)
             .in("chunk_key", keys);
           if (listed?.error || !Array.isArray(listed?.data)) continue;
-          for (const row of listed.data) existing.set(row.chunk_key, row);
+          for (const row of listed.data) existing.set(`${projectId}:${row.chunk_key}`, row);
         } catch {
           // Reuse is an optimization. A failed lookup embeds the chunks again.
         }
@@ -461,7 +531,7 @@ function createSupabaseDrawingStore(supabase, options = {}) {
         reportPersistenceFailure(logger, { reason: "read_failed", code: error.code || null, message: error.message || null });
         throw error;
       }
-      return data || [];
+      return latestDocumentPerDrawing(data || []);
     },
   };
 }

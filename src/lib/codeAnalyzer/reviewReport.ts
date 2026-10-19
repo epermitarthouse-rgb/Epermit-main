@@ -84,7 +84,10 @@ export type ReviewReportView = {
   confirmedFindings: ReviewIssueLike[];
   verificationQuestions: ReviewIssueLike[];
   cleanChecks: string[];
+  /** Why code compliance is unverified (scope, code source, evidence coverage). */
   unreviewable: string[];
+  /** Specific substantive checks the review could not resolve. */
+  unresolvedChecks: string[];
   /** Why the review is not a verified pass. Empty only for a verified compliant review. */
   limitations: ReviewLimitation[];
   evidence: Array<{ where: string; quote: string; hasRegion: boolean }>;
@@ -118,7 +121,8 @@ export function reviewStateLabel(state: string | null | undefined, score: number
 export type ReviewOutcomeName =
   | "verified_compliant"
   | "potential_issue"
-  | "insufficient_evidence"
+  | "verification_incomplete"
+  | "no_findings_unverified"
   | "not_applicable"
   | "not_reviewed"
   | "failed";
@@ -129,38 +133,88 @@ export type ReviewOutcomeSummary = {
   totalIssues?: number;
   codeCoverageVerified?: boolean;
   notApplicable?: boolean;
+  limitations?: ReviewLimitation[] | null;
 };
 
+/** Limitations that name a specific substantive check the review could not resolve. */
+const UNRESOLVED_CHECK_CODES = new Set(["open_check"]);
+
+export function isUnresolvedCheck(item: ReviewLimitation | null | undefined): boolean {
+  return UNRESOLVED_CHECK_CODES.has(String(item?.code || ""));
+}
+
 /**
- * Presentation outcome over the stored review state. A stored reviewed_clear without
- * an authoritative requirement shows as insufficient evidence, never as a verified pass.
+ * Presentation outcome over the stored review state.
+ * Zero findings is never a pass: compliance is verified only when an authoritative
+ * requirement and the drawing evidence were both confirmed (codeCoverageVerified).
  */
 export function reviewOutcome(summary: ReviewOutcomeSummary | null | undefined): ReviewOutcomeName {
   const state = summary?.reviewState ?? null;
   if (state === "failed") return "failed";
   if ((summary?.totalIssues ?? 0) > 0) return "potential_issue";
   if (summary?.notApplicable === true) return "not_applicable";
-  if (state === "passed" && typeof summary?.overallScore === "number") return "verified_compliant";
   if (!state || state === "not_reviewed") return "not_reviewed";
+  if ((summary?.limitations ?? []).some(isUnresolvedCheck)) return "verification_incomplete";
   if ((state === "reviewed_clear" || state === "passed") && summary?.codeCoverageVerified === true) {
     return "verified_compliant";
   }
-  return "insufficient_evidence";
+  return "no_findings_unverified";
 }
 
 /** Header and export text. Missing scores stay words, never 0% or 100%. */
 export function reviewOutcomeLabel(summary: ReviewOutcomeSummary | null | undefined): string {
   const outcome = reviewOutcome(summary);
-  const score = summary?.overallScore;
   if (outcome === "failed") return "Failed";
   if (outcome === "not_reviewed") return "Not reviewed";
   if (outcome === "not_applicable") return "Not applicable";
-  if (outcome === "insufficient_evidence") return "No findings · Verification incomplete";
-  if (outcome === "verified_compliant") return typeof score === "number" ? `${score}% · Verified` : "Verified compliant";
-  return typeof score === "number" ? `${score}%` : "Findings";
+  if (outcome === "verification_incomplete") return "Verification incomplete";
+  if (outcome === "no_findings_unverified") return "No findings identified · Code compliance unverified";
+  if (outcome === "verified_compliant") return "Verified compliant";
+  return "Potential issue";
+}
+
+export type ReviewAssessment = {
+  /** Were the completed checks tied to quotes found on the drawings? */
+  drawingEvidence: "evidence_backed" | "partly_evidence_backed" | "no_checks" | "not_assessed";
+  /** Technical concerns raised, or substantive checks left open. */
+  technicalRequirements: "concerns_identified" | "checks_unresolved" | "no_concerns_identified" | "not_assessed";
+  /** Was an authoritative code requirement matched to the evidence? */
+  codeVerification: "verified" | "unverified";
+  /** Is the selected edition the verified adopted permit code? */
+  applicability: "permit_compliance" | "reference_only";
+};
+
+/** Four separate dimensions. One being unverified does not change the others. */
+export function reviewAssessment(input: {
+  reviewState?: string | null;
+  totalIssues?: number;
+  codeCoverageVerified?: boolean;
+  limitations?: ReviewLimitation[] | null;
+}): ReviewAssessment {
+  const codes = new Set((input.limitations ?? []).map((item) => item.code));
+  const ran = Boolean(input.reviewState) && input.reviewState !== "not_reviewed" && input.reviewState !== "failed";
+  return {
+    drawingEvidence: !ran
+      ? "not_assessed"
+      : codes.has("no_checks_returned")
+        ? "no_checks"
+        : codes.has("checks_not_evidence_backed")
+          ? "partly_evidence_backed"
+          : "evidence_backed",
+    technicalRequirements: !ran
+      ? "not_assessed"
+      : (input.totalIssues ?? 0) > 0
+        ? "concerns_identified"
+        : (input.limitations ?? []).some(isUnresolvedCheck)
+          ? "checks_unresolved"
+          : "no_concerns_identified",
+    codeVerification: input.codeCoverageVerified === true ? "verified" : "unverified",
+    applicability: codes.has("reference_only_scope") ? "reference_only" : "permit_compliance",
+  };
 }
 
 const OPEN_CHECK_REJECTIONS = new Set([
+  "cross_sheet_owner",
   "documented_design_provision",
   "requirement_already_on_sheet",
   "requirement_already_specified",
@@ -255,8 +309,9 @@ export function buildReviewReportView(
   ];
   const states = metadata.map((item) => item.summary?.reviewState).filter(Boolean);
   const limitations = reviewLimitations(metadata);
-  const unreviewable: string[] = limitations.map((item) => item.detail);
-  if (states.includes("reviewed_partial") && unreviewable.length === 0) {
+  const unresolvedChecks = limitations.filter(isUnresolvedCheck).map((item) => item.detail);
+  const unreviewable: string[] = limitations.filter((item) => !isUnresolvedCheck(item)).map((item) => item.detail);
+  if (states.includes("reviewed_partial") && limitations.length === 0) {
     unreviewable.push("The model finished, but the evidence was not complete enough to score this sheet.");
   }
   if (states.includes("failed")) unreviewable.push("The model call failed.");
@@ -311,6 +366,7 @@ export function buildReviewReportView(
     ),
     cleanChecks,
     unreviewable,
+    unresolvedChecks,
     limitations,
     evidence: evidence.slice(0, 12),
     withheldReasons: withheld,
@@ -354,6 +410,7 @@ export function reviewEvidenceStripSummary(
       overallScore: context?.overallScore,
       totalIssues: context?.totalIssues ?? view.confirmedFindings.length + view.verificationQuestions.length,
       codeCoverageVerified: context?.codeCoverageVerified,
+      limitations: view.limitations,
     }),
     countLabel,
   };

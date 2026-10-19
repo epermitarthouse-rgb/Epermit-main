@@ -1,7 +1,8 @@
 "use strict";
 
 const { decideCandidate, applyDecision, sheetRoles, cleanTopic } = require("./review/verifier.js");
-const { resolveReviewState, reviewOutcome } = require("./review/reviewStates.js");
+const { resolveReviewState, reviewOutcome, reviewAssessment } = require("./review/reviewStates.js");
+const { recordCanAnswer } = require("./review/applicability.js");
 const {
   isUnselectedJurisdiction,
   resolveJurisdictionDecision,
@@ -634,8 +635,7 @@ function otherRecordSuppliesFact(issue, ctx) {
   const records = Array.isArray(ctx.drawingRecords) ? ctx.drawingRecords : [];
   for (const record of records) {
     if (isCurrentSheetEntry({ fileName: record.fileName, sheetId: record.sheetId }, ctx)) continue;
-    const text = `${record.text || ""}\n${(record.observations || []).map((item) => item.quote || "").join("\n")}`;
-    if (pageTextSuppliesMissingFact(issue, text)) return record;
+    if (recordCanAnswer(issue, record, ctx, (passage) => pageTextSuppliesMissingFact(issue, passage))) return record;
   }
   return null;
 }
@@ -670,11 +670,14 @@ function hardenIssues(issues, ctx) {
 
     const gated = applyEvidenceGate(issue, ctx);
     if (!gated) {
+      const gateReason = evidenceGateReason(issue, ctx);
       rejectedCandidates.push({
         ...issue,
         validationDisposition: "reject",
-        validationReason: evidenceGateReason(issue, ctx),
-        validationDetail: "The sheet or the set already covers this item, so it is not published as a finding.",
+        validationReason: gateReason,
+        validationDetail: gateReason === "cross_sheet_owner"
+          ? "Another sheet in the set normally carries this information, but it was not confirmed there. Check that sheet."
+          : "The sheet or the set already covers this item, so it is not published as a finding.",
         userVisible: false,
         diagnostics: { originalTitle: issue.title || null },
       });
@@ -850,6 +853,12 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     codeCoverageVerified: coverageVerified,
     unresolvedLimitationCount: unresolved.length,
   });
+  const outcomeInput = {
+    reviewState: decision.reviewState,
+    totalIssues: stored.length,
+    codeCoverageVerified: coverageVerified,
+    limitations: decision.reviewState === "reviewed_clear" && coverageVerified ? [] : limitations,
+  };
   let score = decision.overallScore;
   if (decision.reviewState === "reviewed_findings") {
     const modelScore =
@@ -869,12 +878,9 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     checklist: passItems,
     cleanChecks: evidenceBacked ? passItems : [],
     reviewState: decision.reviewState,
-    reviewOutcome: reviewOutcome({
-      reviewState: decision.reviewState,
-      totalIssues: stored.length,
-      codeCoverageVerified: coverageVerified,
-    }),
-    limitations: decision.reviewState === "reviewed_clear" ? [] : limitations,
+    reviewOutcome: reviewOutcome(outcomeInput),
+    assessment: reviewAssessment(outcomeInput),
+    limitations: outcomeInput.limitations,
     overallScore: score,
     codeCoverageVerified: coverageVerified,
   };
@@ -886,6 +892,7 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
  * A note that only restates a requirement does not prove the requirement is met.
  */
 const OPEN_CHECK_REJECTIONS = new Set([
+  "cross_sheet_owner",
   "documented_design_provision",
   "requirement_already_on_sheet",
   "requirement_already_specified",

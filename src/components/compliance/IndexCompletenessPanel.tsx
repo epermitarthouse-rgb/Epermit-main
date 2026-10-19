@@ -85,7 +85,7 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
               {result.duplicates.length > 0
                 ? `; duplicate sheet numbers: ${result.duplicates.map((dup) => dup.rawLabels.join(", ")).join("; ")}`
                 : ""}
-              ).
+              ).{result.indexReadError ? ` ${result.indexReadError}` : ""}
             </AlertDescription>
           </Alert>
         ) : result.status === "no_index" ? (
@@ -102,6 +102,7 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
             <div className="flex flex-wrap gap-4 text-muted-foreground">
               <span>
                 Expected: <strong className="text-foreground">{result.expectedCount}</strong>
+                {result.indexSource === "vision" ? " (read from the index image)" : ""}
               </span>
               <span>
                 Uploaded: <strong className="text-foreground">{result.comparedSheetCount}</strong>

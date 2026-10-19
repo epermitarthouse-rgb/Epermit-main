@@ -43,7 +43,7 @@ describe("ReviewEvidenceReport", () => {
     assert.match(collapsed, /aria-expanded="false"/);
     assert.match(collapsed, /A-1\.00\.pdf/);
     assert.match(collapsed, /general-ibc/);
-    assert.match(collapsed, /Findings/);
+    assert.match(collapsed, /Potential issue/);
     assert.match(collapsed, /1 evidence/);
     assert.doesNotMatch(collapsed, /Confirmed findings/);
     assert.doesNotMatch(collapsed, /User emphasis/);
@@ -68,7 +68,7 @@ describe("ReviewEvidenceReport", () => {
     assert.match(expanded, /Check the note/);
     assert.match(expanded, /Evidence-backed checks/);
     assert.match(expanded, /Exit width/);
-    assert.match(expanded, /Why verification is incomplete/);
+    assert.match(expanded, /Why code compliance is unverified/);
     assert.match(expanded, /reference-only/);
     assert.match(expanded, /1 HR/);
     assert.match(expanded, /location on sheet/);
@@ -101,10 +101,38 @@ describe("ReviewEvidenceReport", () => {
         expanded: true,
       }),
     );
-    assert.match(html, /No findings · Verification incomplete/);
+    assert.match(html, /No findings identified · Code compliance unverified/);
     assert.match(html, /IBC 2021 is not verified as the adopted permit code/);
     assert.match(html, /No authoritative code requirement/);
     assert.match(html, /returned no completed checks/);
     assert.doesNotMatch(html, /0%|100%/);
+  });
+
+  it("lists the specific unresolved checks when verification is incomplete", () => {
+    const partial = buildReviewReportView(
+      [
+        {
+          sheet_file_name: "E-1.1.pdf",
+          summary: { reviewState: "reviewed_partial", overallScore: null, checklist: ["Panel: 200A"], cleanChecks: ["Panel: 200A"] },
+          legalApplicability: { status: "conflict", reviewScope: "reference_only", selectedEdition: "IBC 2021" },
+          rejectedCandidates: [
+            { title: "Equipment grounding", validationReason: "documented_design_provision", validationDetail: "The sheet note states the requirement." },
+          ],
+        },
+      ],
+      [],
+    );
+    const html = renderToStaticMarkup(
+      createElement(ReviewEvidenceReport, {
+        view: partial,
+        reviewState: "reviewed_partial",
+        overallScore: null,
+        totalIssues: 0,
+        expanded: true,
+      }),
+    );
+    assert.match(html, /Verification incomplete/);
+    assert.match(html, /Unresolved checks/);
+    assert.match(html, /Equipment grounding: The sheet note states the requirement\./);
   });
 });

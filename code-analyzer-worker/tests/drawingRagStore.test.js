@@ -345,6 +345,48 @@ describe("drawing evidence store", () => {
     assert.equal(hits[0].diagnostics.embeddingStatus, "present");
     assert.equal(hits[0].provenance.legs.vector, false);
   });
+
+  it("retires an older document's chunks when a replacement document has the same drawing", async () => {
+    const backend = createMemoryBackend();
+    let embedded = 0;
+    const embedTexts = async (texts) => {
+      embedded += texts.length;
+      return texts.map(() => Array.from({ length: 1536 }, () => 0.01));
+    };
+    const store = createMemoryDrawingStore(backend, { embedTexts });
+    const projectA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const projectB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const oldDoc = "11111111-1111-4111-8111-111111111111";
+    const newDoc = "22222222-2222-4222-8222-222222222222";
+    const sheet = (documentId, text, projectId = projectA) => ({
+      projectId, documentId, fileName: "A-1.01-00.pdf", sheetNumber: "A-1.01", pageNumber: 1, text,
+    });
+    await store.upsertRecords([sheet(oldDoc, "FLOOR PLAN DOOR 101 36 INCH REV 1")]);
+    await store.upsertRecords([sheet(oldDoc, "OTHER PROJECT FLOOR PLAN", projectB)]);
+    const firstEmbedded = embedded;
+    await store.upsertRecords([sheet(oldDoc, "FLOOR PLAN DOOR 101 36 INCH REV 1")]);
+    assert.equal(embedded, firstEmbedded, "unchanged content is not embedded again");
+
+    await store.upsertRecords([sheet(newDoc, "FLOOR PLAN DOOR 101 42 INCH REV 2")]);
+    const active = await store.listActive(projectA);
+    assert.ok(active.length > 0);
+    assert.ok(active.every((row) => row.document_id === newDoc));
+    assert.equal(active.some((row) => /REV 1/.test(row.chunk_text)), false);
+    assert.ok([...backend.rows.values()].some((row) => row.document_id === oldDoc && row.project_id === projectA && row.superseded));
+    const other = await store.listActive(projectB);
+    assert.ok(other.length > 0 && other.every((row) => row.project_id === projectB && !row.superseded));
+  });
+
+  it("keeps only the newest document per drawing when older active rows predate retirement", async () => {
+    const backend = createMemoryBackend();
+    const store = createMemoryDrawingStore(backend);
+    const project = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    backend.rows.set("old", { project_id: project, document_id: "d-old", sheet_number: "M-1.1", chunk_key: "old", chunk_text: "OLD", superseded: false, updated_at: "2026-01-01T00:00:00Z" });
+    backend.rows.set("new", { project_id: project, document_id: "d-new", sheet_number: "M-1.1", chunk_key: "new", chunk_text: "NEW", superseded: false, updated_at: "2026-02-01T00:00:00Z" });
+    backend.rows.set("other", { project_id: project, document_id: "d-old", sheet_number: "M-1.2", chunk_key: "other", chunk_text: "KEEP", superseded: false, updated_at: "2026-01-01T00:00:00Z" });
+    const texts = (await store.listActive(project)).map((row) => row.chunk_text).sort();
+    assert.deepEqual(texts, ["KEEP", "NEW"]);
+  });
 });
 
 describe("drawing rag migration", () => {

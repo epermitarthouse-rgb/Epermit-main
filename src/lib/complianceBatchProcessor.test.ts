@@ -486,6 +486,17 @@ describe("complianceBatchProcessor", () => {
         totalIssues: 0,
         reviewState: "passed",
       }),
+      null,
+    );
+    assert.equal(
+      computeComplianceOverallScore({
+        critical: 0,
+        warnings: 0,
+        advisory: 0,
+        totalIssues: 0,
+        reviewState: "passed",
+        codeCoverageVerified: true,
+      }),
       100,
     );
     const normalized = normalizeComplianceAnalysisResult(
@@ -515,8 +526,9 @@ describe("complianceBatchProcessor", () => {
       },
       "ibc",
     );
+    // A checklist records what was looked at. Without verified code coverage it is not a 100% pass.
     assert.equal(passed.summary.reviewState, "passed");
-    assert.equal(passed.summary.overallScore, 100);
+    assert.equal(passed.summary.overallScore, null);
   });
 
   it("keeps a numeric AI score when issues are present", () => {

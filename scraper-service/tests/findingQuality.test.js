@@ -175,8 +175,10 @@ describe("empty review is not a pass", () => {
       "ibc",
       { pageText: '44" clear labeled at grid B\nshown on sheet A-1.01' },
     );
-    assert.equal(hardened.summary.reviewState, "reviewed_partial");
-    assert.equal(hardened.summary.reviewOutcome, "insufficient_evidence");
+    assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.reviewOutcome, "no_findings_unverified");
+    assert.equal(hardened.summary.assessment.drawingEvidence, "evidence_backed");
+    assert.equal(hardened.summary.assessment.codeVerification, "unverified");
     assert.equal(hardened.summary.cleanChecks.length, 2);
     assert.ok(hardened.summary.limitations.some((item) => item.code === "no_authoritative_requirement"));
     assert.equal(hardened.summary.overallScore, null);
@@ -529,8 +531,8 @@ describe("page text drops missing-information notes that the sheet already state
       "ibc",
       { sheetTitle: "Plumbing details", fileName: "plumbing.pdf", pageText: "GREASE OUTPUT SELECT GREASE INTERCEPTOR. BACKFLOW PREVENTION SHALL COMPLY." },
     );
-    assert.equal(hardened.summary.reviewState, "reviewed_partial");
-    assert.equal(hardened.summary.reviewOutcome, "insufficient_evidence");
+    assert.notEqual(hardened.summary.reviewOutcome, "verified_compliant");
+    assert.equal(hardened.summary.reviewOutcome, "no_findings_unverified");
     assert.equal(hardened.summary.overallScore, null);
   });
 });
@@ -782,7 +784,7 @@ describe("content class does not discard a reviewed sheet", () => {
       "ibc",
       { contentClass: "schedule", sheetTitle: "A-6.00.pdf", pageText: "Door 101 labeled HW-3" },
     );
-    assert.equal(hardened.summary.reviewState, "reviewed_partial");
+    assert.equal(hardened.summary.reviewOutcome, "no_findings_unverified");
     assert.equal(hardened.summary.cleanChecks.length, 1);
     assert.equal(hardened.summary.overallScore, null);
   });

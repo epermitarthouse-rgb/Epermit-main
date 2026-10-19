@@ -1,23 +1,65 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildReviewReportView, reviewOutcome, reviewOutcomeLabel, reviewStateLabel } from "./reviewReport.ts";
+import {
+  buildReviewReportView,
+  reviewAssessment,
+  reviewOutcome,
+  reviewOutcomeLabel,
+  reviewStateLabel,
+} from "./reviewReport.ts";
+
+const UNVERIFIED = "No findings identified · Code compliance unverified";
+const openCheck = { code: "open_check", detail: "Equipment grounding: restated note. Withholding it is not proof of compliance." };
+const referenceOnly = { code: "reference_only_scope", detail: "Reference-only scope." };
 
 describe("review outcome", () => {
   it("never presents a stored Clear without an authoritative requirement as verified", () => {
-    assert.equal(reviewOutcome({ reviewState: "reviewed_clear", totalIssues: 0 }), "insufficient_evidence");
-    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_clear", totalIssues: 0 }), "No findings · Verification incomplete");
+    assert.equal(reviewOutcome({ reviewState: "reviewed_clear", totalIssues: 0 }), "no_findings_unverified");
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_clear", totalIssues: 0 }), UNVERIFIED);
+    assert.equal(reviewOutcomeLabel({ reviewState: "passed", overallScore: 100, totalIssues: 0 }), UNVERIFIED);
     assert.equal(
       reviewOutcome({ reviewState: "reviewed_clear", totalIssues: 0, codeCoverageVerified: true, overallScore: 100 }),
       "verified_compliant",
     );
-    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_partial", totalIssues: 0 }), "No findings · Verification incomplete");
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_partial", totalIssues: 0 }), UNVERIFIED);
     assert.equal(reviewOutcome({ reviewState: "reviewed_partial", totalIssues: 2 }), "potential_issue");
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_findings", overallScore: 82, totalIssues: 2 }), "Potential issue");
     assert.equal(reviewOutcome({ reviewState: "not_reviewed" }), "not_reviewed");
     assert.equal(reviewOutcome({ reviewState: "reviewed_clear", notApplicable: true }), "not_applicable");
     assert.equal(reviewOutcomeLabel({ reviewState: "failed" }), "Failed");
     for (const state of ["reviewed_clear", "reviewed_partial", "reviewed_findings", "not_reviewed"]) {
       assert.doesNotMatch(reviewOutcomeLabel({ reviewState: state, overallScore: null, totalIssues: 0 }), /0%|100%/);
     }
+  });
+
+  it("reference-only scope alone leaves compliance unverified; only a named open check is incomplete", () => {
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_clear", totalIssues: 0, limitations: [referenceOnly] }), UNVERIFIED);
+    assert.equal(
+      reviewOutcomeLabel({ reviewState: "reviewed_partial", totalIssues: 0, limitations: [referenceOnly, openCheck] }),
+      "Verification incomplete",
+    );
+    assert.equal(
+      reviewOutcomeLabel({ reviewState: "reviewed_clear", totalIssues: 0, codeCoverageVerified: true, limitations: [openCheck] }),
+      "Verification incomplete",
+    );
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_partial", totalIssues: 1, limitations: [openCheck] }), "Potential issue");
+  });
+
+  it("keeps the four review dimensions separate", () => {
+    assert.deepEqual(reviewAssessment({ reviewState: "reviewed_clear", totalIssues: 0, limitations: [referenceOnly] }), {
+      drawingEvidence: "evidence_backed",
+      technicalRequirements: "no_concerns_identified",
+      codeVerification: "unverified",
+      applicability: "reference_only",
+    });
+    assert.deepEqual(reviewAssessment({ reviewState: "reviewed_clear", totalIssues: 0, codeCoverageVerified: true, limitations: [] }), {
+      drawingEvidence: "evidence_backed",
+      technicalRequirements: "no_concerns_identified",
+      codeVerification: "verified",
+      applicability: "permit_compliance",
+    });
+    assert.equal(reviewAssessment({ reviewState: "reviewed_partial", limitations: [openCheck] }).technicalRequirements, "checks_unresolved");
+    assert.equal(reviewAssessment({ reviewState: "not_reviewed" }).drawingEvidence, "not_assessed");
   });
 
   it("derives limitation reasons for saved rows that predate stored reasons", () => {
@@ -38,7 +80,10 @@ describe("review outcome", () => {
     assert.ok(codes.includes("no_authoritative_requirement"));
     assert.ok(codes.includes("open_check"));
     assert.equal(view.limitations.filter((item) => item.code === "open_check").length, 1);
-    assert.ok(view.unreviewable.some((line) => /not proof of compliance/.test(line)));
+    assert.equal(view.unresolvedChecks.length, 1);
+    assert.match(view.unresolvedChecks[0], /Equipment grounding.*not proof of compliance/);
+    assert.ok(!view.unreviewable.some((line) => /not proof of compliance/.test(line)));
+    assert.ok(view.unreviewable.some((line) => /reference-only/.test(line)));
   });
 });
 

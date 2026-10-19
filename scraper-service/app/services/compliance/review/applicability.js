@@ -115,6 +115,69 @@ function documentRoles(ctx) {
   return roles;
 }
 
+/** Discipline letter from a sheet name (A, S, M, P, E, FP, ...); "" when none. */
+function sheetDiscipline(record) {
+  const name = `${record?.fileName || ""} ${record?.sheetNumber || ""}`.toUpperCase();
+  const prefix = (name.match(/(?:^|[\s/])([A-Z]{1,3})[-.\s]?\d/) || [])[1] || "";
+  if (prefix === "FP" || prefix === "F") return "FP";
+  if (prefix === "EN") return "EN";
+  if (prefix === "LS") return "A";
+  if (/^(G|CV|T|GI|GN)$/.test(prefix)) return "G";
+  if (/^(MD|M)$/.test(prefix)) return "M";
+  if (/^(PD|P)$/.test(prefix)) return "P";
+  if (/^(ED|E)$/.test(prefix)) return "E";
+  if (/^(AD|A|DM|D|ID|I)$/.test(prefix)) return "A";
+  return prefix.slice(0, 1);
+}
+
+/** Disciplines whose sheets normally state a topic. Empty when the topic is not recognized. */
+const TOPIC_OWNERS = [
+  [/\b(emergency\s+light\w*|exit\s+signs?|grounding|conductors?|panel(?:board)?s?|circuits?|receptacles?|gfci)\b/i, ["E"]],
+  [/\b(sprinklers?|standpipes?|fire\s+alarm|fire\s+pumps?|hydraulic)\b/i, ["FP"]],
+  [/\b(insulation)\b/i, ["M", "P"]],
+  [/\b(grease\s+interceptors?|backflow|water\s+hammer|fixtures?|drains?|water\s+service|expansion\s+tank|valves?)\b/i, ["P"]],
+  [/\b(duct(?:work)?|dampers?|ventilation|exhaust|hoods?|hvac|diffusers?)\b/i, ["M"]],
+  [/\b(structural|connections?|beams?|joists?|truss(?:es)?|footings?|anchorage|special\s+inspections?|shoring|temporary\s+support|fasteners?)\b/i, ["S"]],
+  [/\b(fire[\s-]*(?:rat(?:ed|ing)|separation|resist\w*|barriers?|partitions?)|rated\s+(?:assembl|partition|wall)\w*|egress|corridors?|exits?|stairs?|ramps?|accessib\w*|guard(?:rail)?s?|handrails?|counters?|clearances?|doors?|restrooms?|toilet)\b/i, ["A"]],
+  [/\b(energy|comcheck)\b/i, ["EN", "A", "M", "E"]],
+];
+
+/**
+ * Another sheet answers a claim only when it states the fact next to the claim's
+ * subject, and the sheet is the same discipline, a general/notes sheet, or a
+ * discipline that owns the topic. A fact elsewhere on an unrelated sheet is not an answer.
+ * @param {Record<string, unknown>} issue
+ * @param {Record<string, unknown>} record
+ * @param {Record<string, unknown>} ctx
+ * @param {(passage: string) => boolean} statesFact
+ */
+function recordCanAnswer(issue, record, ctx, statesFact) {
+  const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
+  const subject = titleObjective.length ? titleObjective : subjectTokens(issue);
+  if (!subject.length) return false;
+  const own = sheetDiscipline({ fileName: ctx?.fileName || ctx?.sheetTitle, sheetNumber: ctx?.sheetNumber });
+  const theirs = sheetDiscipline(record);
+  const claim = `${issue?.diagnostics?.originalTitle || issue?.title || ""} ${issue?.description || ""}`;
+  const owners = new Set(TOPIC_OWNERS.filter(([pattern]) => pattern.test(claim)).flatMap(([, list]) => list));
+  const general = theirs === "G" || isGeneralNotesSheet({ fileName: record?.fileName, sheetTitle: record?.title, contentClass: record?.contentClass });
+  const sameDiscipline = Boolean(own) && theirs === own;
+  if (!general && !sameDiscipline && !owners.has(theirs)) return false;
+  const body = recordBody(record);
+  // A legend or section in the same discipline can state the fact without repeating the title words.
+  if (sameDiscipline && statesFact(body)) return true;
+  const lower = body.toLowerCase();
+  for (const token of subject) {
+    let from = 0;
+    while (from < lower.length) {
+      const at = lower.indexOf(token, from);
+      if (at < 0) break;
+      if (statesFact(body.slice(Math.max(0, at - 200), at + token.length + 200))) return true;
+      from = at + token.length;
+    }
+  }
+  return false;
+}
+
 function establishReviewContext(input = {}) {
   const recordText = (input.drawingRecords || []).map((record) => record?.text || "").join("\n");
   const corpus = `${input.projectType || ""}\n${input.pageText || ""}\n${recordText}`;
@@ -257,20 +320,27 @@ function searchProjectEvidence(issue, ctx) {
   }
   const claim = claimText(issue);
   const tokens = distinctiveTokens(claim).slice(0, 8);
-  const measures = claim.match(/\d+(?:\.\d+)?/g) || [];
+  // Only measured values with a unit count; code years and section numbers are not measures.
+  const measures = (claim.match(/\b\d+(?:\.\d+)?\s*(?:"|″|'|′|inch(?:es)?|in\.|ft|feet|hours?|hr|minutes?|psf|lbs?|pounds)/gi) || [])
+    .map((value) => value.match(/\d+(?:\.\d+)?/)[0]);
+  const measureNear = (passage) => {
+    const lower = passage.toLowerCase();
+    return measures.some((number) => new RegExp(`(^|[^\\d.])${number.replace(".", "\\.")}(?![\\d])`).test(lower))
+      && tokens.filter((token) => lower.includes(token)).length >= 2;
+  };
   for (const record of records) {
     if (!record || sameRecord(record, ctx)) continue;
     const text = recordBody(record).toLowerCase();
     if (!text.trim()) continue;
     const hits = tokens.filter((token) => text.includes(token));
-    const measureHit = measures.some((number) => text.includes(number));
     const identifierHit = extractIdentifiers(claim).some((ident) => {
       const wanted = normalizeIdentifier(ident);
       const sheetNumber = normalizeIdentifier(record.sheetNumber || "");
       const fileName = normalizeIdentifier(record.fileName || "");
       return wanted && (sheetNumber === wanted || fileName.includes(wanted));
     });
-    if ((hits.length >= 2 && (measureHit || identifierHit)) || (identifierHit && hits.length >= 1 && measureHit)) {
+    const measured = measures.length > 0 && recordCanAnswer(issue, record, ctx, measureNear);
+    if ((identifierHit && hits.length >= 2) || measured) {
       return {
         resolved: true,
         unavailable,
@@ -413,8 +483,7 @@ function assessApplicability(issue, ctx) {
     const { records } = retrievalState(ctx);
     for (const record of records) {
       if (!record || sameRecord(record, ctx)) continue;
-      const text = recordBody(record);
-      if (!specifies(text)) continue;
+      if (!recordCanAnswer(issue, record, ctx, specifies)) continue;
       const where = record.fileName || record.sheetNumber || record.title || "another sheet";
       return {
         disposition: "reject",
@@ -585,4 +654,6 @@ module.exports = {
   claimsMissing,
   searchProjectEvidence,
   composePublication,
+  recordCanAnswer,
+  sheetDiscipline,
 };

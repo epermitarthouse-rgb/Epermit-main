@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import { buildConsolidatedDocumentCards } from "./documentWorkflowModel.ts";
 
 describe("terminal post-analysis card status", () => {
@@ -41,9 +42,9 @@ describe("terminal post-analysis card status", () => {
       analysisSettled: true,
     });
     const card = cards.find((c) => c.documentId === "ask04");
-    expect(card?.status).toBe("Not analyzed");
-    expect(card?.status).not.toBe("Ready for analysis");
-    expect(card?.statusDetail).toMatch(/No analyzable plan sheets/i);
+    assert.equal(card?.status, "Not analyzed");
+    assert.notEqual(card?.status, "Ready for analysis");
+    assert.match(card?.statusDetail ?? "", /No analyzable plan sheets/i);
   });
 
   it("shows Ready for analysis when sheets exist but run not settled", () => {
@@ -77,6 +78,6 @@ describe("terminal post-analysis card status", () => {
       analysisSettled: false,
     });
     const card = cards.find((c) => c.documentId === "ask02");
-    expect(card?.status).toBe("Ready for analysis");
+    assert.equal(card?.status, "Ready for analysis");
   });
 });

@@ -176,16 +176,15 @@ export function combineModeSummaries(
         });
 
   const issueLists = present.map((mode) => mode.issues).filter(Array.isArray);
-  const outcomeInput = { reviewState, overallScore, totalIssues, codeCoverageVerified };
-  const outcome = reviewOutcome(outcomeInput);
-  const limitations = new Map<string, ReviewLimitation>();
-  if (outcome !== "verified_compliant") {
-    for (const summary of summaries) {
-      for (const item of summary?.limitations ?? []) {
-        if (item?.detail && !limitations.has(item.detail)) limitations.set(item.detail, item);
-      }
+  const collected = new Map<string, ReviewLimitation>();
+  for (const summary of summaries) {
+    for (const item of summary?.limitations ?? []) {
+      if (item?.detail && !collected.has(item.detail)) collected.set(item.detail, item);
     }
   }
+  const outcomeInput = { reviewState, overallScore, totalIssues, codeCoverageVerified, limitations: [...collected.values()] };
+  const outcome = reviewOutcome(outcomeInput);
+  const limitations = outcome === "verified_compliant" ? new Map<string, ReviewLimitation>() : collected;
   return {
     totalIssues,
     critical,
@@ -272,6 +271,7 @@ export function exportScoreText(summary?: {
   reviewState?: string | null;
   totalIssues?: number;
   codeCoverageVerified?: boolean;
+  limitations?: ReviewLimitation[] | null;
 } | null): string {
   return reviewOutcomeLabel(summary);
 }
@@ -281,6 +281,7 @@ export function fileSectionScoreLabel(summary?: {
   reviewState?: string | null;
   totalIssues?: number;
   codeCoverageVerified?: boolean;
+  limitations?: ReviewLimitation[] | null;
 } | null): string {
   const issues = summary?.totalIssues ?? 0;
   return issues > 0 ? `${exportScoreText(summary)} · ${issues} issues` : exportScoreText(summary);

@@ -192,6 +192,96 @@ const CASES = [
     ctx: { fileName: "A-9.06.pdf", sheetTitle: "A-9.06.pdf", pageText: "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF GUARD RAIL DETAIL" },
     expected: "kept",
   },
+  // False-negative guards: a fact on an unrelated discipline's sheet must not silence a genuine question.
+  // "open" keeps the check as a listed limitation; "resolved" would close it as answered.
+  {
+    id: "architecture: guard height is not answered by a number on a fire-protection sheet",
+    discipline: "architectural",
+    issue: {
+      severity: "advisory", findingType: "missing_information", category: "Life Safety",
+      title: "Guard rail height verification",
+      description: "The guard rail height is not dimensioned on the guard detail.",
+      location: "Guard Rail Detail @ High Roof", codeReference: "IBC 1015",
+    },
+    ctx: {
+      fileName: "A-9.06.pdf", sheetTitle: "A-9.06.pdf", pageText: "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+      drawingRecords: [{ fileName: "FP-9.00.pdf", sheetNumber: "FP-9.00", text: "SPRINKLER HEADS 42 INCHES BELOW DECK. PIPE GUARD AT RISER." }],
+    },
+    expected: "kept",
+  },
+  {
+    id: "architecture: plan fire-separation ratings are not answered by an electrical firestopping note",
+    discipline: "architectural",
+    issue: {
+      severity: "advisory", findingType: "missing_information", category: "Fire Safety",
+      title: "Lack of Fire Separation Details",
+      description: "The plan does not provide readable fire separation ratings or locations.",
+      location: "Floor plan", codeReference: "IBC 707",
+    },
+    ctx: {
+      fileName: "A-9.05.pdf", sheetTitle: "A-9.05 Floor Plan", contentClass: "floor_plan", pageText: "SECOND FLOOR PLAN PARTITION TYPES SEE LEGEND",
+      drawingRecords: [{ fileName: "E-9.10.pdf", sheetNumber: "E-9.10", text: "PENETRATIONS THROUGH 1 HR RATED WALLS SHALL BE FIRESTOPPED." }],
+    },
+    expected: "open",
+  },
+  {
+    id: "accessibility: service counter is not answered by a mechanical hood dimension",
+    discipline: "architectural",
+    issue: {
+      severity: "advisory", findingType: "missing_information", category: "Accessibility",
+      title: "Accessible service counter height",
+      description: "The accessible portion of the service counter height is not shown.",
+      location: "Service counter", codeReference: "ADA 904.4",
+    },
+    ctx: {
+      fileName: "A-9.12.pdf", sheetTitle: "A-9.12 Floor Plan", contentClass: "floor_plan", pageText: "SERVICE COUNTER SEATING AREA",
+      drawingRecords: [{ fileName: "M-9.20.pdf", sheetNumber: "M-9.20", text: 'EXHAUST HOOD 36" ABOVE COUNTER AFF' }],
+    },
+    expected: "open",
+  },
+  // False-positive guards: details already on the owning sheet resolve the question before it is alleged.
+  {
+    id: "life safety: emergency lighting answered by the electrical lighting plan",
+    discipline: "electrical",
+    issue: {
+      severity: "advisory", findingType: "missing_information", category: "Life Safety",
+      title: "Emergency lighting not indicated",
+      description: "The floor plan does not indicate emergency lighting along the egress path.",
+      location: "Egress corridor", codeReference: "IBC 1008.3",
+    },
+    ctx: {
+      fileName: "A-9.01.pdf", sheetTitle: "A-9.01 Floor Plan", contentClass: "floor_plan", pageText: "FIRST FLOOR PLAN CORRIDOR",
+      drawingRecords: [{ fileName: "E-9.21.pdf", sheetNumber: "E-9.21", text: "LIGHTING PLAN. EMERGENCY LIGHTING SHALL BE PROVIDED ALONG THE PATH OF EGRESS." }],
+    },
+    expected: "resolved",
+  },
+  {
+    id: "architecture: partition rating answered by the same-discipline wall legend",
+    discipline: "architectural",
+    issue: {
+      severity: "warning", category: "Fire Safety", title: "Fire rating not shown",
+      description: "The wall fire rating is not indicated.", codeReference: "IBC 703",
+    },
+    ctx: {
+      fileName: "A-9.00.pdf", sheetTitle: "A-9.00.pdf", pageText: "FIRST FLOOR PLAN",
+      drawingRecords: [{ fileName: "A-9.60.pdf", sheetNumber: "A-9.60", text: "WALL LEGEND PARTITION TYPE A 1 HR" }],
+    },
+    expected: "resolved",
+  },
+  {
+    id: "plumbing: insulation answered by the mechanical piping specification",
+    discipline: "plumbing",
+    issue: {
+      severity: "advisory", findingType: "missing_information", category: "Plumbing",
+      title: "Missing pipe insulation", description: "Pipe insulation is not shown on this plumbing plan.",
+      location: "Domestic water piping",
+    },
+    ctx: {
+      fileName: "P-9.30.pdf", sheetTitle: "P-9.30 Plumbing Plan", pageText: "DOMESTIC WATER PIPING PLAN",
+      drawingRecords: [{ fileName: "M-9.41.pdf", sheetNumber: "M-9.41", text: "PIPE INSULATION SHALL BE 1 INCH FIBERGLASS ON ALL DOMESTIC WATER PIPING." }],
+    },
+    expected: "resolved",
+  },
 ];
 
 describe("requirement-level benchmark", () => {
@@ -221,8 +311,16 @@ describe("requirement-level benchmark", () => {
     const hardened = run(null, { fileName: "A-9.01.pdf", pageText: 'CORRIDOR 44" CLEAR AT GRID B' }, {
       checklist: [{ item: "Corridor width", result: '44" CLEAR AT GRID B' }],
     });
-    assert.equal(hardened.summary.reviewState, "reviewed_partial");
-    assert.equal(hardened.summary.reviewOutcome, "insufficient_evidence");
+    // Reference-only scope alone does not make the review Partial; it leaves code compliance unverified.
+    assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.overallScore, null);
+    assert.equal(hardened.summary.reviewOutcome, "no_findings_unverified");
+    assert.deepEqual(hardened.summary.assessment, {
+      drawingEvidence: "evidence_backed",
+      technicalRequirements: "no_concerns_identified",
+      codeVerification: "unverified",
+      applicability: "reference_only",
+    });
     assert.ok(hardened.summary.limitations.some((item) => item.code === "no_authoritative_requirement"));
     assert.ok(hardened.summary.limitations.some((item) => item.code === "reference_only_scope"));
   });
@@ -248,6 +346,8 @@ describe("requirement-level benchmark", () => {
     }, { checklist: [{ item: "Grounding", result: "SEPARATE GREEN INSULATED EQUIPMENT GROUNDING CONDUCTOR" }] });
     assert.equal(hardened.issues.length, 0);
     assert.equal(hardened.summary.reviewState, "reviewed_partial");
+    assert.equal(hardened.summary.reviewOutcome, "verification_incomplete");
+    assert.equal(hardened.summary.assessment.technicalRequirements, "checks_unresolved");
     assert.ok(hardened.summary.limitations.some((item) => /not proof of compliance/.test(item.detail)));
   });
 

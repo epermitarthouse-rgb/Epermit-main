@@ -239,14 +239,17 @@ function buildModeResult(
         };
       }
       const passed = stored === "passed" && checklist.length > 0;
+      const verified = passed && meta?.summary?.codeCoverageVerified === true;
       return {
         totalIssues: 0,
         critical: 0,
         warnings: 0,
         advisory: 0,
-        overallScore: passed ? 100 : null,
+        overallScore: verified ? 100 : null,
         reviewState: passed ? "passed" : "not_reviewed",
         checklist: passed ? checklist : [],
+        codeCoverageVerified: verified,
+        ...(passed ? { limitations } : {}),
       };
     }
     const recomputed = computeComplianceOverallScore({

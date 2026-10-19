@@ -167,8 +167,9 @@ export function computeComplianceOverallScore(counts: {
   codeCoverageVerified?: boolean;
 }): number | null {
   if (counts.totalIssues === 0) {
-    if (counts.reviewState === "passed") return 100;
-    if (counts.reviewState === "reviewed_clear" && counts.codeCoverageVerified) return 100;
+    if ((counts.reviewState === "passed" || counts.reviewState === "reviewed_clear") && counts.codeCoverageVerified) {
+      return 100;
+    }
     return null;
   }
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
@@ -252,7 +253,9 @@ export function normalizeComplianceAnalysisResult(
         ? null
         : reviewState === "passed"
           ? issues.length === 0
-            ? 100
+            ? sum?.codeCoverageVerified === true
+              ? 100
+              : null
             : typeof sum?.overallScore === "number"
               ? sum.overallScore
               : recomputedScore

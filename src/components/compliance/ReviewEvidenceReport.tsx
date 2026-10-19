@@ -143,7 +143,8 @@ export function ReviewEvidenceReport({
           <ReportList title="Confirmed findings" items={view.confirmedFindings.map((issue) => issue.title || "Finding")} empty="None" />
           <ReportList title="Verification questions" items={view.verificationQuestions.map((issue) => issue.title || "Question")} empty="None" />
           <ReportList title="Evidence-backed checks" items={view.cleanChecks} empty="None scored" />
-          <ReportList title="Why verification is incomplete" items={view.unreviewable} empty="None" />
+          <ReportList title="Unresolved checks" items={view.unresolvedChecks} empty="None" />
+          <ReportList title="Why code compliance is unverified" items={view.unreviewable} empty="None" />
         </div>
         {view.evidence.length > 0 ? (
           <ul className="space-y-1 text-muted-foreground">

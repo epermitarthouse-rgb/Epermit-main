@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   countFailedSheetJobs,
   failedSheetIdsForDocument,
@@ -47,8 +48,8 @@ describe("retryWorkflow helpers", () => {
       job({ id: "j2", sheet_id: "s1", analysis_mode: "local", status: "completed" }),
       job({ id: "j3", sheet_id: "s2", status: "failed" }),
     ];
-    expect(failedSheetIdsForDocument("doc-a", sheets, sheetJobs)).toEqual(["s1"]);
-    expect(countFailedSheetJobs(sheetJobs)).toBe(2);
+    assert.deepEqual(failedSheetIdsForDocument("doc-a", sheets, sheetJobs), ["s1"]);
+    assert.equal(countFailedSheetJobs(sheetJobs), 2);
   });
 
   it("buildConsolidatedDocumentCards exposes retry organizing on failed ingestion", () => {
@@ -89,8 +90,8 @@ describe("retryWorkflow helpers", () => {
       analyzing: false,
     });
     const card = cards.find((c) => c.documentId === "doc-x");
-    expect(card?.showRetryOrganizing).toBe(true);
-    expect(card?.statusDetail ?? "").toMatch(/Raster error/);
+    assert.equal(card?.showRetryOrganizing, true);
+    assert.match(card?.statusDetail ?? "", /Raster error/);
   });
 
   it("document card shows retry failed analysis when sheet jobs failed for drawing", () => {
@@ -127,7 +128,7 @@ describe("retryWorkflow helpers", () => {
       ],
     });
     const card = cards.find((c) => c.documentId === "doc-d");
-    expect(card?.showRetryFailedAnalysis).toBe(true);
-    expect(card?.retryFailedSheetIds).toEqual(["sheet-1"]);
+    assert.equal(card?.showRetryFailedAnalysis, true);
+    assert.deepEqual(card?.retryFailedSheetIds, ["sheet-1"]);
   });
 });

@@ -143,14 +143,14 @@ describe("saved five-sheet responses through the new verifier", () => {
       }
       if (sheet.fileName.startsWith("E-2")) {
         assert.equal(after.issues.length, 0);
-        assert.equal(after.summary.reviewState, "reviewed_partial");
-        assert.equal(after.summary.reviewOutcome, "insufficient_evidence");
-        assert.notEqual(after.summary.overallScore, 100);
+        assert.equal(after.summary.reviewOutcome, "no_findings_unverified");
+        assert.equal(after.summary.overallScore, null);
       }
       if (sheet.fileName.startsWith("P-")) {
         assert.notEqual(after.summary.overallScore, 100);
       }
-      assert.notEqual(after.summary.reviewState, "reviewed_clear");
+      assert.notEqual(after.summary.reviewOutcome, "verified_compliant");
+      assert.equal(after.summary.codeCoverageVerified, false);
     });
   }
 });

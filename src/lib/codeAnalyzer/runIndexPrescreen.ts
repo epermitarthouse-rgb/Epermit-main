@@ -1,6 +1,8 @@
 import type { CodeAnalyzerSheet } from "./model";
 import {
+  canonicalSheetNumber,
   detectIndexSheet,
+  isCredibleDrawingSheetNumber,
   parseIndexEntriesFromText,
   runIndexCompletenessPrescreen,
   type IndexCompletenessResult,
@@ -9,19 +11,55 @@ import {
 import { requestDrawingIndexExtract } from "./indexExtractClient";
 import { blobToBase64 } from "./blobToBase64";
 
-async function loadSheetImageBase64(
+export type SheetImage = { imageBase64: string; imageType: string };
+export type RasterizePdfPage = (pdf: Blob, pageNumber: number) => Promise<SheetImage>;
+
+/** Longest rendered side for the index image; enough for table text without an oversized request. */
+const INDEX_IMAGE_MAX_SIDE = 3200;
+
+async function rasterizePdfPageInBrowser(pdf: Blob, pageNumber: number): Promise<SheetImage> {
+  const { loadPdfDocument } = await import("@/lib/pdfToImage");
+  const handle = await loadPdfDocument(await pdf.arrayBuffer());
+  try {
+    const probe = document.createElement("canvas");
+    const base = await handle.renderPage(pageNumber, probe, 1);
+    const scale = Math.max(1, Math.min(3, INDEX_IMAGE_MAX_SIDE / Math.max(base.width, base.height)));
+    const canvas = document.createElement("canvas");
+    await handle.renderPage(pageNumber, canvas, scale);
+    const dataUrl = canvas.toDataURL("image/png");
+    return { imageBase64: dataUrl.split(",")[1] ?? "", imageType: "image/png" };
+  } finally {
+    handle.destroy();
+  }
+}
+
+/** A stored PDF page is rendered to an image first; the vision endpoint only reads images. */
+export async function loadSheetImage(
   sheet: CodeAnalyzerSheet,
   getDownloadUrl: (documentId: string) => Promise<string | null>,
-): Promise<{ imageBase64: string; imageType: string } | null> {
+  rasterize: RasterizePdfPage = rasterizePdfPageInBrowser,
+  fetchBlob: (url: string) => Promise<Blob> = async (url) => (await fetch(url)).blob(),
+): Promise<SheetImage | null> {
   const docId = sheet.image_document_id ?? sheet.source_document_id;
   const url = await getDownloadUrl(docId);
   if (!url) return null;
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return {
-    imageBase64: await blobToBase64(blob),
-    imageType: blob.type || "image/png",
-  };
+  const blob = await fetchBlob(url);
+  const isPdf = blob.type === "application/pdf" || /\.pdf(?:$|\?)/i.test(url);
+  if (isPdf) return rasterize(blob, sheet.page_number || 1);
+  return { imageBase64: await blobToBase64(blob), imageType: blob.type || "image/png" };
+}
+
+/** Keep only rows that read as drawing sheet numbers; vision output is never trusted blindly. */
+export function credibleIndexEntries(entries: IndexSheetEntry[]): IndexSheetEntry[] {
+  const seen = new Set<string>();
+  const out: IndexSheetEntry[] = [];
+  for (const entry of entries) {
+    const key = canonicalSheetNumber(entry.rawLabel || entry.sheetNumber);
+    if (!key || !isCredibleDrawingSheetNumber(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...entry, sheetNumber: key });
+  }
+  return out;
 }
 
 /** Run prescreen; uses vision only when an index sheet exists but text parsing is empty. */
@@ -29,6 +67,9 @@ export async function runDrawingIndexPrescreen(params: {
   sheets: CodeAnalyzerSheet[];
   pageTextBySheetId?: Record<string, string>;
   getDownloadUrl?: (documentId: string) => Promise<string | null>;
+  extract?: typeof requestDrawingIndexExtract;
+  rasterize?: RasterizePdfPage;
+  fetchBlob?: (url: string) => Promise<Blob>;
 }): Promise<IndexCompletenessResult> {
   const indexSheet = detectIndexSheet(params.sheets, { pageTextBySheetId: params.pageTextBySheetId });
   if (!indexSheet) {
@@ -38,6 +79,8 @@ export async function runDrawingIndexPrescreen(params: {
   let indexEntries: IndexSheetEntry[] = parseIndexEntriesFromText(
     params.pageTextBySheetId?.[indexSheet.id],
   );
+  let indexSource: "text" | "vision" | null = indexEntries.length ? "text" : null;
+  let indexReadError: string | null = null;
 
   if (
     indexEntries.length === 0 &&
@@ -45,21 +88,29 @@ export async function runDrawingIndexPrescreen(params: {
     (indexSheet.image_document_id || indexSheet.source_document_id)
   ) {
     try {
-      const image = await loadSheetImageBase64(indexSheet, params.getDownloadUrl);
-      if (image) {
-        indexEntries = await requestDrawingIndexExtract({
-          imageBase64: image.imageBase64,
-          imageType: image.imageType,
-          pageText: params.pageTextBySheetId?.[indexSheet.id],
-        });
+      const image = await loadSheetImage(indexSheet, params.getDownloadUrl, params.rasterize, params.fetchBlob);
+      if (image?.imageBase64) {
+        indexEntries = credibleIndexEntries(
+          await (params.extract ?? requestDrawingIndexExtract)({
+            imageBase64: image.imageBase64,
+            imageType: image.imageType,
+            pageText: params.pageTextBySheetId?.[indexSheet.id],
+          }),
+        );
+        if (indexEntries.length) indexSource = "vision";
+        else indexReadError = "The index image was read, but no sheet rows were recognized.";
+      } else {
+        indexReadError = "The index sheet image could not be loaded.";
       }
     } catch (err) {
       console.warn("[index prescreen] Vision extract failed:", err);
+      indexReadError = err instanceof Error ? err.message : "Index extraction failed.";
     }
   }
 
-  return runIndexCompletenessPrescreen(params.sheets, {
+  const result = runIndexCompletenessPrescreen(params.sheets, {
     pageTextBySheetId: params.pageTextBySheetId,
     indexEntries,
   });
+  return { ...result, indexSource, ...(indexReadError && result.status === "index_unreadable" ? { indexReadError } : {}) };
 }
