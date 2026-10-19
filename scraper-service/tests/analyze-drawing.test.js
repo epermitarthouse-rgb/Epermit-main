@@ -162,8 +162,8 @@ describe("analyze-drawing.service", () => {
       },
       "2021",
     );
-    assert.equal(result.summary.reviewState, "reviewed_clear");
-    assert.equal(result.summary.overallScore, 100);
+    assert.equal(result.summary.reviewState, "reviewed_partial");
+    assert.equal(result.summary.overallScore, null);
   });
 
   it("formatSingleResult does not keep a score of 100 when issues exist", () => {
@@ -190,7 +190,8 @@ describe("analyze-drawing.service", () => {
 
   it("buildPrompts does not tell the model to score an empty review as 100", () => {
     const ibc = buildPrompts({ codeType: "ibc", codeYear: "2021", pageText: "1 HR WALL" });
-    assert.match(ibc.systemPrompt, /"overallScore": 100/);
+    assert.match(ibc.systemPrompt, /"overallScore": null/);
+    assert.doesNotMatch(ibc.systemPrompt, /44 in clear/);
     assert.doesNotMatch(ibc.systemPrompt, /"overallScore": 85/);
     assert.match(ibc.systemPrompt, /do not set overallScore to 100/i);
     assert.doesNotMatch(ibc.systemPrompt, /overallScore MUST be 100/i);

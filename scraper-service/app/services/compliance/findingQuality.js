@@ -1,6 +1,6 @@
 "use strict";
 
-const { decideCandidate, applyDecision, sheetRole } = require("./review/verifier.js");
+const { decideCandidate, applyDecision, sheetRoles, cleanTopic } = require("./review/verifier.js");
 const { resolveReviewState } = require("./review/reviewStates.js");
 const {
   isUnselectedJurisdiction,
@@ -150,15 +150,8 @@ const AFF_HEIGHT_RE = /\b\d{2}\s*(?:(?:\"|″)|in(?:ch(?:es)?)?\b)?\s*(?:a\.?\s*
  * quotes from image understanding (observedEvidence) and checklist quotes.
  * @param {{ pageText?: string | null; observedEvidence?: unknown; checklist?: unknown } | null | undefined} ctx
  */
-function evidenceCorpus(ctx) {
+function sheetEvidenceText(ctx) {
   const parts = [ctx?.pageText];
-  const observed = ctx?.observedEvidence;
-  if (Array.isArray(observed)) {
-    parts.push(observed.map((item) => (typeof item === "string" ? item : "")).filter(Boolean).join("\n"));
-  } else if (observed) {
-    parts.push(String(observed));
-  }
-  if (ctx?.checklist) parts.push(normalizeChecklist(ctx.checklist).join("\n"));
   if (Array.isArray(ctx?.observations)) {
     parts.push(
       ctx.observations
@@ -167,6 +160,25 @@ function evidenceCorpus(ctx) {
         .join("\n"),
     );
   }
+  return parts.filter(Boolean).join("\n");
+}
+
+function corroboratedObservedEvidence(ctx) {
+  const observed = ctx?.observedEvidence;
+  const quotes = Array.isArray(observed)
+    ? observed.filter((item) => typeof item === "string" && item.trim())
+    : typeof observed === "string" && observed.trim()
+      ? [observed.trim()]
+      : [];
+  const hay = sheetEvidenceText(ctx).toLowerCase().replace(/\s+/g, " ");
+  if (!hay) return [];
+  return quotes.filter((quote) => hay.includes(String(quote).toLowerCase().replace(/\s+/g, " ")));
+}
+
+function evidenceCorpus(ctx) {
+  const parts = [sheetEvidenceText(ctx)];
+  const observed = corroboratedObservedEvidence(ctx);
+  if (observed.length) parts.push(observed.join("\n"));
   return parts.filter(Boolean).join("\n");
 }
 
@@ -444,7 +456,9 @@ function normalizeChecklist(raw) {
       const label = String(entry.item || entry.check || entry.title || "").trim();
       if (!label) continue;
       const result = entry.result != null ? String(entry.result).trim() : "";
-      items.push(result ? `${label}: ${result}` : label);
+      const evidence = entry.evidence != null ? String(entry.evidence).trim() : "";
+      const parts = [label, result, evidence].filter(Boolean);
+      items.push(parts.join(": "));
     }
   }
   return items;
@@ -470,13 +484,34 @@ function applyEvidenceGate(issue, ctx) {
     return null;
   }
 
+  if (issue.measurableEvidence === true && /\d/.test(text)) {
+    if (strength === "strong") next.findingType = "confirmed_violation";
+    return next;
+  }
+
   if (strength === "inference" || (needsMeasure && strength !== "strong")) {
     next.findingType = "missing_information";
     next.evidenceTier = "verification";
     next.severity = "advisory";
-    const topic = String(issue.title || issue.category || "This item").replace(/\.$/, "");
+    const topic = cleanTopic(issue.title || issue.category || "This item");
     next.title = `${topic} — verification required`;
-    next.description = `This sheet does not provide enough readable evidence to confirm compliance (dimensions, ratings, or explicit annotations). Verify on the appropriate dimensioned life-safety or code sheet before treating as a violation. Original note: ${String(issue.description || "").slice(0, 280)}`;
+    next.diagnostics = {
+      ...(issue.diagnostics || {}),
+      originalTitle: issue.title || null,
+      originalDescription: issue.description || null,
+      originalCodeReference: issue.codeReference || null,
+    };
+    const question = cleanTopic(issue.description || "")
+      .replace(/\b(?:appears|seems)\s+to\s+meet\s+requirements?\b/gi, "")
+      .replace(/\bto\s+confirm\s+compliance\b/gi, "")
+      .replace(/\b(?:compliance|compliant)\b/gi, "")
+      .replace(/\s+but\s+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    next.description = question
+      ? `${question} This is a question, not a violation. The code citation is unverified.`
+      : "This sheet does not show enough to confirm this condition. This is a question, not a violation. The code citation is unverified.";
+    next.codeSourceStatus = "unverified";
     next.suggestedFix =
       issue.suggestedFix && !VIOLATION_ASSERT_RE.test(String(issue.suggestedFix))
         ? issue.suggestedFix
@@ -640,12 +675,16 @@ function hardenIssues(issues, ctx) {
 
     const decision = decideCandidate(issue, {
       corpus: evidenceCorpus(ctx),
+      pageText: ctx.pageText,
       sheetTitle: ctx.sheetTitle,
       fileName: ctx.fileName || ctx.sheetTitle,
       contentClass: ctx.contentClass,
       jurisdictionScope: ctx.jurisdictionScope || null,
       regions: ctx.regions || [],
       ruleResults: ctx.ruleResults || [],
+      drawingRecords: ctx.drawingRecords || [],
+      observations: ctx.observations || [],
+      authoritativeCode: ctx.authoritativeCode || [],
     });
     issue = applyDecision(issue, decision);
     if (issue.validationDisposition === "reject") {
@@ -668,7 +707,7 @@ function hardenIssues(issues, ctx) {
  * @param {{ sheetTitle?: string | null; specChunks?: unknown[] }} ctx
  */
 function checklistForSheet(checklist, ctx) {
-  if (sheetRole(ctx || {}) !== "equipment" || !Array.isArray(checklist)) return checklist;
+  if (!sheetRoles(ctx || {}).has("equipment") || !Array.isArray(checklist)) return checklist;
   return checklist.filter((item) => {
     const text = typeof item === "string" ? item : `${item?.item || ""} ${item?.result || ""} ${item?.evidence || ""}`;
     return !/corridor/i.test(text);
@@ -683,6 +722,7 @@ function hardenIssueBundle(bundle, ctx) {
   );
   const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist, {
     callStatus: ctx.callStatus || "completed",
+    corpusCtx: ctx,
   });
   summary.rejectedCount = rejectedCandidates.length;
   return {
@@ -701,7 +741,16 @@ function hardenIssueBundle(bundle, ctx) {
  */
 function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
   const stored = issues || [];
-  const passItems = normalizeChecklist(checklist);
+  const corpus = sheetEvidenceText(options.corpusCtx || {}).toLowerCase().replace(/\s+/g, " ");
+  const quoteBacked = (item) => {
+    const quotes = String(item)
+      .split(":")
+      .slice(1)
+      .map((part) => part.trim().toLowerCase().replace(/\s+/g, " "))
+      .filter((part) => part.length >= 8);
+    return quotes.some((quote) => corpus.includes(quote));
+  };
+  const passItems = normalizeChecklist(checklist).filter((item) => checklistItemHasEvidenceQuote(item) || (corpus && quoteBacked(item)));
   const confirmed = stored.filter(
     (issue) => issue.findingType === "confirmed_violation" && issue.validationDisposition !== "reject",
   );
@@ -710,7 +759,8 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
   const warnings = confirmed.filter((i) => i.severity === "warning").length;
   const advisory = stored.filter((i) => i.severity === "advisory").length;
   const computed = Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
-  const evidenceBacked = passItems.length > 0 && passItems.every(checklistItemHasEvidenceQuote);
+  const backedItems = corpus ? passItems.filter(quoteBacked) : [];
+  const evidenceBacked = passItems.length > 0 && backedItems.length === passItems.length;
   const decision = resolveReviewState({
     callStatus: options.callStatus || "completed",
     confirmedCount: confirmed.length,

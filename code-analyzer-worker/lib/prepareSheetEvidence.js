@@ -2,7 +2,7 @@
 
 const { createDrawingIndex } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
 const { prepareSheetReview } = require("../../scraper-service/app/services/compliance/review/orchestrate.js");
-const { comprehendPdfPage } = require("./comprehension.js");
+const { comprehendPdfPage, rankRegionsForQuestions, renderCropsFromFile } = require("./comprehension.js");
 const { createGuardedDrawingStore } = require("./drawingRagStore.js");
 
 /** @type {Map<string, ReturnType<createDrawingIndex>>} */
@@ -93,7 +93,7 @@ async function prepareEvidenceForSheet(input) {
   if (input.pdfPath) {
     try {
       const page = await comprehendPdfPage(input.pdfPath, input.sheet.page_number || input.sheet.pageNumber || 1, {
-        render: Boolean(input.renderRegions),
+        render: false,
         ocr: input.ocr,
         discoverGraphics: input.discoverGraphics,
       });
@@ -129,11 +129,30 @@ async function prepareEvidenceForSheet(input) {
     revision: input.sheet?.revision || null,
   });
 
+  const selection = rankRegionsForQuestions(regions, { questions: prepared.questions });
+  const pageNumber = input.sheet?.page_number || input.sheet?.pageNumber || 1;
+  if (input.renderRegions && input.pdfPath && selection.regions.length) {
+    try {
+      regionImages = await renderCropsFromFile(input.pdfPath, pageNumber, selection.regions);
+    } catch (err) {
+      console.warn(
+        "[code-analyzer-worker] crop render failed:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  } else {
+    regionImages = [];
+  }
+  if (selection.limitation && prepared.promptBlock) {
+    prepared.promptBlock = `${prepared.promptBlock}\n\nCROP LIMITATION: ${selection.limitation}. The full sheet is still attached. No crop was confident enough for the active questions.`.slice(0, 6000);
+  }
+
   return {
     ...prepared,
     pageText,
     ...pageMeta,
     regionImages: regionImages.slice(0, 2),
+    cropLimitation: selection.limitation,
     drawingRecords: verifierRecords(index),
   };
 }

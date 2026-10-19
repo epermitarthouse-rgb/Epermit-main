@@ -173,7 +173,7 @@ describe("empty review is not a pass", () => {
         jurisdictionNotes: "",
       },
       "ibc",
-      {},
+      { pageText: '44" clear labeled at grid B\nshown on sheet A-1.01' },
     );
     assert.equal(hardened.summary.reviewState, "reviewed_clear");
     assert.equal(hardened.summary.overallScore, 100);
@@ -340,7 +340,10 @@ describe("page text drops missing-information notes that the sheet already state
         jurisdictionNotes: "",
       },
       "ibc",
-      { pageText: "ENLARGED TOILET PLAN", observedEvidence: ["54 × 60 clearance", "48 x 48"] },
+      {
+        pageText: "ENLARGED TOILET PLAN",
+        observations: [{ quote: "54 × 60 clearance" }, { quote: "48 x 48" }],
+      },
     );
     assert.equal(hardened.issues.length, 0);
   });
@@ -394,8 +397,38 @@ describe("page text drops missing-information notes that the sheet already state
       { sheetTitle: "A-101 Floor Plan", pageText: '1 HR WALL 45-MINUTE DOOR\nCORRIDOR 36" CLEAR' },
     );
     assert.equal(hardened.issues.length, 1);
+    assert.equal(hardened.issues[0].findingType, "missing_information");
+    assert.equal(hardened.issues[0].codeSourceStatus, "unverified");
+    assert.doesNotMatch(`${hardened.issues[0].title} ${hardened.issues[0].description}`, /does not meet|44/);
+    assert.notEqual(hardened.summary.reviewState, "reviewed_clear");
+  });
+
+  it("confirms a corridor defect only when the threshold text is authoritative", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "warning",
+            category: "Egress",
+            title: "Corridor width below minimum",
+            description: 'Dimension note shows 36" clear, which does not meet the 44" minimum.',
+            codeReference: "IBC 1020.2",
+            evidenceTier: "drawing",
+            measurableEvidence: true,
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        sheetTitle: "A-101 Floor Plan",
+        pageText: 'CORRIDOR 36" CLEAR',
+        authoritativeCode: [{ authoritative: true, text: 'Section 1020.2 minimum corridor width 44"' }],
+      },
+    );
     assert.equal(hardened.issues[0].findingType, "confirmed_violation");
-    assert.doesNotMatch(hardened.issues[0].description, /does not provide enough readable evidence/i);
+    assert.equal(hardened.issues[0].codeSourceStatus, "authoritative");
   });
 });
 
@@ -579,7 +612,9 @@ describe("content class does not discard a reviewed sheet", () => {
       "ibc",
       { contentClass: "mep", sheetTitle: "E-1.2 Electrical Power Plan", pageText: 'CORRIDOR B 36" CLEAR' },
     );
-    assert.equal(hardened.issues.length, 1);
+    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.rejectedCandidates[0].validationReason, "wrong_sheet_for_element");
+    assert.notEqual(hardened.summary.reviewState, "not_reviewed");
     assert.notEqual(hardened.summary.overallScore, 100);
   });
 
@@ -639,7 +674,7 @@ describe("content class does not discard a reviewed sheet", () => {
         jurisdictionNotes: "",
       },
       "ibc",
-      { contentClass: "schedule", sheetTitle: "A-6.00.pdf" },
+      { contentClass: "schedule", sheetTitle: "A-6.00.pdf", pageText: "Door 101 labeled HW-3" },
     );
     assert.equal(hardened.summary.reviewState, "reviewed_clear");
     assert.equal(hardened.summary.overallScore, 100);
@@ -744,7 +779,7 @@ describe("resolveAnalysisJurisdiction", () => {
         jurisdictionNotes: "",
       },
       "local",
-      { sheetTitle: "A-101 Floor Plan" },
+      { sheetTitle: "A-101 Floor Plan", pageText: 'CORRIDOR 36" CLEAR' },
     );
     assert.match(ibc.issues[0].codeReference, /\bIBC\b/);
     assert.notEqual(ibc.issues[0].citationBook, "12A DCMR");
@@ -767,7 +802,7 @@ describe("resolveAnalysisJurisdiction", () => {
         jurisdictionNotes: "",
       },
       "local",
-      { sheetTitle: "A-101 Floor Plan" },
+      { sheetTitle: "A-101 Floor Plan", pageText: 'CORRIDOR 36" CLEAR' },
     );
     assert.equal(dc.issues[0].citationBook, "12A DCMR");
     assert.doesNotMatch(dc.issues[0].codeReference, /\bIBC\b/);

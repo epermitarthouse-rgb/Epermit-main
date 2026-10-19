@@ -320,6 +320,7 @@ function buildPrompts(params) {
   const evidenceRules = `
 EVIDENCE RULES (mandatory):
 - Do NOT claim a measurable violation (width, slope, rise/run, clearance, rating, counts) unless readable dimensions/annotations support it on THIS sheet.
+- Do not copy example text. observedEvidence and checklist evidence must be words you can read, not a sample number.
 - If information is missing, use findingType "missing_information", evidenceTier "verification", severity "advisory", and phrase as verification required — NOT as a confirmed violation.
 - Never treat parking layout graphics as "obstructed by parked vehicles" during design review.
 - Include specReferences ONLY when a provided spec excerpt directly supports the finding.`;
@@ -332,10 +333,10 @@ EVIDENCE RULES (mandatory):
 Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national standard sections.`;
     jsonFormat = `{
   "issues": [${issueSchema}],
-  "checklist": [{"item": "Corridor clear width", "result": "44 in labeled at the corridor", "evidence": "44 in"}],
-  "observedEvidence": ["44 in clear", "1-hour wall"],
+  "checklist": [{"item": "Topic read on this sheet", "result": "quote the printed label", "evidence": "exact words from the sheet"}],
+  "observedEvidence": ["exact label or note read from the sheet"],
   "jurisdictionNotes": "Notes about base code requirements reviewed",
-  "overallScore": 100
+  "overallScore": null
 }`;
   } else if (resolvedCodeType === "local") {
     if (hasLocalAmendmentText(jurisdictionKey)) {
@@ -345,10 +346,10 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
     }
     jsonFormat = `{
   "issues": [${issueSchema}],
-  "checklist": [{"item": "Corridor clear width", "result": "44 in labeled at the corridor", "evidence": "44 in"}],
-  "observedEvidence": ["44 in clear"],
+  "checklist": [{"item": "Topic read on this sheet", "result": "quote the printed label", "evidence": "exact words from the sheet"}],
+  "observedEvidence": ["exact label or note read from the sheet"],
   "jurisdictionNotes": "Notes about local amendment requirements reviewed",
-  "overallScore": 100
+  "overallScore": null
 }`;
   } else {
     analysisFocus = `Perform TWO analyses in one response:
@@ -358,13 +359,13 @@ ${jurisdictionContext ? `\nLOCAL AMENDMENTS:\n${jurisdictionContext}` : ""}`;
     jsonFormat = `{
   "ibcIssues": [${issueSchema}],
   "localIssues": [${issueSchema}],
-  "ibcChecklist": [{"item": "Corridor clear width", "result": "44 in labeled at the corridor", "evidence": "44 in"}],
-  "localChecklist": [{"item": "Local corridor width", "result": "shown on sheet A-1.04", "evidence": "shown on sheet A-1.04"}],
-  "observedEvidence": ["44 in clear"],
+  "ibcChecklist": [{"item": "Topic read on this sheet", "result": "quote the printed label", "evidence": "exact words from the sheet"}],
+  "localChecklist": [{"item": "Topic read on this sheet", "result": "quote the printed label", "evidence": "exact words from the sheet"}],
+  "observedEvidence": ["exact label or note read from the sheet"],
   "ibcJurisdictionNotes": "Notes about base IBC requirements",
   "localJurisdictionNotes": "Notes about local amendment requirements",
-  "ibcOverallScore": 100,
-  "localOverallScore": 100
+  "ibcOverallScore": null,
+  "localOverallScore": null
 }`;
   }
 
@@ -523,6 +524,7 @@ function buildVisionUserContent(params) {
         ? `pdf box x=${box.x} y=${box.y} width=${box.width} height=${box.height} unit=${box.unit || "pdf-point"} origin=${box.origin || "bottom-left"}`
         : null,
       region.extractionMethod || null,
+      Array.isArray(region.questions) && region.questions.length ? `questions ${region.questions.join(", ")}` : null,
     ]
       .filter(Boolean)
       .join("; ");

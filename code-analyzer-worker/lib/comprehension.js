@@ -340,13 +340,61 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
   return { regions, readStatus };
 }
 
+const QUESTION_CUES = [
+  { id: "fire-rated-partition", quote: /fire\s*rat|one\s*hours?|\b[1I]\s*h(?:r)?\b|partition|wall\s*type|\blegend\b/i },
+  { id: "corridor-width", quote: /\bcorridor\b|\begress\b|exit\s*access|clear\s*width/i },
+  { id: "emergency-lighting", quote: /emergency\s+light|egress\s+light|inverter|foot-?candle|nfpa\s*101/i },
+  { id: "accessibility-route", quote: /accessible|clearance|threshold|turning|door\s*width/i },
+  { id: "plumbing-details", quote: /fixture|water[\s-]*hammer|grease|backflow|\brpz\b|drain|arrester/i },
+  { id: "mechanical-schedule", quote: /\bschedule\b|\bequipment\b|\bcfm\b|\bhvac\b/i },
+  { id: "special-inspections", quote: /special\s+inspection/i },
+];
+
+function boilerplateKind(quote) {
+  const text = String(quote || "");
+  if (/scale\b|=\s*1\s*['′]\s*-?\s*0|1\/\d+\s*["″]/i.test(text)) return "scale";
+  if (/\b(street|avenue|ave\b|suite|boulevard|road|drive|odonnell)\b/i.test(text)) return "address";
+  if (/\b(sheet\s*(?:no|number)|drawn by|checked by|project\s*(?:no|number)|copyright)\b/i.test(text)) return "title-block";
+  return null;
+}
+
+/**
+ * Pick at most two regions for the questions on this sheet.
+ * Title blocks, addresses, and scales lose unless a question cue is in the quote.
+ * A low score is a limitation, not a guess.
+ * @param {Array<Record<string, unknown>>} regions
+ * @param {{ questions?: string[] }} [context]
+ */
+function rankRegionsForQuestions(regions, context = {}) {
+  const questions = Array.isArray(context.questions) && context.questions.length ? context.questions : null;
+  const cues = questions
+    ? QUESTION_CUES.filter((cue) => questions.includes(cue.id))
+    : QUESTION_CUES;
+  const scored = (regions || []).map((region) => {
+    const quote = String(region.quote || "");
+    const boilerplate = boilerplateKind(quote);
+    const matched = cues.filter((cue) => quote && cue.quote.test(quote)).map((cue) => cue.id);
+    let score = matched.length * 8;
+    if (!questions && !matched.length && !boilerplate && (region.reason === "rating" || region.reason === "legend")) {
+      score += 7;
+    }
+    if (boilerplate && !matched.length) score -= 12;
+    return {
+      region: { ...region, matchedQuestions: matched, boilerplate },
+      score,
+    };
+  });
+  scored.sort((a, b) => b.score - a.score || String(b.region.quote || "").length - String(a.region.quote || "").length);
+  const picked = scored.filter((item) => item.score >= 6).slice(0, MAX_REGION_IMAGES);
+  return {
+    regions: picked.map((item) => item.region),
+    limitation: picked.length ? null : "crop_selection_unconfident",
+  };
+}
+
 async function renderRegionCrops(page, regions) {
   const crops = [];
-  const ranked = [...regions].sort((a, b) => {
-    const rank = { rating: 5, legend: 4, dimension: 3, note: 3, schedule: 2, detail: 2, graphic: 1, tag: 1 };
-    return (rank[b.reason] || 0) - (rank[a.reason] || 0);
-  });
-  for (const region of ranked) {
+  for (const region of regions) {
     if (crops.length >= MAX_REGION_IMAGES) break;
     if (!region || !(region.width > 1) || !(region.height > 1)) continue;
     try {
@@ -370,6 +418,8 @@ async function renderRegionCrops(page, regions) {
         },
         extractionMethod: "original-pdf-clip",
         readable: region.readable !== false,
+        questions: region.matchedQuestions || [],
+        boilerplate: region.boilerplate || null,
       });
     } catch {
       continue;
@@ -459,9 +509,10 @@ async function comprehendPdfPage(filePath, pageNumber, options = {}) {
         }));
 
       const regions = [...graphic.regions, ...textRegions].slice(0, MAX_REGIONS + MAX_GRAPHIC_REGIONS);
+      const selection = rankRegionsForQuestions(regions, { questions: options.questions });
       let regionImages = [];
-      if (options.render && regions.length) {
-        regionImages = await renderRegionCrops(page, regions);
+      if (options.render && selection.regions.length) {
+        regionImages = await renderRegionCrops(page, selection.regions);
       }
       const textLayer = items.map((item) => item.str).join(" ");
       const ocrText = graphicItems.map((item) => item.str).join("\n");
@@ -471,11 +522,33 @@ async function comprehendPdfPage(filePath, pageNumber, options = {}) {
         items: [...items, ...graphicItems, ...unreadableItems],
         regions,
         regionImages,
+        cropLimitation: selection.limitation,
         pageWidth: viewport.width,
         pageHeight: viewport.height,
         graphicalReadStatus: graphic.readStatus,
         sourcePdf: filePath,
       };
+    } finally {
+      page.cleanup();
+    }
+  } finally {
+    await pdf.destroy();
+  }
+}
+
+async function renderCropsFromFile(filePath, pageNumber, regions) {
+  const buffer = await fs.readFile(filePath);
+  const pdf = await pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    disableFontFace: true,
+  }).promise;
+  const pageNum = Math.max(1, Number(pageNumber) || 1);
+  try {
+    if (pageNum > pdf.numPages || !regions?.length) return [];
+    const page = await pdf.getPage(pageNum);
+    try {
+      return await renderRegionCrops(page, regions);
     } finally {
       page.cleanup();
     }
@@ -491,6 +564,7 @@ function emptyPage() {
     items: [],
     regions: [],
     regionImages: [],
+    cropLimitation: "crop_selection_unconfident",
     pageWidth: 0,
     pageHeight: 0,
     graphicalReadStatus: "no_page",
@@ -500,7 +574,10 @@ function emptyPage() {
 module.exports = {
   boxFromTextItem,
   selectInspectionRegions,
+  rankRegionsForQuestions,
+  boilerplateKind,
   comprehendPdfPage,
+  renderCropsFromFile,
   pdfBoxFromNormalized,
   shouldAttachRegionImages,
   renderPdfClip,

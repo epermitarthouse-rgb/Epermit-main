@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { boxFromTextItem, selectInspectionRegions, pdfBoxFromNormalized, shouldAttachRegionImages } = require("../lib/comprehension.js");
+const { boxFromTextItem, selectInspectionRegions, pdfBoxFromNormalized, shouldAttachRegionImages, rankRegionsForQuestions } = require("../lib/comprehension.js");
 
 describe("selective page regions", () => {
   it("keeps a real text-item box in PDF points and normalized page space", () => {
@@ -52,5 +52,34 @@ describe("crop coordinate mapping", () => {
   it("attaches crops when the full-sheet raster is too coarse to read tags", () => {
     assert.equal(shouldAttachRegionImages(1200, 800, 2592, 1728), true);
     assert.equal(shouldAttachRegionImages(8000, 5400, 2592, 1728), false);
+  });
+});
+
+describe("question-driven crops", () => {
+  const regions = [
+    { quote: "3700 O'Donnell Street, Suite 200", reason: "dimension", x: 1, y: 2, width: 10, height: 4 },
+    { quote: 'SCALE: 1/4" = 1\'-0"', reason: "dimension", x: 3, y: 4, width: 10, height: 4 },
+    { quote: "EMERGENCY LIGHTING HAS BEEN DESIGNED PER NFPA 101", reason: "note", x: 20, y: 30, width: 80, height: 8 },
+    { quote: "— 1H — ONE HOUR FIRE RATED WA", reason: "rating", x: 100, y: 40, width: 40, height: 8 },
+  ];
+
+  it("prefers a graphic fire-rating tag over the scale and address", () => {
+    const picked = rankRegionsForQuestions(regions, { questions: ["fire-rated-partition"] });
+    assert.equal(picked.limitation, null);
+    assert.equal(picked.regions.length, 1);
+    assert.match(picked.regions[0].quote, /ONE HOUR/);
+    assert.deepEqual(picked.regions[0].matchedQuestions, ["fire-rated-partition"]);
+  });
+
+  it("prefers the emergency-lighting note over the address and scale", () => {
+    const picked = rankRegionsForQuestions(regions, { questions: ["emergency-lighting"] });
+    assert.equal(picked.regions[0].quote.includes("EMERGENCY LIGHTING"), true);
+    assert.ok(picked.regions.every((region) => region.boilerplate == null));
+  });
+
+  it("records a limitation when only a title-block crop would match", () => {
+    const picked = rankRegionsForQuestions(regions.slice(0, 2), { questions: ["emergency-lighting"] });
+    assert.equal(picked.regions.length, 0);
+    assert.equal(picked.limitation, "crop_selection_unconfident");
   });
 });

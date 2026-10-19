@@ -124,13 +124,42 @@ describe("candidate verification", () => {
       "ibc",
       { sheetTitle: "EQ-1.00-0.pdf", fileName: "EQ-1.00-0.pdf", pageText: 'EQUIPMENT PLAN 2\'-6" CLEAR' },
     );
-    assert.equal(hardened.issues.length, 1);
-    assert.equal(hardened.issues[0].findingType, "missing_information");
-    assert.equal(hardened.issues[0].validationReason, "corridor_width_needs_architectural_sheet");
-    assert.doesNotMatch(`${hardened.issues[0].title} ${hardened.issues[0].description}`, /non-compliance|does not meet/i);
+    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.rejectedCandidates[0].validationReason, "dimension_not_tied_to_element");
     assert.equal(hardened.summary.cleanChecks.length, 0);
-    assert.equal(hardened.summary.overallScore, null);
+    assert.equal(hardened.summary.confirmedViolations, 0);
     assert.notEqual(hardened.summary.reviewState, "reviewed_clear");
+  });
+
+  it("names the architectural sheet that already shows the corridor and does not invent one", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "critical",
+            title: "Corridor Width Non-Compliance",
+            description: 'The corridor is 36" and does not meet the minimum.',
+            codeReference: "IBC 1020.2",
+            findingType: "confirmed_violation",
+            measurableEvidence: true,
+          },
+        ],
+        summary: {},
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      {
+        sheetTitle: "EQ-1.00-0.pdf",
+        fileName: "EQ-1.00-0.pdf",
+        pageText: 'EQUIPMENT PLAN 36" CLEAR',
+        drawingRecords: [
+          { fileName: "A-101.pdf", title: "Floor plan", text: 'CORRIDOR 36" CLEAR', contentClass: "drawing" },
+        ],
+      },
+    );
+    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.rejectedCandidates[0].validationReason, "dimension_answered_on_other_sheet");
+    assert.match(hardened.rejectedCandidates[0].validationDetail, /A-101\.pdf/);
   });
 
   it("does not confirm a 44-inch corridor without a traceable dimension", () => {
