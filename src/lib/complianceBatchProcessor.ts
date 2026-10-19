@@ -19,6 +19,9 @@ export interface ComplianceBatchIssue {
   location: string;
   suggestedFix: string;
   codeType?: "ibc" | "local";
+  findingType?: string;
+  validationDisposition?: string;
+  sheetFileName?: string;
 }
 
 export interface ComplianceBatchAnalysisResult {
@@ -29,11 +32,20 @@ export interface ComplianceBatchAnalysisResult {
     warnings: number;
     advisory: number;
     overallScore: number | null;
-    reviewState?: "not_reviewed" | "passed" | null;
+    reviewState?:
+      | "not_reviewed"
+      | "passed"
+      | "reviewed_clear"
+      | "reviewed_findings"
+      | "reviewed_partial"
+      | "failed"
+      | null;
     checklist?: string[];
+    cleanChecks?: string[];
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";
+  reviewReport?: import("@/lib/codeAnalyzer/reviewReport").ReviewReportView | null;
 }
 
 export interface ComplianceBatchFile {
@@ -139,9 +151,18 @@ export function computeComplianceOverallScore(counts: {
   warnings: number;
   advisory: number;
   totalIssues: number;
-  reviewState?: "not_reviewed" | "passed" | null;
+  reviewState?:
+    | "not_reviewed"
+    | "passed"
+    | "reviewed_clear"
+    | "reviewed_findings"
+    | "reviewed_partial"
+    | "failed"
+    | null;
 }): number | null {
-  if (counts.totalIssues === 0) return counts.reviewState === "passed" ? 100 : null;
+  if (counts.totalIssues === 0) {
+    return counts.reviewState === "passed" || counts.reviewState === "reviewed_clear" ? 100 : null;
+  }
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
 }
 
@@ -181,8 +202,21 @@ export function normalizeComplianceAnalysisResult(
   const warnings = issues.filter((i) => i.severity === "warning").length;
   const advisory = issues.filter((i) => i.severity === "advisory").length;
   const checklist = checklistFromAnalysis(d, sum);
-  const reviewState: "not_reviewed" | "passed" | null =
-    issues.length === 0 ? (checklist.length > 0 ? "passed" : "not_reviewed") : null;
+  const storedState = sum?.reviewState;
+  const storedReview =
+    storedState === "not_reviewed" ||
+    storedState === "passed" ||
+    storedState === "reviewed_clear" ||
+    storedState === "reviewed_findings" ||
+    storedState === "reviewed_partial" ||
+    storedState === "failed";
+  const reviewState = storedReview
+    ? storedState
+    : issues.length === 0
+      ? checklist.length > 0
+        ? "passed"
+        : "not_reviewed"
+      : null;
   const recomputedScore = computeComplianceOverallScore({
     critical,
     warnings,
@@ -200,11 +234,19 @@ export function normalizeComplianceAnalysisResult(
     checklist,
     reviewState,
     overallScore:
-      issues.length === 0
-        ? recomputedScore
-        : typeof sum?.overallScore === "number"
-          ? sum.overallScore
-          : recomputedScore,
+      reviewState === "reviewed_partial" || reviewState === "failed" || reviewState === "not_reviewed"
+        ? null
+        : reviewState === "reviewed_clear" || reviewState === "passed"
+          ? issues.length === 0
+            ? 100
+            : typeof sum?.overallScore === "number"
+              ? sum.overallScore
+              : recomputedScore
+          : issues.length === 0
+            ? recomputedScore
+            : typeof sum?.overallScore === "number"
+              ? sum.overallScore
+              : recomputedScore,
   };
   return {
     issues,

@@ -128,6 +128,8 @@ import {
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
 import { buildJurisdictionDiagnostics } from "@/lib/codeAnalyzer/jurisdictionDiagnostics";
 import { jurisdictionForAnalyzerProject } from "@/lib/codeAnalyzer/analyzerJurisdiction";
+import { buildReviewReportView, reviewStateLabel, type ReviewReportView } from "@/lib/codeAnalyzer/reviewReport";
+import { ReviewEvidenceReport } from "@/components/compliance/ReviewEvidenceReport";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   analyzerSheetFingerprint,
@@ -254,6 +256,8 @@ interface ComplianceIssue {
   suggestedFix: string;
   codeType?: "ibc" | "local";
   sheetFileName?: string;
+  findingType?: string;
+  validationDisposition?: string;
 }
 
 type AnalysisResult = ComplianceBatchAnalysisResult;
@@ -363,6 +367,21 @@ interface ComplianceAnnotationData {
   jurisdiction?: string;
   projectType?: string;
   codeYear_meta?: string;
+  findingType?: string;
+  validationDisposition?: string;
+  jurisdictionScope?: {
+    selectedScope?: string | null;
+    detectedLocation?: string | null;
+    enforcedJurisdiction?: string | null;
+    amendmentsEnforced?: boolean;
+    selectionSource?: string | null;
+  } | null;
+  jurisdictionDiagnostics?: { message?: string | null; detectedLocation?: string | null; selectedScope?: string | null; amendmentsEnforced?: boolean } | null;
+  userEmphasis?: string | null;
+  disciplines?: string[] | null;
+  observations?: Array<{ element?: string; quote?: string; fileName?: string | null; region?: unknown }>;
+  retrievalHits?: Array<{ questionId?: string; drawing?: Array<{ fileName?: string | null; quote?: string | null; pageNumber?: number | null; region?: unknown }> }>;
+  rejectedCandidates?: Array<{ validationReason?: string; validationDetail?: string; title?: string }>;
 }
 
 function omitSuppressedRun<T extends { id: string }>(
@@ -1109,6 +1128,8 @@ export function AIComplianceAnalyzer() {
             suggestedFix: d.suggestedFix || "",
             codeType: d.codeType,
             sheetFileName: d.sheet_file_name || d.file_name || undefined,
+            findingType: d.findingType,
+            validationDisposition: d.validationDisposition,
           };
           const list = issuesByCodeType.get(d.codeType) || [];
           list.push(issue);
@@ -1127,10 +1148,32 @@ export function AIComplianceAnalyzer() {
         const advisory = issues.filter((i) => i.severity === "advisory").length;
         // An empty issue list is not a pass unless the stored checklist recorded the checks.
         if (issues.length === 0) {
-          const passed =
-            meta?.summary?.reviewState === "passed" &&
-            Array.isArray(meta.summary.checklist) &&
-            meta.summary.checklist.length > 0;
+          const stored = meta?.summary?.reviewState;
+          const checklist = Array.isArray(meta?.summary?.checklist) ? meta.summary.checklist : [];
+          if (stored === "reviewed_clear") {
+            return {
+              totalIssues: 0,
+              critical: 0,
+              warnings: 0,
+              advisory: 0,
+              overallScore: 100,
+              reviewState: "reviewed_clear",
+              checklist,
+              cleanChecks: meta?.summary?.cleanChecks,
+            };
+          }
+          if (stored === "reviewed_partial" || stored === "failed" || stored === "reviewed_findings") {
+            return {
+              totalIssues: 0,
+              critical: 0,
+              warnings: 0,
+              advisory: 0,
+              overallScore: null,
+              reviewState: stored,
+              checklist,
+            };
+          }
+          const passed = stored === "passed" && checklist.length > 0;
           return {
             totalIssues: 0,
             critical: 0,
@@ -1138,7 +1181,7 @@ export function AIComplianceAnalyzer() {
             advisory: 0,
             overallScore: passed ? 100 : null,
             reviewState: passed ? "passed" : "not_reviewed",
-            checklist: passed ? meta?.summary?.checklist : [],
+            checklist: passed ? checklist : [],
           };
         }
         const recomputed = computeComplianceOverallScore({
@@ -1178,6 +1221,7 @@ export function AIComplianceAnalyzer() {
           summary: buildSummary(ibcIssues, ibcMeta),
           jurisdictionNotes: ibcMeta?.jurisdictionNotes || "",
           codeType: "ibc",
+          reviewReport: buildReviewReportView(ibcMeta ? [ibcMeta] : [], ibcIssues),
         };
       }
       if (localIssues.length > 0 || localMeta) {
@@ -1186,6 +1230,7 @@ export function AIComplianceAnalyzer() {
           summary: buildSummary(localIssues, localMeta),
           jurisdictionNotes: localMeta?.jurisdictionNotes || "",
           codeType: "local",
+          reviewReport: buildReviewReportView(localMeta ? [localMeta] : [], localIssues),
         };
       }
 
@@ -3393,6 +3438,8 @@ export function AIComplianceAnalyzer() {
           </Card>
         )}
 
+        {groupResult.reviewReport ? <ReviewEvidenceReport view={groupResult.reviewReport} /> : null}
+
         {renderIssuesList(group.id, groupResult, group.fileName)}
           </div>
         ) : null}
@@ -3507,16 +3554,17 @@ export function AIComplianceAnalyzer() {
     return "text-destructive";
   };
 
-  const formatReviewScore = (summary?: { overallScore?: number | null; reviewState?: string | null }) => {
-    if (summary?.reviewState === "not_reviewed" || summary?.overallScore == null) {
-      return summary?.reviewState === "passed" ? "Passed" : "Not reviewed";
-    }
-    return `${summary.overallScore}%`;
-  };
+  const formatReviewScore = (summary?: { overallScore?: number | null; reviewState?: string | null }) =>
+    reviewStateLabel(summary?.reviewState, summary?.overallScore);
 
   const scoreToneClass = (summary?: { overallScore?: number | null; reviewState?: string | null }) => {
-    if (summary?.reviewState === "passed") return "text-emerald-600";
-    if (summary?.reviewState === "not_reviewed" || typeof summary?.overallScore !== "number") {
+    if (summary?.reviewState === "passed" || summary?.reviewState === "reviewed_clear") return "text-emerald-600";
+    if (
+      summary?.reviewState === "not_reviewed" ||
+      summary?.reviewState === "reviewed_partial" ||
+      summary?.reviewState === "failed" ||
+      typeof summary?.overallScore !== "number"
+    ) {
       return "text-muted-foreground";
     }
     return getScoreColor(summary.overallScore);

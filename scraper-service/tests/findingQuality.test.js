@@ -135,7 +135,7 @@ describe("empty review is not a pass", () => {
       "ibc",
       {},
     );
-    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
     assert.equal(hardened.summary.overallScore, null);
     assert.equal(hardened.summary.checklist.length, 0);
   });
@@ -156,7 +156,7 @@ describe("empty review is not a pass", () => {
       "ibc",
       {},
     );
-    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
     assert.equal(hardened.summary.overallScore, null);
     assert.notEqual(hardened.summary.overallScore, 100);
   });
@@ -175,7 +175,7 @@ describe("empty review is not a pass", () => {
       "ibc",
       {},
     );
-    assert.equal(hardened.summary.reviewState, "passed");
+    assert.equal(hardened.summary.reviewState, "reviewed_clear");
     assert.equal(hardened.summary.overallScore, 100);
   });
 
@@ -198,7 +198,7 @@ describe("empty review is not a pass", () => {
         jurisdictionNotes: "",
       },
       "ibc",
-      { sheetTitle: "A-101 Floor Plan" },
+      { sheetTitle: "A-101 Floor Plan", pageText: 'CORRIDOR B 36" CLEAR' },
     );
     assert.equal(hardened.issues.length, 1);
     assert.notEqual(hardened.summary.overallScore, 100);
@@ -275,7 +275,7 @@ describe("page text drops missing-information notes that the sheet already state
       { pageText: "PARTITION 1-hour wall / DOOR 45-minute" },
     );
     assert.equal(hardened.issues.length, 0);
-    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
     assert.equal(hardened.summary.overallScore, null);
   });
 
@@ -368,7 +368,7 @@ describe("page text drops missing-information notes that the sheet already state
     assert.equal(hardened.issues[0].findingType, "unverified");
     assert.equal(hardened.issues[0].severity, "advisory");
     assert.equal(hardened.summary.confirmedViolations, 0);
-    assert.equal(hardened.summary.reviewState, "not_reviewed");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
     assert.equal(hardened.summary.overallScore, null);
     assert.notEqual(hardened.summary.overallScore, 100);
   });
@@ -391,7 +391,7 @@ describe("page text drops missing-information notes that the sheet already state
         jurisdictionNotes: "",
       },
       "ibc",
-      { sheetTitle: "A-101 Floor Plan", pageText: "1 HR WALL 45-MINUTE DOOR" },
+      { sheetTitle: "A-101 Floor Plan", pageText: '1 HR WALL 45-MINUTE DOOR\nCORRIDOR 36" CLEAR' },
     );
     assert.equal(hardened.issues.length, 1);
     assert.equal(hardened.issues[0].findingType, "confirmed_violation");
@@ -577,7 +577,7 @@ describe("content class does not discard a reviewed sheet", () => {
         jurisdictionNotes: "",
       },
       "ibc",
-      { contentClass: "mep", sheetTitle: "E-1.2 Electrical Power Plan" },
+      { contentClass: "mep", sheetTitle: "E-1.2 Electrical Power Plan", pageText: 'CORRIDOR B 36" CLEAR' },
     );
     assert.equal(hardened.issues.length, 1);
     assert.notEqual(hardened.summary.overallScore, 100);
@@ -604,7 +604,7 @@ describe("content class does not discard a reviewed sheet", () => {
       "ibc",
       {
         contentClass: "schedule",
-        pageText: "DOOR AND HARDWARE SCHEDULE\nDOOR DETAILS\nWINDOW ELEVATIONS",
+        pageText: 'DOOR AND HARDWARE SCHEDULE\nDOOR DETAILS\nDOOR 101 30" CLEAR\nWINDOW ELEVATIONS',
         sheetTitle: "A-6.00.pdf",
       },
     );
@@ -624,7 +624,7 @@ describe("content class does not discard a reviewed sheet", () => {
         "ibc",
         { contentClass: "mep", sheetTitle: "E-1.2.pdf" },
       );
-      assert.equal(hardened.summary.reviewState, "not_reviewed");
+      assert.equal(hardened.summary.reviewState, "reviewed_partial");
       assert.equal(hardened.summary.overallScore, null);
       assert.notEqual(hardened.summary.overallScore, 100);
     }
@@ -641,26 +641,33 @@ describe("content class does not discard a reviewed sheet", () => {
       "ibc",
       { contentClass: "schedule", sheetTitle: "A-6.00.pdf" },
     );
-    assert.equal(hardened.summary.reviewState, "passed");
+    assert.equal(hardened.summary.reviewState, "reviewed_clear");
     assert.equal(hardened.summary.overallScore, 100);
   });
 });
 
 describe("resolveAnalysisJurisdiction", () => {
-  it("uses a stored DC project jurisdiction when the run is general", () => {
+  it("keeps explicit General IBC when the project or title block says Washington DC", () => {
     assert.equal(
       resolveAnalysisJurisdiction({
         runJurisdiction: "general",
         projectJurisdiction: "Washington, D.C.",
       }),
-      "dc",
+      "general",
     );
     assert.equal(
       resolveAnalysisJurisdiction({
-        runJurisdiction: "general",
+        runJurisdiction: "General IBC",
         projectJurisdiction: null,
         projectCity: "Washington",
         projectState: "DC",
+      }),
+      "general",
+    );
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: null,
+        projectJurisdiction: "Washington, D.C.",
       }),
       "dc",
     );
@@ -688,6 +695,14 @@ describe("resolveAnalysisJurisdiction", () => {
         projectJurisdiction: null,
         projectCity: null,
         projectState: null,
+        drawingText: "PROJECT LOCATION Washington, D.C.\nAPPLICABLE CODE: 2017 DC Building Code",
+      }),
+      "general",
+    );
+    assert.equal(
+      resolveAnalysisJurisdiction({
+        runJurisdiction: null,
+        projectJurisdiction: null,
         drawingText: "PROJECT LOCATION Washington, D.C.\nAPPLICABLE CODE: 2017 DC Building Code",
       }),
       "dc",

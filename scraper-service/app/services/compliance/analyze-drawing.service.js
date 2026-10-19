@@ -143,8 +143,8 @@ function formatStaffGuidanceBlock(analysisInstructions) {
   if (!text) return "";
   return `
 
-STAFF GUIDANCE / REVIEW FOCUS (NOT EVIDENCE):
-The following notes were provided by staff to guide this review. They are NOT submitted evidence and must NOT be treated as proof of compliance or as facts about the drawing set. Use them only to prioritize or focus your review:
+USER EMPHASIS (NOT EVIDENCE AND NOT A SCOPE LIMIT):
+The following notes were stored with this run. Review the entire sheet and the retrieved package. These notes add emphasis only. They do not drop disciplines, sheets, or questions. They are NOT submitted evidence and must NOT be treated as proof of compliance or as facts about the drawing set:
 ${text}`;
 }
 
@@ -278,6 +278,7 @@ ${lines.join("\n\n")}`;
  *   pageText?: string | null;
  *   contentClass?: string | null;
  *   sheetIndex?: Array<{ fileName?: string | null; contentClass?: string | null; title?: string | null; excerpt?: string | null }> | null;
+ *   reviewContext?: string | null;
  * }} params
  */
 function buildPrompts(params) {
@@ -293,6 +294,7 @@ function buildPrompts(params) {
     pageText = null,
     contentClass = null,
     sheetIndex = null,
+    reviewContext = null,
   } = params;
   const jurisdictionKey = normalizeJurisdictionKey(jurisdiction);
   const jurisdictionContext = JURISDICTION_AMENDMENTS[jurisdictionKey] || "";
@@ -396,6 +398,7 @@ ${evidenceRules}
 - A missing-information finding must name the place on this sheet you looked. If you cannot name that place, do not file it as a violation.
 Scoring: overallScore is 0-100 only after a real review. Every checklist item must include a non-empty evidence quote from this sheet (a dimension, a label, a note, or "shown on sheet <id>"). If checklist is empty and issues is empty, the sheet was not reviewed — do not set overallScore to 100. A generic checklist or "no failing condition" without that quote is not a pass. If any issue remains, overallScore must not be 100. Do not echo 85.
 ${formatContentClassBlock(contentClass, pageText)}${formatSheetIndexBlock(sheetIndex)}${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
+${reviewContext ? `\nQUESTION-DRIVEN REVIEW CONTEXT:\n${String(reviewContext).slice(0, 6000)}\n` : ""}
 ${formatExtractedPageText(pageText)}
 ${sheetTitle ? `\nSheet under review: ${sheetTitle}` : ""}${discipline ? `\nDiscipline: ${discipline}` : ""}
 
@@ -495,26 +498,42 @@ async function downscaleImageBase64(imageBase64, imageType) {
  *   systemPrompt: string;
  *   userPrompt: string;
  *   detail: "high" | "low";
+ *   regionImages?: Array<{ imageBase64: string; imageType?: string; label?: string }>;
  * }} params
  */
 async function callVision(openai, params) {
   const start = Date.now();
+  const regionImages = (params.regionImages || []).slice(0, 2).filter((image) => image?.imageBase64);
+  const content = [
+    { type: "text", text: params.userPrompt },
+    {
+      type: "image_url",
+      image_url: {
+        url: `data:${params.imageType};base64,${params.imageBase64}`,
+        detail: params.detail,
+      },
+    },
+  ];
+  for (const region of regionImages) {
+    content.push({
+      type: "text",
+      text: `High-resolution region${region.label ? `: ${region.label}` : ""}. Use it only if the full sheet is ambiguous. Coordinates stay on the region record; do not invent a box.`,
+    });
+    content.push({
+      type: "image_url",
+      image_url: {
+        url: `data:${region.imageType || "image/png"};base64,${region.imageBase64}`,
+        detail: "low",
+      },
+    });
+  }
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       { role: "system", content: params.systemPrompt },
       {
         role: "user",
-        content: [
-          { type: "text", text: params.userPrompt },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${params.imageType};base64,${params.imageBase64}`,
-              detail: params.detail,
-            },
-          },
-        ],
+        content,
       },
     ],
     max_tokens: 4096,
@@ -655,6 +674,13 @@ function collectObservedEvidence(analysisData) {
  *   sheetIndex?: Array<{ fileName?: string | null; contentClass?: string | null; title?: string | null; excerpt?: string | null; sheetId?: string | null }> | null;
  *   sheetId?: string | null;
  *   jurisdictionDiagnostics?: Record<string, unknown> | null;
+ *   reviewContext?: string | null;
+ *   jurisdictionScope?: Record<string, unknown> | null;
+ *   drawingRecords?: Array<Record<string, unknown>>;
+ *   observations?: Array<Record<string, unknown>>;
+ *   regions?: Array<Record<string, unknown>>;
+ *   regionImages?: Array<{ imageBase64: string; imageType?: string; label?: string }>;
+ *   fileName?: string | null;
  *   logInfo?: (msg: string, extra?: string) => void;
  *   logError?: (msg: string, extra?: string) => void;
  *   downscaleFn?: typeof downscaleImageBase64;
@@ -678,6 +704,13 @@ async function analyzeDrawingWithOpenAI(params) {
     sheetIndex = null,
     sheetId = null,
     jurisdictionDiagnostics = null,
+    reviewContext = null,
+    jurisdictionScope = null,
+    drawingRecords = null,
+    observations = null,
+    regions = null,
+    regionImages = null,
+    fileName = null,
     logInfo = console.log,
     logError = console.error,
     downscaleFn = downscaleImageBase64,
@@ -691,7 +724,12 @@ async function analyzeDrawingWithOpenAI(params) {
     pageText,
     contentClass,
     sheetIndex,
+    fileName: fileName || sheetTitle,
     jurisdictionDiagnostics,
+    jurisdictionScope,
+    drawingRecords,
+    observations,
+    regions,
   };
 
   const { systemPrompt, userPrompt, codeType: promptedCodeType } = buildPrompts({
@@ -706,6 +744,7 @@ async function analyzeDrawingWithOpenAI(params) {
     pageText,
     contentClass,
     sheetIndex,
+    reviewContext,
   });
 
   logInfo("[analyze-drawing] Calling OpenAI GPT-4o Vision...");
@@ -720,6 +759,7 @@ async function analyzeDrawingWithOpenAI(params) {
       systemPrompt,
       userPrompt,
       detail: attempt.detail,
+      regionImages: attempt.retry ? [] : regionImages,
     });
     logAnalyzeDrawingMeta(logInfo, {
       finishReason: meta.finishReason,

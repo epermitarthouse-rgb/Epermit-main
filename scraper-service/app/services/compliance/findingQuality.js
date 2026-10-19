@@ -1,5 +1,13 @@
 "use strict";
 
+const { decideCandidate, applyDecision } = require("./review/verifier.js");
+const { resolveReviewState } = require("./review/reviewStates.js");
+const {
+  isUnselectedJurisdiction,
+  resolveJurisdictionDecision,
+  jurisdictionDisclosure,
+} = require("./review/jurisdictionScope.js");
+
 /** Topics that require measurable or cited evidence before a violation claim. */
 const MEASURABLE_TOPIC_RE =
   /\b(width|clearance|slope|ramp|rise|run|riser|tread|dimension|distance|spacing|occupant\s*load|fire\s*rating|rated|hour|accessible\s*parking|parking\s*space|44\s*in|48\s*in|1:12|percent|%)\b/i;
@@ -151,6 +159,14 @@ function evidenceCorpus(ctx) {
     parts.push(String(observed));
   }
   if (ctx?.checklist) parts.push(normalizeChecklist(ctx.checklist).join("\n"));
+  if (Array.isArray(ctx?.observations)) {
+    parts.push(
+      ctx.observations
+        .map((item) => (item && typeof item === "object" ? item.quote || item.observedValue || "" : ""))
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
   return parts.filter(Boolean).join("\n");
 }
 
@@ -229,6 +245,11 @@ function pageTextSuppliesMissingFact(issue, pageText) {
 
   const doorWidthMissing = /\bdoor\s+widths?\b/i.test(claim);
   if (doorWidthMissing && INCH_MARK_RE.test(body)) return true;
+
+  if (/\bemergency\s+light/i.test(claim) && /\bemergency\s+light/i.test(body)) return true;
+  if (/water[\s-]*hammer/i.test(claim) && /water[\s-]*hammer/i.test(body)) return true;
+  if (/\bgfci\b/i.test(claim) && /\bgfci\b/i.test(body)) return true;
+  if (/draft[\s-]*stop/i.test(claim) && /draft[\s-]*stop/i.test(body)) return true;
 
   return false;
 }
@@ -568,10 +589,21 @@ function dedupAgainstRun(existingSemanticKeys, issues) {
  * @param {Array<Record<string, unknown>>} issues
  * @param {{ sheetTitle?: string | null; specChunks?: unknown[]; jurisdictionDiagnostics?: Record<string, unknown> | null; pageText?: string | null; contentClass?: string | null; codeType?: string | null }} ctx
  */
+function otherRecordSuppliesFact(issue, ctx) {
+  const records = Array.isArray(ctx.drawingRecords) ? ctx.drawingRecords : [];
+  for (const record of records) {
+    if (isCurrentSheetEntry({ fileName: record.fileName, sheetId: record.sheetId }, ctx)) continue;
+    const text = `${record.text || ""}\n${(record.observations || []).map((item) => item.quote || "").join("\n")}`;
+    if (pageTextSuppliesMissingFact(issue, text)) return record;
+  }
+  return null;
+}
+
 function hardenIssues(issues, ctx) {
   const sheetCtx = inferSheetReviewContext(ctx.sheetTitle);
   const seen = new Set();
   const out = [];
+  const rejectedCandidates = [];
 
   for (const raw of issues || []) {
     let issue = correctCitationBook({ ...raw }, ctx.codeType);
@@ -587,6 +619,39 @@ function hardenIssues(issues, ctx) {
 
     issue = applyEvidenceGate(issue, ctx);
     if (!issue) continue;
+
+    const supplied = otherRecordSuppliesFact(issue, ctx);
+    if (supplied) {
+      rejectedCandidates.push({
+        ...issue,
+        validationDisposition: "reject",
+        validationReason: "cross_sheet_supplies_fact",
+        validationDetail: `Related sheet ${supplied.fileName || supplied.sheetNumber || "in the set"} already states this fact.`,
+        userVisible: false,
+        provenance: {
+          verifier: "cross-sheet",
+          fileName: supplied.fileName || null,
+          sheetId: supplied.sheetId || null,
+          pageNumber: supplied.pageNumber || null,
+        },
+      });
+      continue;
+    }
+
+    const decision = decideCandidate(issue, {
+      corpus: evidenceCorpus(ctx),
+      sheetTitle: ctx.sheetTitle,
+      fileName: ctx.fileName || ctx.sheetTitle,
+      contentClass: ctx.contentClass,
+      jurisdictionScope: ctx.jurisdictionScope || null,
+      regions: ctx.regions || [],
+      ruleResults: ctx.ruleResults || [],
+    });
+    issue = applyDecision(issue, decision);
+    if (issue.validationDisposition === "reject") {
+      rejectedCandidates.push(issue);
+      continue;
+    }
     if (!sheetContextAllowsIssue(issue, sheetCtx)) continue;
 
     const key = dedupKey(issue, ctx.sheetTitle);
@@ -595,7 +660,7 @@ function hardenIssues(issues, ctx) {
     out.push(issue);
   }
 
-  return { issues: out, sheetReviewContext: sheetCtx };
+  return { issues: out, sheetReviewContext: sheetCtx, rejectedCandidates };
 }
 
 /**
@@ -604,14 +669,18 @@ function hardenIssues(issues, ctx) {
  */
 function hardenIssueBundle(bundle, ctx) {
   const checklist = bundle.checklist ?? bundle.summary?.checklist;
-  const { issues, sheetReviewContext } = hardenIssues(
+  const { issues, sheetReviewContext, rejectedCandidates } = hardenIssues(
     /** @type {Array<Record<string, unknown>>} */ (bundle.issues || []),
     { ...ctx, checklist },
   );
-  const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist);
+  const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist, {
+    callStatus: ctx.callStatus || "completed",
+  });
+  summary.rejectedCount = rejectedCandidates.length;
   return {
     issues,
     summary,
+    rejectedCandidates,
     jurisdictionNotes: bundle.jurisdictionNotes || "",
     sheetReviewContext,
   };
@@ -622,38 +691,42 @@ function hardenIssueBundle(bundle, ctx) {
  * @param {number | undefined | null} overallScore
  * @param {unknown} checklist
  */
-function buildSummaryFromIssues(issues, overallScore, checklist) {
+function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
   const stored = issues || [];
   const passItems = normalizeChecklist(checklist);
-  const scoringIssues = stored.filter((i) => i.findingType !== "unverified");
-  const critical = scoringIssues.filter((i) => i.severity === "critical").length;
-  const warnings = scoringIssues.filter((i) => i.severity === "warning").length;
-  const advisory = scoringIssues.filter((i) => i.severity === "advisory").length;
+  const confirmed = stored.filter(
+    (issue) => issue.findingType === "confirmed_violation" && issue.validationDisposition !== "reject",
+  );
+  const openQuestions = stored.filter((issue) => issue.findingType !== "confirmed_violation");
+  const critical = confirmed.filter((i) => i.severity === "critical").length;
+  const warnings = confirmed.filter((i) => i.severity === "warning").length;
+  const advisory = stored.filter((i) => i.severity === "advisory").length;
   const computed = Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
   const evidenceBacked = passItems.length > 0 && passItems.every(checklistItemHasEvidenceQuote);
-  let reviewState = null;
-  let score;
-  if (scoringIssues.length === 0 && stored.length === 0 && evidenceBacked) {
-    reviewState = "passed";
-    score = 100;
-  } else if (scoringIssues.length === 0) {
-    reviewState = "not_reviewed";
-    score = null;
-  } else {
+  const decision = resolveReviewState({
+    callStatus: options.callStatus || "completed",
+    confirmedCount: confirmed.length,
+    openQuestionCount: openQuestions.length,
+    evidenceBacked,
+  });
+  let score = decision.overallScore;
+  if (decision.reviewState === "reviewed_findings") {
     const modelScore =
       typeof overallScore === "number" && Number.isFinite(overallScore) ? overallScore : computed;
-    score = modelScore >= 100 ? (computed >= 100 ? 99 : computed) : modelScore;
+    const capped = modelScore >= 100 ? (computed >= 100 ? 99 : computed) : modelScore;
+    score = capped >= 100 ? 99 : capped;
   }
   return {
     totalIssues: stored.length,
     critical,
     warnings,
     advisory,
-    confirmedViolations: scoringIssues.filter((i) => i.findingType === "confirmed_violation").length,
-    verificationRequired: scoringIssues.filter((i) => i.findingType === "missing_information").length,
+    confirmedViolations: confirmed.length,
+    verificationRequired: stored.filter((i) => i.findingType === "missing_information").length,
     unverified: stored.filter((i) => i.findingType === "unverified").length,
     checklist: passItems,
-    reviewState,
+    cleanChecks: evidenceBacked ? passItems : [],
+    reviewState: decision.reviewState,
     overallScore: score,
   };
 }
@@ -679,6 +752,7 @@ function hardenAnalysisResult(result, codeType, ctx) {
   return {
     issues: single.issues,
     summary: single.summary,
+    rejectedCandidates: single.rejectedCandidates || [],
     jurisdictionNotes: single.jurisdictionNotes,
     sheetReviewContext: single.sheetReviewContext,
     jurisdictionDiagnostics: ctx.jurisdictionDiagnostics || null,
@@ -737,39 +811,59 @@ function jurisdictionFromDrawingText(text) {
  * project record, then title-block / code notes on the drawings.
  * @param {{ runJurisdiction?: string | null; projectJurisdiction?: string | null; projectCity?: string | null; projectState?: string | null; drawingText?: string | null; pageText?: string | null }} input
  */
-function resolveAnalysisJurisdiction(input = {}) {
-  const runKey = canonicalJurisdictionKey(input.runJurisdiction);
-  if (runKey !== "general") return runKey;
-  const projectKey = canonicalJurisdictionKey(input.projectJurisdiction);
-  if (projectKey !== "general") return projectKey;
+function projectLocationKey(input) {
   const city = String(input.projectCity || "").trim().toLowerCase();
   const state = String(input.projectState || "").trim().toLowerCase().replace(/\./g, "");
   const stateIsDc = state === "dc" || state === "district of columbia";
   const cityIsWashington = !city || city === "washington" || city === "washington dc";
   if (stateIsDc && cityIsWashington) return "dc";
-  const fromDrawing = jurisdictionFromDrawingText(input.drawingText || input.pageText);
-  if (fromDrawing) return fromDrawing;
-  return "general";
+  return null;
 }
 
-function buildJurisdictionDiagnostics(runJurisdiction, documentNameHints) {
-  const hints = documentNameHints.join(" ").toLowerCase();
+function resolveJurisdictionDecisionFromInput(input = {}) {
+  return resolveJurisdictionDecision({
+    runJurisdiction: input.runJurisdiction,
+    runKey: isUnselectedJurisdiction(input.runJurisdiction)
+      ? "general"
+      : canonicalJurisdictionKey(input.runJurisdiction),
+    projectKey: canonicalJurisdictionKey(input.projectJurisdiction),
+    projectLocationKey: projectLocationKey(input),
+    detectedFromDrawing: jurisdictionFromDrawingText(input.drawingText || input.pageText),
+  });
+}
+
+function resolveAnalysisJurisdiction(input = {}) {
+  return resolveJurisdictionDecisionFromInput(input).enforcedJurisdiction;
+}
+
+function buildJurisdictionDiagnostics(runJurisdiction, documentNameHints, decision) {
+  const hints = (documentNameHints || []).join(" ").toLowerCase();
   const detected = [];
   if (/\bwashington,?\s*d\.?c\.?\b|\bdistrict of columbia\b|\b12a dcmr\b|\b4th street sw\b/.test(hints)) {
     detected.push("dc");
   }
-  const runKey = String(runJurisdiction || "general")
-    .toLowerCase()
-    .replace(/\s+/g, "-");
-  const mismatch =
-    detected.length > 0 && runKey === "general" && !detected.includes(runKey);
+  const resolved =
+    decision ||
+    (String(runJurisdiction || "general").toLowerCase() === "general"
+      ? {
+          selectionSource: "explicit",
+          selectedScope: "general-ibc",
+          enforcedJurisdiction: "general",
+          detectedLocation: detected[0] || null,
+          amendmentsEnforced: false,
+          disclosed: detected.length > 0,
+        }
+      : null);
+  const disclosure = jurisdictionDisclosure(resolved, detected);
   return {
     runJurisdiction: runJurisdiction || "general",
+    selectedScope: disclosure.selectedScope,
+    detectedLocation: disclosure.detectedLocation,
+    amendmentsEnforced: disclosure.amendmentsEnforced,
+    selectionSource: disclosure.selectionSource,
     detectedJurisdictionHints: detected,
-    mismatch,
-    message: mismatch
-      ? "Project documents reference Washington, DC, but this run used jurisdiction 'general'. Local amendment analysis may be incomplete — select DC jurisdiction for local findings."
-      : null,
+    mismatch: disclosure.mismatch,
+    message: disclosure.message,
   };
 }
 
@@ -783,6 +877,7 @@ module.exports = {
   buildJurisdictionDiagnostics,
   canonicalJurisdictionKey,
   resolveAnalysisJurisdiction,
+  resolveJurisdictionDecisionFromInput,
   jurisdictionFromDrawingText,
   correctCitationBook,
   pageTextSuppliesMissingFact,

@@ -32,7 +32,14 @@ export type DesignCheckSummaryCounts = {
   warnings: number;
   advisory: number;
   overallScore: number | null;
-  reviewState?: "not_reviewed" | "passed" | null;
+  reviewState?:
+    | "not_reviewed"
+    | "passed"
+    | "reviewed_clear"
+    | "reviewed_findings"
+    | "reviewed_partial"
+    | "failed"
+    | null;
 };
 
 export type DesignCheckDocumentRef = {
@@ -69,7 +76,14 @@ export type DesignCheckAnnotationData = {
   location?: string;
   suggestedFix?: string;
   summary?: DesignCheckSummaryCounts;
-  reviewState?: "not_reviewed" | "passed" | null;
+  reviewState?:
+    | "not_reviewed"
+    | "passed"
+    | "reviewed_clear"
+    | "reviewed_findings"
+    | "reviewed_partial"
+    | "failed"
+    | null;
   checklist?: unknown;
   jurisdictionNotes?: string;
   jurisdiction?: string;
@@ -113,9 +127,18 @@ export function recomputeOverallScore(counts: {
   warnings: number;
   advisory: number;
   totalIssues: number;
-  reviewState?: "not_reviewed" | "passed" | null;
+  reviewState?:
+    | "not_reviewed"
+    | "passed"
+    | "reviewed_clear"
+    | "reviewed_findings"
+    | "reviewed_partial"
+    | "failed"
+    | null;
 }): number | null {
-  if (counts.totalIssues === 0) return counts.reviewState === "passed" ? 100 : null;
+  if (counts.totalIssues === 0) {
+    return counts.reviewState === "passed" || counts.reviewState === "reviewed_clear" ? 100 : null;
+  }
   return Math.max(0, 100 - counts.critical * 15 - counts.warnings * 5 - counts.advisory * 2);
 }
 
@@ -179,7 +202,14 @@ export function buildDesignCheckSummary(
   let codeYear: string | null = null;
   let hasIbc = false;
   let hasLocal = false;
-  let metadataReviewState: "not_reviewed" | "passed" | null = null;
+  let metadataReviewState:
+    | "not_reviewed"
+    | "passed"
+    | "reviewed_clear"
+    | "reviewed_findings"
+    | "reviewed_partial"
+    | "failed"
+    | null = null;
 
   for (const ann of annotations) {
     const d = (ann.data ?? {}) as DesignCheckAnnotationData;
@@ -197,8 +227,17 @@ export function buildDesignCheckSummary(
       if (d.projectType) projectType = d.projectType;
       if (d.codeYear_meta || d.codeYear) codeYear = d.codeYear_meta || d.codeYear || null;
       const state = d.summary?.reviewState ?? d.reviewState;
-      if (state === "passed") metadataReviewState = "passed";
-      else if (state === "not_reviewed" && metadataReviewState !== "passed") metadataReviewState = "not_reviewed";
+      const rank: Record<string, number> = {
+        failed: 6,
+        reviewed_findings: 5,
+        reviewed_partial: 4,
+        reviewed_clear: 3,
+        passed: 3,
+        not_reviewed: 1,
+      };
+      if (typeof state === "string" && rank[state] && (!metadataReviewState || rank[state] >= rank[metadataReviewState])) {
+        metadataReviewState = state as typeof metadataReviewState;
+      }
       continue;
     }
 
@@ -234,7 +273,7 @@ export function buildDesignCheckSummary(
     return null;
   }
 
-  const reviewState = findings.length === 0 ? (metadataReviewState === "passed" ? "passed" : "not_reviewed") : null;
+  const reviewState = findings.length === 0 ? metadataReviewState || "not_reviewed" : null;
   const computed = summarizeFindings(findings);
   const overallScore =
     findings.length === 0

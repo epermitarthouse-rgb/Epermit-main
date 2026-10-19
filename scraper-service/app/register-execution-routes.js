@@ -951,7 +951,7 @@ app.post("/api/analyze-drawing", async (req, res) => {
     const OpenAI = require("openai").default || require("openai");
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, analysisInstructions, specChunks, sheetTitle, discipline, jurisdictionDiagnostics, pageText, contentClass, sheetIndex, sheetId } = req.body;
+    const { imageBase64, imageType = "image/png", jurisdiction, projectType = "Commercial", codeYear = "2021", codeType, analysisInstructions, specChunks, sheetTitle, discipline, jurisdictionDiagnostics, pageText, contentClass, sheetIndex, sheetId, reviewContext, jurisdictionScope, drawingRecords, observations, regions, regionImages, fileName } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: "Image data is required" });
@@ -975,6 +975,13 @@ app.post("/api/analyze-drawing", async (req, res) => {
       sheetIndex,
       sheetId,
       jurisdictionDiagnostics,
+      reviewContext,
+      jurisdictionScope,
+      drawingRecords,
+      observations,
+      regions,
+      regionImages,
+      fileName,
       logInfo: console.log,
       logError: console.error,
     });

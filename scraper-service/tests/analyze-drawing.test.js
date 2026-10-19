@@ -97,8 +97,8 @@ describe("analyze-drawing.service", () => {
       "2021",
     );
     assert.equal(result.summary.totalIssues, 1);
-    assert.equal(result.summary.critical, 1);
-    assert.equal(result.summary.overallScore, 90);
+    assert.equal(result.summary.reviewState, "reviewed_partial");
+    assert.equal(result.summary.overallScore, null);
     assert.equal(result.jurisdictionNotes, "note");
   });
 
@@ -116,7 +116,7 @@ describe("analyze-drawing.service", () => {
     );
     assert.equal(result.ibc.summary.totalIssues, 1);
     assert.equal(result.local.summary.totalIssues, 0);
-    assert.equal(result.local.summary.reviewState, "not_reviewed");
+    assert.equal(result.local.summary.reviewState, "reviewed_partial");
     assert.equal(result.local.summary.overallScore, null);
     assert.notEqual(result.local.summary.overallScore, 95);
     assert.equal(result.ibc.jurisdictionNotes, "ibc note");
@@ -133,7 +133,7 @@ describe("analyze-drawing.service", () => {
       "2021",
     );
     assert.equal(result.summary.totalIssues, 0);
-    assert.equal(result.summary.reviewState, "not_reviewed");
+    assert.equal(result.summary.reviewState, "reviewed_partial");
     assert.equal(result.summary.overallScore, null);
   });
 
@@ -147,7 +147,7 @@ describe("analyze-drawing.service", () => {
       },
       "2021",
     );
-    assert.equal(result.summary.reviewState, "not_reviewed");
+    assert.equal(result.summary.reviewState, "reviewed_partial");
     assert.equal(result.summary.overallScore, null);
   });
 
@@ -161,7 +161,7 @@ describe("analyze-drawing.service", () => {
       },
       "2021",
     );
-    assert.equal(result.summary.reviewState, "passed");
+    assert.equal(result.summary.reviewState, "reviewed_clear");
     assert.equal(result.summary.overallScore, 100);
   });
 
@@ -213,11 +213,11 @@ describe("analyze-drawing.service", () => {
       codeYear: "2021",
       analysisInstructions: "Prioritize stair egress.",
     });
-    assert.match(withGuidance.systemPrompt, /STAFF GUIDANCE \/ REVIEW FOCUS \(NOT EVIDENCE\)/i);
+    assert.match(withGuidance.systemPrompt, /USER EMPHASIS \(NOT EVIDENCE AND NOT A SCOPE LIMIT\)/i);
     assert.match(withGuidance.systemPrompt, /Prioritize stair egress/);
     assert.match(withGuidance.systemPrompt, /NOT submitted evidence/i);
     const without = buildPrompts({ codeType: "ibc", codeYear: "2021" });
-    assert.doesNotMatch(without.systemPrompt, /STAFF GUIDANCE/i);
+    assert.doesNotMatch(without.systemPrompt, /USER EMPHASIS/i);
   });
 
   it("formatStaffGuidanceBlock returns empty for blank input", () => {
@@ -244,7 +244,7 @@ describe("analyze-drawing.service", () => {
       analysisInstructions:
         "Verify the 3-hour fire rating on the stair enclosure is shown on every egress sheet.",
     });
-    assert.match(withGuidance.systemPrompt, /STAFF GUIDANCE \/ REVIEW FOCUS \(NOT EVIDENCE\)/i);
+    assert.match(withGuidance.systemPrompt, /USER EMPHASIS \(NOT EVIDENCE AND NOT A SCOPE LIMIT\)/i);
     assert.match(withGuidance.systemPrompt, /3-hour fire rating/i);
     assert.match(withGuidance.systemPrompt, /must NOT be treated as proof/i);
     assert.doesNotMatch(withGuidance.userPrompt, /3-hour/i);
@@ -286,7 +286,7 @@ describe("analyze-drawing.service", () => {
     assert.equal(outcome.ok, true);
     assert.equal(outcome.status, 200);
     assert.equal(outcome.result.summary.totalIssues, 0);
-    assert.equal(outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(outcome.result.summary.reviewState, "reviewed_partial");
     assert.equal(outcome.result.summary.overallScore, null);
     assert.equal(openai.chat.completions.create.mock.calls.length, 1);
     assert.equal(openai.chat.completions.create.mock.calls[0].arguments[0].model, "gpt-4o");
@@ -328,7 +328,7 @@ describe("analyze-drawing.service", () => {
       logError: () => {},
     });
     assert.equal(outcome.ok, true);
-    assert.equal(outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(outcome.result.summary.reviewState, "reviewed_partial");
     assert.equal(outcome.result.summary.overallScore, null);
   });
 
@@ -427,7 +427,7 @@ describe("analyze-drawing.service", () => {
     assert.match(captured.system, /whole page/i);
     assert.doesNotMatch(captured.system, /not sent through/i);
     assert.doesNotMatch(captured.user, /do not report architectural/i);
-    assert.equal(captured.outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(captured.outcome.result.summary.reviewState, "reviewed_partial");
     assert.equal(captured.outcome.result.summary.overallScore, null);
   });
 
@@ -456,7 +456,7 @@ describe("analyze-drawing.service", () => {
     assert.match(captured.system, /COMcheck or energy compliance certificate/i);
     assert.match(captured.system, /whole page/i);
     assert.doesNotMatch(captured.system, /not sent through/i);
-    assert.equal(captured.outcome.result.summary.reviewState, "not_reviewed");
+    assert.equal(captured.outcome.result.summary.reviewState, "reviewed_partial");
   });
 
   it("sends a floor plan through architectural review", async () => {

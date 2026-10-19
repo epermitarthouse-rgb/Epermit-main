@@ -8,10 +8,15 @@ const { classifySheetContent } = require("./classify");
 const { isPdfFile } = require("./mediaType");
 const {
   buildJurisdictionDiagnostics,
-  resolveAnalysisJurisdiction,
+  resolveJurisdictionDecisionFromInput,
   semanticDedupKey,
   dedupAgainstRun,
 } = require("../../scraper-service/app/services/compliance/findingQuality.js");
+const {
+  clearRunEvidenceIndex,
+  seedDrawingIndex,
+  prepareEvidenceForSheet,
+} = require("./prepareSheetEvidence.js");
 
 const SCRAPER_BASE_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3000";
 const SHEET_CONCURRENCY = Math.max(1, Number(process.env.CODE_ANALYZER_SHEET_CONCURRENCY) || 3);
@@ -85,6 +90,7 @@ function forgetRunSheetIndex(runId) {
     if (key.startsWith(prefix)) sheetExcerptCache.delete(key);
   }
   runWarmPromises.delete(runId);
+  clearRunEvidenceIndex(runId);
 }
 
 async function extractPageTextMap(filePath, pageNumbers) {
@@ -175,6 +181,39 @@ async function fetchProjectJurisdiction(supabase, projectId) {
     .eq("id", projectId)
     .maybeSingle();
   return data || {};
+}
+
+async function withSourcePdf(supabase, sheet, fn) {
+  if (!sheet?.source_document_id) return fn(null);
+  const { data: doc } = await supabase
+    .from("project_documents")
+    .select("file_path, file_name, file_type")
+    .eq("id", sheet.source_document_id)
+    .maybeSingle();
+  if (!doc?.file_path || !isPdfFile(doc.file_name, doc.file_type)) return fn(null);
+  const tempPath = await downloadToTempFile(supabase, doc.file_path, doc.file_name || "sheet.pdf");
+  try {
+    return await fn(tempPath);
+  } finally {
+    await removeTempFile(tempPath);
+  }
+}
+
+function hitSummary(hit) {
+  if (!hit) return null;
+  return {
+    sourceType: hit.sourceType || null,
+    fileName: hit.fileName || null,
+    sheetNumber: hit.sheetNumber || null,
+    pageNumber: hit.pageNumber || null,
+    sectionNumber: hit.sectionNumber || null,
+    quote: hit.quote || null,
+    region: hit.region || null,
+    authoritative: hit.authoritative ?? null,
+    provesDrawing: hit.provesDrawing ?? null,
+    provesRequirementSatisfied: false,
+    provenance: hit.provenance || null,
+  };
 }
 
 async function loadSheetPageText(supabase, sheet) {
@@ -398,6 +437,14 @@ async function persistSheetFindings(supabase, params) {
       jurisdictionNotes: bundle.jurisdictionNotes,
       jurisdictionDiagnostics: bundle.jurisdictionDiagnostics || result.jurisdictionDiagnostics || null,
       sheetReviewContext: bundle.sheetReviewContext || null,
+      rejectedCandidates: bundle.rejectedCandidates || [],
+      jurisdictionScope: params.jurisdictionScope || null,
+      userEmphasis: params.userEmphasis || null,
+      observations: params.observations || null,
+      disciplines: params.disciplines || null,
+      retrievalHits: params.retrievalHits || null,
+      ruleResults: params.ruleResults || null,
+      regions: params.regions || null,
       spec_chunks_retrieved: specChunkCount ?? 0,
       sheet_id: sheetId,
       page_number: pageNumber,
@@ -619,17 +666,40 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
   const contentClass = classifySheetContent({ text: pageText });
   const sheetFileName = sheetFileNameFromRow(sheet);
   const sheetIndex = sheetIndexForRun(run.id, includedSheets, sheet, pageText, contentClass);
-  const jurisdiction = resolveAnalysisJurisdiction({
+  const jurisdictionDecision = resolveJurisdictionDecisionFromInput({
     runJurisdiction: run.jurisdiction,
     projectJurisdiction: projectJurisdiction.jurisdiction,
     projectCity: projectJurisdiction.city,
     projectState: projectJurisdiction.state,
     drawingText: drawingTextForJurisdiction(pageText, sheetIndex),
   });
-  const jurisdictionDiagnostics = buildJurisdictionDiagnostics(jurisdiction, [
-    ...documentNameHints,
-    pageText,
-  ]);
+  const jurisdiction = jurisdictionDecision.enforcedJurisdiction;
+  const jurisdictionDiagnostics = buildJurisdictionDiagnostics(
+    jurisdiction,
+    [...documentNameHints, pageText],
+    jurisdictionDecision,
+  );
+
+  if (run.status === "cancelled") {
+    await completeSheetJob(supabase, { jobId: job.id, workerId, status: "cancelled" });
+    return;
+  }
+
+  seedDrawingIndex(run.id, includedSheets, (sheetId) => cachedSheetText(run.id, sheetId));
+  const prepared = await withSourcePdf(supabase, sheet, (pdfPath) =>
+    prepareEvidenceForSheet({
+      runId: run.id,
+      projectId: job.project_id,
+      sheet,
+      pageText,
+      contentClass,
+      pdfPath,
+      specChunks,
+      jurisdictionScope: jurisdictionDecision,
+      analysisInstructions: run.analysis_instructions,
+      renderRegions: true,
+    }),
+  );
 
   // Every included sheet is posted for the requested code type. Content class is
   // prompt context and must not be replaced with a not_reviewed row.
@@ -651,10 +721,17 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     sheetTitle: sheetFileName,
     sheetId: sheet.id,
     discipline: sheet.discipline,
-    pageText,
     contentClass,
     sheetIndex,
     jurisdictionDiagnostics,
+    jurisdictionScope: jurisdictionDecision,
+    reviewContext: prepared.promptBlock,
+    drawingRecords: prepared.drawingRecords,
+    observations: prepared.observations,
+    regions: prepared.record?.regions || [],
+    regionImages: prepared.regionImages,
+    fileName: sheetFileName,
+    pageText: prepared.pageText || pageText,
   });
 
   await persistSheetFindings(supabase, {
@@ -670,6 +747,18 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     specChunkCount: specChunks.length,
     sheetFileName,
     contentClass,
+    jurisdictionScope: jurisdictionDecision,
+    userEmphasis: run.analysis_instructions || null,
+    observations: (prepared.observations || []).slice(0, 24),
+    disciplines: prepared.disciplines,
+    retrievalHits: (prepared.retrieval?.packages || []).map((pack) => ({
+      questionId: pack.questionId,
+      drawing: (pack.drawing || []).map(hitSummary),
+      code: (pack.code || []).map(hitSummary),
+      spec: (pack.spec || []).map(hitSummary),
+    })),
+    ruleResults: prepared.rules,
+    regions: prepared.record?.regions || [],
   });
 
   await completeSheetJob(supabase, {
