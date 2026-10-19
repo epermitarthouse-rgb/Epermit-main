@@ -193,6 +193,7 @@ function applyDecision(issue, decision) {
     };
   }
   if (decision.disposition === "downgrade") {
+    const corridorQuestion = decision.reason === "corridor_width_needs_architectural_sheet";
     return {
       ...issue,
       validationDisposition: "downgrade",
@@ -204,6 +205,13 @@ function applyDecision(issue, decision) {
       severity: "advisory",
       measurableEvidence: false,
       userVisible: true,
+      ...(corridorQuestion
+        ? {
+            title: "Corridor width needs the architectural sheet — verification required",
+            description:
+              "An equipment-plan dimension is not the corridor clear width. Retrieve the architectural sheet before treating it as a violation.",
+          }
+        : {}),
     };
   }
   return {

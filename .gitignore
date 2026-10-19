@@ -1,6 +1,9 @@
 # Environment variables (contains secrets)
 .env
 
+# Local paid-run diagnostics (model output, not source)
+code-analyzer-worker/tmp-vision-harness/
+
 # Logs
 logs
 *.log

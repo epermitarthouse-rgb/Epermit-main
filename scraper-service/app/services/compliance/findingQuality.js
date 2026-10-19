@@ -1,6 +1,6 @@
 "use strict";
 
-const { decideCandidate, applyDecision } = require("./review/verifier.js");
+const { decideCandidate, applyDecision, sheetRole } = require("./review/verifier.js");
 const { resolveReviewState } = require("./review/reviewStates.js");
 const {
   isUnselectedJurisdiction,
@@ -667,8 +667,16 @@ function hardenIssues(issues, ctx) {
  * @param {{ issues?: unknown[]; summary?: Record<string, unknown>; jurisdictionNotes?: string }} bundle
  * @param {{ sheetTitle?: string | null; specChunks?: unknown[] }} ctx
  */
+function checklistForSheet(checklist, ctx) {
+  if (sheetRole(ctx || {}) !== "equipment" || !Array.isArray(checklist)) return checklist;
+  return checklist.filter((item) => {
+    const text = typeof item === "string" ? item : `${item?.item || ""} ${item?.result || ""} ${item?.evidence || ""}`;
+    return !/corridor/i.test(text);
+  });
+}
+
 function hardenIssueBundle(bundle, ctx) {
-  const checklist = bundle.checklist ?? bundle.summary?.checklist;
+  const checklist = checklistForSheet(bundle.checklist ?? bundle.summary?.checklist, ctx);
   const { issues, sheetReviewContext, rejectedCandidates } = hardenIssues(
     /** @type {Array<Record<string, unknown>>} */ (bundle.issues || []),
     { ...ctx, checklist },

@@ -100,6 +100,39 @@ describe("candidate verification", () => {
     assert.equal(hardened.summary.overallScore, null);
   });
 
+  it("does not publish an equipment-plan dimension as a corridor violation", () => {
+    const hardened = hardenAnalysisResult(
+      {
+        issues: [
+          {
+            severity: "critical",
+            category: "Egress",
+            title: "Corridor Width Non-Compliance",
+            description: 'The corridor width is marked as 2\'-6", which does not meet the minimum clear width requirement.',
+            codeReference: "IBC 1020.2",
+            findingType: "confirmed_violation",
+            measurableEvidence: true,
+            location: "Corridor near equipment layout",
+          },
+        ],
+        checklist: [
+          { item: "Corridor clear width", result: '2\'-6" labeled at the corridor', evidence: '2\'-6" (CLEAR)' },
+        ],
+        summary: { overallScore: 80 },
+        jurisdictionNotes: "",
+      },
+      "ibc",
+      { sheetTitle: "EQ-1.00-0.pdf", fileName: "EQ-1.00-0.pdf", pageText: 'EQUIPMENT PLAN 2\'-6" CLEAR' },
+    );
+    assert.equal(hardened.issues.length, 1);
+    assert.equal(hardened.issues[0].findingType, "missing_information");
+    assert.equal(hardened.issues[0].validationReason, "corridor_width_needs_architectural_sheet");
+    assert.doesNotMatch(`${hardened.issues[0].title} ${hardened.issues[0].description}`, /non-compliance|does not meet/i);
+    assert.equal(hardened.summary.cleanChecks.length, 0);
+    assert.equal(hardened.summary.overallScore, null);
+    assert.notEqual(hardened.summary.reviewState, "reviewed_clear");
+  });
+
   it("does not confirm a 44-inch corridor without a traceable dimension", () => {
     const hardened = hardenAnalysisResult(
       {
