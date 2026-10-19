@@ -62,8 +62,8 @@ interface ExportOptions {
   /** Optional per-file sections for Detailed Findings (All export). */
   fileSections?: ExportFileSection[];
   /**
-   * Resolve issue responses. Prefer (fileId, issueId) → `fileId:issueId`
-   * for multi-file exports; falls back to bare issue.id.
+   * Resolve issue responses by `fileId:issueId`. A card for one file does not
+   * inherit a decision stored under the bare issue id.
    */
   responseKeyForIssue?: (issue: ComplianceIssue, fileId?: string) => string;
 }
@@ -344,16 +344,24 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   y += 15;
 
   const renderIssueCard = (issue: ComplianceIssue, fileId?: string) => {
-    checkPageBreak(84);
-
     const response = resolveResponse(issue, fileId);
+    doc.setFontSize(7);
+    const caption = findingCaptionLines(issue, response ?? null);
+    const captionLines: string[] = [];
+    caption.forEach((line, index) => {
+      const wrapped = doc.splitTextToSize(line, contentWidth - 12);
+      captionLines.push(...(index < 2 ? wrapped.slice(0, 1) : wrapped.slice(0, 4)));
+    });
+    const cardHeight = 72 + Math.max(0, captionLines.length - 2) * 10;
+    checkPageBreak(cardHeight + 6);
+
     const severity = safeText(issue.severity) || 'advisory';
     const severityColor = SEVERITY_COLORS[severity as keyof typeof SEVERITY_COLORS] ?? SEVERITY_COLORS.advisory;
 
     // Issue card
     doc.setDrawColor(severityColor[0], severityColor[1], severityColor[2]);
     doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, contentWidth, 72, 3, 3, 'S');
+    doc.roundedRect(margin, y, contentWidth, cardHeight, 3, 3, 'S');
 
     // Severity badge
     doc.setFillColor(severityColor[0], severityColor[1], severityColor[2]);
@@ -387,15 +395,13 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     doc.setFontSize(8);
     doc.text(`Location: ${safeText(issue.location)}`, margin + 5, y + 36);
 
-    const caption = findingCaptionLines(issue, response ?? null);
     doc.setFontSize(7);
     doc.setTextColor(71, 85, 105);
-    const scopeLine = doc.splitTextToSize(caption[0], contentWidth - 12);
-    const responseLine = doc.splitTextToSize(caption[1], contentWidth - 12);
-    doc.text(scopeLine.slice(0, 1).map(safeText), margin + 5, y + 48);
-    doc.text(responseLine.slice(0, 1).map(safeText), margin + 5, y + 58);
+    captionLines.forEach((line, index) => {
+      doc.text(safeText(line), margin + 5, y + 48 + index * 10);
+    });
 
-    y += 78;
+    y += cardHeight + 6;
   };
 
   const renderIssuesByCategory = (sectionIssues: ComplianceIssue[], fileId?: string) => {

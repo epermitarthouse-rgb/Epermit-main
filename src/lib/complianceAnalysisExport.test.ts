@@ -263,7 +263,10 @@ describe("single-sheet export labels", () => {
       codeYear: "2021",
       responses: {
         [complianceIssueResponseKey("sheet-p", "ibc-1")]: { status: "accepted" },
-        [complianceIssueResponseKey("sheet-p", "local-1")]: { status: "modified" },
+        [complianceIssueResponseKey("sheet-p", "local-1")]: {
+          status: "modified",
+          modifiedResponse: "Specify the insulation thickness.",
+        },
         [complianceIssueResponseKey("sheet-p", "local-2")]: { status: "rejected" },
       },
       generatedAt: "2026-10-20T00:00:00.000Z",
@@ -284,6 +287,10 @@ describe("single-sheet export labels", () => {
     assert.equal(issues[1].citationVerificationStatus, "Unverified");
     assert.equal(issues[0].reviewerResponse, "Accept");
     assert.equal(issues[1].reviewerResponse, "Modify");
+    assert.equal(
+      (issues[1].response as { modifiedResponse?: string } | null)?.modifiedResponse,
+      "Specify the insulation thickness.",
+    );
     assert.equal(issues[2].reviewerResponse, "N/A");
     assert.match(issues[0].description, /Check the note/);
   });

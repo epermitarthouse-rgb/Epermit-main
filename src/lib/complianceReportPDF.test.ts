@@ -52,6 +52,39 @@ const summary = (totalIssues: number) => ({
 });
 
 describe("PDF export reviewer decisions", () => {
+  it("prints Accept, Modify with the edited text, N/A, and Unreviewed on the finding that owns each decision", async () => {
+    const shared = issue("issue-1", "ibc");
+    const edited = "Raise the service counter to 36 inches.";
+    const text = await renderPdfText({
+      jurisdiction: "general",
+      projectType: "commercial",
+      codeYear: "2021",
+      summary: summary(4),
+      issues: [shared, shared, shared, shared],
+      responses: {
+        "file-accept:issue-1": { status: "accepted", originalFix: shared.suggestedFix },
+        "file-modify:issue-1": { status: "modified", originalFix: shared.suggestedFix, modifiedResponse: edited },
+        "file-na:issue-1": { status: "rejected", originalFix: shared.suggestedFix },
+        "issue-1": { status: "accepted", originalFix: shared.suggestedFix, modifiedResponse: "LEAKED EDIT" },
+      },
+      jurisdictionNotes: "",
+      filesAnalyzed: 4,
+      fileSections: [
+        { fileId: "file-accept", fileName: "A-101.pdf", summary: summary(1), issues: [shared] },
+        { fileId: "file-modify", fileName: "A-102.pdf", summary: summary(1), issues: [shared] },
+        { fileId: "file-na", fileName: "A-103.pdf", summary: summary(1), issues: [shared] },
+        { fileId: "file-open", fileName: "A-104.pdf", summary: summary(1), issues: [shared] },
+      ],
+      responseKeyForIssue: (item, fileId) => (fileId ? `${fileId}:${item.id}` : item.id),
+    });
+    assert.equal((text.match(/Response: Accept/g) ?? []).length, 1);
+    assert.equal((text.match(/Response: Modify/g) ?? []).length, 1);
+    assert.equal((text.match(/Response: N\/A/g) ?? []).length, 1);
+    assert.equal((text.match(/Response: Unreviewed/g) ?? []).length, 1);
+    assert.equal((text.match(/Raise the service counter to 36 inches/g) ?? []).length, 1);
+    assert.equal(text.includes("LEAKED EDIT"), false);
+  });
+
   it("keeps each sheet's decision on its own finding when issue ids repeat across sheets", async () => {
     const a = issue("issue-1", "ibc");
     const b = issue("issue-1", "local");

@@ -218,6 +218,11 @@ const CASES = [
       description: "The plan does not provide readable fire separation ratings or locations.",
       location: "Floor plan", codeReference: "IBC 707",
     },
+    // The floor plan names partition types and a legend. It does not name fire
+    // separation, a rating, or a location, so the text does not support a published
+    // finding that fire-separation information is missing. The electrical note says
+    // penetrations of a 1-hour wall are firestopped; it does not locate this plan's
+    // separations, so it does not answer the question. The check stays open.
     ctx: {
       fileName: "A-9.05.pdf", sheetTitle: "A-9.05 Floor Plan", contentClass: "floor_plan", pageText: "SECOND FLOOR PLAN PARTITION TYPES SEE LEGEND",
       drawingRecords: [{ fileName: "E-9.10.pdf", sheetNumber: "E-9.10", text: "PENETRATIONS THROUGH 1 HR RATED WALLS SHALL BE FIRESTOPPED." }],
@@ -233,11 +238,14 @@ const CASES = [
       description: "The accessible portion of the service counter height is not shown.",
       location: "Service counter", codeReference: "ADA 904.4",
     },
+    // The architectural plan names the service counter and does not show its
+    // accessible height. The mechanical sheet dimensions an exhaust hood, which
+    // is a different element, so the question stays a published finding.
     ctx: {
       fileName: "A-9.12.pdf", sheetTitle: "A-9.12 Floor Plan", contentClass: "floor_plan", pageText: "SERVICE COUNTER SEATING AREA",
       drawingRecords: [{ fileName: "M-9.20.pdf", sheetNumber: "M-9.20", text: 'EXHAUST HOOD 36" ABOVE COUNTER AFF' }],
     },
-    expected: "open",
+    expected: "kept",
   },
   // False-positive guards: details already on the owning sheet resolve the question before it is alleged.
   {

@@ -603,8 +603,11 @@ function composePublication(issue, ctx, decision) {
   ].filter(Boolean).join("\n");
   const lowerCorpus = corpus.toLowerCase();
   const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
-  const subject = titleObjective.length ? titleObjective : subjectTokens(issue);
-  const subjectHits = subject.filter((token) => lowerCorpus.includes(token));
+  const titleSubject = subjectTokens(issue);
+  const subject = titleObjective.length ? titleObjective : titleSubject;
+  // The word that names the missing quality ("accessible") may not be printed.
+  // The element the title names ("counter") is the drawing evidence when it is.
+  const subjectHits = [...new Set([...subject, ...titleSubject])].filter((token) => lowerCorpus.includes(token));
   const objectiveEvidence = evidenceSnippet(corpus, objective.tokens);
   const tied = subject.length === 0 || subjectHits.length > 0 || !objectiveEvidence;
   const evidence = subjectHits.length ? evidenceSnippet(corpus, subjectHits) : tied ? objectiveEvidence : "";

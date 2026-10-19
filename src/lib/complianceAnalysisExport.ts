@@ -157,13 +157,16 @@ export function describeExportFinding(
 
 export function findingCaptionLines(
   issue: Parameters<typeof describeExportFinding>[0],
-  response: { status?: string } | null | undefined,
+  response: { status?: string; modifiedResponse?: string | null } | null | undefined,
 ): string[] {
   const labels = describeExportFinding(issue, response);
-  return [
+  const lines = [
     `Scope: ${labels.codeScope} · Edition: ${labels.codeEdition} · Sheet: ${labels.sheet}`,
     `Citation: ${labels.citationVerificationStatus} · Response: ${labels.reviewerResponse}`,
   ];
+  const edited = response?.status === "modified" ? response.modifiedResponse?.trim() : "";
+  if (edited) lines.push(`Modified response: ${edited}`);
+  return lines;
 }
 
 export function exportReportButtonLabel(format: "pdf" | "json", scope: "all" | "filtered"): string {
