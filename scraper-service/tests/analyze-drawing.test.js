@@ -6,6 +6,7 @@ const {
   REFUSAL_USER_MESSAGE,
   EMPTY_USER_MESSAGE,
   buildPrompts,
+  buildVisionUserContent,
   formatStaffGuidanceBlock,
   extractChoiceMeta,
   isEmptyResponse,
@@ -589,6 +590,80 @@ describe("analyze-drawing.service", () => {
       retryCall.messages[1].content[1].image_url.detail,
       "low",
     );
+  });
+
+  it("sends the crop image and its sheet coordinates, including on retry", async () => {
+    const crop = {
+      imageBase64: "crop-bytes",
+      imageType: "image/png",
+      label: "rating: sample",
+      fileName: "A-1.00-00.pdf",
+      sheetId: "sheet-1",
+      pageNumber: 1,
+      extractionMethod: "original-pdf-clip",
+      region: { x: 1544, y: 393, width: 180, height: 24, unit: "pdf-point", origin: "bottom-left" },
+    };
+    let call = 0;
+    const openai = {
+      chat: {
+        completions: {
+          create: mock.fn(async () => {
+            call += 1;
+            if (call === 1) {
+              return {
+                usage: { prompt_tokens: 10, completion_tokens: 0 },
+                choices: [{ finish_reason: "stop", message: { content: "" } }],
+              };
+            }
+            return {
+              usage: { prompt_tokens: 8, completion_tokens: 4 },
+              choices: [
+                {
+                  finish_reason: "stop",
+                  message: { content: JSON.stringify({ issues: [], jurisdictionNotes: "", overallScore: null }) },
+                },
+              ],
+            };
+          }),
+        },
+      },
+    };
+
+    const outcome = await analyzeDrawingWithOpenAI({
+      openai,
+      imageBase64: "full-sheet",
+      imageType: "image/png",
+      codeType: "ibc",
+      jurisdiction: "general",
+      regionImages: [crop],
+      logInfo: () => {},
+      logError: () => {},
+      downscaleFn: async () => ({ imageBase64: "full-sheet-small", imageType: "image/png" }),
+    });
+
+    assert.equal(outcome.ok, true);
+    assert.equal(openai.chat.completions.create.mock.calls.length, 2);
+    for (const entry of openai.chat.completions.create.mock.calls) {
+      const content = entry.arguments[0].messages[1].content;
+      const images = content.filter((part) => part.type === "image_url");
+      assert.equal(images.length, 2);
+      assert.match(images[1].image_url.url, /crop-bytes/);
+      assert.equal(images[1].image_url.detail, "low");
+      const note = content.find((part) => part.type === "text" && String(part.text).includes("High-resolution crop"));
+      assert.match(note.text, /A-1\.00-00\.pdf/);
+      assert.match(note.text, /page 1/);
+      assert.match(note.text, /x=1544/);
+      assert.match(note.text, /y=393/);
+      assert.match(note.text, /pdf-point/);
+    }
+    const built = buildVisionUserContent({
+      imageBase64: "full-sheet",
+      imageType: "image/png",
+      userPrompt: "review",
+      detail: "high",
+      regionImages: [crop, { imageBase64: "second" }, { imageBase64: "third" }],
+    });
+    assert.equal(built.filter((part) => part.type === "image_url").length, 3);
   });
 
   it("both mode returns split ibc/local payload", async () => {

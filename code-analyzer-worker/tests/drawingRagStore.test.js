@@ -142,6 +142,9 @@ describe("drawing rag migration", () => {
     assert.match(sql, /has_project_access/);
     assert.match(sql, /REVOKE ALL ON FUNCTION/);
     assert.match(sql, /TO authenticated, service_role/);
+    assert.match(sql, /SET search_path = public, extensions/);
+    assert.match(sql, /code_analyzer_drawing_chunks_same_project/);
+    assert.match(sql, /octet_length\(observations::text\) <= 48000/);
     assert.doesNotMatch(sql, /image bytea|raster bytea/i);
   });
 });

@@ -20,8 +20,6 @@ const {
   persistDrawingRecord,
   drawingStoreFor,
 } = require("./prepareSheetEvidence.js");
-const { shouldAttachRegionImages } = require("./comprehension.js");
-const sharp = require("sharp");
 
 const SCRAPER_BASE_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3000";
 const SHEET_CONCURRENCY = Math.max(1, Number(process.env.CODE_ANALYZER_SHEET_CONCURRENCY) || 3);
@@ -709,17 +707,14 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
   );
   await persistDrawingRecord(drawingStore, prepared.record);
 
-  let regionImages = prepared.regionImages || [];
-  if (regionImages.length && imageBase64) {
-    try {
-      const meta = await sharp(Buffer.from(imageBase64, "base64")).metadata();
-      if (!shouldAttachRegionImages(meta.width || 0, meta.height || 0, prepared.pageWidth, prepared.pageHeight)) {
-        regionImages = [];
-      }
-    } catch {
-      // Keep the crops when the full-sheet raster size cannot be read.
-    }
-  }
+  // A 150 DPI full sheet is still too coarse for small tags, so the dpi gate
+  // must not drop crops. The scraper keeps at most two.
+  const regionImages = (prepared.regionImages || []).slice(0, 2).map((image) => ({
+    ...image,
+    fileName: sheetFileName,
+    sheetId: sheet.id,
+    pageNumber: sheet.page_number || 1,
+  }));
 
   // Every included sheet is posted for the requested code type. Content class is
   // prompt context and must not be replaced with a not_reviewed row.

@@ -491,18 +491,17 @@ async function downscaleImageBase64(imageBase64, imageType) {
 }
 
 /**
- * @param {import("openai").OpenAI} openai
+ * Chat-completion user content. Crops stay attached, including on a retry.
+ * Provenance is the sheet, page, and PDF box next to the image.
  * @param {{
  *   imageBase64: string;
  *   imageType: string;
- *   systemPrompt: string;
  *   userPrompt: string;
  *   detail: "high" | "low";
- *   regionImages?: Array<{ imageBase64: string; imageType?: string; label?: string }>;
+ *   regionImages?: Array<Record<string, unknown>>;
  * }} params
  */
-async function callVision(openai, params) {
-  const start = Date.now();
+function buildVisionUserContent(params) {
   const regionImages = (params.regionImages || []).slice(0, 2).filter((image) => image?.imageBase64);
   const content = [
     { type: "text", text: params.userPrompt },
@@ -515,9 +514,21 @@ async function callVision(openai, params) {
     },
   ];
   for (const region of regionImages) {
+    const box = region.region && typeof region.region === "object" ? region.region : null;
+    const where = [
+      region.fileName || null,
+      region.sheetId ? `sheet ${region.sheetId}` : null,
+      region.pageNumber != null ? `page ${region.pageNumber}` : null,
+      box
+        ? `pdf box x=${box.x} y=${box.y} width=${box.width} height=${box.height} unit=${box.unit || "pdf-point"} origin=${box.origin || "bottom-left"}`
+        : null,
+      region.extractionMethod || null,
+    ]
+      .filter(Boolean)
+      .join("; ");
     content.push({
       type: "text",
-      text: `High-resolution region${region.label ? `: ${region.label}` : ""}. Use it only if the full sheet is ambiguous. Coordinates stay on the region record; do not invent a box.`,
+      text: `High-resolution crop from the original PDF${where ? ` (${where})` : ""}${region.label ? `: ${region.label}` : ""}. Use it only to read this region. Do not invent a box or a quote.`,
     });
     content.push({
       type: "image_url",
@@ -527,6 +538,12 @@ async function callVision(openai, params) {
       },
     });
   }
+  return content;
+}
+
+async function callVision(openai, params) {
+  const start = Date.now();
+  const content = buildVisionUserContent(params);
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -759,7 +776,7 @@ async function analyzeDrawingWithOpenAI(params) {
       systemPrompt,
       userPrompt,
       detail: attempt.detail,
-      regionImages: attempt.retry ? [] : regionImages,
+      regionImages,
     });
     logAnalyzeDrawingMeta(logInfo, {
       finishReason: meta.finishReason,
@@ -846,6 +863,7 @@ module.exports = {
   normalizeJurisdictionKey,
   hasLocalAmendmentText,
   buildPrompts,
+  buildVisionUserContent,
   formatStaffGuidanceBlock,
   extractChoiceMeta,
   isEmptyResponse,

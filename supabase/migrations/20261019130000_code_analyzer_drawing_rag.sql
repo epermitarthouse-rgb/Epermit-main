@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS public.code_analyzer_drawing_chunks (
   CONSTRAINT code_analyzer_drawing_chunks_key UNIQUE (project_id, chunk_key),
   CONSTRAINT code_analyzer_drawing_chunks_observations_array
     CHECK (jsonb_typeof(observations) = 'array'),
+  CONSTRAINT code_analyzer_drawing_chunks_sheet_fk
+    FOREIGN KEY (sheet_id) REFERENCES public.code_analyzer_sheets(id) ON DELETE CASCADE,
   CONSTRAINT code_analyzer_drawing_chunks_no_raster CHECK (
     (region IS NULL OR (
       jsonb_typeof(region) = 'object'
@@ -42,6 +44,12 @@ CREATE TABLE IF NOT EXISTS public.code_analyzer_drawing_chunks (
     ))
     AND NOT (metadata ? 'imageBase64')
     AND NOT (metadata ? 'image')
+    AND octet_length(observations::text) <= 48000
+    AND octet_length(metadata::text) <= 48000
+    AND octet_length(COALESCE(region::text, '')) <= 8000
+    AND position('imagebase64' in lower(observations::text)) = 0
+    AND position('imagebase64' in lower(metadata::text)) = 0
+    AND position('imagebase64' in lower(COALESCE(region::text, ''))) = 0
   )
 );
 
@@ -91,6 +99,46 @@ REVOKE ALL ON public.code_analyzer_drawing_chunks FROM PUBLIC, anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.code_analyzer_drawing_chunks TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.code_analyzer_drawing_chunks TO service_role;
 
+-- Reject a chunk whose document or sheet belongs to a different project.
+-- Security invoker so RLS still hides other tenants from a normal user.
+CREATE OR REPLACE FUNCTION public.code_analyzer_drawing_chunks_same_project()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  sheet_project UUID;
+  doc_project UUID;
+BEGIN
+  IF NEW.sheet_id IS NOT NULL THEN
+    SELECT project_id INTO sheet_project
+    FROM public.code_analyzer_sheets
+    WHERE id = NEW.sheet_id;
+    IF sheet_project IS NULL OR sheet_project <> NEW.project_id THEN
+      RAISE EXCEPTION 'drawing chunk sheet is not in this project';
+    END IF;
+  END IF;
+  IF NEW.document_id IS NOT NULL THEN
+    SELECT project_id INTO doc_project
+    FROM public.project_documents
+    WHERE id = NEW.document_id;
+    IF doc_project IS NULL OR doc_project <> NEW.project_id THEN
+      RAISE EXCEPTION 'drawing chunk document is not in this project';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS code_analyzer_drawing_chunks_same_project
+  ON public.code_analyzer_drawing_chunks;
+CREATE TRIGGER code_analyzer_drawing_chunks_same_project
+  BEFORE INSERT OR UPDATE ON public.code_analyzer_drawing_chunks
+  FOR EACH ROW
+  EXECUTE FUNCTION public.code_analyzer_drawing_chunks_same_project();
+
+REVOKE ALL ON FUNCTION public.code_analyzer_drawing_chunks_same_project() FROM PUBLIC, anon;
+
 CREATE OR REPLACE FUNCTION public.match_analyzer_drawing_chunks(
   p_project_id UUID,
   p_query_embedding vector(1536) DEFAULT NULL,
@@ -120,7 +168,7 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   IF COALESCE(auth.jwt() ->> 'role', '') <> 'service_role' THEN
@@ -177,9 +225,12 @@ BEGIN
     CASE
       WHEN p_identifiers IS NOT NULL
         AND cardinality(p_identifiers) > 0
-        AND (
-          upper(COALESCE(c.sheet_number, '')) = ANY (SELECT upper(ident) FROM unnest(p_identifiers) AS ident)
-          OR c.identifiers && p_identifiers
+        AND EXISTS (
+          SELECT 1
+          FROM unnest(p_identifiers) AS ranked(ident)
+          WHERE upper(COALESCE(c.sheet_number, '')) = upper(ranked.ident)
+             OR upper(ranked.ident) = ANY (SELECT upper(x) FROM unnest(c.identifiers) AS x)
+             OR upper(ranked.ident) = ANY (SELECT upper(y) FROM unnest(c.cross_sheet_refs) AS y)
         )
       THEN 0
       ELSE 1
