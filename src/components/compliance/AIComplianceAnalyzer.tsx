@@ -62,7 +62,6 @@ import {
 } from "@/lib/complianceUploadLimits";
 import {
   batchProgressPercent,
-  computeComplianceOverallScore,
   countFailedBatchFiles,
   canRemoveBatchFile,
   createComplianceBatchFileId,
@@ -120,6 +119,7 @@ import {
   computeStandardRunFingerprint,
   filterAnnotationsForActiveAnalysis,
   isStandardComplianceRun,
+  pickDisplayRun,
   resolveHydrateRun,
   shouldMarkAnalysisStale,
   type CodeAnalyzerRun,
@@ -128,7 +128,14 @@ import {
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
 import { buildJurisdictionDiagnostics } from "@/lib/codeAnalyzer/jurisdictionDiagnostics";
 import { jurisdictionForAnalyzerProject } from "@/lib/codeAnalyzer/analyzerJurisdiction";
-import { buildReviewReportView, reviewStateLabel, type ReviewReportView } from "@/lib/codeAnalyzer/reviewReport";
+import { reviewStateLabel } from "@/lib/codeAnalyzer/reviewReport";
+import {
+  aggregateSheetAnalysisResults,
+  fetchAnnotationRefsForHydrateResolution,
+  fetchAnnotationsForSheetResults,
+  filterSheetResultsBySearch,
+  formatSheetResultsCounter,
+} from "@/lib/codeAnalyzer/sheetResults";
 import { ReviewEvidenceReport } from "@/components/compliance/ReviewEvidenceReport";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
@@ -346,44 +353,6 @@ const categoryIcons: Record<string, string> = {
   "Life Safety": "🛡️",
 };
 
-/** Annotation data shape for AI compliance findings stored in document_annotations */
-interface ComplianceAnnotationData {
-  compliance_issue?: boolean;
-  compliance_metadata?: boolean;
-  codeType?: "ibc" | "local";
-  id?: string;
-  category?: string;
-  title?: string;
-  description?: string;
-  severity?: "critical" | "warning" | "advisory";
-  codeReference?: string;
-  codeYear?: string;
-  location?: string;
-  suggestedFix?: string;
-  sheet_file_name?: string;
-  file_name?: string;
-  summary?: AnalysisResult["summary"];
-  jurisdictionNotes?: string;
-  jurisdiction?: string;
-  projectType?: string;
-  codeYear_meta?: string;
-  findingType?: string;
-  validationDisposition?: string;
-  jurisdictionScope?: {
-    selectedScope?: string | null;
-    detectedLocation?: string | null;
-    enforcedJurisdiction?: string | null;
-    amendmentsEnforced?: boolean;
-    selectionSource?: string | null;
-  } | null;
-  jurisdictionDiagnostics?: { message?: string | null; detectedLocation?: string | null; selectedScope?: string | null; amendmentsEnforced?: boolean } | null;
-  userEmphasis?: string | null;
-  disciplines?: string[] | null;
-  observations?: Array<{ element?: string; quote?: string; fileName?: string | null; region?: unknown }>;
-  retrievalHits?: Array<{ questionId?: string; drawing?: Array<{ fileName?: string | null; quote?: string | null; pageNumber?: number | null; region?: unknown }> }>;
-  rejectedCandidates?: Array<{ validationReason?: string; validationDetail?: string; title?: string }>;
-}
-
 function omitSuppressedRun<T extends { id: string }>(
   run: T | null,
   suppressedIds: ReadonlySet<string>,
@@ -408,6 +377,7 @@ export function AIComplianceAnalyzer() {
   const [complianceScoreFilter, setComplianceScoreFilter] = useState<ComplianceScoreFilter>(
     COMPLIANCE_SCORE_FILTER_ALL,
   );
+  const [sheetResultsSearch, setSheetResultsSearch] = useState("");
   const [loadingExisting, setLoadingExisting] = useState(false);
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -1050,19 +1020,15 @@ export function AIComplianceAnalyzer() {
         if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
         if (selectedProjectIdRef.current !== projectId) return;
 
-        const { data: annotations, error } = await supabase
-          .from("document_annotations")
-          .select("document_id, data, analysis_run_id")
-          .eq("project_id", projectId)
-          .not("document_id", "is", null);
-
-        if (error) throw error;
-        if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
-        if (selectedProjectIdRef.current !== projectId) return;
-
         const hasStandardRuns = runs.some(isStandardComplianceRun);
         const standardRuns = runs.filter(isStandardComplianceRun);
-        const runIdsWithFindings = collectRunIdsWithComplianceFindings(annotations ?? []);
+        let runIdsWithFindings = new Set<string>();
+        if (!pickDisplayRun(standardRuns, ANALYSIS_TYPE_STANDARD) && hasStandardRuns) {
+          const refs = await fetchAnnotationRefsForHydrateResolution(projectId);
+          if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
+          if (selectedProjectIdRef.current !== projectId) return;
+          runIdsWithFindings = collectRunIdsWithComplianceFindings(refs);
+        }
         const hydrateResolution = resolveHydrateRun(
           standardRuns,
           ANALYSIS_TYPE_STANDARD,
@@ -1071,7 +1037,19 @@ export function AIComplianceAnalyzer() {
         setHydrateRunId(hydrateResolution.runId);
         setResultsFromHistoricalRun(hydrateResolution.isHistorical);
 
-        const complianceDocIds = complianceDocumentIdsFromAnnotations(annotations ?? [], {
+        if (!hydrateResolution.runId && hasStandardRuns) {
+          setDocumentsWithAnalysis([]);
+          return;
+        }
+
+        const annotations = await fetchAnnotationsForSheetResults({
+          projectId,
+          runId: hydrateResolution.runId,
+        });
+        if (!docsFetchGuardRef.current.isCurrent(fetchGen)) return;
+        if (selectedProjectIdRef.current !== projectId) return;
+
+        const complianceDocIds = complianceDocumentIdsFromAnnotations(annotations, {
           hydrateRunId: hydrateResolution.runId,
           hasAnalyzerRuns: hasStandardRuns,
         });
@@ -1106,141 +1084,6 @@ export function AIComplianceAnalyzer() {
     void fetchDocsWithAnalysis();
   }, [selectedProjectId, user, analysisSavedAt]);
 
-  const buildResultsFromAnnotations = useCallback(
-    (complianceAnnotations: Array<{ id: string; data: unknown }>) => {
-      const metadataByCodeType = new Map<string, ComplianceAnnotationData>();
-      const issuesByCodeType = new Map<string, ComplianceIssue[]>();
-
-      for (const ann of complianceAnnotations) {
-        const d = ann.data as ComplianceAnnotationData;
-        if (d.compliance_metadata) {
-          metadataByCodeType.set(d.codeType || "ibc", d);
-        } else if (d.compliance_issue && d.codeType) {
-          const issue: ComplianceIssue = {
-            id: d.id || ann.id,
-            category: d.category || "",
-            title: d.title || "",
-            description: d.description || "",
-            severity: (d.severity as ComplianceIssue["severity"]) || "advisory",
-            codeReference: d.codeReference || "",
-            codeYear: d.codeYear || "",
-            location: d.location || "",
-            suggestedFix: d.suggestedFix || "",
-            codeType: d.codeType,
-            sheetFileName: d.sheet_file_name || d.file_name || undefined,
-            findingType: d.findingType,
-            validationDisposition: d.validationDisposition,
-          };
-          const list = issuesByCodeType.get(d.codeType) || [];
-          list.push(issue);
-          issuesByCodeType.set(d.codeType, list);
-        }
-      }
-
-      const ibcMeta = metadataByCodeType.get("ibc");
-      const localMeta = metadataByCodeType.get("local");
-      const ibcIssues = issuesByCodeType.get("ibc") || [];
-      const localIssues = issuesByCodeType.get("local") || [];
-
-      const buildSummary = (issues: ComplianceIssue[], meta?: ComplianceAnnotationData) => {
-        const critical = issues.filter((i) => i.severity === "critical").length;
-        const warnings = issues.filter((i) => i.severity === "warning").length;
-        const advisory = issues.filter((i) => i.severity === "advisory").length;
-        // An empty issue list is not a pass unless the stored checklist recorded the checks.
-        if (issues.length === 0) {
-          const stored = meta?.summary?.reviewState;
-          const checklist = Array.isArray(meta?.summary?.checklist) ? meta.summary.checklist : [];
-          if (stored === "reviewed_clear") {
-            const verified = meta?.summary?.codeCoverageVerified === true && meta?.summary?.overallScore === 100;
-            return {
-              totalIssues: 0,
-              critical: 0,
-              warnings: 0,
-              advisory: 0,
-              overallScore: verified ? 100 : null,
-              reviewState: "reviewed_clear",
-              checklist,
-              cleanChecks: meta?.summary?.cleanChecks,
-              codeCoverageVerified: meta?.summary?.codeCoverageVerified === true,
-            };
-          }
-          if (stored === "reviewed_partial" || stored === "failed" || stored === "reviewed_findings") {
-            return {
-              totalIssues: 0,
-              critical: 0,
-              warnings: 0,
-              advisory: 0,
-              overallScore: null,
-              reviewState: stored,
-              checklist,
-            };
-          }
-          const passed = stored === "passed" && checklist.length > 0;
-          return {
-            totalIssues: 0,
-            critical: 0,
-            warnings: 0,
-            advisory: 0,
-            overallScore: passed ? 100 : null,
-            reviewState: passed ? "passed" : "not_reviewed",
-            checklist: passed ? checklist : [],
-          };
-        }
-        const recomputed = computeComplianceOverallScore({
-          critical,
-          warnings,
-          advisory,
-          totalIssues: issues.length,
-        });
-        if (meta?.summary) {
-          return {
-            ...meta.summary,
-            totalIssues: issues.length,
-            critical,
-            warnings,
-            advisory,
-            overallScore:
-              typeof meta.summary.overallScore === "number"
-                ? meta.summary.overallScore
-                : recomputed,
-          };
-        }
-        return {
-          totalIssues: issues.length,
-          critical,
-          warnings,
-          advisory,
-          overallScore: recomputed,
-        };
-      };
-
-      let loadedIbc: AnalysisResult | null = null;
-      let loadedLocal: AnalysisResult | null = null;
-
-      if (ibcIssues.length > 0 || ibcMeta) {
-        loadedIbc = {
-          issues: ibcIssues,
-          summary: buildSummary(ibcIssues, ibcMeta),
-          jurisdictionNotes: ibcMeta?.jurisdictionNotes || "",
-          codeType: "ibc",
-          reviewReport: buildReviewReportView(ibcMeta ? [ibcMeta] : [], ibcIssues),
-        };
-      }
-      if (localIssues.length > 0 || localMeta) {
-        loadedLocal = {
-          issues: localIssues,
-          summary: buildSummary(localIssues, localMeta),
-          jurisdictionNotes: localMeta?.jurisdictionNotes || "",
-          codeType: "local",
-          reviewReport: buildReviewReportView(localMeta ? [localMeta] : [], localIssues),
-        };
-      }
-
-      return { loadedIbc, loadedLocal, ibcIssues, localIssues };
-    },
-    [],
-  );
-
   /**
    * Hydrate prior analyses from DB into resultGroups.
    * - Omit `documentIds` (or pass every analyzed id) to load All for the project.
@@ -1248,78 +1091,61 @@ export function AIComplianceAnalyzer() {
    * Stale completions (after project switch / superseded request) are ignored.
    */
   const hydrateExistingAnalyses = useCallback(
-    async (documentIds?: string[], opts?: { toastOnEmpty?: boolean }) => {
+    async (documentIds?: string[], opts?: { toastOnEmpty?: boolean; runId?: string | null }) => {
       if (!selectedProjectId || !user) return false;
       const projectId = selectedProjectId;
-      const ids =
-        documentIds && documentIds.length > 0
-          ? documentIds
-          : documentsWithAnalysis.map((d) => d.id);
-      if (ids.length === 0) {
-        if (!documentIds) {
-          setLoadedExistingResults([]);
-          setHydrateLoadFailed(false);
-        }
-        return false;
-      }
+      const requestedIds = documentIds && documentIds.length > 0 ? documentIds : null;
+      const isFullAllHydrate = !requestedIds;
+      const displayRunId =
+        opts && Object.prototype.hasOwnProperty.call(opts, "runId")
+          ? opts.runId ?? null
+          : (viewingHistoricalRunId ?? hydrateRunId);
 
       const hydrateGen = hydrateGuardRef.current.next();
-      const isFullAllHydrate = !documentIds;
       setLoadingExisting(true);
       setHydrateLoadFailed(false);
       try {
-        const { data: annotations, error } = await supabase
-          .from("document_annotations")
-          .select("*")
-          .eq("project_id", projectId)
-          .in("document_id", ids)
-          .order("layer_order", { ascending: true });
+        if (!displayRunId && hasAnalyzerRuns) {
+          if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
+          if (isFullAllHydrate) {
+            setLoadedExistingResults([]);
+            setHydrateLoadFailed(false);
+          }
+          return false;
+        }
 
-        if (error) throw error;
+        const annotations = await fetchAnnotationsForSheetResults({
+          projectId,
+          runId: displayRunId,
+        });
         if (!hydrateGuardRef.current.isCurrent(hydrateGen)) return false;
         if (selectedProjectIdRef.current !== projectId) return false;
 
-        const displayRunId = viewingHistoricalRunId ?? hydrateRunId;
-        const filtered = filterAnnotationsForActiveAnalysis(
-          (annotations || []).map((ann) => ({
-            id: ann.id,
-            analysis_run_id: (ann as { analysis_run_id?: string | null }).analysis_run_id ?? null,
-            data: ann.data,
-            document_id: ann.document_id,
-          })),
-          {
-            currentRunId: displayRunId,
-            hasAnalyzerRuns,
-          },
-        );
-
-        const byDoc = new Map<string, Array<{ id: string; data: unknown }>>();
-        for (const ann of filtered) {
-          const documentId = (ann as { document_id?: string | null }).document_id;
-          if (!documentId) continue;
-          const list = byDoc.get(documentId) || [];
-          list.push({ id: ann.id ?? documentId, data: ann.data });
-          byDoc.set(documentId, list);
-        }
-
-        const loaded: LoadedExistingAnalysis[] = [];
-        for (const documentId of ids) {
-          const complianceAnnotations = byDoc.get(documentId) || [];
-          if (complianceAnnotations.length === 0) continue;
-          const { loadedIbc, loadedLocal } = buildResultsFromAnnotations(complianceAnnotations);
-          if (!loadedIbc && !loadedLocal) continue;
-          const doc = documentsWithAnalysis.find((d) => d.id === documentId);
-          const sheetFileName = complianceAnnotations
-            .map((ann) => {
-              const data = ann.data as ComplianceAnnotationData;
-              return data.sheet_file_name || data.file_name || "";
-            })
-            .find((name) => name.trim().length > 0);
-          loaded.push({
-            documentId,
-            fileName: sheetFileName || doc?.file_name || "Loaded document",
-            ibcResult: loadedIbc,
-            localResult: loadedLocal,
+        const filtered = filterAnnotationsForActiveAnalysis(annotations, {
+          currentRunId: displayRunId,
+          hasAnalyzerRuns,
+        });
+        const rank = new Map(documentsWithAnalysis.map((doc, index) => [doc.id, index]));
+        let loaded: LoadedExistingAnalysis[] = aggregateSheetAnalysisResults(filtered).map((sheet) => {
+          const doc = documentsWithAnalysis.find((item) => item.id === sheet.documentId);
+          return {
+            documentId: sheet.documentId,
+            fileName: sheet.fileName || doc?.file_name || "Loaded document",
+            ibcResult: sheet.ibcResult,
+            localResult: sheet.localResult,
+          };
+        });
+        if (requestedIds) {
+          const allow = new Set(requestedIds);
+          loaded = loaded.filter((sheet) => allow.has(sheet.documentId));
+        } else {
+          loaded.sort((a, b) => {
+            const left = rank.get(a.documentId);
+            const right = rank.get(b.documentId);
+            if (left != null && right != null && left !== right) return left - right;
+            if (left != null && right == null) return -1;
+            if (left == null && right != null) return 1;
+            return a.fileName.localeCompare(b.fileName);
           });
         }
 
@@ -1345,7 +1171,7 @@ export function AIComplianceAnalyzer() {
         } else {
           // Merge specific docs into the existing hydrate set.
           setLoadedExistingResults((prev) =>
-            mergeLoadedExistingAnalyses(prev, loaded, "merge", ids),
+            mergeLoadedExistingAnalyses(prev, loaded, "merge", requestedIds ?? []),
           );
         }
         setHydrateLoadFailed(false);
@@ -1369,7 +1195,7 @@ export function AIComplianceAnalyzer() {
         }
       }
     },
-    [selectedProjectId, user, documentsWithAnalysis, buildResultsFromAnnotations, hydrateRunId, viewingHistoricalRunId, hasAnalyzerRuns],
+    [selectedProjectId, user, documentsWithAnalysis, hydrateRunId, viewingHistoricalRunId, hasAnalyzerRuns],
   );
 
   // When landing on / switching to All, hydrate every saved analysis for the project.
@@ -1402,28 +1228,9 @@ export function AIComplianceAnalyzer() {
         setAnalysisSavedAt(Date.now());
         lastAllHydrateKeyRef.current = "";
         setViewingHistoricalRunId(null);
-
-        const { data: annotations, error } = await supabase
-          .from("document_annotations")
-          .select("document_id")
-          .eq("project_id", projectId)
-          .not("document_id", "is", null);
-        if (error) {
-          console.error("Error loading annotations after async standard run:", error);
-          return;
-        }
+        setHydrateRunId(run.id);
         if (selectedProjectIdRef.current !== projectId) return;
-
-        const docIds = [
-          ...new Set(
-            (annotations ?? [])
-              .map((row) => row.document_id)
-              .filter((id): id is string => Boolean(id)),
-          ),
-        ];
-        if (docIds.length > 0) {
-          await hydrateExistingAnalyses(docIds);
-        }
+        await hydrateExistingAnalyses(undefined, { runId: run.id });
 
         if (run.status === "current") {
           toast.success("Analysis complete — results loaded");
@@ -1503,6 +1310,7 @@ export function AIComplianceAnalyzer() {
     setShowNewProjectInput(false);
     setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
     setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+    setSheetResultsSearch("");
     setLoadedExistingResults([]);
     setDocumentsWithAnalysis([]);
     setPersistedSheets([]);
@@ -1626,6 +1434,7 @@ export function AIComplianceAnalyzer() {
     setResponses({});
     setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
     setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+    setSheetResultsSearch("");
     // Re-show every saved analysis under All after clearing the session queue.
     lastAllHydrateKeyRef.current = "";
     if (documentsWithAnalysis.length > 0) {
@@ -2370,6 +2179,7 @@ export function AIComplianceAnalyzer() {
         setActiveResultFileId(null);
         setResultsDocumentFilter(COMPLIANCE_RESULTS_FILTER_ALL);
         setComplianceScoreFilter(COMPLIANCE_SCORE_FILTER_ALL);
+        setSheetResultsSearch("");
         setLoadedExistingResults([]);
         setViewingHistoricalRunId(null);
         setResultsFromHistoricalRun(false);
@@ -3039,8 +2849,9 @@ export function AIComplianceAnalyzer() {
       resultsDocumentFilter,
       filterMatchFileName,
     );
-    return filterComplianceGroupsByScore(byDocument, complianceScoreFilter);
-  }, [resultGroups, resultsDocumentFilter, filterMatchFileName, complianceScoreFilter]);
+    const byScore = filterComplianceGroupsByScore(byDocument, complianceScoreFilter);
+    return filterSheetResultsBySearch(byScore, sheetResultsSearch);
+  }, [resultGroups, resultsDocumentFilter, filterMatchFileName, complianceScoreFilter, sheetResultsSearch]);
 
   /** Aggregate KPI strip across displayed analyzed sheets' real results — never seeded. */
   const aggregateFindingStats = useMemo(() => {
@@ -3266,24 +3077,19 @@ export function AIComplianceAnalyzer() {
             : currentRun?.id ?? displayRun?.id ?? null;
         setHydrateRunId(currentId);
         lastAllHydrateKeyRef.current = "";
-        if (documentsWithAnalysis.length > 0) {
-          await hydrateExistingAnalyses();
-        } else {
-          setLoadedExistingResults([]);
-        }
+        await hydrateExistingAnalyses(undefined, { runId: currentId });
         return;
       }
       setViewingHistoricalRunId(value);
       setResultsFromHistoricalRun(true);
       setHydrateRunId(value);
       lastAllHydrateKeyRef.current = "";
-      await hydrateExistingAnalyses();
+      await hydrateExistingAnalyses(undefined, { runId: value });
     },
     [
       displayRun?.id,
       displayRun?.status,
       currentRun?.id,
-      documentsWithAnalysis.length,
       hydrateExistingAnalyses,
     ],
   );
@@ -4180,6 +3986,14 @@ export function AIComplianceAnalyzer() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <Input
+                      value={sheetResultsSearch}
+                      onChange={(event) => setSheetResultsSearch(event.target.value)}
+                      placeholder="Search sheets"
+                      aria-label="Search sheets"
+                      className="w-[220px]"
+                      data-testid="sheet-results-search"
+                    />
                     {loadingExisting && (
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     )}
@@ -4713,6 +4527,11 @@ export function AIComplianceAnalyzer() {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
+                {resultGroups.length > 0 && (
+                  <p className="text-sm font-medium text-foreground" data-testid="sheet-results-counter">
+                    {formatSheetResultsCounter(displayedResultGroups.length, resultGroups.length)}
+                  </p>
+                )}
                 {displayedResultGroups.length === 0 ? (
                   <div className="space-y-3" data-testid="compliance-results-empty">
                     <p className="text-sm text-muted-foreground">
