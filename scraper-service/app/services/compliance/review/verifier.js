@@ -1,6 +1,6 @@
 "use strict";
 
-const { assessApplicability, finalizeMissingQuestion, claimsMissing } = require("./applicability.js");
+const { assessApplicability, finalizeMissingQuestion, claimsMissing, composePublication } = require("./applicability.js");
 
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;
@@ -254,6 +254,22 @@ function unsupportedCodeAssertion(issue) {
   return true;
 }
 
+function asPublishedQuestion(decision, issue, ctx) {
+  if (!decision || (decision.disposition !== "downgrade" && decision.disposition !== "accept_question")) {
+    return decision;
+  }
+  const publication = composePublication(issue, ctx, decision);
+  if (!publication.complete) {
+    return {
+      disposition: "reject",
+      reason: "incomplete_question",
+      detail: "The candidate is missing an applicable objective, relevant drawing evidence, the unresolved condition, or an explanation of why retrieved sheets do not resolve it.",
+      provenance: decision.provenance,
+    };
+  }
+  return { ...decision, detail: publication.text };
+}
+
 function withProjectContext(decision, projectContext) {
   if (!projectContext) return decision;
   return {
@@ -320,6 +336,15 @@ function decideCandidate(issue, ctx) {
       disposition: "reject",
       reason: "dimension_not_tied_to_element",
       detail: "An equipment-plan dimension is not a corridor width unless the corridor label and the number are the same note.",
+      provenance,
+    };
+  }
+
+  if (/\begress\b/i.test(claimText(issue)) && /\bwidth\b/i.test(claimText(issue)) && roles.has("equipment")) {
+    return {
+      disposition: "reject",
+      reason: "egress_width_outside_sheet",
+      detail: "An equipment plan does not establish an egress width.",
       provenance,
     };
   }
@@ -392,12 +417,12 @@ function decideCandidate(issue, ctx) {
       };
     }
     if (!authoritative) {
-      return {
+      return asPublishedQuestion({
         disposition: "downgrade",
         reason: "unverified_threshold",
         detail: `${cleanTopic(issue.title)} remains unresolved against a verified code threshold. It matters because the number on this sheet is not itself a violation. Look at the dimension note on this sheet and the code edition selected for the run.`,
         provenance,
-      };
+      }, issue, ctx);
     }
   }
 
@@ -445,25 +470,29 @@ function decideCandidate(issue, ctx) {
         };
       }
       if (!linked) {
-        return {
+        return asPublishedQuestion({
           disposition: "downgrade",
           reason: "unsupported_confirmed_finding",
           detail: `${cleanTopic(issue.title)} remains unresolved. It matters because a confirmed violation needs the element and a number read from the sheet. Look at the sheet note for that element and the selected code edition.`,
           provenance,
-        };
+        }, issue, ctx);
       }
-      return {
+      return asPublishedQuestion({
         disposition: "downgrade",
         reason: "unverified_threshold",
         detail: `${cleanTopic(issue.title)} remains unresolved against a verified code threshold. It matters because the number on this sheet is not itself a violation. Look at the dimension note on this sheet and the code edition selected for the run.`,
         provenance,
-      };
+      }, issue, ctx);
     }
   }
 
   const missingQuestion = finalizeMissingQuestion(issue, ctx);
   if (missingQuestion) {
-    return { ...missingQuestion, provenance: { ...provenance, ...(missingQuestion.provenance || {}) } };
+    return asPublishedQuestion(
+      { ...missingQuestion, provenance: { ...provenance, ...(missingQuestion.provenance || {}) } },
+      issue,
+      ctx,
+    );
   }
 
   return {

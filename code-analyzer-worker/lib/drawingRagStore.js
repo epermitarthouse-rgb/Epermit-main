@@ -1,6 +1,8 @@
 "use strict";
 
 const crypto = require("crypto");
+const { vectorToPg } = require("./chunk.js");
+const { buildDrawingChunks } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
 
 const TABLE = "code_analyzer_drawing_chunks";
 
@@ -13,12 +15,104 @@ function isUuid(value) {
 }
 
 function chunkKey(record) {
+  const chunkIndex = Number.isInteger(record.chunkIndex)
+    ? record.chunkIndex
+    : Number.isInteger(record.chunk_index)
+      ? record.chunk_index
+      : 0;
   return [
     record.documentId || record.document_id || "none",
     record.sheetId || record.sheet_id || record.fileName || record.file_name || "sheet",
     record.pageNumber || record.page_number || 1,
     record.revision || "unspecified",
+    chunkIndex,
   ].join(":");
+}
+
+function embeddingValue(record) {
+  if (Array.isArray(record.embedding) && record.embedding.length === 1536) return vectorToPg(record.embedding);
+  if (typeof record.embedding === "string" && record.embedding.startsWith("[")) return record.embedding;
+  return null;
+}
+
+function parseEmbedding(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || !value.startsWith("[")) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function sheetIdentity(row) {
+  return [
+    row.project_id,
+    row.document_id || "",
+    row.sheet_id || "",
+    row.file_name || "",
+    row.page_number || 1,
+    row.revision || "",
+  ].join("|");
+}
+
+function summarizeEmbeddings(records) {
+  if (!records.length) return "unavailable";
+  if (records.every((record) => record.embeddingStatus === "present")) return "present";
+  if (records.some((record) => record.embeddingStatus === "missing")) return "missing";
+  return "unavailable";
+}
+
+async function applyEmbeddings(records, embedTexts) {
+  const indexes = [];
+  const next = records.map((record, index) => {
+    if (Array.isArray(record.embedding) && record.embedding.length === 1536) {
+      return { ...record, embeddingStatus: "present" };
+    }
+    if (typeof record.embedding === "string" && record.embedding.startsWith("[")) {
+      return { ...record, embeddingStatus: "present" };
+    }
+    indexes.push(index);
+    return { ...record, embedding: null };
+  });
+  if (!indexes.length) return next;
+  if (typeof embedTexts !== "function") {
+    for (const index of indexes) next[index].embeddingStatus = "unavailable";
+    return next;
+  }
+  try {
+    const vectors = await embedTexts(indexes.map((index) => String(next[index].text || "").slice(0, 2000)));
+    if (!Array.isArray(vectors) || vectors.length !== indexes.length) throw new Error("embedding count");
+    indexes.forEach((index, position) => {
+      const vector = vectors[position];
+      if (Array.isArray(vector) && vector.length === 1536) {
+        next[index].embedding = vector;
+        next[index].embeddingStatus = "present";
+      } else {
+        next[index].embedding = null;
+        next[index].embeddingStatus = "missing";
+      }
+    });
+    return next;
+  } catch {
+    for (const index of indexes) {
+      next[index].embedding = null;
+      next[index].embeddingStatus = "missing";
+    }
+    return next;
+  }
+}
+
+function expandRecords(records) {
+  const expanded = [];
+  for (const record of records || []) {
+    const projectId = record?.projectId || record?.project_id;
+    if (!projectId) continue;
+    const chunks = buildDrawingChunks({ ...record, projectId });
+    for (const chunk of chunks) expanded.push({ ...chunk, projectId });
+  }
+  return expanded;
 }
 
 function stripRaster(value) {
@@ -45,7 +139,12 @@ function recordToRow(record) {
     kind: item.kind || null,
   }));
   const regions = (record.regions || []).slice(0, 12).map(stripRaster).filter(Boolean);
-  const embedding = Array.isArray(record.embedding) && record.embedding.length === 1536 ? record.embedding : null;
+  const embedding = embeddingValue(record);
+  const sourceLocation = record.sourceLocation || {
+    pageNumber: Number(record.pageNumber) || 1,
+    charStart: Number(record.charStart) || 0,
+    charEnd: Number(record.charEnd) || text.length,
+  };
   return {
     project_id: record.projectId,
     document_id: isUuid(record.documentId) ? record.documentId : null,
@@ -66,7 +165,15 @@ function recordToRow(record) {
     identifiers: record.identifiers || [],
     cross_sheet_refs: record.references || record.crossSheetRefs || [],
     region: regions[0] || null,
-    metadata: { regions, provesRequirementSatisfied: false },
+    metadata: {
+      regions,
+      provesRequirementSatisfied: false,
+      chunkIndex: Number.isInteger(record.chunkIndex) ? record.chunkIndex : 0,
+      charStart: sourceLocation.charStart,
+      charEnd: sourceLocation.charEnd,
+      sourceLocation,
+      embeddingStatus: record.embeddingStatus || (embedding ? "present" : "missing"),
+    },
     embedding,
     superseded: false,
     superseded_at: null,
@@ -92,7 +199,12 @@ function rowToRecord(row) {
     identifiers: row.identifiers || [],
     references: row.cross_sheet_refs || [],
     extractionMethod: row.extraction_method,
-    embedding: row.embedding || null,
+    embedding: parseEmbedding(row.embedding),
+    embeddingStatus: metadata.embeddingStatus || (row.embedding ? "present" : "missing"),
+    chunkIndex: Number.isInteger(metadata.chunkIndex) ? metadata.chunkIndex : 0,
+    charStart: metadata.charStart,
+    charEnd: metadata.charEnd,
+    sourceLocation: metadata.sourceLocation || null,
   };
 }
 
@@ -139,19 +251,38 @@ function createMemoryBackend() {
   };
 }
 
-function createMemoryDrawingStore(backend = createMemoryBackend()) {
+function retireMemoryRows(backend, written) {
+  const keysBySheet = new Map();
+  for (const row of written) {
+    const identity = sheetIdentity(row);
+    if (!keysBySheet.has(identity)) keysBySheet.set(identity, new Set());
+    keysBySheet.get(identity).add(row.chunk_key);
+  }
+  for (const existing of backend.rows.values()) {
+    if (existing.superseded) continue;
+    const keys = keysBySheet.get(sheetIdentity(existing));
+    if (!keys || keys.has(existing.chunk_key)) continue;
+    existing.superseded = true;
+    existing.superseded_at = new Date().toISOString();
+  }
+}
+
+function createMemoryDrawingStore(backend = createMemoryBackend(), options = {}) {
   return {
     kind: "memory",
     available: true,
     backend,
     rowToRecord,
     async upsertRecords(records) {
-      const written = [];
-      for (const record of records || []) {
-        if (!record?.projectId) continue;
-        written.push(backend.upsert(recordToRow(record)));
-      }
-      return { persisted: true, count: written.length, liveSupabase: false };
+      const expanded = await applyEmbeddings(expandRecords(records), options.embedTexts);
+      const written = expanded.map((record) => backend.upsert(recordToRow(record)));
+      retireMemoryRows(backend, written);
+      return {
+        persisted: true,
+        count: written.length,
+        liveSupabase: false,
+        embeddingStatus: summarizeEmbeddings(expanded),
+      };
     },
     async listActive(projectId) {
       return backend.listActive(projectId);
@@ -175,6 +306,39 @@ function reportPersistenceFailure(logger, result) {
     code: result.code || null,
     message: result.message ? String(result.message).slice(0, 300) : null,
   });
+}
+
+async function retireSupabaseRows(supabase, rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const identity = sheetIdentity(row);
+    if (!groups.has(identity)) groups.set(identity, []);
+    groups.get(identity).push(row);
+  }
+  for (const group of groups.values()) {
+    const sample = group[0];
+    const keys = new Set(group.map((row) => row.chunk_key));
+    let query = supabase
+      .from(TABLE)
+      .select("chunk_key")
+      .eq("project_id", sample.project_id)
+      .eq("page_number", sample.page_number)
+      .eq("superseded", false);
+    query = sample.document_id ? query.eq("document_id", sample.document_id) : query.is("document_id", null);
+    query = sample.sheet_id ? query.eq("sheet_id", sample.sheet_id) : query.is("sheet_id", null);
+    if (sample.file_name) query = query.eq("file_name", sample.file_name);
+    const listed = await query;
+    const data = listed?.data;
+    if (listed?.error || !Array.isArray(data)) continue;
+    for (const existing of data) {
+      if (!existing?.chunk_key || keys.has(existing.chunk_key)) continue;
+      await supabase
+        .from(TABLE)
+        .update({ superseded: true, superseded_at: new Date().toISOString() })
+        .eq("project_id", sample.project_id)
+        .eq("chunk_key", existing.chunk_key);
+    }
+  }
 }
 
 function createSupabaseDrawingStore(supabase, options = {}) {
@@ -217,28 +381,21 @@ function createSupabaseDrawingStore(supabase, options = {}) {
     },
     async upsertRecords(records) {
       if (!(await probe())) return failed(probeFailure || { reason: "table_unavailable" });
-      const rows = (records || []).filter((record) => record?.projectId).map(recordToRow);
-      if (!rows.length) return { persisted: false, reason: "empty" };
+      const expanded = await applyEmbeddings(expandRecords(records), options.embedTexts);
+      const rows = expanded.map(recordToRow);
+      if (!rows.length) return { persisted: false, reason: "empty", embeddingStatus: summarizeEmbeddings(expanded) };
       const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: "project_id,chunk_key" });
       if (error) {
         if (missingTable(error)) return failed({ reason: "table_unavailable", code: error.code || null, message: error.message || null });
         return failed({ reason: "write_failed", code: error.code || null, message: error.message || null });
       }
-      for (const row of rows) {
-        if (!row.revision) continue;
-        let query = supabase
-          .from(TABLE)
-          .update({ superseded: true, superseded_at: new Date().toISOString() })
-          .eq("project_id", row.project_id)
-          .eq("page_number", row.page_number)
-          .eq("superseded", false)
-          .neq("chunk_key", row.chunk_key);
-        query = row.document_id ? query.eq("document_id", row.document_id) : query.is("document_id", null);
-        query = row.sheet_id ? query.eq("sheet_id", row.sheet_id) : query.is("sheet_id", null);
-        if (row.file_name) query = query.eq("file_name", row.file_name);
-        await query;
-      }
-      return { persisted: true, count: rows.length, liveSupabase: true };
+      await retireSupabaseRows(supabase, rows);
+      return {
+        persisted: true,
+        count: rows.length,
+        liveSupabase: true,
+        embeddingStatus: summarizeEmbeddings(expanded),
+      };
     },
     async listActive(projectId) {
       if (!(await probe())) return [];

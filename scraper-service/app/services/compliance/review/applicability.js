@@ -102,7 +102,43 @@ function isTypeADwellingClaim(issue) {
 }
 
 function isAccessibleRouteGap(issue) {
-  return /\baccessible route\b/i.test(claimText(issue)) && claimsMissing(issue);
+  return /\b(accessible route|accessibility|accessible entrance)\b/i.test(claimText(issue)) && claimsMissing(issue);
+}
+
+function isEgressWidthClaim(issue) {
+  const claim = claimText(issue);
+  return /\bwidth\b/i.test(claim) && /\b(egress|corridor|exit access)\b/i.test(claim);
+}
+
+function isGeneralNotesSheet(ctx) {
+  const name = `${ctx?.fileName || ""} ${ctx?.sheetTitle || ""} ${ctx?.title || ""} ${ctx?.contentClass || ""}`.toLowerCase();
+  if (/\bgeneral notes?\b/.test(name) || /\bcover sheet\b/.test(name) || /\bsheet index\b/.test(name) || ctx?.contentClass === "general_notes") {
+    return true;
+  }
+  const prefix = ((name.match(/(?:^|[\s/])([a-z]{1,3})[-.]?\d/) || [])[1] || "");
+  return prefix === "g" && !/\b(floor plan|egress plan|life safety)\b/.test(name);
+}
+
+function affirmativeNear(body, token) {
+  const source = String(body || "");
+  const needle = String(token || "").toLowerCase();
+  if (needle.length < 4) return false;
+  const lower = source.toLowerCase();
+  let from = 0;
+  while (from < lower.length) {
+    const at = lower.indexOf(needle, from);
+    if (at < 0) break;
+    const window = lower.slice(Math.max(0, at - 90), at + needle.length + 90);
+    if (/\b(shall|must|provide[ds]?|specified|specification|required|r-\d+|thick|inches?)\b/.test(window)) return true;
+    from = at + needle.length;
+  }
+  return false;
+}
+
+function documentationTokens(issue) {
+  return distinctiveTokens(claimText(issue)).filter((token) => ![
+    "documentation", "information", "details", "detail", "missing", "required", "compliance", "requirement",
+  ].includes(token));
 }
 
 function isEgressGap(issue) {
@@ -209,10 +245,14 @@ function searchProjectEvidence(issue, ctx) {
     }
   }
   const places = [];
+  const placeTokens = objectiveTokens(issue).tokens;
   for (const record of records) {
     if (!record || sameRecord(record, ctx)) continue;
+    const text = recordBody(record).toLowerCase();
+    const shared = placeTokens.filter((token) => text.includes(token));
+    if (!shared.length) continue;
     const label = record.fileName || record.sheetNumber || record.title;
-    if (label && places.length < 3) places.push(label);
+    if (label && !places.includes(label) && places.length < 3) places.push(label);
   }
   return { resolved: false, unavailable, places };
 }
@@ -251,11 +291,29 @@ function assessApplicability(issue, ctx) {
     };
   }
 
+  if ((roles.has("structural") || roles.has("electrical")) && !roles.has("architectural") && isAccessibleRouteGap(issue)) {
+    return {
+      disposition: "reject",
+      reason: "accessible_route_outside_discipline",
+      detail: "A structural or electrical drawing is not independently faulted for an architectural accessible route.",
+      projectContext: context,
+    };
+  }
+
   if ((roles.has("electrical") || roles.has("equipment")) && !roles.has("architectural") && isAccessibleRouteGap(issue)) {
     return {
       disposition: "reject",
       reason: "accessible_route_outside_discipline",
       detail: "An electrical or equipment plan is not independently faulted for architectural accessible-route documentation.",
+      projectContext: context,
+    };
+  }
+
+  if (isEgressWidthClaim(issue) && isGeneralNotesSheet(ctx)) {
+    return {
+      disposition: "reject",
+      reason: "egress_width_outside_sheet",
+      detail: "Egress width is not established from a general-notes or cover sheet.",
       projectContext: context,
     };
   }
@@ -267,6 +325,33 @@ function assessApplicability(issue, ctx) {
       detail: "An energy certificate is not reviewed for an unrelated egress plan.",
       projectContext: context,
     };
+  }
+
+  if (claimsMissing(issue) && /\b(documentation|information|insulation)\b/i.test(claimText(issue))) {
+    const tokens = documentationTokens(issue);
+    const here = `${ctx.pageText || ""}\n${ctx.corpus || ""}`;
+    if (tokens.some((token) => affirmativeNear(here, token))) {
+      return {
+        disposition: "reject",
+        reason: "requirement_already_specified",
+        detail: "The sheet already specifies this item. The note is not a missing-information finding.",
+        projectContext: context,
+      };
+    }
+    const { records } = retrievalState(ctx);
+    for (const record of records) {
+      if (!record || sameRecord(record, ctx)) continue;
+      const text = recordBody(record);
+      if (!tokens.some((token) => affirmativeNear(text, token))) continue;
+      const where = record.fileName || record.sheetNumber || record.title || "another sheet";
+      return {
+        disposition: "reject",
+        reason: "cross_sheet_answers_question",
+        detail: `${where} already specifies this item.`,
+        redirectFile: where,
+        projectContext: context,
+      };
+    }
   }
 
   if ((roles.has("structural") || roles.has("special_inspection")) && isSpecialInspectionGap(issue)) {
@@ -326,6 +411,78 @@ function finalizeMissingQuestion(issue, ctx) {
   };
 }
 
+function objectiveTokens(issue) {
+  const claim = claimText(issue);
+  const match = claim.match(/\b(corridor(?:\s+width)?|exit access(?:\s+width)?|egress(?:\s+width)?|stair(?:\s+riser|\s+width)?|riser|door(?:\s+width)?|insulation|accessible(?:\s+route|\s+entrance|\s+parking)?|accessibility|fire(?:[\s-]*resistance)?(?:\s+rating)?|emergency lighting|special inspections?|grease interceptor|guard(?:rail)?|handrail|clearance|turning space|compartment|restroom|toilet(?:\s+room)?|sprinkler|beam|drain|fixture|parking)\b/i);
+  if (!match) return { label: "", tokens: [] };
+  const label = match[0];
+  const generic = new Set(["width", "note", "plan", "type", "size", "area", "room", "sheet", "rating"]);
+  const tokens = label.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !generic.has(token));
+  return { label, tokens };
+}
+
+function evidenceSnippet(corpus, tokens) {
+  const text = String(corpus || "");
+  const lower = text.toLowerCase();
+  const ordered = [...tokens].sort((a, b) => b.length - a.length);
+  for (const token of ordered) {
+    const at = lower.indexOf(token);
+    if (at < 0) continue;
+    return text.slice(Math.max(0, at - 24), at + token.length + 70).replace(/\s+/g, " ").trim().slice(0, 180);
+  }
+  return "";
+}
+
+/**
+ * A published question needs an objective, sheet evidence, the unresolved condition,
+ * related sheets only when they share the element, and why those sheets do not resolve it.
+ * @param {Record<string, unknown>} issue
+ * @param {Record<string, unknown>} ctx
+ * @param {Record<string, unknown>} decision
+ */
+function composePublication(issue, ctx, decision) {
+  const objective = objectiveTokens(issue);
+  const corpus = [
+    ctx?.pageText,
+    ctx?.corpus,
+    ...(ctx?.observations || []).map((item) => item?.quote || ""),
+  ].filter(Boolean).join("\n");
+  const evidence = evidenceSnippet(corpus, objective.tokens);
+  const search = searchProjectEvidence(issue, ctx);
+  const refs = search.places || [];
+  const sheets = refs.length
+    ? `Related sheets: ${refs.slice(0, 3).join(", ")}.`
+    : "No indexed sheet that shares this element supplies the missing fact.";
+  const why = refs.length
+    ? "Those related sheets do not state the missing fact."
+    : "Retrieved sheets do not share this element, so they do not resolve it.";
+  const code = decision?.provenance?.codeSourceStatus === "authoritative"
+    ? "A verified provision was supplied for this element."
+    : "No verified edition-specific provision in the authorized sources resolves it.";
+  const scope = ctx?.jurisdictionScope;
+  const edition = scope?.enforcedJurisdiction || null;
+  const year = ctx?.codeYear || null;
+  const unresolved = decision?.reason === "unverified_threshold" || decision?.reason === "unsupported_confirmed_finding"
+    ? "The unresolved condition is that no verified edition threshold confirms a violation."
+    : "The unresolved condition is the element fact that this sheet does not state.";
+  const scopeLine = edition
+    ? `Selected code scope is ${edition}${year ? ` ${year}` : ""}.`
+    : "The run has no selected code edition to verify.";
+  const complete = Boolean(objective.label && evidence && unresolved && why);
+  return {
+    complete,
+    text: [
+      `${objective.label} is the review objective.`,
+      evidence ? `Drawing evidence: ${evidence}` : "",
+      unresolved,
+      sheets,
+      `${why} ${code}`,
+      scopeLine,
+      "This is not a confirmed violation.",
+    ].filter(Boolean).join(" "),
+  };
+}
+
 module.exports = {
   establishReviewContext,
   inferOccupancy,
@@ -335,4 +492,5 @@ module.exports = {
   finalizeMissingQuestion,
   claimsMissing,
   searchProjectEvidence,
+  composePublication,
 };

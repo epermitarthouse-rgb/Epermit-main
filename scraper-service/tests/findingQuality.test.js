@@ -103,9 +103,9 @@ describe("findingQuality Riverside-like bundle", () => {
     const hardened = hardenAnalysisResult(
       { issues: riversideIssues, summary: {}, jurisdictionNotes: "" },
       "ibc",
-      { sheetTitle: "A003 Site Plan", specChunks: [] },
+      { sheetTitle: "A003 Site Plan", pageText: "SITE PLAN ACCESSIBLE PARKING SPACES FIRE SEPARATION", specChunks: [] },
     );
-    assert.ok(hardened.summary.verificationRequired >= 1);
+    assert.ok(hardened.summary.verificationRequired + hardened.summary.unverified >= 1);
     assert.ok(hardened.summary.totalIssues >= 2);
     assert.equal(
       hardened.issues.filter((i) => i.severity === "critical" && i.findingType === "confirmed_violation")
@@ -389,9 +389,8 @@ describe("page text drops missing-information notes that the sheet already state
       "ibc",
       { pageText: "FIRST FLOOR PLAN", sheetTitle: "A-1.01 Floor Plan" },
     );
-    assert.equal(hardened.issues.length, 1);
-    assert.equal(hardened.issues[0].findingType, "unverified");
-    assert.equal(hardened.issues[0].severity, "advisory");
+    assert.equal(hardened.issues.length, 0);
+    assert.equal(hardened.rejectedCandidates[0].validationReason, "incomplete_question");
     assert.equal(hardened.summary.confirmedViolations, 0);
     assert.equal(hardened.summary.reviewState, "reviewed_partial");
     assert.equal(hardened.summary.overallScore, null);
@@ -550,7 +549,10 @@ describe("schedule restatement and citation book", () => {
         jurisdictionNotes: "",
       },
       "ibc",
-      { sheetTitle: "A-101 Floor Plan" },
+      {
+        sheetTitle: "A-101 Floor Plan",
+        pageText: "WHEELCHAIR COMPARTMENT TURNING SPACE",
+      },
     );
     assert.equal(hardened.issues.length, 1);
     assert.equal(hardened.issues[0].citationBook, "ICC A117.1");
@@ -621,7 +623,7 @@ describe("set-level sheet index", () => {
       {
         sheetTitle: "A-1.01.pdf",
         contentClass: "floor_plan",
-        pageText: "FIRST FLOOR PLAN",
+        pageText: "FIRST FLOOR PLAN RESTROOM TOILET ROOM A",
         sheetIndex: floorAndEnlarged,
       },
     );

@@ -11,11 +11,12 @@ const MAX_PROMPT_CHARS = 4000;
  * Question-driven hybrid retrieval. Does not concatenate the drawing set.
  * @param {{
  *   index: { list: () => Array<Record<string, unknown>> };
- *   questions: Array<{ id: string; topics?: string[]; identifiers?: string[]; discipline?: string | null }>;
+ *   questions: Array<{ id: string; topics?: string[]; identifiers?: string[]; discipline?: string | null; disciplines?: string[] }>;
  *   specChunks?: Array<Record<string, unknown>>;
  *   jurisdiction?: string | null;
  *   currentSheetId?: string | null;
  *   queryEmbedding?: number[] | null;
+ *   queryEmbeddings?: Record<string, number[]>;
  * }} input
  */
 function retrieveForQuestions(input) {
@@ -25,8 +26,9 @@ function retrieveForQuestions(input) {
       topics: question.topics,
       identifiers: question.identifiers,
       discipline: question.discipline,
+      disciplines: question.disciplines,
       currentSheetId: input.currentSheetId,
-      queryEmbedding: input.queryEmbedding,
+      queryEmbedding: input.queryEmbeddings?.[question.id] || input.queryEmbedding || null,
       limit: 4,
     });
     const code = retrieveCodeProvisions({

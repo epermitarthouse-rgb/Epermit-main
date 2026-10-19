@@ -1,6 +1,7 @@
 "use strict";
 
-const { createDrawingIndex } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
+const { createDrawingIndex, applyQueryEmbeddings } = require("../../scraper-service/app/services/compliance/rag/drawingIndex.js");
+const { retrieveForQuestions } = require("../../scraper-service/app/services/compliance/rag/retrieve.js");
 const { prepareSheetReview } = require("../../scraper-service/app/services/compliance/review/orchestrate.js");
 const {
   comprehendPdfPage,
@@ -15,6 +16,32 @@ const { createGuardedDrawingStore } = require("./drawingRagStore.js");
 const indexes = new Map();
 /** @type {Set<string>} */
 const hydratedRuns = new Set();
+
+function replaceRetrievedEvidence(prompt, evidence) {
+  const block = evidence
+    ? `RETRIEVED EVIDENCE (quotes from other sheets, code policy, or specs; a hit is not proof the requirement is satisfied):\n${evidence}`
+    : "";
+  const source = String(prompt || "");
+  if (source.includes("RETRIEVED EVIDENCE")) {
+    return source
+      .replace(
+        /RETRIEVED EVIDENCE[\s\S]*?(?=\n\nCODE LIMITATION:|\n\nSTRUCTURED OBSERVATIONS|\n\nCROP LIMITATION:|$)/,
+        block ? `${block}\n\n` : "",
+      )
+      .slice(0, 6000);
+  }
+  if (!block) return source;
+  if (source.includes("CODE LIMITATION:")) {
+    return source.replace("CODE LIMITATION:", `${block}\n\nCODE LIMITATION:`).slice(0, 6000);
+  }
+  return `${source}\n\n${block}`.slice(0, 6000);
+}
+
+function drawingEmbedder() {
+  if (!process.env.OPENAI_API_KEY) return null;
+  const { embedTexts, getOpenAIClient } = require("./embed.js");
+  return (texts) => embedTexts(getOpenAIClient(), texts);
+}
 
 function evidenceIndexForRun(runId) {
   const key = String(runId || "run");
@@ -58,7 +85,24 @@ function seedDrawingIndex(runId, sheets, cached) {
 }
 
 function verifierRecords(index) {
-  return index.list().map((record) => ({
+  const bySheet = new Map();
+  for (const record of index.list()) {
+    const key = [
+      record.projectId || "",
+      record.sheetId || record.fileName || "",
+      record.pageNumber || 1,
+    ].join(":");
+    const text = String(record.text || "");
+    const current = bySheet.get(key);
+    if (!current) {
+      bySheet.set(key, { ...record, text });
+      continue;
+    }
+    current.text = `${current.text}\n${text}`;
+    current.identifiers = [...new Set([...(current.identifiers || []), ...(record.identifiers || [])])];
+    current.references = [...new Set([...(current.references || []), ...(record.references || [])])];
+  }
+  return [...bySheet.values()].map((record) => ({
     projectId: record.projectId || null,
     documentId: record.documentId || null,
     sheetId: record.sheetId || null,
@@ -71,7 +115,10 @@ function verifierRecords(index) {
     text: String(record.text || "").slice(0, 4000),
     observations: (record.observations || []).slice(0, 12),
     regions: record.regions || [],
+    identifiers: record.identifiers || [],
+    references: record.references || [],
     extractionMethod: record.extractionMethod || null,
+    embeddingStatus: record.embeddingStatus || (record.embedding ? "present" : "unavailable"),
   }));
 }
 
@@ -171,6 +218,20 @@ async function prepareEvidenceForSheet(input) {
     prepared.promptBlock = `${prepared.promptBlock}\n\n${note}`.slice(0, 6000);
   }
 
+  const embedding = await applyQueryEmbeddings(index, prepared.questionRecords, input.embedTexts);
+  if (embedding.embeddingStatus !== "unavailable") {
+    prepared.retrieval = retrieveForQuestions({
+      index,
+      questions: prepared.questionRecords,
+      specChunks: input.specChunks,
+      jurisdiction: input.jurisdictionScope?.enforcedJurisdiction || null,
+      currentSheetId: prepared.record?.sheetId || null,
+      queryEmbeddings: embedding.queryEmbeddings,
+    });
+    prepared.promptBlock = replaceRetrievedEvidence(prepared.promptBlock, prepared.retrieval.promptEvidence);
+  }
+  prepared.embeddingStatus = embedding.embeddingStatus;
+
   return {
     ...prepared,
     pageText,
@@ -201,11 +262,16 @@ async function rehydrateDrawingIndex(runId, projectId, store) {
 }
 
 async function persistDrawingRecord(store, record) {
-  if (!store || store.kind === "disabled" || store.available === false || !record?.projectId) {
-    return { persisted: false, reason: store?.kind === "disabled" || store?.available === false ? "disabled" : "no_project" };
+  const records = (Array.isArray(record) ? record : [record]).filter((item) => item?.projectId);
+  if (!store || store.kind === "disabled" || store.available === false || !records.length) {
+    return {
+      persisted: false,
+      reason: store?.kind === "disabled" || store?.available === false ? "disabled" : "no_project",
+      embeddingStatus: "unavailable",
+    };
   }
   try {
-    return await store.upsertRecords([record]);
+    return await store.upsertRecords(records);
   } catch (err) {
     const result = {
       persisted: false,
@@ -224,7 +290,7 @@ async function persistDrawingRecord(store, record) {
 }
 
 function drawingStoreFor(supabase) {
-  return createGuardedDrawingStore(supabase);
+  return createGuardedDrawingStore(supabase, { embedTexts: drawingEmbedder() });
 }
 
 module.exports = {
@@ -236,4 +302,5 @@ module.exports = {
   rehydrateDrawingIndex,
   persistDrawingRecord,
   drawingStoreFor,
+  drawingEmbedder,
 };

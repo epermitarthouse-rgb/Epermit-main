@@ -14,11 +14,13 @@ const {
 } = require("../../scraper-service/app/services/compliance/findingQuality.js");
 const {
   clearRunEvidenceIndex,
+  evidenceIndexForRun,
   seedDrawingIndex,
   prepareEvidenceForSheet,
   rehydrateDrawingIndex,
   persistDrawingRecord,
   drawingStoreFor,
+  drawingEmbedder,
 } = require("./prepareSheetEvidence.js");
 
 const SCRAPER_BASE_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3000";
@@ -706,13 +708,24 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       projectType: run.project_type || null,
       codeYear: run.code_year || null,
       renderRegions: true,
+      embedTexts: drawingEmbedder(),
     }),
   );
-  const drawingWrite = await persistDrawingRecord(drawingStore, prepared.record);
+  const sheetChunks = evidenceIndexForRun(run.id).list().filter((record) => {
+    if (record.projectId && job.project_id && String(record.projectId) !== String(job.project_id)) return false;
+    if (sheet.id && record.sheetId && String(record.sheetId) === String(sheet.id)) return true;
+    return !record.sheetId && record.fileName && record.fileName === sheetFileName;
+  });
+  const drawingWrite = await persistDrawingRecord(
+    drawingStore,
+    sheetChunks.length ? sheetChunks : prepared.record,
+  );
   const drawingRetrieval = {
     available: !hydrated?.error,
     persisted: Boolean(drawingWrite?.persisted),
     reason: drawingWrite?.reason || (drawingWrite?.persisted ? "persisted" : hydrated?.reason || null),
+    embeddingStatus: drawingWrite?.embeddingStatus || prepared.embeddingStatus || "unavailable",
+    chunks: drawingWrite?.count || sheetChunks.length || 0,
   };
 
   // A 150 DPI full sheet is still too coarse for small tags, so the dpi gate

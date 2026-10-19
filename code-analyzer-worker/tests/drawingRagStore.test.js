@@ -262,6 +262,60 @@ describe("drawing evidence store", () => {
     assert.equal(row.superseded, false);
     assert.ok(row.chunk_key.includes("A-3.02"));
     assert.ok(row.chunk_text.length < 24000);
+    assert.equal(row.metadata.embeddingStatus, "missing");
+  });
+
+  it("stores bounded chunks, injected embeddings, and keeps projects apart", async () => {
+    const backend = createMemoryBackend();
+    const embedTexts = async (texts) => texts.map(() => Array.from({ length: 1536 }, () => 0.02));
+    const store = createMemoryDrawingStore(backend, { embedTexts });
+    const filler = "GENERAL NOTE WIDTH SYMBOL LEGEND ".repeat(40);
+    const text = `${filler} PIPE INSULATION SHALL BE 1 INCH. SEE SHEET S-3.01 FOR THE SCHEDULE. ${filler} WATER HAMMER ARRESTER AT THE FIXTURE.`;
+    const projectA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const projectB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const record = {
+      projectId: projectA,
+      documentId: "doc-a",
+      sheetId: "sheet-p",
+      fileName: "P-2.0-00.pdf",
+      discipline: "general",
+      pageNumber: 1,
+      revision: "1",
+      text,
+    };
+    const first = await store.upsertRecords([record]);
+    const second = await store.upsertRecords([record]);
+    const active = backend.listActive(projectA);
+    assert.ok(active.length > 1);
+    assert.ok(active.length <= 16);
+    assert.equal(first.count, second.count);
+    assert.equal(active.length, first.count);
+    assert.equal(new Set(active.map((row) => row.chunk_key)).size, active.length);
+    assert.ok(active.every((row) => row.embedding && String(row.embedding).startsWith("[")));
+    assert.ok(active.every((row) => row.metadata.embeddingStatus === "present"));
+    assert.equal(active[0].discipline, "plumbing");
+    assert.ok(active.some((row) => (row.identifiers || []).includes("P-2.0")));
+    assert.ok(active.some((row) => (row.cross_sheet_refs || []).includes("S-3.01")));
+    assert.ok(active.some((row) => String(row.chunk_text).includes("WATER HAMMER")));
+    assert.ok(active.every((row) => row.chunk_text.length <= 12000));
+    await store.upsertRecords([
+      { projectId: projectB, fileName: "S-1.pdf", text: "other project secret beam", pageNumber: 1 },
+    ]);
+    const isolated = backend.listActive(projectA);
+    assert.ok(isolated.every((row) => row.project_id === projectA));
+    assert.equal(isolated.some((row) => String(row.chunk_text).includes("secret")), false);
+
+    const index = createDrawingIndex();
+    for (const row of isolated) index.upsert(store.rowToRecord(row));
+    const hits = hybridRetrieveDrawings(index, {
+      topics: ["water hammer"],
+      disciplines: ["plumbing"],
+      currentSheetId: "other",
+    });
+    assert.equal(hits.length, 1);
+    assert.match(hits[0].quote, /WATER HAMMER/);
+    assert.equal(hits[0].diagnostics.embeddingStatus, "present");
+    assert.equal(hits[0].provenance.legs.vector, false);
   });
 });
 

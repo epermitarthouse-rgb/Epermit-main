@@ -262,6 +262,12 @@ function pageTextSuppliesMissingFact(issue, pageText) {
   if (/water[\s-]*hammer/i.test(claim) && /water[\s-]*hammer/i.test(body)) return true;
   if (/\bgfci\b/i.test(claim) && /\bgfci\b/i.test(body)) return true;
   if (/draft[\s-]*stop/i.test(claim) && /draft[\s-]*stop/i.test(body)) return true;
+  if (/\binsulation\b/i.test(claim) && /\binsulation\b/i.test(body) && /\b(shall|must|provide[ds]?|specified|r-\d+|thick|inches?)\b/i.test(body)) {
+    return true;
+  }
+  if (/\b(energy|comcheck)\b/i.test(claim) && /\b(energy code certificate|comcheck|certificate of energy compliance)\b/i.test(body)) {
+    return true;
+  }
 
   return false;
 }
@@ -561,7 +567,7 @@ function sheetContextAllowsIssue(issue, sheetCtx) {
   if (sheetCtx.role === "cover_index") {
     return false;
   }
-  if (sheetCtx.role === "site_plan" && /\b(stair|rise|run|riser|tread)\b/i.test(`${issue.title} ${issue.description}`)) {
+  if (sheetCtx.role === "site_plan" && /\b(stair|riser|tread)\b/i.test(`${issue.title} ${issue.description}`)) {
     return false;
   }
   return (

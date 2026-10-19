@@ -125,6 +125,7 @@ function prepareSheetReview(input) {
     observations,
     disciplines: disciplines.map((discipline) => discipline.id),
     questions: questions.map((question) => question.id),
+    questionRecords: questions,
     retrieval,
     rules,
     record,
