@@ -1,6 +1,46 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildReviewReportView, reviewStateLabel } from "./reviewReport.ts";
+import { buildReviewReportView, reviewOutcome, reviewOutcomeLabel, reviewStateLabel } from "./reviewReport.ts";
+
+describe("review outcome", () => {
+  it("never presents a stored Clear without an authoritative requirement as verified", () => {
+    assert.equal(reviewOutcome({ reviewState: "reviewed_clear", totalIssues: 0 }), "insufficient_evidence");
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_clear", totalIssues: 0 }), "No findings · Verification incomplete");
+    assert.equal(
+      reviewOutcome({ reviewState: "reviewed_clear", totalIssues: 0, codeCoverageVerified: true, overallScore: 100 }),
+      "verified_compliant",
+    );
+    assert.equal(reviewOutcomeLabel({ reviewState: "reviewed_partial", totalIssues: 0 }), "No findings · Verification incomplete");
+    assert.equal(reviewOutcome({ reviewState: "reviewed_partial", totalIssues: 2 }), "potential_issue");
+    assert.equal(reviewOutcome({ reviewState: "not_reviewed" }), "not_reviewed");
+    assert.equal(reviewOutcome({ reviewState: "reviewed_clear", notApplicable: true }), "not_applicable");
+    assert.equal(reviewOutcomeLabel({ reviewState: "failed" }), "Failed");
+    for (const state of ["reviewed_clear", "reviewed_partial", "reviewed_findings", "not_reviewed"]) {
+      assert.doesNotMatch(reviewOutcomeLabel({ reviewState: state, overallScore: null, totalIssues: 0 }), /0%|100%/);
+    }
+  });
+
+  it("derives limitation reasons for saved rows that predate stored reasons", () => {
+    const view = buildReviewReportView(
+      [{
+        summary: { reviewState: "reviewed_clear", overallScore: null, checklist: ["Door 101: labeled HW-3"], cleanChecks: ["Door 101: labeled HW-3"] },
+        legalApplicability: { status: "conflict", reviewScope: "reference_only", selectedEdition: "IBC 2021" },
+        codeCoverage: { status: "applicability_only", enforceableProvisionCount: 0 },
+        rejectedCandidates: [
+          { title: "Equipment grounding", validationReason: "documented_design_provision", validationDetail: "The sheet's own note states this requirement." },
+          { title: "Exit path", validationReason: "egress_outside_discipline", validationDetail: "Not on an electrical sheet." },
+        ],
+      }],
+      [],
+    );
+    const codes = view.limitations.map((item) => item.code);
+    assert.ok(codes.includes("reference_only_scope"));
+    assert.ok(codes.includes("no_authoritative_requirement"));
+    assert.ok(codes.includes("open_check"));
+    assert.equal(view.limitations.filter((item) => item.code === "open_check").length, 1);
+    assert.ok(view.unreviewable.some((line) => /not proof of compliance/.test(line)));
+  });
+});
 
 describe("review report hydration", () => {
   it("shows explicit General IBC separately from detected DC and keeps historical states", () => {

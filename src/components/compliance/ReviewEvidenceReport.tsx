@@ -9,6 +9,8 @@ export function ReviewEvidenceReport({
   sourceFileName,
   reviewState,
   overallScore,
+  totalIssues,
+  codeCoverageVerified,
   expanded,
   onExpandedChange,
 }: {
@@ -16,6 +18,8 @@ export function ReviewEvidenceReport({
   sourceFileName?: string | null;
   reviewState?: string | null;
   overallScore?: number | null;
+  totalIssues?: number;
+  codeCoverageVerified?: boolean;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
 }) {
@@ -26,7 +30,13 @@ export function ReviewEvidenceReport({
     if (!isControlled) setUncontrolledExpanded(next);
     onExpandedChange?.(next);
   };
-  const strip = reviewEvidenceStripSummary(view, { sourceFileName, reviewState, overallScore });
+  const strip = reviewEvidenceStripSummary(view, {
+    sourceFileName,
+    reviewState,
+    overallScore,
+    totalIssues,
+    codeCoverageVerified,
+  });
 
   return (
     <AnalyzerDisclosure
@@ -133,7 +143,7 @@ export function ReviewEvidenceReport({
           <ReportList title="Confirmed findings" items={view.confirmedFindings.map((issue) => issue.title || "Finding")} empty="None" />
           <ReportList title="Verification questions" items={view.verificationQuestions.map((issue) => issue.title || "Question")} empty="None" />
           <ReportList title="Evidence-backed checks" items={view.cleanChecks} empty="None scored" />
-          <ReportList title="Not fully reviewable" items={view.unreviewable} empty="None" />
+          <ReportList title="Why verification is incomplete" items={view.unreviewable} empty="None" />
         </div>
         {view.evidence.length > 0 ? (
           <ul className="space-y-1 text-muted-foreground">

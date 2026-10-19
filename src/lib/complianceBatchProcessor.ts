@@ -45,6 +45,8 @@ export interface ComplianceBatchAnalysisResult {
       | null;
     checklist?: string[];
     cleanChecks?: string[];
+    limitations?: Array<{ code: string; detail: string }> | null;
+    notApplicable?: boolean;
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";
@@ -200,7 +202,11 @@ export function normalizeComplianceAnalysisResult(
   codeType: "ibc" | "local",
 ): ComplianceBatchAnalysisResult {
   const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const issues = Array.isArray(d.issues) ? (d.issues as ComplianceBatchIssue[]) : [];
+  const issues = (Array.isArray(d.issues) ? (d.issues as ComplianceBatchIssue[]) : []).map((issue) =>
+    issue.severity === "critical" || issue.severity === "warning" || issue.severity === "advisory"
+      ? issue
+      : { ...issue, severity: "advisory" as const },
+  );
   const sum = d.summary && typeof d.summary === "object"
     ? (d.summary as ComplianceBatchAnalysisResult["summary"])
     : null;
@@ -240,6 +246,7 @@ export function normalizeComplianceAnalysisResult(
     checklist,
     reviewState,
     codeCoverageVerified: sum?.codeCoverageVerified === true,
+    limitations: Array.isArray(sum?.limitations) ? sum.limitations : undefined,
     overallScore:
       reviewState === "reviewed_partial" || reviewState === "failed" || reviewState === "not_reviewed"
         ? null

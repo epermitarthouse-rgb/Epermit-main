@@ -28,6 +28,8 @@ interface AnalysisSummary {
   advisory: number;
   overallScore: number | null;
   reviewState?: string | null;
+  codeCoverageVerified?: boolean;
+  limitations?: Array<{ code?: string; detail?: string }>;
 }
 
 interface IssueResponse {
@@ -441,7 +443,8 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
         : fileSectionScoreLabel({
             overallScore: section.summary?.overallScore,
             reviewState: section.summary?.reviewState,
-            totalIssues: section.summary?.totalIssues ?? section.issues?.length ?? 0,
+            totalIssues: section.issues?.length ?? section.summary?.totalIssues ?? 0,
+            codeCoverageVerified: section.summary?.codeCoverageVerified,
           });
       doc.text(
         `${safeText(section.fileName)}  (${scoreLabel})`,
@@ -469,6 +472,21 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
         doc.setFont('helvetica', 'normal');
         doc.text('No issues found for this file.', margin + 2, y);
         y += 14;
+        const reasons = (section.summary?.limitations ?? [])
+          .map((item) => safeText(item?.detail))
+          .filter(Boolean);
+        if (reasons.length > 0) {
+          doc.setFontSize(8);
+          doc.text('Why verification is incomplete:', margin + 2, y);
+          y += 10;
+          for (const reason of reasons.slice(0, 4)) {
+            checkPageBreak(12);
+            const lines = doc.splitTextToSize(`- ${reason}`, contentWidth - 8);
+            doc.text(lines.slice(0, 2).map(safeText), margin + 4, y);
+            y += 10 * Math.min(lines.length, 2);
+          }
+          y += 4;
+        }
         return;
       }
 

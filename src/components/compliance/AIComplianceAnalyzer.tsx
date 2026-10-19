@@ -103,7 +103,7 @@ import {
   exportReportButtonLabel,
   selectSheetsForExport,
 } from "@/lib/complianceAnalysisExport";
-import { sheetResultPresentation } from "@/lib/codeAnalyzer/combinedSheetSummary";
+import { combineSheetSummaries, sheetResultPresentation } from "@/lib/codeAnalyzer/combinedSheetSummary";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -138,7 +138,7 @@ import {
   type PermitApplicabilityFacts,
 } from "@/lib/codeAnalyzer/jurisdictionEditionVerification";
 import { jurisdictionForAnalyzerProject } from "@/lib/codeAnalyzer/analyzerJurisdiction";
-import { reviewStateLabel } from "@/lib/codeAnalyzer/reviewReport";
+import { reviewOutcome, reviewOutcomeLabel } from "@/lib/codeAnalyzer/reviewReport";
 import {
   aggregateSheetAnalysisResults,
   fetchAnnotationRefsForHydrateResolution,
@@ -148,6 +148,7 @@ import {
 } from "@/lib/codeAnalyzer/sheetResults";
 import { ReviewEvidenceReport } from "@/components/compliance/ReviewEvidenceReport";
 import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
+import { fetchSheetPageText } from "@/lib/codeAnalyzer/sheetPageText";
 import {
   analyzerSheetFingerprint,
   indexPrescreenEffectKey,
@@ -652,8 +653,12 @@ export function AIComplianceAnalyzer() {
     setIndexPrescreenError(null);
     void (async () => {
       try {
+        const pageTextBySheetId = selectedProjectId
+          ? await fetchSheetPageText(selectedProjectId).catch(() => ({}))
+          : {};
         const result = await runDrawingIndexPrescreen({
           sheets: persistedSheets,
+          pageTextBySheetId,
           getDownloadUrl: async (documentId) => {
             const doc = sheetDocuments.find((d) => d.id === documentId);
             if (doc) return getDownloadUrl(doc);
@@ -685,6 +690,7 @@ export function AIComplianceAnalyzer() {
     isModificationMode,
     persistedSheets,
     sheetDocuments,
+    selectedProjectId,
   ]);
 
   const pendingDrawingCount = files.filter(isPendingSessionUpload).length;
@@ -825,6 +831,11 @@ export function AIComplianceAnalyzer() {
         const incoming = display.index_completeness ?? null;
         if (!incoming) return prev ?? null;
         if (!prev) return incoming;
+        // The run stores the prescreen taken at run creation. A live recheck that
+        // found the index keeps its result; the run only adds analysis coverage.
+        if (prev.hasIndex && !incoming.hasIndex) {
+          return { ...prev, analysisCoverage: incoming.analysisCoverage ?? prev.analysisCoverage };
+        }
         return {
           ...prev,
           ...incoming,
@@ -2932,15 +2943,12 @@ export function AIComplianceAnalyzer() {
     let sheetsWithResults = 0;
     for (const group of displayedResultGroups) {
       if (group.failed) continue;
-      const groupResults = [group.ibcResult, group.localResult].filter(
-        (r): r is AnalysisResult => Boolean(r),
-      );
-      if (groupResults.length > 0) sheetsWithResults += 1;
-      for (const result of groupResults) {
-        critical += result.summary.critical ?? 0;
-        warnings += result.summary.warnings ?? 0;
-        advisory += result.summary.advisory ?? 0;
-      }
+      if (!group.ibcResult && !group.localResult) continue;
+      sheetsWithResults += 1;
+      const combined = combineSheetSummaries(group.ibcResult, group.localResult);
+      critical += combined.critical;
+      warnings += combined.warnings;
+      advisory += combined.advisory;
     }
     return { critical, warnings, advisory, sheetsWithResults };
   }, [displayedResultGroups]);
@@ -3230,7 +3238,7 @@ export function AIComplianceAnalyzer() {
             <span className="truncate text-sm font-medium text-foreground">{group.fileName}</span>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-            <span>{combinedSummary.totalIssues} issues</span>
+            {combinedSummary.totalIssues > 0 ? <span>{combinedSummary.totalIssues} issues</span> : null}
             <span className={`font-semibold ${scoreToneClass(combinedSummary)}`}>
               {formatReviewScore(combinedSummary)}
             </span>
@@ -3297,6 +3305,15 @@ export function AIComplianceAnalyzer() {
           </Card>
         </div>
 
+        {combinedSummary.findingTypes && combinedSummary.totalIssues > 0 ? (
+          <p className="text-xs text-muted-foreground" data-testid="finding-type-breakdown">
+            Finding type: {combinedSummary.findingTypes.confirmedViolations} confirmed violations ·{" "}
+            {combinedSummary.findingTypes.potentialConcerns} potential concerns ·{" "}
+            {combinedSummary.findingTypes.verificationQuestions} verification questions. Severity is
+            shown separately above.
+          </p>
+        ) : null}
+
         {presentation.resolution.total > 0 && (
           <Card className={"pilot-card border-border bg-card"}>
             <CardContent className="pt-6">
@@ -3331,6 +3348,8 @@ export function AIComplianceAnalyzer() {
             sourceFileName={group.fileName}
             reviewState={groupResult.summary.reviewState ?? null}
             overallScore={groupResult.summary.overallScore ?? null}
+            totalIssues={groupResult.issues.length}
+            codeCoverageVerified={groupResult.summary.codeCoverageVerified === true}
             expanded={reviewEvidenceExpanded[group.id] ?? false}
             onExpandedChange={(open) =>
               setReviewEvidenceExpanded((prev) => ({ ...prev, [group.id]: open }))
@@ -3444,11 +3463,21 @@ export function AIComplianceAnalyzer() {
     return "text-destructive";
   };
 
-  const formatReviewScore = (summary?: { overallScore?: number | null; reviewState?: string | null }) =>
-    reviewStateLabel(summary?.reviewState, summary?.overallScore);
+  const formatReviewScore = (summary?: {
+    overallScore?: number | null;
+    reviewState?: string | null;
+    totalIssues?: number;
+    codeCoverageVerified?: boolean;
+  }) => reviewOutcomeLabel(summary);
 
-  const scoreToneClass = (summary?: { overallScore?: number | null; reviewState?: string | null }) => {
-    if (summary?.reviewState === "passed" || summary?.reviewState === "reviewed_clear") return "text-emerald-600";
+  const scoreToneClass = (summary?: {
+    overallScore?: number | null;
+    reviewState?: string | null;
+    totalIssues?: number;
+    codeCoverageVerified?: boolean;
+  }) => {
+    if (reviewOutcome(summary) === "verified_compliant") return "text-emerald-600";
+    if (summary?.reviewState === "passed" || summary?.reviewState === "reviewed_clear") return "text-muted-foreground";
     if (
       summary?.reviewState === "not_reviewed" ||
       summary?.reviewState === "reviewed_partial" ||

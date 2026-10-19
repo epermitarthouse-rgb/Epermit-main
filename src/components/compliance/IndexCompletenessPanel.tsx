@@ -22,6 +22,9 @@ function statusBadge(result: IndexCompletenessResult) {
   if (result.status === "no_index") {
     return <Badge variant="secondary">No index detected</Badge>;
   }
+  if (result.status === "index_unreadable") {
+    return <Badge variant="secondary">Index found · rows unreadable</Badge>;
+  }
   return (
     <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
       Incomplete
@@ -72,7 +75,20 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
           </Alert>
         ) : null}
 
-        {result.status === "no_index" ? (
+        {result.status === "index_unreadable" ? (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              An index of sheets was found, but its rows could not be read from the sheet text or the
+              visual extraction, so the uploaded set was not compared against it ({result.actualCount}{" "}
+              included sheet{result.actualCount === 1 ? "" : "s"} present
+              {result.duplicates.length > 0
+                ? `; duplicate sheet numbers: ${result.duplicates.map((dup) => dup.rawLabels.join(", ")).join("; ")}`
+                : ""}
+              ).
+            </AlertDescription>
+          </Alert>
+        ) : result.status === "no_index" ? (
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>

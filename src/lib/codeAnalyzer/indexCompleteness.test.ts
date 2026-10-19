@@ -109,6 +109,34 @@ describe("runIndexCompletenessPrescreen", () => {
     assert.equal(result.hasIndex, false);
   });
 
+  it("finds an Index of Sheets heading in a cover sheet's flattened text layer", () => {
+    const sheets = [
+      sheet({ id: "cv", file_name: "CV-1.00-00.pdf", page_number: 1 }),
+      sheet({ id: "a1", file_name: "A-1.00-00.pdf", page_number: 1 }),
+      sheet({ id: "a1b", file_name: "A-1.00-00 copy.pdf", source_document_id: "src-2", page_number: 1 }),
+    ];
+    const coverText = "COVER SHEET CV-1.00-00 SCALE: 7 INDEX OF SHEETS N.T.S. REVISED PERMIT SET 10/15/2026";
+    const result = runIndexCompletenessPrescreen(sheets, { pageTextBySheetId: { cv: coverText } });
+    assert.equal(result.hasIndex, true);
+    assert.equal(result.indexSheetId, "cv");
+    assert.equal(result.status, "index_unreadable");
+    assert.equal(result.duplicates.length, 1);
+  });
+
+  it("compares a flattened index list against uploads, reporting missing and extra sheets", () => {
+    const sheets = [
+      sheet({ id: "cv", file_name: "CV-1.00-00.pdf" }),
+      sheet({ id: "a1", file_name: "A-1.00-00.pdf" }),
+      sheet({ id: "m1", file_name: "M-1.1.pdf" }),
+    ];
+    const coverText =
+      "COVER SHEET INDEX OF SHEETS CV-1.00 COVER SHEET A-1.00 FLOOR PLAN P-1.0 PLUMBING PLAN";
+    const result = runIndexCompletenessPrescreen(sheets, { pageTextBySheetId: { cv: coverText } });
+    assert.equal(result.status, "incomplete");
+    assert.deepEqual(result.missing.map((row) => row.sheetNumber), ["P1"]);
+    assert.deepEqual(result.extra.map((row) => row.sheetNumber), ["M11"]);
+  });
+
   it("detects index sheet and compares against uploaded labels", () => {
     const sheets = [
       sheet({ id: "idx", file_name: "Drawing Index.pdf" }),

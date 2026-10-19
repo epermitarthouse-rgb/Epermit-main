@@ -21,15 +21,50 @@ function claimText(issue) {
   ].filter(Boolean).join(" ");
 }
 
+const MISSING_CLAIM_RE =
+  /\b(not shown|not provided|not indicated|not labeled|not specified|missing|absent|does not (?:show|specify|provide|indicate|include|identify|define|clearly indicate|clearly show)|lacks?|lacking|incomplete|unclear|unknown|undefined|no (?:details?|information|specification))\b/i;
+
 function claimsMissing(issue) {
   const claim = claimText(issue);
   const findingType = String(issue?.findingType || "").toLowerCase();
-  if (findingType === "confirmed_violation" && !/\b(not shown|not provided|not indicated|not labeled|missing|absent|does not show)\b/i.test(claim)) {
+  if (findingType === "confirmed_violation" && !MISSING_CLAIM_RE.test(claim)) {
     return false;
   }
   return findingType === "missing_information"
     || findingType === "unverified"
-    || /\b(not shown|not provided|not indicated|not labeled|missing|absent|does not show)\b/i.test(claim);
+    || MISSING_CLAIM_RE.test(claim);
+}
+
+/** Exit, egress, and evacuation routes are owned by architectural or life-safety sheets. */
+function isEgressRouteClaim(issue) {
+  return /\b(egress|exit(?:\s+(?:path|route|access|discharge))?|means of egress|evacuation)\b/i.test(claimText(issue))
+    && !/\bexit\s*signs?\b|\bemergency\s+light/i.test(claimText(issue));
+}
+
+/**
+ * Text that describes trade coordination, field conditions, contractor means and
+ * methods, or a generic "practice" names no code requirement to review against.
+ */
+function namesNoRequirement(issue) {
+  const claim = `${issue?.title || ""} ${issue?.description || ""}`;
+  if (/\b(coordinat(?:e|ed|ion)\s+with\s+(?:other\s+)?trades|field\s+conditions?|may\s+vary|routes?\s+(?:as\s+shown\s+)?(?:are\s+)?(?:general|diagrammatic|schematic))\b/i.test(claim)) {
+    return "trade_coordination_note";
+  }
+  if (/\b(standard|best|good|industry)\s+(?:cable\s+management\s+)?practices?\b/i.test(claim)) {
+    return "practice_not_requirement";
+  }
+  if (/\b(means and methods|safety procedures?|procedures? for (?:safe\s+)?removal|safe removal)\b/i.test(claim)) {
+    return "contractor_means_and_methods";
+  }
+  return null;
+}
+
+/** The finding says the sheet's own notes already state the item and only asks to verify it. */
+function restatesSheetNote(issue) {
+  const claim = `${issue?.title || ""} ${issue?.description || ""}`;
+  return /\b(notes?|the sheet|this sheet|the plan)\s+(?:on the sheet\s+)?(?:indicate|indicates|specif(?:y|ies)|require|requires|state|states|call(?:s)? for)\s+that\b/i.test(claim)
+    && !MISSING_CLAIM_RE.test(claim)
+    && !/\b(does not meet|non-?compliant|insufficient|below|less than)\b/i.test(claim);
 }
 
 function inferOccupancy(projectType, corpus) {
@@ -309,6 +344,39 @@ function assessApplicability(issue, ctx) {
     };
   }
 
+  const nonRequirement = namesNoRequirement(issue);
+  if (nonRequirement) {
+    return {
+      disposition: "reject",
+      reason: nonRequirement,
+      detail: "The candidate names no applicable code requirement or review objective, so it is not a compliance finding.",
+      projectContext: context,
+    };
+  }
+
+  if (
+    isEgressRouteClaim(issue) &&
+    !isEgressWidthClaim(issue) &&
+    !roles.has("architectural") &&
+    (roles.has("electrical") || roles.has("plumbing") || roles.has("mechanical") || roles.has("structural") || roles.has("equipment"))
+  ) {
+    return {
+      disposition: "reject",
+      reason: "egress_outside_discipline",
+      detail: "An engineering discipline sheet does not establish exit or egress routes. Egress is reviewed on the architectural and life-safety sheets.",
+      projectContext: context,
+    };
+  }
+
+  if (restatesSheetNote(issue)) {
+    return {
+      disposition: "reject",
+      reason: "documented_design_provision",
+      detail: "The sheet's own note states this requirement. The note is not a deficiency, and it is not proof the installed work complies.",
+      projectContext: context,
+    };
+  }
+
   if (isEgressWidthClaim(issue) && isGeneralNotesSheet(ctx)) {
     return {
       disposition: "reject",
@@ -327,10 +395,14 @@ function assessApplicability(issue, ctx) {
     };
   }
 
-  if (claimsMissing(issue) && /\b(documentation|information|insulation)\b/i.test(claimText(issue))) {
+  if (claimsMissing(issue) && !isSpecialInspectionGap(issue)) {
     const tokens = documentationTokens(issue);
+    // Documentation-style gaps close on one specified token. Other missing-detail
+    // claims need two distinct tokens stated as a requirement before they close.
+    const needed = /\b(documentation|information|insulation)\b/i.test(claimText(issue)) ? 1 : 2;
+    const specifies = (body) => tokens.filter((token) => affirmativeNear(body, token)).length >= needed;
     const here = `${ctx.pageText || ""}\n${ctx.corpus || ""}`;
-    if (tokens.some((token) => affirmativeNear(here, token))) {
+    if (specifies(here)) {
       return {
         disposition: "reject",
         reason: "requirement_already_specified",
@@ -342,7 +414,7 @@ function assessApplicability(issue, ctx) {
     for (const record of records) {
       if (!record || sameRecord(record, ctx)) continue;
       const text = recordBody(record);
-      if (!tokens.some((token) => affirmativeNear(text, token))) continue;
+      if (!specifies(text)) continue;
       const where = record.fileName || record.sheetNumber || record.title || "another sheet";
       return {
         disposition: "reject",
@@ -413,12 +485,25 @@ function finalizeMissingQuestion(issue, ctx) {
 
 function objectiveTokens(issue) {
   const claim = claimText(issue);
-  const match = claim.match(/\b(corridor(?:\s+width)?|exit access(?:\s+width)?|egress(?:\s+width)?|stair(?:\s+riser|\s+width)?|riser|door(?:\s+width)?|insulation|accessible(?:\s+route|\s+entrance|\s+parking)?|accessibility|fire(?:[\s-]*resistance)?(?:\s+rating)?|emergency lighting|special inspections?|grease interceptor|guard(?:rail)?|handrail|clearance|turning space|compartment|restroom|toilet(?:\s+room)?|sprinkler|beam|drain|fixture|parking)\b/i);
+  const match = claim.match(/\b(corridor(?:\s+width)?|exit access(?:\s+width)?|egress(?:\s+width)?|stair(?:\s+riser|\s+width)?|riser|door(?:\s+width)?|insulation|accessible(?:\s+route|\s+entrance|\s+parking)?|accessibility|fire(?:[\s-]*resistance)?(?:\s+rating)?|emergency lighting|special inspections?|grease interceptor|guard(?:rail)?|handrail|clearance|turning space|compartment|restroom|toilet(?:\s+room)?|sprinkler|beam|drain|fixture|parking|connections?|fasteners?|anchorage|pipe material|piping|ductwork|fire dampers?|smoke control|grounding|conductor|ventilation|exhaust)\b/i);
   if (!match) return { label: "", tokens: [] };
   const label = match[0];
   const generic = new Set(["width", "note", "plan", "type", "size", "area", "room", "sheet", "rating"]);
   const tokens = label.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4 && !generic.has(token));
   return { label, tokens };
+}
+
+const SUBJECT_STOP = new Set([
+  "unknown", "specification", "specifications", "verification", "detail", "details", "detailed",
+  "clear", "clearly", "lack", "lacks", "incomplete", "unclear", "concern", "potential", "condition",
+  "below", "minimum", "maximum", "width", "height", "length", "depth", "general",
+]);
+
+/** Words that name what the finding is about, from its title. */
+function subjectTokens(issue) {
+  const title = String(issue?.diagnostics?.originalTitle || issue?.title || "")
+    .replace(/\s*[—-]\s*verification required/ig, "");
+  return distinctiveTokens(title).filter((token) => !SUBJECT_STOP.has(token)).slice(0, 4);
 }
 
 function evidenceSnippet(corpus, tokens) {
@@ -447,7 +532,13 @@ function composePublication(issue, ctx, decision) {
     ctx?.corpus,
     ...(ctx?.observations || []).map((item) => item?.quote || ""),
   ].filter(Boolean).join("\n");
-  const evidence = evidenceSnippet(corpus, objective.tokens);
+  const lowerCorpus = corpus.toLowerCase();
+  const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
+  const subject = titleObjective.length ? titleObjective : subjectTokens(issue);
+  const subjectHits = subject.filter((token) => lowerCorpus.includes(token));
+  const objectiveEvidence = evidenceSnippet(corpus, objective.tokens);
+  const tied = subject.length === 0 || subjectHits.length > 0 || !objectiveEvidence;
+  const evidence = subjectHits.length ? evidenceSnippet(corpus, subjectHits) : tied ? objectiveEvidence : "";
   const search = searchProjectEvidence(issue, ctx);
   const refs = search.places || [];
   const sheets = refs.length
@@ -471,6 +562,7 @@ function composePublication(issue, ctx, decision) {
   const complete = Boolean(objective.label && evidence && unresolved && why);
   return {
     complete,
+    tiedToEvidence: tied,
     text: [
       `${objective.label} is the review objective.`,
       evidence ? `Drawing evidence: ${evidence}` : "",

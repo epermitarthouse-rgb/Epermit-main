@@ -104,6 +104,27 @@ async function applyEmbeddings(records, embedTexts) {
   }
 }
 
+/**
+ * Attach a stored embedding when the chunk key and text fingerprint are unchanged,
+ * so a rerun on the same drawings does not pay to embed the same text again.
+ * @param {Array<Record<string, unknown>>} expanded
+ * @param {Map<string, { content_fingerprint?: string; embedding?: unknown }>} existingByKey
+ */
+function reuseStoredEmbeddings(expanded, existingByKey) {
+  let reused = 0;
+  const next = expanded.map((record) => {
+    if (embeddingValue(record)) return record;
+    const row = recordToRow(record);
+    const prior = existingByKey.get(row.chunk_key);
+    if (!prior || prior.content_fingerprint !== row.content_fingerprint) return record;
+    const embedding = Array.isArray(prior.embedding) ? prior.embedding : parseEmbedding(prior.embedding);
+    if (!Array.isArray(embedding) || embedding.length !== 1536) return record;
+    reused += 1;
+    return { ...record, embedding, embeddingStatus: "present" };
+  });
+  return { records: next, reused };
+}
+
 function expandRecords(records) {
   const expanded = [];
   for (const record of records || []) {
@@ -274,12 +295,19 @@ function createMemoryDrawingStore(backend = createMemoryBackend(), options = {})
     backend,
     rowToRecord,
     async upsertRecords(records) {
-      const expanded = await applyEmbeddings(expandRecords(records), options.embedTexts);
+      const fresh = expandRecords(records);
+      const existing = new Map();
+      for (const row of backend.rows.values()) {
+        if (!row.superseded) existing.set(row.chunk_key, row);
+      }
+      const reuse = reuseStoredEmbeddings(fresh, existing);
+      const expanded = await applyEmbeddings(reuse.records, options.embedTexts);
       const written = expanded.map((record) => backend.upsert(recordToRow(record)));
       retireMemoryRows(backend, written);
       return {
         persisted: true,
         count: written.length,
+        reusedEmbeddings: reuse.reused,
         liveSupabase: false,
         embeddingStatus: summarizeEmbeddings(expanded),
       };
@@ -381,7 +409,30 @@ function createSupabaseDrawingStore(supabase, options = {}) {
     },
     async upsertRecords(records) {
       if (!(await probe())) return failed(probeFailure || { reason: "table_unavailable" });
-      const expanded = await applyEmbeddings(expandRecords(records), options.embedTexts);
+      const fresh = expandRecords(records);
+      const existing = new Map();
+      const keysByProject = new Map();
+      for (const record of fresh) {
+        const row = recordToRow(record);
+        if (!keysByProject.has(row.project_id)) keysByProject.set(row.project_id, []);
+        keysByProject.get(row.project_id).push(row.chunk_key);
+      }
+      for (const [projectId, keys] of keysByProject) {
+        try {
+          const listed = await supabase
+            .from(TABLE)
+            .select("chunk_key, content_fingerprint, embedding")
+            .eq("project_id", projectId)
+            .eq("superseded", false)
+            .in("chunk_key", keys);
+          if (listed?.error || !Array.isArray(listed?.data)) continue;
+          for (const row of listed.data) existing.set(row.chunk_key, row);
+        } catch {
+          // Reuse is an optimization. A failed lookup embeds the chunks again.
+        }
+      }
+      const reuse = reuseStoredEmbeddings(fresh, existing);
+      const expanded = await applyEmbeddings(reuse.records, options.embedTexts);
       const rows = expanded.map(recordToRow);
       if (!rows.length) return { persisted: false, reason: "empty", embeddingStatus: summarizeEmbeddings(expanded) };
       const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: "project_id,chunk_key" });
@@ -393,6 +444,7 @@ function createSupabaseDrawingStore(supabase, options = {}) {
       return {
         persisted: true,
         count: rows.length,
+        reusedEmbeddings: reuse.reused,
         liveSupabase: true,
         embeddingStatus: summarizeEmbeddings(expanded),
       };

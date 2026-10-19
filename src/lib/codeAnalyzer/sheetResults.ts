@@ -5,7 +5,7 @@
  */
 import type { ComplianceBatchAnalysisResult, ComplianceBatchIssue } from "@/lib/complianceBatchProcessor";
 import { computeComplianceOverallScore } from "@/lib/complianceBatchProcessor";
-import { buildReviewReportView, type ReviewMetadataLike } from "@/lib/codeAnalyzer/reviewReport";
+import { buildReviewReportView, reviewLimitations, type ReviewMetadataLike } from "@/lib/codeAnalyzer/reviewReport";
 import { supabase } from "@/lib/supabase";
 
 export const ANNOTATION_QUERY_PAGE_SIZE = 1000;
@@ -202,7 +202,8 @@ function buildModeResult(
 
   const critical = issues.filter((issue) => issue.severity === "critical").length;
   const warnings = issues.filter((issue) => issue.severity === "warning").length;
-  const advisory = issues.filter((issue) => issue.severity === "advisory").length;
+  const advisory = issues.length - critical - warnings;
+  const limitations = meta ? reviewLimitations([meta]) : [];
 
   const buildSummary = (): ComplianceBatchAnalysisResult["summary"] => {
     if (issues.length === 0) {
@@ -220,6 +221,7 @@ function buildModeResult(
           checklist,
           cleanChecks: meta?.summary?.cleanChecks,
           codeCoverageVerified: meta?.summary?.codeCoverageVerified === true,
+          limitations,
         };
       }
       if (stored === "reviewed_partial" || stored === "failed" || stored === "reviewed_findings") {
@@ -231,6 +233,9 @@ function buildModeResult(
           overallScore: null,
           reviewState: stored,
           checklist,
+          cleanChecks: meta?.summary?.cleanChecks,
+          codeCoverageVerified: meta?.summary?.codeCoverageVerified === true,
+          limitations,
         };
       }
       const passed = stored === "passed" && checklist.length > 0;
@@ -258,6 +263,7 @@ function buildModeResult(
         warnings,
         advisory,
         overallScore: preservedIssueScore(meta.summary, recomputed),
+        limitations,
       };
     }
     return {

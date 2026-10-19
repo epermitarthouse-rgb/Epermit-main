@@ -23,7 +23,8 @@ export interface IndexCompletenessInconsistency {
   variants: string[];
 }
 
-export type IndexCompletenessStatus = "complete" | "incomplete" | "no_index";
+/** index_unreadable: an index sheet was found but its rows could not be read. */
+export type IndexCompletenessStatus = "complete" | "incomplete" | "no_index" | "index_unreadable";
 
 /** Post-run sheet coverage (distinct from index prescreen). */
 export interface AnalysisCoverageSnapshot {
@@ -70,7 +71,10 @@ export function normalizeSheetNumber(label: string | null | undefined): string {
 }
 
 const INDEX_TITLE_PATTERN =
-  /\b(drawing\s+index|sheet\s+index|index\s+of\s+drawings|drawings?\s+index|sheet\s+list)\b/i;
+  /\b(drawing\s+index|sheet\s+index|index\s+of\s+(?:drawings|sheets)|drawings?\s+index|sheet\s+list|list\s+of\s+(?:drawings|sheets)|drawing\s+list|schedule\s+of\s+drawings)\b/i;
+
+/** Sheet-number tokens in a flattened text layer (A-1.00-00, FP100, M-1.1). */
+const FLAT_SHEET_TOKEN_PATTERN = /\b[A-Z]{1,3}-?\d{1,4}(?:\.\d{1,2})?(?:-\d{1,2})?\b/g;
 
 /** Cover / general index sheet numbers (G000, G-000, G001, etc.). */
 const INDEX_COVER_SHEET_PATTERN = /^G[-.]?0{2,3}\d?$/i;
@@ -189,9 +193,30 @@ function looksLikeSheetNumberToken(token: string | null | undefined): boolean {
   return Boolean(inferSheetNumberFromLabel(trimmed));
 }
 
+/**
+ * A PDF text layer often arrives as one line. Read sheet numbers that follow the
+ * index heading. A heading with fewer than two rows after it is not a readable index.
+ */
+function parseFlattenedIndexEntries(text: string): IndexSheetEntry[] {
+  const heading = INDEX_TITLE_PATTERN.exec(text);
+  if (!heading) return [];
+  const body = text.slice(heading.index + heading[0].length);
+  const entries: IndexSheetEntry[] = [];
+  const seen = new Set<string>();
+  for (const match of body.matchAll(FLAT_SHEET_TOKEN_PATTERN)) {
+    const inferred = inferSheetNumberFromLabel(match[0]);
+    if (!inferred || !isCredibleDrawingSheetNumber(inferred) || /^\d+$/.test(inferred)) continue;
+    if (seen.has(inferred)) continue;
+    seen.add(inferred);
+    entries.push({ sheetNumber: inferred, rawLabel: match[0], title: null });
+  }
+  return entries.length >= 2 ? entries : [];
+}
+
 /** Parse index table rows from plain text (deterministic). */
 export function parseIndexEntriesFromText(text: string | null | undefined): IndexSheetEntry[] {
   if (typeof text !== "string" || !text.trim()) return [];
+  if (!/\r?\n/.test(text.trim())) return parseFlattenedIndexEntries(text);
   const entries: IndexSheetEntry[] = [];
   const seen = new Set<string>();
 
@@ -302,18 +327,21 @@ export function detectIndexSheet(
   opts?: { pageTextBySheetId?: Record<string, string> },
 ): CodeAnalyzerSheet | null {
   const included = sheets.filter((s) => !s.excluded);
+  // A sheet named as the index wins over a sheet whose text mentions an index.
   for (const sheet of included) {
-    if (
-      isLikelyIndexSheet({
-        sheetLabel: sheet.sheet_label,
-        fileName: sheet.file_name,
-        pageText: opts?.pageTextBySheetId?.[sheet.id],
-      })
-    ) {
-      return sheet;
-    }
+    if (isLikelyIndexSheet({ sheetLabel: sheet.sheet_label, fileName: sheet.file_name })) return sheet;
   }
-  return null;
+  const byText = included.filter((sheet) => {
+    const pageText = opts?.pageTextBySheetId?.[sheet.id];
+    return Boolean(pageText && INDEX_TITLE_PATTERN.test(pageText));
+  });
+  if (byText.length <= 1) return byText[0] ?? null;
+  // Prefer the sheet whose own text lists the most sheet numbers, then the earliest page.
+  return [...byText].sort((a, b) => {
+    const rows = (sheet: CodeAnalyzerSheet) =>
+      parseIndexEntriesFromText(opts?.pageTextBySheetId?.[sheet.id]).length;
+    return rows(b) - rows(a) || a.page_number - b.page_number;
+  })[0];
 }
 
 /** Deterministic set diff — AI output must be parsed into entries before calling this. */
@@ -453,5 +481,38 @@ export function runIndexCompletenessPrescreen(
     ...opts,
     indexSheetId: indexSheet.id,
   });
+  if (expected.length === 0) {
+    const compared = actual.filter((a) => a.sheetId !== indexSheet.id);
+    return {
+      status: "index_unreadable",
+      hasIndex: true,
+      indexSheetId: indexSheet.id,
+      expectedCount: 0,
+      actualCount: compared.length,
+      missing: [],
+      extra: [],
+      duplicates: uploadedDuplicates(compared),
+      numberingInconsistencies: [],
+      comparedSheetCount: compared.length,
+    };
+  }
   return compareIndexCompleteness(expected, actual, { indexSheetId: indexSheet.id });
+}
+
+/** Duplicate uploaded sheet numbers are reported even when the index rows are unreadable. */
+function uploadedDuplicates(actual: ActualSheetLabel[]): IndexCompletenessDuplicate[] {
+  const byNumber = new Map<string, ActualSheetLabel[]>();
+  for (const row of actual) {
+    if (row.comparable === false || !row.sheetNumber) continue;
+    const list = byNumber.get(row.sheetNumber) ?? [];
+    list.push(row);
+    byNumber.set(row.sheetNumber, list);
+  }
+  return [...byNumber.entries()]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([sheetNumber, rows]) => ({
+      sheetNumber,
+      rawLabels: [...new Set(rows.map((r) => r.rawLabel))],
+      sheetIds: rows.map((r) => r.sheetId),
+    }));
 }

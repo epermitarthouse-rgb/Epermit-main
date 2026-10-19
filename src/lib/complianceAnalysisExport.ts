@@ -47,6 +47,9 @@ export interface ComplianceExportAnalysisResult {
       | "failed"
       | null;
     codeCoverageVerified?: boolean;
+    limitations?: Array<{ code: string; detail: string }>;
+    outcome?: string;
+    outcomeLabel?: string;
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";

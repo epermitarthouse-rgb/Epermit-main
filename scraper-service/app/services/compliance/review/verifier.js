@@ -254,6 +254,14 @@ function asPublishedQuestion(decision, issue, ctx) {
     return decision;
   }
   const publication = composePublication(issue, ctx, decision);
+  if (publication.tiedToEvidence === false) {
+    return {
+      disposition: "reject",
+      reason: "claim_not_tied_to_evidence",
+      detail: "The sheet text does not mention the element this question is about, so the quoted drawing evidence does not support it. The check stays open.",
+      provenance: decision.provenance,
+    };
+  }
   if (!publication.complete) {
     return {
       disposition: "reject",

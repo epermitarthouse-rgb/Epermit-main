@@ -47,6 +47,41 @@ function dualScopeSheet(): { ibcResult: CombinedModeResult; localResult: Combine
   };
 }
 
+describe("saved run dec23cb8 shape", () => {
+  // Stored summaries on three sheets said totalIssues 1 with 0 warnings and 0 advisory,
+  // because warning counts were taken only from confirmed violations.
+  it("counts from the issue rows so Total = Critical + Warning + Advisory", () => {
+    const sheets = [
+      { ibc: [{ id: "e13", severity: "warning", findingType: "potential_concern" }], local: [] },
+      { ibc: [{ id: "s201", severity: "warning", findingType: "potential_concern" }], local: [] },
+      { ibc: [], local: [{ id: "dm101", severity: "warning", findingType: "potential_concern" }] },
+      { ibc: [{ id: "p10", severity: "advisory", findingType: "potential_concern" }], local: [] },
+      { ibc: [], local: [{ id: "fp300", severity: "advisory", findingType: "missing_information" }] },
+    ];
+    let total = 0;
+    let warnings = 0;
+    let advisory = 0;
+    for (const sheet of sheets) {
+      const stale = { totalIssues: 1, critical: 0, warnings: 0, advisory: 0, overallScore: null, reviewState: "reviewed_partial" as const };
+      const summary = combineSheetSummaries(
+        { codeType: "ibc", issues: sheet.ibc, summary: sheet.ibc.length ? stale : { ...stale, totalIssues: 0 } },
+        { codeType: "local", issues: sheet.local, summary: sheet.local.length ? stale : { ...stale, totalIssues: 0 } },
+      );
+      assert.equal(summary.totalIssues, summary.critical + summary.warnings + summary.advisory);
+      assert.equal(
+        summary.totalIssues,
+        summary.findingTypes!.confirmedViolations + summary.findingTypes!.potentialConcerns + summary.findingTypes!.verificationQuestions,
+      );
+      total += summary.totalIssues;
+      warnings += summary.warnings;
+      advisory += summary.advisory;
+    }
+    assert.equal(total, 5);
+    assert.equal(warnings, 3);
+    assert.equal(advisory, 2);
+  });
+});
+
 describe("combined sheet summary", () => {
   it("counts 1 IBC finding and 2 Local findings as 3", () => {
     const sheet = dualScopeSheet();
@@ -151,8 +186,8 @@ describe("combined sheet summary", () => {
     const summary = combineSheetSummaries(clear, clear);
     assert.equal(summary.reviewState, "reviewed_clear");
     assert.equal(summary.overallScore, null);
-    assert.equal(exportScoreText(summary), "Clear");
-    assert.equal(fileSectionScoreLabel(summary), "Clear · 0 issues");
+    assert.equal(exportScoreText(summary), "No findings · Verification incomplete");
+    assert.equal(fileSectionScoreLabel(summary), "No findings · Verification incomplete");
     assert.notEqual(exportScoreText(summary), "0%");
   });
 
@@ -173,7 +208,7 @@ describe("combined sheet summary", () => {
     );
     assert.equal(partial.reviewState, "reviewed_partial");
     assert.equal(partial.overallScore, null);
-    assert.equal(exportScoreText(partial), "Partial");
+    assert.equal(exportScoreText(partial), "No findings · Verification incomplete");
 
     const findings = combineSheetSummaries(
       {

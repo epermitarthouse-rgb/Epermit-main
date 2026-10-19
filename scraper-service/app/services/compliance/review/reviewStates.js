@@ -44,6 +44,7 @@ function hydrateStoredReviewState(state) {
  *   openQuestionCount: number;
  *   evidenceBacked: boolean;
  *   codeCoverageVerified?: boolean;
+ *   unresolvedLimitationCount?: number;
  * }} input
  */
 function resolveReviewState(input) {
@@ -57,17 +58,38 @@ function resolveReviewState(input) {
   if (input.confirmedCount > 0) {
     return { reviewState: REVIEW_STATES.reviewedFindings, overallScore: null, scored: true };
   }
-  if (input.evidenceBacked && input.openQuestionCount === 0 && input.codeCoverageVerified) {
+  // A quoted drawing label shows the element is present. It proves compliance
+  // only when an authoritative requirement for that element was verified.
+  if (
+    input.evidenceBacked &&
+    input.openQuestionCount === 0 &&
+    input.codeCoverageVerified &&
+    !input.unresolvedLimitationCount
+  ) {
     return { reviewState: REVIEW_STATES.reviewedClear, overallScore: 100, scored: true };
   }
-  if (input.evidenceBacked && input.openQuestionCount === 0) {
-    return { reviewState: REVIEW_STATES.reviewedClear, overallScore: null, scored: false };
-  }
   return { reviewState: REVIEW_STATES.reviewedPartial, overallScore: null, scored: false };
+}
+
+/**
+ * Presentation outcome. Stored review states stay unchanged for compatibility.
+ * @param {{ reviewState?: string | null; totalIssues?: number; codeCoverageVerified?: boolean; notApplicable?: boolean }} summary
+ */
+function reviewOutcome(summary) {
+  const state = summary?.reviewState || null;
+  if (state === REVIEW_STATES.failed) return "failed";
+  if ((summary?.totalIssues || 0) > 0) return "potential_issue";
+  if (summary?.notApplicable === true) return "not_applicable";
+  if (!state || state === REVIEW_STATES.notReviewed) return "not_reviewed";
+  if ((state === REVIEW_STATES.reviewedClear || state === "passed") && summary?.codeCoverageVerified === true) {
+    return "verified_compliant";
+  }
+  return "insufficient_evidence";
 }
 
 module.exports = {
   REVIEW_STATES,
   hydrateStoredReviewState,
   resolveReviewState,
+  reviewOutcome,
 };

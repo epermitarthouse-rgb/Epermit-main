@@ -250,6 +250,34 @@ describe("drawing evidence store", () => {
     }
   });
 
+  it("reuses stored embeddings for unchanged chunks and re-embeds changed text", async () => {
+    const backend = createMemoryBackend();
+    let embedded = 0;
+    const embedTexts = async (texts) => {
+      embedded += texts.length;
+      return texts.map(() => Array.from({ length: 1536 }, () => 0.01));
+    };
+    const store = createMemoryDrawingStore(backend, { embedTexts });
+    const record = {
+      projectId: "proj-a",
+      documentId: "doc-a",
+      sheetId: "sheet-a",
+      fileName: "M-1.1.pdf",
+      pageNumber: 1,
+      text: "DUCTWORK SHALL BE GALVANIZED STEEL. FIRE DAMPER AT RATED WALL.",
+    };
+    const first = await store.upsertRecords([record]);
+    const afterFirst = embedded;
+    assert.ok(afterFirst > 0);
+    assert.equal(first.reusedEmbeddings, 0);
+    const second = await store.upsertRecords([record]);
+    assert.equal(embedded, afterFirst);
+    assert.equal(second.reusedEmbeddings, second.count);
+    assert.equal(second.embeddingStatus, "present");
+    await store.upsertRecords([{ ...record, text: "DUCTWORK SHALL BE ALUMINUM. FIRE DAMPER AT RATED WALL." }]);
+    assert.ok(embedded > afterFirst);
+  });
+
   it("keeps exact rows when no embedding is present", () => {
     const row = recordToRow({
       projectId: "proj-a",

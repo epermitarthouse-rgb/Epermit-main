@@ -43,7 +43,7 @@ describe("ReviewEvidenceReport", () => {
     assert.match(collapsed, /aria-expanded="false"/);
     assert.match(collapsed, /A-1\.00\.pdf/);
     assert.match(collapsed, /general-ibc/);
-    assert.match(collapsed, /Partial/);
+    assert.match(collapsed, /Findings/);
     assert.match(collapsed, /1 evidence/);
     assert.doesNotMatch(collapsed, /Confirmed findings/);
     assert.doesNotMatch(collapsed, /User emphasis/);
@@ -68,7 +68,8 @@ describe("ReviewEvidenceReport", () => {
     assert.match(expanded, /Check the note/);
     assert.match(expanded, /Evidence-backed checks/);
     assert.match(expanded, /Exit width/);
-    assert.match(expanded, /Not fully reviewable/);
+    assert.match(expanded, /Why verification is incomplete/);
+    assert.match(expanded, /reference-only/);
     assert.match(expanded, /1 HR/);
     assert.match(expanded, /location on sheet/);
     assert.match(expanded, /User emphasis/);
@@ -76,5 +77,34 @@ describe("ReviewEvidenceReport", () => {
     assert.match(expanded, /Withheld, not shown as violations/);
     assert.match(expanded, /equipment plan/);
     assert.match(expanded, /Washington, DC/);
+  });
+
+  it("explains a zero-finding Partial with the stored limitation reasons", () => {
+    const partial = buildReviewReportView(
+      [
+        {
+          sheet_file_name: "A-1.02-00.pdf",
+          summary: { reviewState: "reviewed_partial", overallScore: null, checklist: [], cleanChecks: [] },
+          legalApplicability: { status: "conflict", reviewScope: "reference_only", selectedEdition: "IBC 2021", adoptedEdition: "2017 DC Construction Codes" },
+          codeCoverage: { status: "applicability_only", authoritativeProvisionCount: 2, enforceableProvisionCount: 0 },
+        },
+      ],
+      [],
+    );
+    const html = renderToStaticMarkup(
+      createElement(ReviewEvidenceReport, {
+        view: partial,
+        sourceFileName: "A-1.02-00.pdf",
+        reviewState: "reviewed_partial",
+        overallScore: null,
+        totalIssues: 0,
+        expanded: true,
+      }),
+    );
+    assert.match(html, /No findings · Verification incomplete/);
+    assert.match(html, /IBC 2021 is not verified as the adopted permit code/);
+    assert.match(html, /No authoritative code requirement/);
+    assert.match(html, /returned no completed checks/);
+    assert.doesNotMatch(html, /0%|100%/);
   });
 });

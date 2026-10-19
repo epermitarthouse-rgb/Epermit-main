@@ -161,7 +161,7 @@ describe("empty review is not a pass", () => {
     assert.notEqual(hardened.summary.overallScore, 100);
   });
 
-  it("passes only when every checklist item quotes evidence from the sheet", () => {
+  it("keeps quoted labels as evidence without calling the sheet verified", () => {
     const hardened = hardenAnalysisResult(
       {
         issues: [],
@@ -175,7 +175,10 @@ describe("empty review is not a pass", () => {
       "ibc",
       { pageText: '44" clear labeled at grid B\nshown on sheet A-1.01' },
     );
-    assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
+    assert.equal(hardened.summary.reviewOutcome, "insufficient_evidence");
+    assert.equal(hardened.summary.cleanChecks.length, 2);
+    assert.ok(hardened.summary.limitations.some((item) => item.code === "no_authoritative_requirement"));
     assert.equal(hardened.summary.overallScore, null);
     assert.notEqual(hardened.summary.codeCoverageVerified, true);
   });
@@ -205,6 +208,8 @@ describe("empty review is not a pass", () => {
       },
     );
     assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.reviewOutcome, "verified_compliant");
+    assert.deepEqual(hardened.summary.limitations, []);
     assert.equal(hardened.summary.overallScore, 100);
     assert.equal(hardened.summary.codeCoverageVerified, true);
   });
@@ -524,7 +529,8 @@ describe("page text drops missing-information notes that the sheet already state
       "ibc",
       { sheetTitle: "Plumbing details", fileName: "plumbing.pdf", pageText: "GREASE OUTPUT SELECT GREASE INTERCEPTOR. BACKFLOW PREVENTION SHALL COMPLY." },
     );
-    assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
+    assert.equal(hardened.summary.reviewOutcome, "insufficient_evidence");
     assert.equal(hardened.summary.overallScore, null);
   });
 });
@@ -765,7 +771,7 @@ describe("content class does not discard a reviewed sheet", () => {
     }
   });
 
-  it("still passes a checklist that quotes a label on the sheet", () => {
+  it("treats a quoted label as evidence presence, not proof of compliance", () => {
     const hardened = hardenAnalysisResult(
       {
         issues: [],
@@ -776,7 +782,8 @@ describe("content class does not discard a reviewed sheet", () => {
       "ibc",
       { contentClass: "schedule", sheetTitle: "A-6.00.pdf", pageText: "Door 101 labeled HW-3" },
     );
-    assert.equal(hardened.summary.reviewState, "reviewed_clear");
+    assert.equal(hardened.summary.reviewState, "reviewed_partial");
+    assert.equal(hardened.summary.cleanChecks.length, 1);
     assert.equal(hardened.summary.overallScore, null);
   });
 });

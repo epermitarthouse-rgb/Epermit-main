@@ -1,7 +1,7 @@
 "use strict";
 
 const { decideCandidate, applyDecision, sheetRoles, cleanTopic } = require("./review/verifier.js");
-const { resolveReviewState } = require("./review/reviewStates.js");
+const { resolveReviewState, reviewOutcome } = require("./review/reviewStates.js");
 const {
   isUnselectedJurisdiction,
   resolveJurisdictionDecision,
@@ -640,6 +640,16 @@ function otherRecordSuppliesFact(issue, ctx) {
   return null;
 }
 
+/** Why the evidence gate withheld a candidate. A restated note keeps the check open. */
+function evidenceGateReason(issue, ctx) {
+  const text = `${issue.title || ""} ${issue.description || ""}`;
+  if (pageTextSuppliesMissingFact(issue, evidenceCorpus(ctx))) return "requirement_already_on_sheet";
+  if (otherSheetOwnsMissingFact(issue, ctx)) return "cross_sheet_owner";
+  if (isScheduleRequirementRestatement(issue, ctx)) return "requirement_already_on_sheet";
+  if (OPERATIONAL_FALSE_POSITIVE_RE.test(text)) return "operational_note";
+  return "evidence_gate";
+}
+
 function hardenIssues(issues, ctx) {
   const sheetCtx = inferSheetReviewContext(ctx.sheetTitle);
   const seen = new Set();
@@ -658,8 +668,19 @@ function hardenIssues(issues, ctx) {
       issue.evidenceTier = "verification";
     }
 
-    issue = applyEvidenceGate(issue, ctx);
-    if (!issue) continue;
+    const gated = applyEvidenceGate(issue, ctx);
+    if (!gated) {
+      rejectedCandidates.push({
+        ...issue,
+        validationDisposition: "reject",
+        validationReason: evidenceGateReason(issue, ctx),
+        validationDetail: "The sheet or the set already covers this item, so it is not published as a finding.",
+        userVisible: false,
+        diagnostics: { originalTitle: issue.title || null },
+      });
+      continue;
+    }
+    issue = gated;
 
     const supplied = otherRecordSuppliesFact(issue, ctx);
     if (supplied) {
@@ -702,7 +723,16 @@ function hardenIssues(issues, ctx) {
       rejectedCandidates.push(issue);
       continue;
     }
-    if (!sheetContextAllowsIssue(issue, sheetCtx)) continue;
+    if (!sheetContextAllowsIssue(issue, sheetCtx)) {
+      rejectedCandidates.push({
+        ...issue,
+        validationDisposition: "reject",
+        validationReason: "outside_sheet_scope",
+        validationDetail: "This sheet type is not reviewed for that category.",
+        userVisible: false,
+      });
+      continue;
+    }
 
     const key = dedupKey(issue, ctx.sheetTitle);
     if (seen.has(key)) continue;
@@ -734,6 +764,7 @@ function hardenIssueBundle(bundle, ctx) {
   const summary = buildSummaryFromIssues(issues, bundle.summary?.overallScore, checklist, {
     callStatus: ctx.callStatus || "completed",
     corpusCtx: ctx,
+    rejectedCandidates,
   });
   summary.rejectedCount = rejectedCandidates.length;
   return {
@@ -789,9 +820,9 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     (issue) => issue.findingType === "confirmed_violation" && issue.validationDisposition !== "reject",
   );
   const openQuestions = stored.filter((issue) => issue.findingType !== "confirmed_violation");
-  const critical = confirmed.filter((i) => i.severity === "critical").length;
-  const warnings = confirmed.filter((i) => i.severity === "warning").length;
-  const advisory = stored.filter((i) => i.severity === "advisory").length;
+  const critical = stored.filter((i) => i.severity === "critical").length;
+  const warnings = stored.filter((i) => i.severity === "warning").length;
+  const advisory = stored.length - critical - warnings;
   const computed = Math.max(0, 100 - critical * 20 - warnings * 10 - advisory * 3);
   const backedItems = corpus ? passItems.filter(quoteBacked) : [];
   const evidenceBacked = passItems.length > 0 && backedItems.length === passItems.length;
@@ -800,12 +831,24 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     options.corpusCtx?.authoritativeCode,
     options.corpusCtx?.legalApplicability,
   );
+  const unresolved = (options.rejectedCandidates || []).filter(rejectionLeavesCheckOpen);
+  const limitations = reviewLimitations({
+    callStatus: options.callStatus || "completed",
+    checklistCount: normalizeChecklist(checklist).length,
+    evidenceBacked,
+    coverageVerified,
+    legalApplicability: options.corpusCtx?.legalApplicability,
+    authoritativeCode: options.corpusCtx?.authoritativeCode,
+    drawingRetrieval: options.corpusCtx?.drawingRetrieval,
+    unresolved,
+  });
   const decision = resolveReviewState({
     callStatus: options.callStatus || "completed",
     confirmedCount: confirmed.length,
     openQuestionCount: openQuestions.length,
     evidenceBacked,
     codeCoverageVerified: coverageVerified,
+    unresolvedLimitationCount: unresolved.length,
   });
   let score = decision.overallScore;
   if (decision.reviewState === "reviewed_findings") {
@@ -822,12 +865,106 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     confirmedViolations: confirmed.length,
     verificationRequired: stored.filter((i) => i.findingType === "missing_information").length,
     unverified: stored.filter((i) => i.findingType === "unverified").length,
+    potentialConcerns: stored.filter((i) => i.findingType === "potential_concern").length,
     checklist: passItems,
     cleanChecks: evidenceBacked ? passItems : [],
     reviewState: decision.reviewState,
+    reviewOutcome: reviewOutcome({
+      reviewState: decision.reviewState,
+      totalIssues: stored.length,
+      codeCoverageVerified: coverageVerified,
+    }),
+    limitations: decision.reviewState === "reviewed_clear" ? [] : limitations,
     overallScore: score,
     codeCoverageVerified: coverageVerified,
   };
+}
+
+/**
+ * Rejected candidates whose topic is still an open check. Invalid allegations
+ * (wrong discipline, untraced numbers) and checks answered by another sheet close.
+ * A note that only restates a requirement does not prove the requirement is met.
+ */
+const OPEN_CHECK_REJECTIONS = new Set([
+  "documented_design_provision",
+  "requirement_already_on_sheet",
+  "requirement_already_specified",
+  "already_noted",
+  "special_inspection_retrieval_unavailable",
+  "drawing_retrieval_unavailable",
+  "claim_not_tied_to_evidence",
+  "incomplete_question",
+]);
+
+function rejectionLeavesCheckOpen(candidate) {
+  return OPEN_CHECK_REJECTIONS.has(String(candidate?.validationReason || ""));
+}
+
+function limitationTopic(candidate) {
+  const title = String(candidate?.diagnostics?.originalTitle || candidate?.title || "A candidate check")
+    .replace(/\s*[—-]\s*verification required/ig, "")
+    .trim();
+  return title || "A candidate check";
+}
+
+/**
+ * Plain reasons a completed review is not a verified pass.
+ * @param {{
+ *   callStatus: string;
+ *   checklistCount: number;
+ *   evidenceBacked: boolean;
+ *   coverageVerified: boolean;
+ *   legalApplicability?: Record<string, unknown> | null;
+ *   authoritativeCode?: unknown[] | null;
+ *   drawingRetrieval?: Record<string, unknown> | null;
+ *   unresolved: Array<Record<string, unknown>>;
+ * }} input
+ */
+function reviewLimitations(input) {
+  if (input.callStatus !== "completed") return [];
+  const out = [];
+  const legal = input.legalApplicability || null;
+  if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
+    out.push({
+      code: "reference_only_scope",
+      detail: "The selected code edition is not verified as the adopted permit code for this project, so the review is reference-only.",
+    });
+  }
+  const enforceable = (Array.isArray(input.authoritativeCode) ? input.authoritativeCode : []).filter(
+    (chunk) => chunk && chunk.authoritative === true && chunk.supportsConfirmedViolation === true,
+  );
+  if (!enforceable.length) {
+    out.push({
+      code: "no_authoritative_requirement",
+      detail: "No authoritative code requirement for the reviewed elements was available, so drawing labels could not be checked against a requirement.",
+    });
+  } else if (!input.coverageVerified && input.evidenceBacked) {
+    out.push({
+      code: "requirement_not_matched",
+      detail: "The evidence-backed checks did not match an authoritative requirement.",
+    });
+  }
+  if (input.checklistCount === 0) {
+    out.push({ code: "no_checks_returned", detail: "The review returned no completed checks for this sheet." });
+  } else if (!input.evidenceBacked) {
+    out.push({
+      code: "checks_not_evidence_backed",
+      detail: "One or more completed checks were not tied to a quote found in the sheet text.",
+    });
+  }
+  if (input.drawingRetrieval && input.drawingRetrieval.available === false) {
+    out.push({
+      code: "drawing_retrieval_unavailable",
+      detail: "Cross-sheet drawing retrieval was unavailable, so related sheets were not searched.",
+    });
+  }
+  for (const candidate of input.unresolved.slice(0, 5)) {
+    out.push({
+      code: "open_check",
+      detail: `${limitationTopic(candidate)}: ${String(candidate.validationDetail || "withheld, not verified").trim()} Withholding it is not proof of compliance.`,
+    });
+  }
+  return out;
 }
 
 /**

@@ -4,11 +4,18 @@
  * so the header does not depend on which code tab is selected.
  */
 import { computeComplianceOverallScore } from "@/lib/complianceBatchProcessor";
-import { reviewStateLabel, type ReviewStateName } from "@/lib/codeAnalyzer/reviewReport";
+import {
+  reviewOutcome,
+  reviewOutcomeLabel,
+  type ReviewLimitation,
+  type ReviewOutcomeName,
+  type ReviewStateName,
+} from "@/lib/codeAnalyzer/reviewReport";
 
 export interface CombinedIssueRef {
   id: string;
   severity?: "critical" | "warning" | "advisory" | string;
+  findingType?: string | null;
   codeType?: "ibc" | "local" | string;
   codeYear?: string;
   codeSourceStatus?: string | null;
@@ -23,6 +30,7 @@ export interface CombinedModeSummary {
   overallScore: number | null;
   reviewState?: ReviewStateName;
   codeCoverageVerified?: boolean;
+  limitations?: ReviewLimitation[];
 }
 
 export interface CombinedModeResult {
@@ -35,6 +43,27 @@ export interface CombinedModeResult {
 export interface CombinedSheetSummary extends CombinedModeSummary {
   reviewState: ReviewStateName;
   codeCoverageVerified: boolean;
+  /** Finding type is separate from severity. These three add up to totalIssues. */
+  findingTypes?: FindingTypeCounts;
+  outcome: ReviewOutcomeName;
+  outcomeLabel: string;
+}
+
+export interface FindingTypeCounts {
+  confirmedViolations: number;
+  potentialConcerns: number;
+  verificationQuestions: number;
+}
+
+/** Confirmed violations, potential concerns, and verification questions (missing or unverified). */
+export function findingTypeCounts(issues: Array<{ findingType?: string | null }>): FindingTypeCounts {
+  const confirmedViolations = issues.filter((issue) => issue.findingType === "confirmed_violation").length;
+  const potentialConcerns = issues.filter((issue) => issue.findingType === "potential_concern").length;
+  return {
+    confirmedViolations,
+    potentialConcerns,
+    verificationQuestions: issues.length - confirmedViolations - potentialConcerns,
+  };
 }
 
 const REVIEW_RANK: Record<string, number> = {
@@ -55,12 +84,10 @@ function countsFromMode(result: CombinedModeResult | null | undefined): {
   if (!result) return { totalIssues: 0, critical: 0, warnings: 0, advisory: 0 };
   if (Array.isArray(result.issues)) {
     const issues = result.issues;
-    return {
-      totalIssues: issues.length,
-      critical: issues.filter((issue) => issue.severity === "critical").length,
-      warnings: issues.filter((issue) => issue.severity === "warning").length,
-      advisory: issues.filter((issue) => issue.severity === "advisory").length,
-    };
+    const critical = issues.filter((issue) => issue.severity === "critical").length;
+    const warnings = issues.filter((issue) => issue.severity === "warning").length;
+    // Any other severity value is shown as advisory, so Total = Critical + Warning + Advisory.
+    return { totalIssues: issues.length, critical, warnings, advisory: issues.length - critical - warnings };
   }
   const summary = result.summary;
   return {
@@ -148,6 +175,17 @@ export function combineModeSummaries(
           codeCoverageVerified,
         });
 
+  const issueLists = present.map((mode) => mode.issues).filter(Array.isArray);
+  const outcomeInput = { reviewState, overallScore, totalIssues, codeCoverageVerified };
+  const outcome = reviewOutcome(outcomeInput);
+  const limitations = new Map<string, ReviewLimitation>();
+  if (outcome !== "verified_compliant") {
+    for (const summary of summaries) {
+      for (const item of summary?.limitations ?? []) {
+        if (item?.detail && !limitations.has(item.detail)) limitations.set(item.detail, item);
+      }
+    }
+  }
   return {
     totalIssues,
     critical,
@@ -156,6 +194,12 @@ export function combineModeSummaries(
     overallScore,
     reviewState,
     codeCoverageVerified,
+    findingTypes: issueLists.length === present.length && present.length > 0
+      ? findingTypeCounts(issueLists.flat())
+      : undefined,
+    ...(limitations.size > 0 ? { limitations: [...limitations.values()] } : {}),
+    outcome,
+    outcomeLabel: reviewOutcomeLabel(outcomeInput),
   };
 }
 
@@ -167,7 +211,9 @@ export function combineSheetSummaries(
 }
 
 export function rollupSheetSummaries(summaries: CombinedModeSummary[]): CombinedSheetSummary {
-  return combineModeSummaries(summaries.map((summary) => ({ summary, issues: undefined })));
+  return combineModeSummaries(
+    summaries.map((summary) => ({ summary: { ...summary, limitations: undefined }, issues: undefined })),
+  );
 }
 
 export function combinedSheetIssues(
@@ -220,19 +266,22 @@ export function sheetResultPresentation<T extends CombinedModeResult>(
   };
 }
 
-/** Score text for headers and exports. Absent scores stay words such as Clear, Partial, or Findings. */
+/** Score text for headers and exports. Absent scores stay words, never 0% or 100%. */
 export function exportScoreText(summary?: {
   overallScore?: number | null;
   reviewState?: string | null;
+  totalIssues?: number;
+  codeCoverageVerified?: boolean;
 } | null): string {
-  return reviewStateLabel(summary?.reviewState, summary?.overallScore);
+  return reviewOutcomeLabel(summary);
 }
 
 export function fileSectionScoreLabel(summary?: {
   overallScore?: number | null;
   reviewState?: string | null;
   totalIssues?: number;
+  codeCoverageVerified?: boolean;
 } | null): string {
   const issues = summary?.totalIssues ?? 0;
-  return `${exportScoreText(summary)} · ${issues} issues`;
+  return issues > 0 ? `${exportScoreText(summary)} · ${issues} issues` : exportScoreText(summary);
 }

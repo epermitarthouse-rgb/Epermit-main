@@ -17,12 +17,17 @@ export type ReviewIssueLike = {
   codeReference?: string | null;
 };
 
+export type ReviewLimitation = { code: string; detail: string };
+
 export type ReviewMetadataLike = {
   summary?: {
     reviewState?: string | null;
     overallScore?: number | null;
     checklist?: string[];
     cleanChecks?: string[];
+    codeCoverageVerified?: boolean;
+    limitations?: ReviewLimitation[] | null;
+    notApplicable?: boolean;
   } | null;
   jurisdictionScope?: {
     selectedScope?: string | null;
@@ -80,6 +85,8 @@ export type ReviewReportView = {
   verificationQuestions: ReviewIssueLike[];
   cleanChecks: string[];
   unreviewable: string[];
+  /** Why the review is not a verified pass. Empty only for a verified compliant review. */
+  limitations: ReviewLimitation[];
   evidence: Array<{ where: string; quote: string; hasRegion: boolean }>;
   withheldReasons: string[];
   legalApplicability: NonNullable<ReviewMetadataLike["legalApplicability"]> | null;
@@ -106,6 +113,118 @@ export function reviewStateLabel(state: string | null | undefined, score: number
   if (state === "reviewed_findings") return typeof score === "number" ? `${score}%` : "Findings";
   if (typeof score === "number") return `${score}%`;
   return "Not reviewed";
+}
+
+export type ReviewOutcomeName =
+  | "verified_compliant"
+  | "potential_issue"
+  | "insufficient_evidence"
+  | "not_applicable"
+  | "not_reviewed"
+  | "failed";
+
+export type ReviewOutcomeSummary = {
+  reviewState?: string | null;
+  overallScore?: number | null;
+  totalIssues?: number;
+  codeCoverageVerified?: boolean;
+  notApplicable?: boolean;
+};
+
+/**
+ * Presentation outcome over the stored review state. A stored reviewed_clear without
+ * an authoritative requirement shows as insufficient evidence, never as a verified pass.
+ */
+export function reviewOutcome(summary: ReviewOutcomeSummary | null | undefined): ReviewOutcomeName {
+  const state = summary?.reviewState ?? null;
+  if (state === "failed") return "failed";
+  if ((summary?.totalIssues ?? 0) > 0) return "potential_issue";
+  if (summary?.notApplicable === true) return "not_applicable";
+  if (state === "passed" && typeof summary?.overallScore === "number") return "verified_compliant";
+  if (!state || state === "not_reviewed") return "not_reviewed";
+  if ((state === "reviewed_clear" || state === "passed") && summary?.codeCoverageVerified === true) {
+    return "verified_compliant";
+  }
+  return "insufficient_evidence";
+}
+
+/** Header and export text. Missing scores stay words, never 0% or 100%. */
+export function reviewOutcomeLabel(summary: ReviewOutcomeSummary | null | undefined): string {
+  const outcome = reviewOutcome(summary);
+  const score = summary?.overallScore;
+  if (outcome === "failed") return "Failed";
+  if (outcome === "not_reviewed") return "Not reviewed";
+  if (outcome === "not_applicable") return "Not applicable";
+  if (outcome === "insufficient_evidence") return "No findings · Verification incomplete";
+  if (outcome === "verified_compliant") return typeof score === "number" ? `${score}% · Verified` : "Verified compliant";
+  return typeof score === "number" ? `${score}%` : "Findings";
+}
+
+const OPEN_CHECK_REJECTIONS = new Set([
+  "documented_design_provision",
+  "requirement_already_on_sheet",
+  "requirement_already_specified",
+  "already_noted",
+  "special_inspection_retrieval_unavailable",
+  "drawing_retrieval_unavailable",
+  "claim_not_tied_to_evidence",
+  "incomplete_question",
+]);
+
+/**
+ * Stored reasons first. Older rows have none, so the same reasons are read from
+ * legal applicability, code coverage, checklist evidence, and withheld candidates.
+ */
+export function reviewLimitations(metadata: ReviewMetadataLike[]): ReviewLimitation[] {
+  const out: ReviewLimitation[] = [];
+  const add = (item: ReviewLimitation) => {
+    if (!out.some((existing) => existing.code === item.code && existing.detail === item.detail)) out.push(item);
+  };
+  for (const item of metadata) {
+    const summary = item.summary;
+    if (!summary) continue;
+    if (reviewOutcome({ ...summary, totalIssues: 0 }) === "verified_compliant") continue;
+    if (Array.isArray(summary.limitations) && summary.limitations.length > 0) {
+      summary.limitations.forEach(add);
+      continue;
+    }
+    if (summary.reviewState === "failed" || summary.reviewState === "not_reviewed") continue;
+    const legal = item.legalApplicability;
+    if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
+      add({
+        code: "reference_only_scope",
+        detail: legal?.selectedEdition
+          ? `${legal.selectedEdition} is not verified as the adopted permit code for this project${legal.adoptedEdition ? ` (verified adopted edition: ${legal.adoptedEdition})` : ""}, so the review is reference-only.`
+          : "The selected code edition is not verified as the adopted permit code for this project, so the review is reference-only.",
+      });
+    }
+    if (!item.codeCoverage || (item.codeCoverage.enforceableProvisionCount ?? 0) === 0) {
+      add({
+        code: "no_authoritative_requirement",
+        detail: `No authoritative code requirement for the reviewed elements was available${item.codeCoverage?.status ? ` (code source coverage: ${item.codeCoverage.status.replace(/_/g, " ")})` : ""}, so drawing labels could not be checked against a requirement.`,
+      });
+    }
+    const checklist = summary.checklist ?? [];
+    const clean = summary.cleanChecks ?? [];
+    if (checklist.length === 0) {
+      add({ code: "no_checks_returned", detail: "The review returned no completed checks for this sheet." });
+    } else if (clean.length < checklist.length) {
+      add({
+        code: "checks_not_evidence_backed",
+        detail: "One or more completed checks were not tied to a quote found in the sheet text.",
+      });
+    }
+    const open = (item.rejectedCandidates ?? []).filter((candidate) =>
+      OPEN_CHECK_REJECTIONS.has(String(candidate.validationReason || "")),
+    );
+    for (const candidate of open.slice(0, 5)) {
+      add({
+        code: "open_check",
+        detail: `${candidate.title || "A candidate check"}: ${candidate.validationDetail || "withheld, not verified"} Withholding it is not proof of compliance.`,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -135,8 +254,9 @@ export function buildReviewReportView(
     ...new Set(metadata.flatMap((item) => item.summary?.cleanChecks || []).filter(Boolean)),
   ];
   const states = metadata.map((item) => item.summary?.reviewState).filter(Boolean);
-  const unreviewable: string[] = [];
-  if (states.includes("reviewed_partial")) {
+  const limitations = reviewLimitations(metadata);
+  const unreviewable: string[] = limitations.map((item) => item.detail);
+  if (states.includes("reviewed_partial") && unreviewable.length === 0) {
     unreviewable.push("The model finished, but the evidence was not complete enough to score this sheet.");
   }
   if (states.includes("failed")) unreviewable.push("The model call failed.");
@@ -191,6 +311,7 @@ export function buildReviewReportView(
     ),
     cleanChecks,
     unreviewable,
+    limitations,
     evidence: evidence.slice(0, 12),
     withheldReasons: withheld,
     legalApplicability,
@@ -205,6 +326,8 @@ export function reviewEvidenceStripSummary(
     sourceFileName?: string | null;
     reviewState?: string | null;
     overallScore?: number | null;
+    totalIssues?: number;
+    codeCoverageVerified?: boolean;
   },
 ): ReviewEvidenceStripSummary {
   const sourceFileName =
@@ -226,7 +349,12 @@ export function reviewEvidenceStripSummary(
       ? `${view.legalApplicability.selectedEdition} · ${view.legalApplicability.reviewScope || "reference_only"}`
       : view.selectedScope,
     jurisdictionLabel,
-    reviewStateLabel: reviewStateLabel(context?.reviewState, context?.overallScore),
+    reviewStateLabel: reviewOutcomeLabel({
+      reviewState: context?.reviewState,
+      overallScore: context?.overallScore,
+      totalIssues: context?.totalIssues ?? view.confirmedFindings.length + view.verificationQuestions.length,
+      codeCoverageVerified: context?.codeCoverageVerified,
+    }),
     countLabel,
   };
 }
