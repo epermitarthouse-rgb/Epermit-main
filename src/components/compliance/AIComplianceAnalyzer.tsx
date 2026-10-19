@@ -99,7 +99,10 @@ import {
   buildAggregatedComplianceExport,
   buildComplianceExportJsonReport,
   complianceIssueResponseKey,
+  exportReportButtonLabel,
+  selectSheetsForExport,
 } from "@/lib/complianceAnalysisExport";
+import { sheetResultPresentation } from "@/lib/codeAnalyzer/combinedSheetSummary";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -3141,12 +3144,10 @@ export function AIComplianceAnalyzer() {
     }
 
     const tab = fileResultTabs[group.id] ?? (group.ibcResult ? "ibc" : "local");
-    const groupResult =
-      (tab === "local" ? group.localResult : group.ibcResult) ?? group.localResult ?? group.ibcResult;
+    const presentation = sheetResultPresentation(group, tab, responses, group.id);
+    const groupResult = presentation.findingsResult;
     if (!groupResult) return null;
-
-    const groupIssues = groupResult.issues ?? [];
-    const resolvedInGroup = groupIssues.filter((issue) => responses[issueResponseKey(group.id, issue.id)]).length;
+    const combinedSummary = presentation.summary;
     const isExpanded = expandedResultGroups[group.id] ?? false;
 
     return (
@@ -3161,9 +3162,9 @@ export function AIComplianceAnalyzer() {
             <span className="truncate text-sm font-medium text-foreground">{group.fileName}</span>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-            <span>{groupResult.summary.totalIssues ?? 0} issues</span>
-            <span className={`font-semibold ${scoreToneClass(groupResult.summary)}`}>
-              {formatReviewScore(groupResult.summary)}
+            <span>{combinedSummary.totalIssues} issues</span>
+            <span className={`font-semibold ${scoreToneClass(combinedSummary)}`}>
+              {formatReviewScore(combinedSummary)}
             </span>
             <span>{isExpanded ? "Hide" : "Show"}</span>
           </div>
@@ -3180,11 +3181,11 @@ export function AIComplianceAnalyzer() {
               <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent p-0 h-auto shadow-none border-0">
                 <TabsTrigger value="ibc" className="flex items-center gap-2">
                   <Scale className="h-4 w-4" />
-                  General IBC ({group.ibcResult.summary.totalIssues} issues)
+                  General IBC ({presentation.ibcCount} issues)
                 </TabsTrigger>
                 <TabsTrigger value="local" className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
-                  Local Amendments ({group.localResult.summary.totalIssues} issues)
+                  Local Amendments ({presentation.localCount} issues)
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -3194,8 +3195,8 @@ export function AIComplianceAnalyzer() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className={cn("pilot-card border-border bg-card", "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
             <CardContent className="pt-6 text-center">
-              <div className={`text-4xl font-bold ${scoreToneClass(groupResult.summary)}`}>
-                {formatReviewScore(groupResult.summary)}
+              <div className={`text-4xl font-bold ${scoreToneClass(combinedSummary)}`}>
+                {formatReviewScore(combinedSummary)}
               </div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Compliance Score</p>
             </CardContent>
@@ -3203,41 +3204,41 @@ export function AIComplianceAnalyzer() {
           <Card className={"pilot-card border-border bg-card"}>
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-foreground dark:text-foreground">
-                {groupResult.summary.totalIssues ?? 0}
+                {combinedSummary.totalIssues}
               </div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Total Issues</p>
             </CardContent>
           </Card>
           <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-destructive")}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-destructive">{groupResult.summary.critical ?? 0}</div>
+              <div className="text-4xl font-bold text-destructive">{combinedSummary.critical}</div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Critical</p>
             </CardContent>
           </Card>
           <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{groupResult.summary.warnings ?? 0}</div>
+              <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{combinedSummary.warnings}</div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Warnings</p>
             </CardContent>
           </Card>
           <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{groupResult.summary.advisory ?? 0}</div>
+              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{combinedSummary.advisory}</div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Advisory</p>
             </CardContent>
           </Card>
         </div>
 
-        {groupIssues.length > 0 && (
+        {presentation.resolution.total > 0 && (
           <Card className={"pilot-card border-border bg-card"}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-foreground dark:text-foreground">Resolution Progress</span>
                 <span className="text-sm text-muted-foreground dark:text-muted-foreground">
-                  {resolvedInGroup} / {groupIssues.length} resolved
+                  {presentation.resolution.resolved} / {presentation.resolution.total} resolved
                 </span>
               </div>
-              <Progress value={(resolvedInGroup / groupIssues.length) * 100} className="h-2" />
+              <Progress value={presentation.resolution.percent} className="h-2" />
             </CardContent>
           </Card>
         )}
@@ -3269,19 +3270,23 @@ export function AIComplianceAnalyzer() {
           />
         ) : null}
 
-        {renderIssuesList(group.id, groupResult, group.fileName)}
+        {renderIssuesList(group.id, groupResult, group.fileName, presentation.resolution)}
           </div>
         ) : null}
       </div>
     );
   };
 
-  /** Export uses the same filtered set as the results UI / KPI strip. */
-  const exportAggregated = useMemo(
-    () => buildAggregatedComplianceExport(displayedResultGroups),
-    [displayedResultGroups],
+  /** Export All uses every sheet on the active run and ignores search and score filters. */
+  const exportAllGroups = useMemo(
+    () => selectSheetsForExport(resultGroups, displayedResultGroups, "all"),
+    [resultGroups, displayedResultGroups],
   );
-  const canExportReport = exportAggregated.filesAnalyzed > 0 || exportAggregated.files.some((f) => f.failed);
+  const exportAggregated = useMemo(
+    () => buildAggregatedComplianceExport(exportAllGroups),
+    [exportAllGroups],
+  );
+  const canExportReport = exportAggregated.files.length > 0;
 
   const selectedProjectName = useMemo(() => {
     if (!selectedProjectId) return null;
@@ -3303,18 +3308,10 @@ export function AIComplianceAnalyzer() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const scope =
-      resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
-        ? `all-${exportAggregated.filesAnalyzed}files`
-        : (exportAggregated.files[0]?.codeType ?? "combined");
-    a.download = `compliance-report-${scope}-${new Date().toISOString().split("T")[0]}.json`;
+    a.download = `compliance-report-all-${exportAggregated.files.length}sheets-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(
-      resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
-        ? `JSON report exported (${exportAggregated.filesAnalyzed} files)`
-        : "JSON report exported",
-    );
+    toast.success(`JSON report exported (all ${exportAggregated.files.length} sheets)`);
   };
 
   const exportReportPDF = () => {
@@ -3366,11 +3363,7 @@ export function AIComplianceAnalyzer() {
         responseKeyForIssue: (issue, fileId) =>
           fileId ? complianceIssueResponseKey(fileId, issue.id) : issue.id,
       });
-      toast.success(
-        resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
-          ? `PDF report exported (${exportAggregated.filesAnalyzed} files)`
-          : "PDF report exported",
-      );
+      toast.success(`PDF report exported (all ${exportAggregated.files.length} sheets)`);
     } catch (err) {
       console.error("PDF export error:", err);
       toast.error("Failed to export PDF. Please try again.");
@@ -3521,14 +3514,22 @@ export function AIComplianceAnalyzer() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const renderIssuesList = (fileId: string, result: AnalysisResult, fileName: string) => {
+  const renderIssuesList = (
+    fileId: string,
+    result: AnalysisResult,
+    fileName: string,
+    resolutionOverride?: { resolved: number; total: number },
+  ) => {
     const issues = result?.issues ?? [];
-    const summary = result?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 0 };
+    const summary = result?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: null };
     const filteredIssues = (tab: string) =>
       issues.filter((issue) => tab === "all" || issue.severity === tab);
 
-    const resolvedInResult = issues.filter((issue) => responses[issueResponseKey(fileId, issue.id)]).length;
-    const progressPercent = issues.length > 0 ? (resolvedInResult / issues.length) * 100 : 0;
+    const resolvedInResult =
+      resolutionOverride?.resolved ??
+      issues.filter((issue) => responses[issueResponseKey(fileId, issue.id)]).length;
+    const progressTotal = resolutionOverride?.total ?? issues.length;
+    const progressPercent = progressTotal > 0 ? (resolvedInResult / progressTotal) * 100 : 0;
 
     return (
       <Card className={cn("pilot-card border-border bg-card", "overflow-hidden shadow-lg")}>
@@ -3546,7 +3547,7 @@ export function AIComplianceAnalyzer() {
               </CardDescription>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-primary-deep">{resolvedInResult}/{issues.length}</div>
+              <div className="text-2xl font-bold text-primary-deep">{resolvedInResult}/{progressTotal}</div>
               <div className="text-xs text-muted-foreground dark:text-muted-foreground">Issues Resolved</div>
             </div>
           </div>
@@ -4566,7 +4567,7 @@ export function AIComplianceAnalyzer() {
                       disabled={!canExportReport}
                     >
                       <FileDown className="h-4 w-4 mr-2" />
-                      Export PDF
+                      {exportReportButtonLabel("pdf", "all")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -4575,7 +4576,7 @@ export function AIComplianceAnalyzer() {
                       disabled={!canExportReport}
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      Export JSON
+                      {exportReportButtonLabel("json", "all")}
                     </Button>
                   </div>
                 </Panel>
