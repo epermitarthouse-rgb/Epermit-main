@@ -6,6 +6,7 @@ const { evaluateRules } = require("./rules.js");
 const { createDrawingIndex } = require("../rag/drawingIndex.js");
 const { retrieveForQuestions } = require("../rag/retrieve.js");
 const { sheetNumberFromName } = require("../rag/identifiers.js");
+const { establishReviewContext } = require("./applicability.js");
 
 /**
  * Shared package for one sheet. One model call consumes the capped prompt block.
@@ -82,7 +83,21 @@ function prepareSheetReview(input) {
 
   const emphasis = String(input.analysisInstructions || "").trim();
   const scope = input.jurisdictionScope;
+  const projectContext = establishReviewContext({
+    projectType: input.projectType,
+    pageText: input.pageText,
+    drawingRecords: index.list(),
+    fileName,
+    sheetTitle: record.title,
+    title: record.title,
+    contentClass: input.contentClass,
+    discipline: sheet.discipline,
+    jurisdiction: scope?.enforcedJurisdiction || null,
+    jurisdictionScope: scope,
+    codeYear: input.codeYear || null,
+  });
   const contextLines = [
+    `PROJECT CONTEXT: occupancy ${projectContext.occupancy}; work scope ${projectContext.workScope}; document ${projectContext.documentRoles.join(", ") || "unclassified"}; code ${projectContext.code.jurisdiction || "unselected"} ${projectContext.code.edition || ""}. Apply only requirements that fit this occupancy, work scope, discipline, and document. Project-wide compliance information may be on another sheet.`,
     emphasis
       ? `USER EMPHASIS (adds focus, does not narrow this review, and is not evidence):\n${emphasis.slice(0, 1200)}`
       : "",
@@ -113,6 +128,7 @@ function prepareSheetReview(input) {
     retrieval,
     rules,
     record,
+    projectContext,
     promptBlock: contextLines.join("\n\n").slice(0, 6000),
   };
 }

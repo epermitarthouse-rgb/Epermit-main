@@ -80,18 +80,33 @@ const CODE_PROVISIONS = [
 /**
  * @param {{ topics?: string[]; jurisdiction?: string | null; authoritativeOnly?: boolean }} query
  */
+function provisionIsVerified(provision) {
+  return Boolean(
+    provision
+    && provision.authoritative === true
+    && provision.sourceStatus === "verified_text"
+    && provision.section
+    && String(provision.text || "").trim().length >= 12
+  );
+}
+
 function retrieveCodeProvisions(query) {
   const topics = (query.topics || []).map((topic) => topic.toLowerCase());
+  const source = [...CODE_PROVISIONS, ...(Array.isArray(query.provisions) ? query.provisions : [])];
   const hits = [];
-  for (const provision of CODE_PROVISIONS) {
-    if (query.authoritativeOnly && !provision.authoritative) continue;
-    if (provision.jurisdiction !== "any" && query.jurisdiction && provision.jurisdiction !== query.jurisdiction) {
+  for (const provision of source) {
+    const verified = provisionIsVerified(provision);
+    if (query.authoritativeOnly && !verified) continue;
+    const jurisdiction = provision.jurisdiction || "any";
+    if (jurisdiction !== "any" && query.jurisdiction && jurisdiction !== query.jurisdiction) {
       continue;
     }
+    const provisionTopics = Array.isArray(provision.topics) ? provision.topics : [];
     const matched = topics.filter((topic) =>
-      provision.topics.some((item) => item.includes(topic) || topic.includes(item)),
+      provisionTopics.some((item) => item.includes(topic) || topic.includes(item)),
     );
-    if (topics.length && !matched.length) continue;
+    if (topics.length && provisionTopics.length && !matched.length) continue;
+    if (topics.length && !provisionTopics.length && !verified) continue;
     hits.push({
       sourceType: "code",
       id: provision.id,
@@ -99,19 +114,19 @@ function retrieveCodeProvisions(query) {
       codeBook: provision.codeBook,
       edition: provision.edition,
       jurisdiction: provision.jurisdiction,
-      section: provision.section,
-      quote: provision.requirement,
+      section: verified ? provision.section : null,
+      quote: provision.text || provision.requirement,
       applicability: provision.applicability,
       exceptions: provision.exceptions,
       requiredEvidence: provision.requiredEvidence,
       elementTypes: provision.elementTypes,
-      sourceStatus: provision.sourceStatus,
-      authoritative: provision.authoritative,
+      sourceStatus: verified ? "verified_text" : (provision.sourceStatus || "unverified"),
+      authoritative: verified,
       provesRequirementSatisfied: false,
       provenance: {
         method: "code-library",
         sourceStatus: provision.sourceStatus,
-        note: provision.authoritative
+        note: verified
           ? "Retrieved from verified code text."
           : "Review policy or unverified summary. Not authoritative code text.",
       },
@@ -123,4 +138,5 @@ function retrieveCodeProvisions(query) {
 module.exports = {
   CODE_PROVISIONS,
   retrieveCodeProvisions,
+  provisionIsVerified,
 };

@@ -726,6 +726,7 @@ async function analyzeDrawingWithOpenAI(params) {
     reviewContext = null,
     jurisdictionScope = null,
     drawingRecords = null,
+    drawingRetrieval = null,
     observations = null,
     regions = null,
     regionImages = null,
@@ -747,6 +748,8 @@ async function analyzeDrawingWithOpenAI(params) {
     jurisdictionDiagnostics,
     jurisdictionScope,
     drawingRecords,
+    drawingRetrieval,
+    projectType,
     observations,
     regions,
   };

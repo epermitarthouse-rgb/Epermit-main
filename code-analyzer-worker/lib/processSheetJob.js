@@ -448,6 +448,7 @@ async function persistSheetFindings(supabase, params) {
       retrievalHits: params.retrievalHits || null,
       ruleResults: params.ruleResults || null,
       regions: params.regions || null,
+      drawingRetrieval: params.drawingRetrieval || null,
       spec_chunks_retrieved: specChunkCount ?? 0,
       sheet_id: sheetId,
       page_number: pageNumber,
@@ -690,7 +691,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
 
   seedDrawingIndex(run.id, includedSheets, (sheetId) => cachedSheetText(run.id, sheetId));
   const drawingStore = drawingStoreFor(supabase);
-  await rehydrateDrawingIndex(run.id, job.project_id, drawingStore);
+  const hydrated = await rehydrateDrawingIndex(run.id, job.project_id, drawingStore);
   const prepared = await withSourcePdf(supabase, sheet, (pdfPath) =>
     prepareEvidenceForSheet({
       runId: run.id,
@@ -702,10 +703,17 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       specChunks,
       jurisdictionScope: jurisdictionDecision,
       analysisInstructions: run.analysis_instructions,
+      projectType: run.project_type || null,
+      codeYear: run.code_year || null,
       renderRegions: true,
     }),
   );
-  await persistDrawingRecord(drawingStore, prepared.record);
+  const drawingWrite = await persistDrawingRecord(drawingStore, prepared.record);
+  const drawingRetrieval = {
+    available: !hydrated?.error,
+    persisted: Boolean(drawingWrite?.persisted),
+    reason: drawingWrite?.reason || (drawingWrite?.persisted ? "persisted" : hydrated?.reason || null),
+  };
 
   // A 150 DPI full sheet is still too coarse for small tags, so the dpi gate
   // must not drop crops. The scraper keeps at most two.
@@ -742,6 +750,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     jurisdictionScope: jurisdictionDecision,
     reviewContext: prepared.promptBlock,
     drawingRecords: prepared.drawingRecords,
+    drawingRetrieval,
     observations: prepared.observations,
     regions: prepared.record?.regions || [],
     regionImages,
@@ -774,6 +783,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     })),
     ruleResults: prepared.rules,
     regions: prepared.record?.regions || [],
+    drawingRetrieval,
   });
 
   await completeSheetJob(supabase, {
