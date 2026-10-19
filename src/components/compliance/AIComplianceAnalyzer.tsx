@@ -99,7 +99,9 @@ import {
 import {
   buildAggregatedComplianceExport,
   buildComplianceExportJsonReport,
+  combineComplianceScopeSummaries,
   complianceIssueResponseKey,
+  selectComplianceExportGroups,
 } from "@/lib/complianceAnalysisExport";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
@@ -3213,8 +3215,12 @@ export function AIComplianceAnalyzer() {
       (tab === "local" ? group.localResult : group.ibcResult) ?? group.localResult ?? group.ibcResult;
     if (!groupResult) return null;
 
-    const groupIssues = groupResult.issues ?? [];
-    const resolvedInGroup = groupIssues.filter((issue) => responses[issueResponseKey(group.id, issue.id)]).length;
+    const combinedSummary = combineComplianceScopeSummaries([group.ibcResult, group.localResult]);
+    const combinedIssues = [
+      ...(group.ibcResult?.issues ?? []),
+      ...(group.localResult?.issues ?? []),
+    ];
+    const resolvedInGroup = combinedIssues.filter((issue) => responses[issueResponseKey(group.id, issue.id)]).length;
     const isExpanded = expandedResultGroups[group.id] ?? false;
 
     return (
@@ -3229,9 +3235,9 @@ export function AIComplianceAnalyzer() {
             <span className="truncate text-sm font-medium text-foreground">{group.fileName}</span>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-            <span>{groupResult.summary.totalIssues ?? 0} issues</span>
-            <span className={`font-semibold ${scoreToneClass(groupResult.summary)}`}>
-              {formatReviewScore(groupResult.summary)}
+            <span>{combinedSummary.totalIssues} issues</span>
+            <span className={`font-semibold ${scoreToneClass(combinedSummary)}`}>
+              {formatReviewScore(combinedSummary)}
             </span>
             <span>{isExpanded ? "Hide" : "Show"}</span>
           </div>
@@ -3262,8 +3268,8 @@ export function AIComplianceAnalyzer() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className={cn("pilot-card border-border bg-card", "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
             <CardContent className="pt-6 text-center">
-              <div className={`text-4xl font-bold ${scoreToneClass(groupResult.summary)}`}>
-                {formatReviewScore(groupResult.summary)}
+              <div className={`text-4xl font-bold ${scoreToneClass(combinedSummary)}`}>
+                {formatReviewScore(combinedSummary)}
               </div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Compliance Score</p>
             </CardContent>
@@ -3271,41 +3277,41 @@ export function AIComplianceAnalyzer() {
           <Card className={"pilot-card border-border bg-card"}>
             <CardContent className="pt-6 text-center">
               <div className="text-4xl font-bold text-foreground dark:text-foreground">
-                {groupResult.summary.totalIssues ?? 0}
+                {combinedSummary.totalIssues}
               </div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Total Issues</p>
             </CardContent>
           </Card>
           <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-destructive")}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-destructive">{groupResult.summary.critical ?? 0}</div>
+              <div className="text-4xl font-bold text-destructive">{combinedSummary.critical}</div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Critical</p>
             </CardContent>
           </Card>
           <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{groupResult.summary.warnings ?? 0}</div>
+              <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{combinedSummary.warnings}</div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Warnings</p>
             </CardContent>
           </Card>
           <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
             <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{groupResult.summary.advisory ?? 0}</div>
+              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{combinedSummary.advisory}</div>
               <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Advisory</p>
             </CardContent>
           </Card>
         </div>
 
-        {groupIssues.length > 0 && (
+        {combinedIssues.length > 0 && (
           <Card className={"pilot-card border-border bg-card"}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-foreground dark:text-foreground">Resolution Progress</span>
                 <span className="text-sm text-muted-foreground dark:text-muted-foreground">
-                  {resolvedInGroup} / {groupIssues.length} resolved
+                  {resolvedInGroup} / {combinedIssues.length} resolved
                 </span>
               </div>
-              <Progress value={(resolvedInGroup / groupIssues.length) * 100} className="h-2" />
+              <Progress value={(resolvedInGroup / combinedIssues.length) * 100} className="h-2" />
             </CardContent>
           </Card>
         )}
@@ -3344,10 +3350,10 @@ export function AIComplianceAnalyzer() {
     );
   };
 
-  /** Export uses the same filtered set as the results UI / KPI strip. */
+  /** Export All uses every sheet in the selected run, including sheets hidden by search or score filters. */
   const exportAggregated = useMemo(
-    () => buildAggregatedComplianceExport(displayedResultGroups),
-    [displayedResultGroups],
+    () => buildAggregatedComplianceExport(selectComplianceExportGroups(resultGroups)),
+    [resultGroups],
   );
   const canExportReport = exportAggregated.filesAnalyzed > 0 || exportAggregated.files.some((f) => f.failed);
 
@@ -3371,18 +3377,11 @@ export function AIComplianceAnalyzer() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const scope =
-      resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
-        ? `all-${exportAggregated.filesAnalyzed}files`
-        : (exportAggregated.files[0]?.codeType ?? "combined");
+    const scope = `all-${exportAggregated.files.length}sheets`;
     a.download = `compliance-report-${scope}-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success(
-      resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
-        ? `JSON report exported (${exportAggregated.filesAnalyzed} files)`
-        : "JSON report exported",
-    );
+    toast.success(`JSON report exported (${exportAggregated.files.length} sheets in this run)`);
   };
 
   const exportReportPDF = () => {
@@ -3434,11 +3433,7 @@ export function AIComplianceAnalyzer() {
         responseKeyForIssue: (issue, fileId) =>
           fileId ? complianceIssueResponseKey(fileId, issue.id) : issue.id,
       });
-      toast.success(
-        resultsDocumentFilter === COMPLIANCE_RESULTS_FILTER_ALL
-          ? `PDF report exported (${exportAggregated.filesAnalyzed} files)`
-          : "PDF report exported",
-      );
+      toast.success(`PDF report exported (${exportAggregated.files.length} sheets in this run)`);
     } catch (err) {
       console.error("PDF export error:", err);
       toast.error("Failed to export PDF. Please try again.");
@@ -3591,7 +3586,7 @@ export function AIComplianceAnalyzer() {
 
   const renderIssuesList = (fileId: string, result: AnalysisResult, fileName: string) => {
     const issues = result?.issues ?? [];
-    const summary = result?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: 0 };
+    const summary = result?.summary ?? { totalIssues: 0, critical: 0, warnings: 0, advisory: 0, overallScore: null };
     const filteredIssues = (tab: string) =>
       issues.filter((issue) => tab === "all" || issue.severity === tab);
 
@@ -4801,7 +4796,7 @@ export function AIComplianceAnalyzer() {
                       disabled={!canExportReport}
                     >
                       <FileDown className="h-4 w-4 mr-2" />
-                      Export PDF
+                      Export All PDF
                     </Button>
                     <Button
                       variant="ghost"
@@ -4810,7 +4805,7 @@ export function AIComplianceAnalyzer() {
                       disabled={!canExportReport}
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      Export JSON
+                      Export All JSON
                     </Button>
                   </div>
                 </Panel>

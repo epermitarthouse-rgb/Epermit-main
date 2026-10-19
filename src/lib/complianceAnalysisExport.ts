@@ -4,6 +4,7 @@
  */
 
 import { computeComplianceOverallScore } from "./complianceBatchProcessor";
+import { reviewStateLabel, type ReviewReportView, type ReviewStateName } from "./codeAnalyzer/reviewReport";
 
 export interface ComplianceExportIssue {
   id: string;
@@ -16,6 +17,10 @@ export interface ComplianceExportIssue {
   location: string;
   suggestedFix: string;
   codeType?: "ibc" | "local";
+  scopeLabel?: "IBC" | "Local";
+  findingType?: string;
+  validationDisposition?: string;
+  sheetFileName?: string;
 }
 
 export interface ComplianceExportAnalysisResult {
@@ -26,10 +31,12 @@ export interface ComplianceExportAnalysisResult {
     warnings: number;
     advisory: number;
     overallScore: number | null;
-    reviewState?: "not_reviewed" | "passed" | null;
+    reviewState?: ReviewStateName;
+    codeCoverageVerified?: boolean;
   };
   jurisdictionNotes: string;
   codeType: "ibc" | "local" | "combined";
+  reviewReport?: ReviewReportView | null;
 }
 
 export interface ComplianceExportResultGroup {
@@ -52,6 +59,7 @@ export interface ComplianceExportFileSection {
   summary: ComplianceExportAnalysisResult["summary"];
   issues: ComplianceExportIssue[];
   jurisdictionNotes: string;
+  scopes: ComplianceExportScopeSection[];
 }
 
 export interface AggregatedComplianceExport {
@@ -63,8 +71,55 @@ export interface AggregatedComplianceExport {
   jurisdictionNotes: string;
 }
 
+export interface ComplianceExportScopeSection {
+  codeType: "ibc" | "local";
+  scopeLabel: "IBC" | "Local";
+  summary: ComplianceExportAnalysisResult["summary"];
+  issueCount: number;
+  evidence: ReviewReportView["evidence"];
+  legalApplicability: ReviewReportView["legalApplicability"];
+  codeCoverage: ReviewReportView["codeCoverage"];
+}
+
 export function complianceIssueResponseKey(fileId: string, issueId: string): string {
   return `${fileId}:${issueId}`;
+}
+
+export function selectComplianceExportGroups<T>(groups: T[]): T[] {
+  return groups;
+}
+
+export function formatComplianceScoreLabel(summary?: {
+  overallScore?: number | null;
+  reviewState?: string | null;
+} | null): string {
+  return reviewStateLabel(summary?.reviewState, summary?.overallScore);
+}
+
+export function combineComplianceScopeSummaries(
+  results: Array<ComplianceExportAnalysisResult | null | undefined>,
+): ComplianceExportAnalysisResult["summary"] {
+  return finalizeSummary(results.filter((result): result is ComplianceExportAnalysisResult => Boolean(result)));
+}
+
+const UNRESOLVED_REVIEW_STATES = new Set(["not_reviewed", "reviewed_partial", "failed"]);
+
+function combinedReviewState(
+  results: ComplianceExportAnalysisResult[],
+  totalIssues: number,
+): ReviewStateName {
+  const states = results
+    .map((result) => result.summary.reviewState)
+    .filter((state): state is Exclude<ReviewStateName, null> => Boolean(state));
+  if (states.length === 0) return totalIssues > 0 ? "reviewed_findings" : "not_reviewed";
+  if (states.some((state) => state === "failed")) return "failed";
+  if (states.some((state) => state === "not_reviewed" || state === "reviewed_partial")) {
+    return "reviewed_partial";
+  }
+  if (totalIssues > 0) return "reviewed_findings";
+  if (states.every((state) => state === "reviewed_clear")) return "reviewed_clear";
+  if (states.every((state) => state === "passed" || state === "reviewed_clear")) return "passed";
+  return "reviewed_partial";
 }
 
 function emptySummary(): ComplianceExportAnalysisResult["summary"] {
@@ -78,39 +133,65 @@ function emptySummary(): ComplianceExportAnalysisResult["summary"] {
   };
 }
 
-function addSummaries(
-  a: ComplianceExportAnalysisResult["summary"],
-  b: ComplianceExportAnalysisResult["summary"],
-): ComplianceExportAnalysisResult["summary"] {
-  return {
-    totalIssues: (a.totalIssues ?? 0) + (b.totalIssues ?? 0),
-    critical: (a.critical ?? 0) + (b.critical ?? 0),
-    warnings: (a.warnings ?? 0) + (b.warnings ?? 0),
-    advisory: (a.advisory ?? 0) + (b.advisory ?? 0),
-    overallScore: 0,
-  };
+function countsFromResults(results: ComplianceExportAnalysisResult[]) {
+  return results.reduce(
+    (counts, result) => ({
+      totalIssues: counts.totalIssues + (result.summary.totalIssues ?? 0),
+      critical: counts.critical + (result.summary.critical ?? 0),
+      warnings: counts.warnings + (result.summary.warnings ?? 0),
+      advisory: counts.advisory + (result.summary.advisory ?? 0),
+    }),
+    { totalIssues: 0, critical: 0, warnings: 0, advisory: 0 },
+  );
+}
+
+function overallScoreFromResults(
+  results: ComplianceExportAnalysisResult[],
+  counts: ReturnType<typeof countsFromResults>,
+  reviewState: ReviewStateName,
+): number | null {
+  const scoreUnknown = results.some((result) => {
+    const state = result.summary.reviewState;
+    if (state && UNRESOLVED_REVIEW_STATES.has(state)) return true;
+    return result.summary.overallScore == null
+      && state !== "passed"
+      && state !== "reviewed_clear";
+  });
+  if (scoreUnknown) return null;
+  return computeComplianceOverallScore({
+    ...counts,
+    reviewState,
+    codeCoverageVerified: results.length > 0 && results.every((result) => result.summary.codeCoverageVerified === true),
+  });
 }
 
 function finalizeSummary(
-  counts: Omit<ComplianceExportAnalysisResult["summary"], "overallScore"> & {
-    overallScore?: number;
-  },
+  results: ComplianceExportAnalysisResult[],
 ): ComplianceExportAnalysisResult["summary"] {
-  const critical = counts.critical ?? 0;
-  const warnings = counts.warnings ?? 0;
-  const advisory = counts.advisory ?? 0;
-  const totalIssues = counts.totalIssues ?? critical + warnings + advisory;
+  const counts = countsFromResults(results);
+  const reviewState = combinedReviewState(results, counts.totalIssues);
   return {
-    totalIssues,
-    critical,
-    warnings,
-    advisory,
-    overallScore: computeComplianceOverallScore({
-      critical,
-      warnings,
-      advisory,
-      totalIssues,
-    }),
+    ...counts,
+    reviewState,
+    codeCoverageVerified: results.length > 0 && results.every((result) => result.summary.codeCoverageVerified === true),
+    overallScore: overallScoreFromResults(results, counts, reviewState),
+  };
+}
+
+function scopeLabelFor(codeType: ComplianceExportAnalysisResult["codeType"] | undefined): "IBC" | "Local" {
+  return codeType === "local" ? "Local" : "IBC";
+}
+
+function scopeSection(result: ComplianceExportAnalysisResult): ComplianceExportScopeSection {
+  const codeType = result.codeType === "local" ? "local" : "ibc";
+  return {
+    codeType,
+    scopeLabel: scopeLabelFor(codeType),
+    summary: result.summary,
+    issueCount: result.summary.totalIssues ?? result.issues?.length ?? 0,
+    evidence: result.reviewReport?.evidence ?? [],
+    legalApplicability: result.reviewReport?.legalApplicability ?? null,
+    codeCoverage: result.reviewReport?.codeCoverage ?? null,
   };
 }
 
@@ -130,6 +211,7 @@ function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportF
       summary: emptySummary(),
       issues: [],
       jurisdictionNotes: "",
+      scopes: [],
     };
   }
 
@@ -138,16 +220,16 @@ function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportF
   );
   if (results.length === 0) return null;
 
-  let summary = emptySummary();
   const issues: ComplianceExportIssue[] = [];
   const notes: string[] = [];
 
   for (const result of results) {
-    summary = addSummaries(summary, result.summary);
+    const codeType = result.codeType === "local" ? "local" : "ibc";
     for (const issue of result.issues ?? []) {
       issues.push({
         ...issue,
-        codeType: issue.codeType ?? (result.codeType === "local" ? "local" : "ibc"),
+        codeType: issue.codeType ?? codeType,
+        scopeLabel: scopeLabelFor(issue.codeType ?? codeType),
       });
     }
     if (result.jurisdictionNotes?.trim()) {
@@ -169,24 +251,25 @@ function sectionFromGroup(group: ComplianceExportResultGroup): ComplianceExportF
     failed: Boolean(group.failed),
     error: group.error,
     codeType,
-    summary: finalizeSummary(summary),
+    summary: finalizeSummary(results),
     issues,
     jurisdictionNotes: [...new Set(notes)].join("\n\n"),
+    scopes: results.map(scopeSection),
   };
 }
 
 /**
- * Build an export payload from the same groups the results UI displays
- * (`displayedResultGroups` after document + score filters).
+ * Build an export payload from every sheet in the selected run.
+ * Callers must pass the unfiltered run groups, not the search/score view.
  */
 export function buildAggregatedComplianceExport(
   groups: ComplianceExportResultGroup[],
 ): AggregatedComplianceExport {
   const files: ComplianceExportFileSection[] = [];
-  let summary = emptySummary();
   let filesAnalyzed = 0;
   const flatIssues: AggregatedComplianceExport["issues"] = [];
   const notes: string[] = [];
+  const scoredResults: ComplianceExportAnalysisResult[] = [];
 
   for (const group of groups) {
     const section = sectionFromGroup(group);
@@ -195,11 +278,8 @@ export function buildAggregatedComplianceExport(
 
     const hasResults = Boolean(group.ibcResult || group.localResult);
     if (hasResults) filesAnalyzed += 1;
-
-    // Match KPI strip: sum each code-type result's summary independently.
     for (const result of [group.ibcResult, group.localResult]) {
-      if (!result) continue;
-      summary = addSummaries(summary, result.summary);
+      if (result) scoredResults.push(result);
     }
 
     for (const issue of section.issues) {
@@ -221,7 +301,7 @@ export function buildAggregatedComplianceExport(
 
   return {
     filesAnalyzed,
-    summary: finalizeSummary(summary),
+    summary: finalizeSummary(scoredResults),
     files,
     issues: flatIssues,
     jurisdictionNotes: notes.join("\n\n"),
@@ -245,6 +325,7 @@ export interface ComplianceExportJsonReport {
     summary: ComplianceExportAnalysisResult["summary"];
     issues: Array<ComplianceExportIssue & { response: unknown }>;
     jurisdictionNotes: string;
+    scopes: ComplianceExportScopeSection[];
   }>;
   jurisdictionNotes: string;
 }
@@ -281,6 +362,7 @@ export function buildComplianceExportJsonReport(opts: {
           null,
       })),
       jurisdictionNotes: file.jurisdictionNotes,
+      scopes: file.scopes,
     })),
     jurisdictionNotes: aggregated.jurisdictionNotes,
   };

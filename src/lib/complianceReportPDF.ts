@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { format } from 'date-fns';
+import { formatComplianceScoreLabel } from './complianceAnalysisExport';
 
 interface ComplianceIssue {
   id: string;
@@ -11,6 +12,8 @@ interface ComplianceIssue {
   codeYear: string;
   location: string;
   suggestedFix: string;
+  codeType?: 'ibc' | 'local';
+  scopeLabel?: 'IBC' | 'Local';
 }
 
 interface AnalysisSummary {
@@ -19,6 +22,7 @@ interface AnalysisSummary {
   warnings: number;
   advisory: number;
   overallScore: number | null;
+  reviewState?: string | null;
 }
 
 interface IssueResponse {
@@ -200,7 +204,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
   if (overallScore == null) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Not reviewed", margin, y + 18);
+    doc.text(formatComplianceScoreLabel(summary), margin, y + 18);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text("Compliance Score", margin, y + 38);
@@ -353,10 +357,15 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     doc.setFont('helvetica', 'bold');
     doc.text(safeText(issue.severity).toUpperCase(), margin + 30, y + 11, { align: 'center' });
 
-    // Issue title
+    // Issue title, prefixed with its code scope.
+    const scopeLabel = issue.scopeLabel || (issue.codeType === 'local' ? 'Local' : issue.codeType === 'ibc' ? 'IBC' : '');
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(10);
-    doc.text(safeText(issue.title), margin + 60, y + 11);
+    doc.text(
+      scopeLabel ? `${scopeLabel}: ${safeText(issue.title)}` : safeText(issue.title),
+      margin + 60,
+      y + 11,
+    );
 
     // Code reference
     doc.setFillColor(219, 234, 254); // blue-100
@@ -440,7 +449,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
       const scoreLabel =
         section.failed
           ? 'FAILED'
-          : `${safeText(section.summary?.overallScore ?? 0)}% · ${safeText(section.summary?.totalIssues ?? section.issues?.length ?? 0)} issues`;
+          : `${formatComplianceScoreLabel(section.summary)} · ${safeText(section.summary?.totalIssues ?? section.issues?.length ?? 0)} issues`;
       doc.text(
         `${safeText(section.fileName)}  (${scoreLabel})`,
         margin + 5,

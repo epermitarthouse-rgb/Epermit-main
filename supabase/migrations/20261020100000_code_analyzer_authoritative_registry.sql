@@ -217,7 +217,7 @@ DROP FUNCTION IF EXISTS public.create_code_analyzer_run_async_v2(
   UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID[], TEXT[], UUID, TEXT, JSONB
 );
 
-CREATE FUNCTION public.create_code_analyzer_run_async_v2(
+CREATE OR REPLACE FUNCTION public.create_code_analyzer_run_async_v2(
   p_project_id UUID,
   p_user_id UUID,
   p_analysis_type TEXT,

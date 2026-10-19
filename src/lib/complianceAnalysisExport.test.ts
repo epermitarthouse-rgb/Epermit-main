@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import {
   buildAggregatedComplianceExport,
   buildComplianceExportJsonReport,
+  combineComplianceScopeSummaries,
   complianceIssueResponseKey,
+  formatComplianceScoreLabel,
+  selectComplianceExportGroups,
   type ComplianceExportResultGroup,
 } from "./complianceAnalysisExport.ts";
 
@@ -181,5 +184,67 @@ describe("buildComplianceExportJsonReport", () => {
     assert.equal(report.filesAnalyzed, 1);
     assert.equal(report.files[0].issues[0].response?.status, "accepted");
     assert.equal(report.summary.critical, 1);
+  });
+
+  it("labels one IBC finding and two Local findings and keeps an unknown score unset", () => {
+    const ibc = makeResult(1, 0, 0, "ibc");
+    const localBase = makeResult(0, 1, 1, "local");
+    const local = {
+      ...localBase,
+      summary: {
+        ...localBase.summary,
+        overallScore: null,
+        reviewState: "reviewed_partial" as const,
+      },
+      reviewReport: {
+        selectedScope: "Washington, DC",
+        detectedLocation: "Washington, DC",
+        amendmentsEnforced: false,
+        disclosure: null,
+        userEmphasis: null,
+        documentsReviewed: ["A-1.pdf"],
+        disciplines: ["architectural"],
+        confirmedFindings: [],
+        verificationQuestions: [],
+        cleanChecks: [],
+        unreviewable: [],
+        evidence: [{ where: "A-1.pdf", quote: "Corridor 44 in", hasRegion: true }],
+        withheldReasons: [],
+        legalApplicability: { status: "conflict", reviewScope: "reference_only" },
+        codeCoverage: { status: "applicability_only", authoritativeProvisionCount: 4 },
+      },
+    };
+    const runGroups: ComplianceExportResultGroup[] = [
+      {
+        id: "sheet-1",
+        fileName: "A-1.pdf",
+        ibcResult: ibc,
+        localResult: local,
+      },
+      {
+        id: "sheet-2",
+        fileName: "hidden-by-search.pdf",
+        ibcResult: makeResult(0, 1, 0, "ibc"),
+        localResult: null,
+      },
+    ];
+    const filteredView = [runGroups[0]];
+    const aggregated = buildAggregatedComplianceExport(selectComplianceExportGroups(runGroups));
+
+    assert.notEqual(aggregated.files.length, filteredView.length);
+    assert.equal(aggregated.files.length, 2);
+    assert.equal(aggregated.files[0].summary.totalIssues, 3);
+    assert.equal(aggregated.files[0].summary.critical, 1);
+    assert.equal(aggregated.files[0].summary.warnings, 1);
+    assert.equal(aggregated.files[0].summary.advisory, 1);
+    assert.equal(aggregated.files[0].summary.overallScore, null);
+    assert.equal(formatComplianceScoreLabel(aggregated.files[0].summary), "Partial");
+    assert.deepEqual(
+      aggregated.files[0].issues.map((issue) => issue.scopeLabel),
+      ["IBC", "Local", "Local"],
+    );
+    assert.equal(aggregated.files[0].scopes[1].evidence[0].quote, "Corridor 44 in");
+    assert.equal(combineComplianceScopeSummaries([ibc, local]).totalIssues, 3);
+    assert.equal(combineComplianceScopeSummaries([ibc, local]).overallScore, null);
   });
 });
