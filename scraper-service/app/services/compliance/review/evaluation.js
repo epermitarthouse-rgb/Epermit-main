@@ -622,6 +622,9 @@ function codeStatus(issue, ctx) {
     provisionId: provision,
     textStatus: issue?.provenance?.codeSourceStatus === "authoritative" ? "verified_text" : provision ? "unverified_text" : "no_text",
     citationSupported: issue?.provenance?.codeSourceStatus === "authoritative",
+    coverageClass: issue?.provenance?.coverageClass
+      || (issue?.provenance?.codeSourceStatus === "authoritative" ? "verified_requirement" : "missing_coverage"),
+    technicalComparison: issue?.provenance?.technicalComparison || null,
   };
 }
 

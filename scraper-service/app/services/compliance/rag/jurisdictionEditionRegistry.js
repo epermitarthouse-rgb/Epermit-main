@@ -15,6 +15,14 @@ function readBundledRegistry(filename) {
   return JSON.parse(fs.readFileSync(found, "utf8"));
 }
 
+const {
+  editionInScope,
+  gateProvision,
+  loadSuppliedTechnicalProvisions,
+  isEnforceable,
+  familyCoverage,
+} = require("./technicalCorpus.js");
+
 const bundledEditions = readBundledRegistry("jurisdiction-editions.json");
 const bundledProvisions = readBundledRegistry("authoritative-provisions.json");
 
@@ -95,6 +103,14 @@ function recordSummary(record) {
     sourceCoverage: record.coverage?.enforceableProvisionText === "unavailable"
       ? "applicability_only"
       : "partial",
+    adoptedCodes: [
+      ...(record.baseCodes || []),
+      ...(record.referencedStandards || []).map((code) => ({
+        family: code.family,
+        edition: code.edition,
+        discipline: code.discipline || null,
+      })),
+    ],
   };
 }
 
@@ -286,12 +302,7 @@ function bundledAuthoritativeProvisions(query = {}) {
     if (provision.verificationStatus !== VERIFIED) return false;
     if (provision.jurisdiction !== jurisdiction) return false;
     if (registryRecordId && provision.registryRecordId !== registryRecordId) return false;
-    if (selectedEdition &&
-        provision.edition !== selectedEdition &&
-        provision.baseCodeEdition !== selectedEdition &&
-        provision.jurisdictionCodeEdition !== selectedEdition) {
-      return false;
-    }
+    if (!editionInScope(provision, selectedEdition, query.adoptedCodes)) return false;
     return true;
   });
 }
@@ -386,10 +397,23 @@ async function buildCodeVerificationBundle(input) {
     jurisdiction: input.jurisdiction,
     selectedEdition: input.selectedEdition,
     registryRecordId: legalApplicability.registryRecordId,
+    adoptedCodes: legalApplicability.adoptedCodes,
   });
   const provisions = [
-    ...new Map([...bundled, ...dbProvisions].map((item) => [item.id, item])).values(),
+    ...new Map(
+      [...bundled, ...dbProvisions, ...loadSuppliedTechnicalProvisions()]
+        .map((item) => gateProvision(item))
+        .filter(Boolean)
+        .filter((item) => editionInScope(
+          item,
+          legalApplicability.selectedEdition || input.selectedEdition,
+          legalApplicability.adoptedCodes,
+        ))
+        .map((item) => [item.id, item]),
+    ).values(),
   ];
+  const record = records.find((item) => item.id === legalApplicability.registryRecordId) || null;
+  const families = familyCoverage(record, provisions);
   return {
     legalApplicability,
     provisions,
@@ -398,10 +422,9 @@ async function buildCodeVerificationBundle(input) {
       authoritativeProvisionCount: provisions.filter((item) =>
         item.authoritative === true && item.sourceStatus === "verified_text",
       ).length,
-      enforceableProvisionCount: provisions.filter((item) =>
-        item.authoritative === true && item.supportsConfirmedViolation === true,
-      ).length,
+      enforceableProvisionCount: provisions.filter(isEnforceable).length,
       status: legalApplicability.sourceCoverage || "unavailable",
+      families,
     },
   };
 }

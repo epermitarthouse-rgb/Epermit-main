@@ -14,8 +14,9 @@ const MAX_PROMPT_CHARS = 4000;
  *   questions: Array<{ id: string; topics?: string[]; identifiers?: string[]; discipline?: string | null; disciplines?: string[] }>;
  *   specChunks?: Array<Record<string, unknown>>;
  *   jurisdiction?: string | null;
- *   edition?: string | null;
- *   registryRecordId?: string | null;
+   *   edition?: string | null;
+   *   adoptedCodes?: Array<{ family?: string; edition?: string }> | null;
+   *   registryRecordId?: string | null;
  *   effectiveOn?: string | null;
  *   codeProvisions?: Array<Record<string, unknown>>;
  *   currentSheetId?: string | null;
@@ -39,6 +40,7 @@ function retrieveForQuestions(input) {
       topics: question.topics,
       jurisdiction: input.jurisdiction,
       edition: input.edition,
+      adoptedCodes: input.adoptedCodes,
       registryRecordId: input.registryRecordId,
       effectiveOn: input.effectiveOn,
       provisions: input.codeProvisions,

@@ -472,13 +472,18 @@ function decideCandidate(issue, ctx) {
     String(issue.findingType || "") === "confirmed_violation" ||
     /\b(does not meet|non-?compliant|insufficient|too narrow|below)\b/i.test(claimText(issue));
   const currentFile = ctx.fileName || ctx.sheetTitle || null;
+  ctx.claim = element ? { element } : null;
   const codeVerification = authoritativeThreshold(ctx, issue);
   const authoritative = codeVerification.verified;
-  provenance.codeSourceStatus = authoritative ? "authoritative" : "unverified";
+  provenance.codeSourceStatus = authoritative || codeVerification.coverageClass === "verified_requirement"
+    ? "authoritative"
+    : "unverified";
   provenance.codeVerificationReason = codeVerification.reason;
+  provenance.coverageClass = codeVerification.coverageClass || (authoritative ? "verified_requirement" : "missing_coverage");
+  provenance.technicalComparison = codeVerification.comparison?.outcome || null;
   provenance.codeProvisionId = codeVerification.provision?.id || null;
-  provenance.codeSourceUrl = codeVerification.provision?.sourceUrl || null;
-  provenance.codeSourceLocator = codeVerification.provision?.sourceLocator || null;
+  provenance.codeSourceUrl = codeVerification.provision?.sourceUrl || codeVerification.locator?.sourceUrl || null;
+  provenance.codeSourceLocator = codeVerification.provision?.sourceLocator || codeVerification.locator?.sourceLocator || null;
 
   if (element && !sheetAllows(roles, element)) {
     const other = supplyingRecord(ctx.drawingRecords, currentFile, element, tokens[0]);
@@ -552,9 +557,42 @@ function decideCandidate(issue, ctx) {
   }
 
   const wantsConfirmation = String(issue.findingType || "") === "confirmed_violation" || assertsDefect;
+  if (wantsConfirmation && codeVerification.reason === "requirement_met") {
+    return {
+      disposition: "reject",
+      reason: "requirement_met",
+      detail: codeVerification.comparison?.detail || "The bound drawing evidence meets the verified requirement. It is not a violation.",
+      provenance,
+    };
+  }
+  if (wantsConfirmation && codeVerification.reason === "insufficient_drawing_evidence") {
+    return {
+      disposition: "reject",
+      reason: "value_not_bound_to_element",
+      detail: codeVerification.comparison?.detail || "A verified provision is available, but the drawing evidence is not bound to this element. This is missing drawing evidence, not missing code text.",
+      provenance,
+    };
+  }
+  if (wantsConfirmation && codeVerification.reason === "code_exceptions_unresolved") {
+    return asPublishedQuestion({
+      disposition: "downgrade",
+      reason: "code_exceptions_unresolved",
+      detail: codeVerification.comparison?.detail || "A verified provision applies, but its exceptions were not checked. This is not a confirmed violation and it is not missing code text.",
+      provenance,
+    }, issue, ctx);
+  }
+  if (wantsConfirmation && codeVerification.reason === "provision_applicability_unresolved") {
+    return asPublishedQuestion({
+      disposition: "downgrade",
+      reason: "provision_applicability_unresolved",
+      detail: "The verified provision does not apply to the documented occupancy, work scope, or element. This is not a confirmed violation and it is not missing code text.",
+      provenance,
+    }, issue, ctx);
+  }
   if (wantsConfirmation) {
     const linked = Boolean(element && tokens.some((token) => linkedSpan(corpus, element.re, token)));
-    if (!linked || !authoritative) {
+    const structuredViolation = codeVerification.comparison?.outcome === "violation";
+    if (!structuredViolation && (!linked || !authoritative)) {
       const missingQuestion = finalizeMissingQuestion(issue, ctx);
       if (!linked && isVagueUnsupported(issue)) {
         return {
@@ -1054,7 +1092,8 @@ function visibleCopy(issue, decision) {
   const authoritative = decision.provenance?.codeSourceStatus === "authoritative";
   const sentence = corpusUnavailableSentence(issue);
   const detail = String(decision.detail || "");
-  const description = authoritative || detail.includes(CORPUS_UNAVAILABLE) ? detail : `${detail} ${sentence}`.trim();
+  const drawingGap = /missing drawing evidence/i.test(detail) || decision.provenance?.coverageClass === "verified_requirement";
+  const description = authoritative || drawingGap || detail.includes(CORPUS_UNAVAILABLE) ? detail : `${detail} ${sentence}`.trim();
   const fix = String(issue.suggestedFix || "");
   const inventedThreshold = /\d/.test(fix) && /\b(?:inch(?:es)?|mm|gpm|minimum|maximum|between|at least)\b/i.test(fix);
   const suggestedFix = authoritative ? issue.suggestedFix : (inventedThreshold ? sentence : (fix || sentence));

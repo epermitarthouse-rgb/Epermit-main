@@ -4,6 +4,7 @@ const { decideCandidate, challengeDecision, applyDecision, sheetRoles, cleanTopi
 const { resolveReviewState, reviewOutcome, reviewAssessment } = require("./review/reviewStates.js");
 const { recordCanAnswer } = require("./review/applicability.js");
 const { buildEvaluation, parseClaim, attributeEvidence, outcomeForReason, graphicUnread } = require("./review/evaluation.js");
+const { compareRequirementToFacts, countsAsStoredRequirement } = require("./rag/technicalCorpus.js");
 const {
   isUnselectedJurisdiction,
   resolveJurisdictionDecision,
@@ -702,6 +703,8 @@ function hardenIssues(issues, ctx) {
       observations: ctx.observations || [],
       observedEvidence: ctx.observedEvidence || [],
       graphicalReadStatus: ctx.graphicalReadStatus || null,
+      structuredDrawing: ctx.structuredDrawing || null,
+      projectContext: ctx.projectContext || null,
       authoritativeCode: ctx.authoritativeCode || [],
       legalApplicability: ctx.legalApplicability || null,
       codeYear: ctx.codeYear || null,
@@ -802,23 +805,28 @@ function hardenIssueBundle(bundle, ctx) {
  * @param {number | undefined | null} overallScore
  * @param {unknown} checklist
  */
-function codeCoverageVerified(checklistItems, authoritativeCode, legalApplicability) {
+function codeCoverageVerified(checklistItems, authoritativeCode, legalApplicability, structuredDrawing) {
   if (legalApplicability?.status !== "verified" ||
       legalApplicability?.reviewScope !== "permit_compliance") {
     return false;
   }
-  const chunks = (Array.isArray(authoritativeCode) ? authoritativeCode : []).filter(
-    (chunk) =>
-      chunk
-      && chunk.authoritative === true
-      && chunk.supportsConfirmedViolation === true
-      && String(chunk.text || "").trim().length >= 12,
-  );
+  const chunks = (Array.isArray(authoritativeCode) ? authoritativeCode : []).filter(countsAsStoredRequirement);
   if (!chunks.length || !checklistItems.length) return false;
   return checklistItems.every((item) => {
     const words = String(item).toLowerCase().match(/[a-z][a-z0-9-]{4,}/g) || [];
     if (!words.length) return false;
     return chunks.some((chunk) => {
+      if (Array.isArray(chunk.thresholds) && chunk.thresholds.length) {
+        const comparison = compareRequirementToFacts(chunk, {
+          structuredDrawing,
+          legalApplicability,
+        }, {
+          title: String(item),
+          description: String(item),
+          exceptionsChecked: true,
+        }, null);
+        return comparison.outcome === "compliant";
+      }
       const text = String(chunk.text).toLowerCase();
       return words.some((word) => text.includes(word));
     });
@@ -851,6 +859,7 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     backedItems,
     options.corpusCtx?.authoritativeCode,
     options.corpusCtx?.legalApplicability,
+    options.corpusCtx?.structuredDrawing || null,
   );
   const unresolved = (options.rejectedCandidates || []).filter(rejectionLeavesCheckOpen);
   const limitations = reviewLimitations({
@@ -860,6 +869,7 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     coverageVerified,
     legalApplicability: options.corpusCtx?.legalApplicability,
     authoritativeCode: options.corpusCtx?.authoritativeCode,
+    structuredDrawing: options.corpusCtx?.structuredDrawing || null,
     drawingRetrieval: options.corpusCtx?.drawingRetrieval,
     unresolved,
     sheetFileName: options.corpusCtx?.fileName || null,
@@ -986,13 +996,18 @@ function reviewLimitations(input) {
       detail: "The selected code edition is not verified as the adopted permit code for this project, so the review is reference-only.",
     });
   }
-  const enforceable = (Array.isArray(input.authoritativeCode) ? input.authoritativeCode : []).filter(
-    (chunk) => chunk && chunk.authoritative === true && chunk.supportsConfirmedViolation === true,
-  );
+  const enforceable = (Array.isArray(input.authoritativeCode) ? input.authoritativeCode : []).filter(countsAsStoredRequirement);
+  const measuredFacts = input.structuredDrawing
+    && (Array.isArray(input.structuredDrawing.dimensions) || Array.isArray(input.structuredDrawing.elements));
   if (!enforceable.length) {
     out.push({
       code: "no_authoritative_requirement",
       detail: corpusUnavailableDetail(legal),
+    });
+  } else if (enforceable.some((chunk) => Array.isArray(chunk.thresholds) && chunk.thresholds.length) && !measuredFacts) {
+    out.push({
+      code: "insufficient_drawing_evidence",
+      detail: "A verified technical provision is in the corpus, but no bound measurement, schedule cell, governing calculation, or cross-sheet fact was available to compare. This is missing drawing evidence, not missing code text.",
     });
   } else if (!input.coverageVerified && input.evidenceBacked) {
     out.push({

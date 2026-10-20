@@ -3,6 +3,7 @@
 const {
   bundledAuthoritativeProvisions,
 } = require("./jurisdictionEditionRegistry.js");
+const { editionInScope } = require("./technicalCorpus.js");
 
 /**
  * Review policy remains separate from authoritative code text. Verified,
@@ -125,12 +126,7 @@ function retrieveCodeProvisions(query) {
     if (jurisdiction !== "any" && query.jurisdiction && jurisdiction !== query.jurisdiction) {
       continue;
     }
-    if (query.edition && provision.edition &&
-        provision.edition !== query.edition &&
-        provision.baseCodeEdition !== query.edition &&
-        provision.jurisdictionCodeEdition !== query.edition) {
-      continue;
-    }
+    if (!editionInScope(provision, query.edition, query.adoptedCodes)) continue;
     if (query.registryRecordId && provision.registryRecordId &&
         provision.registryRecordId !== query.registryRecordId) {
       continue;

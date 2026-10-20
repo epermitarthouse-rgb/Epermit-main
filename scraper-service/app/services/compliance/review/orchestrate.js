@@ -7,6 +7,7 @@ const { createDrawingIndex } = require("../rag/drawingIndex.js");
 const { retrieveForQuestions } = require("../rag/retrieve.js");
 const { sheetNumberFromName } = require("../rag/identifiers.js");
 const { establishReviewContext } = require("./applicability.js");
+const { formatCodeRetrieval } = require("../rag/technicalCorpus.js");
 
 /**
  * Shared package for one sheet. One model call consumes the capped prompt block.
@@ -79,6 +80,7 @@ function prepareSheetReview(input) {
     specChunks: input.specChunks,
     jurisdiction: input.jurisdictionScope?.enforcedJurisdiction || null,
     edition: input.codeYear || null,
+    adoptedCodes: input.codeVerification?.legalApplicability?.adoptedCodes || null,
     registryRecordId: input.codeVerification?.legalApplicability?.registryRecordId || null,
     effectiveOn: input.codeVerification?.legalApplicability?.permitFacts?.applicationDate || null,
     codeProvisions: input.codeVerification?.provisions || null,
@@ -130,8 +132,9 @@ function prepareSheetReview(input) {
       ? `LEGAL APPLICABILITY: ${legal.reviewScope || "reference_only"}; determination ${legal.status || "unavailable"}; selected edition ${legal.selectedEdition || input.codeYear || "unselected"}; verified adopted base ${legal.adoptedBaseCode || "unavailable"}. ${legal.warning || ""}`.trim()
       : "",
     authoritativeCode.length
-      ? `AUTHORITATIVE CODE COVERAGE: ${authoritativeCode.length} verified official excerpt(s) retrieved. Only cited excerpts marked supportsConfirmedViolation may support a confirmed violation.`
-      : "CODE LIMITATION: no verified code section text is available for these questions. Review policy is not a citation and cannot confirm compliance.",
+      ? `AUTHORITATIVE CODE COVERAGE: ${authoritativeCode.length} verified official excerpt(s) retrieved. Only a verified technical requirement compared with bound drawing evidence may support a compliance decision.`
+      : "CODE LIMITATION: no verified technical section text is available for these questions. An adoption or transition excerpt is not a technical requirement. A section locator is not compliance.",
+    input.codeVerification ? formatCodeRetrieval(input.codeVerification) : "",
     observations.length
       ? `STRUCTURED OBSERVATIONS FROM THIS SHEET:\n${observations
           .slice(0, 24)

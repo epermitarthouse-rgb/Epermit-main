@@ -32,207 +32,18 @@ interface AnalysisResult {
 
 // Jurisdiction-specific amendments
 const jurisdictionAmendments: Record<string, string> = {
-  'dc': `
-WASHINGTON D.C. BUILDING CODE AMENDMENTS (12A DCMR):
-The District of Columbia adopts the IBC with the following key amendments:
-
-EGRESS & EXITS:
-- 12A DCMR 1004.5: Occupant load calculations for assembly spaces require additional 15% capacity factor
-- 12A DCMR 1006.3: Exit access travel distance reduced to 200 ft (unsprinklered) and 250 ft (sprinklered) for B occupancy
-- 12A DCMR 1017.2: Corridor width minimum 48" for all occupancies (stricter than IBC 44")
-
-FIRE SAFETY:
-- 12A DCMR 903.2.1: Automatic sprinkler systems required in all new buildings over 5,000 sq ft
-- 12A DCMR 903.2.9: Group R-2 occupancies require NFPA 13R systems minimum (no 13D allowed in D.C.)
-- 12A DCMR 907.2: Fire alarm systems required in buildings over 3 stories (not 4 as in IBC)
-
-ACCESSIBILITY (D.C. Human Rights Act compliance):
-- 12A DCMR 1103.2.2: 10% of dwelling units in multi-family must be Type A units (IBC requires 2%)
-- 12A DCMR 1107.6: All primary entrances must be accessible (no exemptions for grade changes)
-- 12A DCMR 1109.2: D.C. requires grab bars at all water closets in public restrooms
-
-STRUCTURAL:
-- 12A DCMR 1604.5: Snow load minimum 30 psf (higher than standard IBC for region)
-- 12A DCMR 1609.3: Wind design per ASCE 7 with 115 mph basic wind speed minimum
-
-HISTORIC PRESERVATION (unique to D.C.):
-- 12A DCMR 3412: Historic buildings within Historic Districts require HPRB approval
-- Work in L'Enfant Plan zones requires additional Historic Preservation Review Board compliance
-
-ENERGY:
-- D.C. Green Building Act: Buildings over 10,000 sq ft must meet LEED certification or equivalent
-- 12A DCMR C402: Envelope requirements 10% more stringent than IECC
-`,
-
-  'new-york': `
-NEW YORK CITY BUILDING CODE (NYC BC):
-NYC has its own building code separate from IBC with significant differences:
-
-EGRESS & EXITS:
-- NYC BC 1003.2: Minimum corridor width 44" but 60" in Group I-2 (hospitals)
-- NYC BC 1005.1: Egress capacity factors differ - 0.2" per occupant for stairs (IBC is 0.3")
-- NYC BC 1009.3: Stair width minimum 44" (IBC allows 36" in some cases)
-- NYC BC 1020.1: Exit access travel distance 200 ft max (sprinklered), 150 ft (unsprinklered)
-
-FIRE SAFETY:
-- NYC BC 903.2: Sprinklers required in ALL new buildings regardless of size (stricter than IBC)
-- NYC BC 907.2.1: Fire alarm required in buildings over 75 ft in height
-- NYC BC 3002.4: Standpipe systems required in buildings over 4 stories
-- Local Law 5/73: Retroactive fire safety requirements for existing high-rise buildings
-
-ACCESSIBILITY:
-- NYC BC 1107: 5% of dwelling units must be Type A accessible (stricter than IBC 2%)
-- NYC BC 1109.2.1: At least one accessible entrance per 200 ft of street frontage
-- Local Law 58: Enhanced accessibility for places of public accommodation
-
-STRUCTURAL:
-- NYC BC 1604.3: Special wind provisions for buildings over 100 ft
-- NYC BC Appendix K: Special seismic provisions for NYC (different from national standards)
-- 1 inch per hour rain load requirement (stricter than most jurisdictions)
-
-HIGH-RISE REQUIREMENTS (Buildings over 75 ft):
-- NYC BC 403: Additional requirements for high-rise construction
-- Emergency voice/alarm communication system required
-- Stair pressurization or smokeproof enclosures required
-- Fire command center required
-
-SPECIAL NYC REQUIREMENTS:
-- Multiple Dwelling Law (MDL): Additional requirements for residential buildings
-- Zoning Resolution: Floor area ratio, setback, and height restrictions
-- Landmarks Preservation: Special requirements in historic districts
-`,
-
-  'california': `
-CALIFORNIA BUILDING CODE (CBC - Title 24):
-California adopts IBC with extensive amendments:
-
-ACCESSIBILITY (Most Restrictive in U.S.):
-- CBC 11B-206.2.1: Accessible routes required from ALL parking spaces, not just accessible spaces
-- CBC 11B-403.5.1: Corridor width minimum 48" clear (IBC allows 44")
-- CBC 11B-404.2.4: Maneuvering clearances at doors more restrictive than ADA
-- CBC 11B-603: Toilet room clearances require 60" turning space (stricter than federal ADA)
-- CBC 11B-810: Accessible seating dispersal requirements for assembly occupancies
-
-FIRE SAFETY:
-- CBC 903.2.3: Sprinklers required in Group R-3 (single-family) over 5,000 sq ft in fire hazard areas
-- CBC 707A: Fire-resistive exterior wall requirements in WUI (Wildland-Urban Interface) zones
-- CBC Chapter 7A: Materials and construction methods for WUI fire zones
-- CBC 903.2.8.4: Basements over 1,500 sq ft require sprinklers
-
-SEISMIC (VERY CRITICAL):
-- CBC 1613: California-specific seismic design requirements beyond IBC
-- CBC 1616: Site-specific ground motion procedures required for many buildings
-- Hospital (OSHPD) buildings have additional seismic requirements
-- Essential facilities (hospitals, schools) have enhanced seismic performance requirements
-
-ENERGY (Title 24 Part 6):
-- CBC requires compliance with California Energy Code (most stringent in U.S.)
-- Solar-ready requirements for new construction
-- Cool roof requirements in climate zones 10-15
-- Electric vehicle charging infrastructure requirements
-
-GREEN BUILDING (CALGreen - Title 24 Part 11):
-- Mandatory green building standards for all new construction
-- Water efficiency requirements (20% reduction from baseline)
-- Construction waste diversion (65% minimum)
-- Low-emitting materials requirements
-
-STRUCTURAL:
-- CBC 1604.9: Special load combinations for California
-- CBC 1613.1: Seismic Design Category based on California site class
-- Reinforced masonry requirements stricter than national standards
-`,
-
-  'florida': `
-FLORIDA BUILDING CODE (FBC):
-Florida adopts IBC with hurricane and high-velocity wind zone amendments:
-
-WIND DESIGN (CRITICAL):
-- FBC 1609: High-Velocity Hurricane Zone (HVHZ) requirements for Miami-Dade and Broward
-- Wind speeds up to 180 mph in HVHZ areas
-- FBC 1609.1.2: Wind-borne debris protection required in wind-borne debris regions
-- Impact-resistant glazing or shutters required in coastal high-hazard areas
-
-FLOOD REQUIREMENTS:
-- FBC 3109: Coastal construction requirements
-- Buildings in V-zones must be elevated above base flood elevation
-- Breakaway walls required below design flood elevation
-- FBC 1612: Flood-resistant construction for coastal A-zones
-
-ROOFING:
-- FBC 1507.2.8: Enhanced roof underlayment requirements for high-wind zones
-- FBC 1518: Roof deck attachment requirements in HVHZ
-- Secondary water resistance required in high-wind areas
-
-POOL SAFETY (Florida-specific):
-- FBC 454: Residential swimming pool safety requirements
-- 4-foot minimum barrier height with self-latching gates
-- Pool alarms or safety covers required
-
-ACCESSIBILITY:
-- Florida Accessibility Code: Some provisions stricter than ADA
-- FBC 11-4.1.3: Accessible parking space requirements
-`,
-
-  'texas': `
-TEXAS BUILDING CODE:
-Texas allows local jurisdictions to adopt IBC with amendments. Major cities have specific requirements:
-
-WIND DESIGN:
-- Texas Windstorm Insurance Association (TWIA) requirements for coastal counties
-- Buildings in designated catastrophe areas must meet enhanced wind standards
-- WPI-8 inspection requirements for coastal construction
-
-ENERGY:
-- Texas uses International Energy Conservation Code (IECC) with amendments
-- Some jurisdictions require ENERGY STAR compliance
-
-FIRE SAFETY:
-- Texas adopts NFPA standards for fire protection
-- Local fire marshal approval required for sprinkler systems
-
-ACCESSIBILITY:
-- Texas Accessibility Standards (TAS) - generally follows ADA but some local variations
-- Texas Department of Licensing and Regulation (TDLR) registration required
-
-LOCAL VARIATIONS:
-- Houston: No zoning, but building code fully adopted
-- Austin: Stricter green building requirements
-- Dallas: Enhanced high-rise fire safety requirements
-`,
-
-  'chicago': `
-CHICAGO BUILDING CODE (CBC):
-Chicago has its own comprehensive building code separate from IBC:
-
-EGRESS:
-- Chicago BC 13-160: Corridor widths minimum 44", 66" for schools
-- Chicago BC 13-160-140: Exit stair requirements differ from IBC
-- Chicago BC 13-96: Means of egress calculations specific to Chicago
-
-FIRE SAFETY:
-- Chicago BC 15-16: Sprinkler requirements for buildings over 80 ft
-- Chicago BC 15-8: Standpipe requirements
-- High-Rise Fire Safety Ordinance: Additional requirements for buildings over 80 ft
-- Chicago Fire Prevention Code: Separate from building code
-
-STRUCTURAL:
-- Chicago BC 13-132: Wind load requirements specific to Chicago
-- Chicago BC 13-136: Seismic design (Chicago is in a moderate seismic zone)
-- Chicago BC 13-128: Foundation requirements for Chicago soil conditions
-
-ACCESSIBILITY:
-- Illinois Accessibility Code (IAC) applies
-- Chicago Commission on Human Relations enforces accessibility
-
-ELEVATOR REQUIREMENTS:
-- Chicago BC 18-30: Elevator requirements specific to Chicago
-- Freight elevator requirements in commercial buildings
-
-HISTORIC PRESERVATION:
-- Landmarks Commission approval required for designated buildings
-- Special provisions for buildings in historic districts
-`
+  'dc': `WASHINGTON, DC:
+The published construction-code adoption is a registry fact, not technical section text. No comprehensive licensed ICC base-code text is stored in this prompt. Cite a section only when its verified text was retrieved. Do not invent a DC threshold.`,
+  'new-york': `NEW YORK CITY:
+NYC BC is a separate code family. This prompt does not contain its technical provisions. Use retrieved verified text, or leave the citation as an unverified reference.`,
+  'california': `CALIFORNIA:
+CBC Title 24 is an adopted code family. This prompt does not contain its technical provisions. Use retrieved verified text, or leave the citation as an unverified reference.`,
+  'florida': `FLORIDA:
+The Florida Building Code is an adopted code family. This prompt does not contain its technical provisions. Use retrieved verified text, or leave the citation as an unverified reference.`,
+  'texas': `TEXAS:
+Texas adoption is local. This prompt does not contain technical provisions. Use retrieved verified text, or leave the citation as an unverified reference.`,
+  'chicago': `CHICAGO:
+The Chicago Building Code is a separate code family. This prompt does not contain its technical provisions. Use retrieved verified text, or leave the citation as an unverified reference.`,
 };
 
 serve(async (req) => {
@@ -328,13 +139,14 @@ For each issue found, provide:
 2. Clear title describing the issue
 3. Detailed description of the violation
 4. Severity level (critical, warning, or advisory)
-5. Specific code reference (e.g., "${jurisdictionCitation} Section 1005.1")
+5. Specific code reference (the adopted code family and section id only when that verified text was retrieved)
 6. Location in the drawing (e.g., "Main corridor, north exit")
 7. Suggested fix to resolve the issue
 
 Consider the jurisdiction: ${jurisdiction || 'General IBC'} and project type: ${projectType || 'Commercial'}.
 Use code year: ${codeYear || '2021'}.
-${jurisdictionContext ? `IMPORTANT: Apply ${jurisdictionCitation} amendments which may be MORE RESTRICTIVE than base IBC. Always cite ${jurisdictionCitation} sections when jurisdiction-specific requirements apply.` : ''}
+Do not recite model-code section text or numeric thresholds from memory. A section number without retrieved verified text is not compliance and not a confirmed violation.
+${jurisdictionContext ? `Local code family: ${jurisdictionCitation}. Apply a local provision only when its verified text was retrieved. Do not invent a local threshold.` : ''}
 
 Be thorough but avoid false positives. Only report genuine code compliance concerns visible in the drawing.
 

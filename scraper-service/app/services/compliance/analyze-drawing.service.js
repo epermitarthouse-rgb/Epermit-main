@@ -5,6 +5,7 @@ const {
   buildSummaryFromIssues,
   canonicalJurisdictionKey,
 } = require("./findingQuality.js");
+const { formatCodeRetrieval } = require("./rag/technicalCorpus.js");
 
 const REFUSAL_USER_MESSAGE =
   "The AI model could not analyze this drawing. Try a clearer plan sheet or a different page.";
@@ -23,65 +24,14 @@ const JURISDICTION_AMENDMENTS = {
 The jurisdiction registry verifies the published 2017 DC Construction Codes, based on the 2015 ICC family and amended by DCMR Title 12, effective May 29, 2020.
 Only the official applicability and transition excerpts supplied in the authoritative review context may be cited as verified.
 No comprehensive licensed ICC base-code text or comprehensive enforceable DC amendment corpus is bundled. Do not invent a DC threshold or treat an AI summary as authoritative.`,
-  "new-york": `NEW YORK CITY BUILDING CODE (NYC BC):
-NYC has its own building code separate from IBC with significant differences:
-
-EGRESS & EXITS:
-- NYC BC 1003.2: Minimum corridor width 44" but 60" in Group I-2 (hospitals)
-- NYC BC 1005.1: Egress capacity factors differ - 0.2" per occupant for stairs (IBC is 0.3")
-- NYC BC 1009.3: Stair width minimum 44" (IBC allows 36" in some cases)
-- NYC BC 1020.1: Exit access travel distance 200 ft max (sprinklered), 150 ft (unsprinklered)
-
-FIRE SAFETY:
-- NYC BC 903.2: Sprinklers required in ALL new buildings regardless of size (stricter than IBC)
-- NYC BC 907.2.1: Fire alarm required in buildings over 75 ft in height
-- NYC BC 3002.4: Standpipe systems required in buildings over 4 stories
-- Local Law 5/73: Retroactive fire safety requirements for existing high-rise buildings
-
-ACCESSIBILITY:
-- NYC BC 1107: 5% of dwelling units must be Type A accessible (stricter than IBC 2%)
-- NYC BC 1109.2.1: At least one accessible entrance per 200 ft of street frontage
-- Local Law 58: Enhanced accessibility for places of public accommodation`,
-  california: `CALIFORNIA BUILDING CODE (CBC - Title 24):
-California adopts IBC with extensive amendments:
-
-ACCESSIBILITY (Most Restrictive in U.S.):
-- CBC 11B-206.2.1: Accessible routes required from ALL parking spaces
-- CBC 11B-403.5.1: Corridor width minimum 48" clear (IBC allows 44")
-- CBC 11B-404.2.4: Maneuvering clearances at doors more restrictive than ADA
-- CBC 11B-603: Toilet room clearances require 60" turning space
-
-SEISMIC (VERY CRITICAL):
-- CBC 1613: California-specific seismic design requirements beyond IBC
-- CBC 1616: Site-specific ground motion procedures required for many buildings
-- Hospital (OSHPD) buildings have additional seismic requirements
-
-ENERGY (Title 24 Part 6):
-- Most stringent energy code in U.S.
-- Solar-ready requirements for new construction
-- Cool roof requirements in climate zones 10-15`,
-  florida: `FLORIDA BUILDING CODE (FBC):
-Florida adopts IBC with hurricane and high-velocity wind zone amendments:
-
-WIND DESIGN (CRITICAL):
-- FBC 1609: High-Velocity Hurricane Zone (HVHZ) requirements for Miami-Dade and Broward
-- Wind speeds up to 180 mph in HVHZ areas
-- Impact-resistant glazing or shutters required in coastal high-hazard areas
-
-FLOOD REQUIREMENTS:
-- FBC 3109: Coastal construction requirements
-- Buildings in V-zones must be elevated above base flood elevation
-- Breakaway walls required below design flood elevation`,
-  chicago: `CHICAGO BUILDING CODE (CBC):
-Chicago has its own comprehensive building code separate from IBC:
-
-EGRESS:
-- Chicago BC 13-160: Corridor widths minimum 44", 66" for schools
-- Chicago BC 13-160-140: Exit stair requirements differ from IBC
-
-FIRE SAFETY:
-- Chicago BC 15-16: Sprinkler requirements for buildings over 80 ft
-- High-Rise Fire Safety Ordinance: Additional requirements for buildings over 80 ft`,
+  "new-york": `NEW YORK CITY:
+NYC BC is a separate code family. This prompt does not contain its technical provisions. Use a verified Code RAG requirement for the adopted edition, or leave the section as an unverified reference. Do not invent a local threshold.`,
+  california: `CALIFORNIA:
+CBC Title 24 is an adopted code family. This prompt does not contain its technical provisions. Use a verified Code RAG requirement for the adopted edition, or leave the section as an unverified reference. Do not invent a local threshold.`,
+  florida: `FLORIDA:
+The Florida Building Code is an adopted code family. This prompt does not contain its technical provisions. Use a verified Code RAG requirement for the adopted edition, or leave the section as an unverified reference. Do not invent a local threshold.`,
+  chicago: `CHICAGO:
+The Chicago Building Code is a separate code family. This prompt does not contain its technical provisions. Use a verified Code RAG requirement for the adopted edition, or leave the section as an unverified reference. Do not invent a local threshold.`,
 };
 
 /**
@@ -298,7 +248,8 @@ EVIDENCE RULES (mandatory):
 - Do not copy example text. observedEvidence and checklist evidence must be words you can read, not a sample number.
 - If information is missing, use findingType "missing_information", evidenceTier "verification", severity "advisory", and phrase as verification required — NOT as a confirmed violation.
 - Never treat parking layout graphics as "obstructed by parked vehicles" during design review.
-- Include specReferences ONLY when a provided spec excerpt directly supports the finding.`;
+- Include specReferences ONLY when a provided spec excerpt directly supports the finding.
+- Do not state a numeric code threshold, exception, or section requirement unless that text was retrieved as a verified provision. A section number without retrieved text is not compliance and not a confirmed violation.`;
 
   let analysisFocus = "";
   let jsonFormat = "";
@@ -315,7 +266,7 @@ Do NOT apply local jurisdiction amendments in this pass. Cite IBC or national st
 }`;
   } else if (resolvedCodeType === "local") {
     if (hasLocalAmendmentText(jurisdictionKey)) {
-      analysisFocus = `Review the drawing for plan-sheet items that may be inconsistent with the jurisdiction amendment summaries below (${jurisdictionCitation}). Cite section labels from those summaries when flagging a concern. If the sheet lacks information needed to evaluate a topic, skip it or use severity "advisory".`;
+      analysisFocus = `Review local amendments only when a verified Code RAG provision was retrieved for this jurisdiction (${jurisdictionCitation}). Do not invent a local threshold or section text. If no verified local provision applies, do not report a local violation.`;
     } else {
       analysisFocus = `This project uses General IBC — no local amendment text is loaded for this pass. Review only jurisdiction-specific notes that appear on the sheet itself. Do not invent local requirements. If none apply, return an empty issues array and explain in jurisdictionNotes that no local amendment package was selected.`;
     }
@@ -755,7 +706,9 @@ async function analyzeDrawingWithOpenAI(params) {
         codeVerification?.coverage
           ? `Authoritative source coverage: ${codeVerification.coverage.status}; enforceable provisions loaded: ${codeVerification.coverage.enforceableProvisionCount || 0}.`
           : "",
+        formatCodeRetrieval(codeVerification),
         "Do not describe this review as legally applicable permit compliance unless review scope is permit_compliance and legal determination is verified.",
+        "Do not describe missing code text as compliant. Missing drawing evidence is a separate limitation.",
       ].filter(Boolean).join("\n")
     : "";
   const combinedReviewContext = [reviewContext, verifiedContext].filter(Boolean).join("\n\n");

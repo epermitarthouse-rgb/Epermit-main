@@ -1388,5 +1388,6 @@ module.exports = {
   reviewDocument,
   gateMeasuredFact,
   unboundMeasurement,
+  measurementIsProven,
   summarizeForReview,
 };
