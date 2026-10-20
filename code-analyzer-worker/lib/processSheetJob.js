@@ -35,7 +35,13 @@ const {
   persistDrawingRecord,
   drawingStoreFor,
   drawingEmbedder,
+  replaceRetrievedEvidence,
 } = require("./prepareSheetEvidence.js");
+const { capPromptEvidence } = require("../../scraper-service/app/services/compliance/rag/retrieve.js");
+const {
+  loadActiveLearningGuidance,
+  recordLearningApplications,
+} = require("./learningStore.js");
 
 const SCRAPER_BASE_URL = process.env.SCRAPER_SERVICE_URL || "http://localhost:3000";
 const SHEET_CONCURRENCY = Math.max(1, Number(process.env.CODE_ANALYZER_SHEET_CONCURRENCY) || 3);
@@ -468,6 +474,7 @@ async function persistSheetFindings(supabase, params) {
       graphicRead: params.graphicRead || null,
       legalApplicability: result.codeVerification?.legalApplicability || null,
       codeCoverage: result.codeVerification?.coverage || null,
+      learning: params.learning || null,
       spec_chunks_retrieved: specChunkCount ?? 0,
       sheet_id: sheetId,
       page_number: pageNumber,
@@ -934,6 +941,43 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     }
     return { ...evidence, structuredDrawing, extractionWrite };
   });
+  const {
+    applyExtractionLearning,
+    applyRetrievalLearning,
+    applyFindingLearning,
+    formatLearningPrompt,
+  } = await import("../../src/lib/codeAnalyzer/learningLoopCore.mjs");
+  let learningGuidance = [];
+  try {
+    learningGuidance = await loadActiveLearningGuidance(supabase, job.project_id);
+  } catch (err) {
+    console.warn("[code-analyzer-worker] learning guidance skipped:", err instanceof Error ? err.message : err);
+  }
+  const learningContext = {
+    projectId: job.project_id,
+    sheetId: sheet.id,
+    sheetNumber: sheet.sheet_label || null,
+    fileName: sheetFileName,
+    discipline: sheet.discipline || null,
+    codeYear: run.code_year || null,
+    jurisdiction,
+  };
+  const extractedLearning = applyExtractionLearning(prepared.structuredDrawing, learningGuidance, learningContext);
+  const retrievedLearning = applyRetrievalLearning(prepared.retrieval, learningGuidance, learningContext);
+  const reviewDrawing = extractedLearning.document || prepared.structuredDrawing;
+  const retrievalForReview = retrievedLearning.retrieval || prepared.retrieval;
+  let reviewPrompt = prepared.promptBlock || "";
+  if (retrievedLearning.applications.length && retrievalForReview?.packages) {
+    reviewPrompt = replaceRetrievedEvidence(reviewPrompt, capPromptEvidence(retrievalForReview.packages));
+  }
+  const learningBlock = formatLearningPrompt(
+    learningGuidance,
+    learningContext,
+    extractedLearning.applications,
+    retrievedLearning.applications,
+  );
+  const baseContext = [reviewPrompt, summarizeForReview(reviewDrawing)].filter(Boolean).join("\n\n");
+  const reviewContext = learningBlock ? `${learningBlock}\n\n${baseContext}`.slice(0, 6000) : baseContext;
   const sheetChunks = evidenceIndexForRun(run.id).list().filter((record) => {
     if (record.projectId && job.project_id && String(record.projectId) !== String(job.project_id)) return false;
     if (sheet.id && record.sheetId && String(record.sheetId) === String(sheet.id)) return true;
@@ -962,7 +1006,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
 
   // Every included sheet is posted for the requested code type. Content class is
   // prompt context and must not be replaced with a not_reviewed row.
-  const result = await callAnalyzeDrawing({
+  const modelResult = await callAnalyzeDrawing({
     imageBase64,
     imageType,
     jurisdiction,
@@ -984,7 +1028,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     sheetIndex,
     jurisdictionDiagnostics,
     jurisdictionScope: jurisdictionDecision,
-    reviewContext: [prepared.promptBlock, summarizeForReview(prepared.structuredDrawing)].filter(Boolean).join("\n\n"),
+    reviewContext,
     drawingRecords: prepared.drawingRecords,
     drawingRetrieval,
     requestedReviewScope: run.requested_review_scope || "reference_only",
@@ -996,8 +1040,27 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     fileName: sheetFileName,
     pageText: prepared.pageText || pageText,
     graphicalReadStatus: prepared.graphicalReadStatus || null,
-    structuredDrawing: reviewDocument(prepared.structuredDrawing) || null,
+    structuredDrawing: reviewDocument(reviewDrawing) || null,
   });
+
+  let result = modelResult;
+  let findingApplications = [];
+  try {
+    const learnedFindings = applyFindingLearning(modelResult, learningGuidance, learningContext);
+    result = learnedFindings.result;
+    findingApplications = learnedFindings.applications;
+  } catch (err) {
+    console.warn("[code-analyzer-worker] learning disposition skipped:", err instanceof Error ? err.message : err);
+  }
+  try {
+    await recordLearningApplications(supabase, job.project_id, run.id, sheet.id, [
+      ...extractedLearning.applications,
+      ...retrievedLearning.applications,
+      ...findingApplications,
+    ]);
+  } catch (err) {
+    console.warn("[code-analyzer-worker] learning application log skipped:", err instanceof Error ? err.message : err);
+  }
 
   await persistSheetFindings(supabase, {
     projectId: job.project_id,
@@ -1016,7 +1079,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     userEmphasis: run.analysis_instructions || null,
     observations: (prepared.observations || []).slice(0, 24),
     disciplines: prepared.disciplines,
-    retrievalHits: (prepared.retrieval?.packages || []).map((pack) => ({
+    retrievalHits: (retrievalForReview?.packages || prepared.retrieval?.packages || []).map((pack) => ({
       questionId: pack.questionId,
       drawing: (pack.drawing || []).map(hitSummary),
       code: (pack.code || []).map(hitSummary),
@@ -1029,6 +1092,10 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       status: prepared.graphicalReadStatus || null,
       ocrLines: prepared.ocrLineCount || 0,
       indexRows: prepared.indexRowCount || 0,
+    },
+    learning: {
+      accuracyClaim: false,
+      applications: [...extractedLearning.applications, ...retrievedLearning.applications, ...findingApplications],
     },
   });
 

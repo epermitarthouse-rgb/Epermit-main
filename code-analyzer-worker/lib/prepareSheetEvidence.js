@@ -309,4 +309,5 @@ module.exports = {
   persistDrawingRecord,
   drawingStoreFor,
   drawingEmbedder,
+  replaceRetrievedEvidence,
 };

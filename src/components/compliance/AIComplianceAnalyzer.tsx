@@ -158,6 +158,7 @@ import {
   formatSheetResultsCounter,
 } from "@/lib/codeAnalyzer/sheetResults";
 import { ReviewEvidenceReport } from "@/components/compliance/ReviewEvidenceReport";
+import { LearningFeedbackPanel, type LearningDraftContext } from "@/components/compliance/LearningFeedbackPanel";
 import { indexSnapshotForRun, runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import {
   asIndexCompletenessResult,
@@ -3224,6 +3225,8 @@ export function AIComplianceAnalyzer() {
   const [fileResultTabs, setFileResultTabs] = useState<Record<string, "ibc" | "local">>({});
   const [expandedResultGroups, setExpandedResultGroups] = useState<Record<string, boolean>>({});
   const [reviewEvidenceExpanded, setReviewEvidenceExpanded] = useState<Record<string, boolean>>({});
+  const [learningDraft, setLearningDraft] = useState<LearningDraftContext | null>(null);
+  const clearLearningDraft = useCallback(() => setLearningDraft(null), []);
 
   const toggleResultGroupExpanded = (groupId: string) => {
     setExpandedResultGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -3833,6 +3836,21 @@ export function AIComplianceAnalyzer() {
                                       {response?.modifiedResponse || issue.suggestedFix}
                                     </p>
                                   </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="mt-3"
+                                    onClick={() =>
+                                      setLearningDraft({
+                                        fileName,
+                                        documentId: fileId,
+                                        issue,
+                                      })
+                                    }
+                                  >
+                                    Correct this
+                                  </Button>
                                 </div>
 
                                 {/* Action buttons */}
@@ -4857,6 +4875,17 @@ export function AIComplianceAnalyzer() {
                 <AlertDescription>{complianceHistoricalResultsMessage()}</AlertDescription>
               </Alert>
             )}
+
+            {selectedProjectId && user?.id ? (
+              <LearningFeedbackPanel
+                projectId={selectedProjectId}
+                runId={displayRun?.id || null}
+                codeYear={codeYear}
+                jurisdiction={jurisdiction}
+                draft={learningDraft}
+                onDraftConsumed={clearLearningDraft}
+              />
+            ) : null}
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
