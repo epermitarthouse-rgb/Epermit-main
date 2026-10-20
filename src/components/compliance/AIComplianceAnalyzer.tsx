@@ -3300,39 +3300,43 @@ export function AIComplianceAnalyzer() {
           </Tabs>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className={cn("pilot-card border-border bg-card", "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
-            <CardContent className="pt-6 text-center">
-              <div className={`text-4xl font-bold ${scoreToneClass(combinedSummary)}`}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 auto-rows-fr">
+          <Card className={cn("pilot-card border-border bg-card min-w-0 h-full", "!bg-gradient-to-br from-teal/[0.07] to-gold/[0.08] !border-teal/30")}>
+            <CardContent className="flex h-full min-w-0 flex-col items-center justify-center gap-1 px-3 py-5 text-center sm:px-4">
+              <div
+                className={`max-w-full break-words text-balance font-bold leading-tight ${scoreToneClass(combinedSummary)} ${
+                  /\d/.test(formatReviewScore(combinedSummary)) ? "text-3xl sm:text-4xl" : "text-lg sm:text-xl"
+                }`}
+              >
                 {formatReviewScore(combinedSummary)}
               </div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Compliance Score</p>
+              <p className="max-w-full break-words text-xs text-muted-foreground sm:text-sm dark:text-muted-foreground">Compliance Score</p>
             </CardContent>
           </Card>
-          <Card className={"pilot-card border-border bg-card"}>
-            <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-foreground dark:text-foreground">
+          <Card className={"pilot-card border-border bg-card min-w-0 h-full"}>
+            <CardContent className="flex h-full min-w-0 flex-col items-center justify-center gap-1 px-3 py-5 text-center sm:px-4">
+              <div className="text-3xl sm:text-4xl font-bold leading-tight text-foreground dark:text-foreground">
                 {combinedSummary.totalIssues}
               </div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Total Issues</p>
+              <p className="max-w-full break-words text-xs text-muted-foreground sm:text-sm dark:text-muted-foreground">Total Issues</p>
             </CardContent>
           </Card>
-          <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-destructive")}>
-            <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-destructive">{combinedSummary.critical}</div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Critical</p>
+          <Card className={cn("pilot-card border-border bg-card min-w-0 h-full", "border-l-4 border-l-destructive")}>
+            <CardContent className="flex h-full min-w-0 flex-col items-center justify-center gap-1 px-3 py-5 text-center sm:px-4">
+              <div className="text-3xl sm:text-4xl font-bold leading-tight text-destructive">{combinedSummary.critical}</div>
+              <p className="max-w-full break-words text-xs text-muted-foreground sm:text-sm dark:text-muted-foreground">Critical</p>
             </CardContent>
           </Card>
-          <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
-            <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-amber-600 dark:text-amber-400">{combinedSummary.warnings}</div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Warnings</p>
+          <Card className={cn("pilot-card border-border bg-card min-w-0 h-full", "border-l-4 border-l-amber-500 dark:border-l-amber-400")}>
+            <CardContent className="flex h-full min-w-0 flex-col items-center justify-center gap-1 px-3 py-5 text-center sm:px-4">
+              <div className="text-3xl sm:text-4xl font-bold leading-tight text-amber-600 dark:text-amber-400">{combinedSummary.warnings}</div>
+              <p className="max-w-full break-words text-xs text-muted-foreground sm:text-sm dark:text-muted-foreground">Warnings</p>
             </CardContent>
           </Card>
-          <Card className={cn("pilot-card border-border bg-card", "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
-            <CardContent className="pt-6 text-center">
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{combinedSummary.advisory}</div>
-              <p className="text-sm text-muted-foreground mt-1 dark:text-muted-foreground">Advisory</p>
+          <Card className={cn("pilot-card border-border bg-card min-w-0 h-full", "border-l-4 border-l-blue-500 dark:border-l-blue-400")}>
+            <CardContent className="flex h-full min-w-0 flex-col items-center justify-center gap-1 px-3 py-5 text-center sm:px-4">
+              <div className="text-3xl sm:text-4xl font-bold leading-tight text-blue-600 dark:text-blue-400">{combinedSummary.advisory}</div>
+              <p className="max-w-full break-words text-xs text-muted-foreground sm:text-sm dark:text-muted-foreground">Advisory</p>
             </CardContent>
           </Card>
         </div>
