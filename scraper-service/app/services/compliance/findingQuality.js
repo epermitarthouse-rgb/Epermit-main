@@ -954,11 +954,33 @@ function limitationTopic(candidate) {
  *   sheetFileName?: string | null;
  * }} input
  */
+function editionAligned(legal) {
+  const selected = String(legal?.selectedEdition || "").trim();
+  if (!selected) return false;
+  const base = String(legal?.adoptedBaseCode || "");
+  const adopted = String(legal?.adoptedEdition || "");
+  return base === selected || base.endsWith(` ${selected}`) || adopted.endsWith(selected);
+}
+
+function corpusUnavailableDetail(legal) {
+  const named = [legal?.adoptedEdition, legal?.adoptedBaseCode].filter(Boolean).join(" / ")
+    || legal?.selectedEdition
+    || "the selected code";
+  const source = legal?.officialSourceUrl ? ` Source: ${legal.officialSourceUrl}.` : "";
+  return `Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus. No authoritative code requirement for the reviewed elements was available for ${named}.${source} This is missing code text, not a missing drawing dimension.`;
+}
+
 function reviewLimitations(input) {
   if (input.callStatus !== "completed") return [];
   const out = [];
   const legal = input.legalApplicability || null;
-  if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
+  const unresolvedMatch = legal?.status === "unresolved" && editionAligned(legal) && legal?.requestedReviewScope !== "reference_only";
+  if (unresolvedMatch) {
+    out.push({
+      code: "permit_applicability_unresolved",
+      detail: `${(legal.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition matches the verified adopted base code (${legal.adoptedBaseCode || legal.adoptedEdition}). Permit compliance stays unresolved until that fact is documented.`,
+    });
+  } else if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
     out.push({
       code: "reference_only_scope",
       detail: "The selected code edition is not verified as the adopted permit code for this project, so the review is reference-only.",
@@ -970,7 +992,7 @@ function reviewLimitations(input) {
   if (!enforceable.length) {
     out.push({
       code: "no_authoritative_requirement",
-      detail: "No authoritative code requirement for the reviewed elements was available, so drawing labels could not be checked against a requirement.",
+      detail: corpusUnavailableDetail(legal),
     });
   } else if (!input.coverageVerified && input.evidenceBacked) {
     out.push({

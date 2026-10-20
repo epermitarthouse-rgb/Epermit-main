@@ -739,13 +739,19 @@ function evidenceSnippet(corpus, tokens) {
  * @param {Record<string, unknown>} ctx
  * @param {Record<string, unknown>} decision
  */
+const SCALE_LINE_RE = /^.*\b(?:scale\s*:|\bn\.?\s*t\.?\s*s\.?\b|\d+\s*["″]\s*=\s*1\s*['′]).*$/gim;
+
+function withoutScaleLines(text) {
+  return String(text || "").replace(SCALE_LINE_RE, " ");
+}
+
 function composePublication(issue, ctx, decision) {
   const objective = objectiveTokens(issue);
-  const corpus = withoutFileReferences([
+  const corpus = withoutScaleLines(withoutFileReferences([
     ctx?.pageText,
     ctx?.corpus,
     ...(ctx?.observations || []).map((item) => item?.quote || ""),
-  ].filter(Boolean).join("\n"));
+  ].filter(Boolean).join("\n")));
   const lowerCorpus = corpus.toLowerCase();
   const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
   const titleSubject = subjectTokens(issue);

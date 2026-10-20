@@ -570,6 +570,7 @@ const OPEN = new Set([
   "calculation_unresolved", "model_reported_present", "schedule_values_not_bound", "existing_element_scope",
   "value_not_bound_to_element", "element_not_established", "rated_assembly_not_established",
   "requirement_note_not_measurement",
+  "governing_code_unverified",
 ]);
 
 /** Why a check stays open, in the words a reviewer uses. */
@@ -591,6 +592,7 @@ const OPEN_REASON = {
   rated_assembly_not_established: "premise_unconfirmed",
   element_not_established: "premise_unconfirmed",
   requirement_note_not_measurement: "premise_unconfirmed",
+  governing_code_unverified: "requirement_unverified",
   existing_element_scope: "premise_unconfirmed",
   calculation_unresolved: "calculation_unresolved",
   documented_design_provision: "requirement_unverified",

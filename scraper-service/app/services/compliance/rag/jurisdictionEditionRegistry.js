@@ -248,13 +248,13 @@ function resolveLegalApplicability(input, records = bundledEditions) {
   if (unresolvedReasons.length) {
     return {
       status: "unresolved",
-      reviewScope: REFERENCE_ONLY,
+      reviewScope: requestedReviewScope,
       requestedReviewScope,
       jurisdiction,
       selectedEdition,
       ...summary,
       unresolvedReasons,
-      warning: "Legal applicability is unresolved. Results must remain reference-only.",
+      warning: unresolvedReasons[0],
       requiresReferenceConfirmation: false,
       referenceReviewConfirmed: Boolean(input.referenceReviewConfirmed),
       transitionSection,

@@ -259,10 +259,10 @@ export function resolveJurisdictionEditionVerification(input: {
     return {
       ...base,
       status: "unresolved",
-      reviewScope: "reference_only",
+      reviewScope: requestedReviewScope,
       ...fields,
       unresolvedReasons,
-      warning: "Legal applicability is unresolved. Results must remain reference-only.",
+      warning: unresolvedReasons[0],
       requiresReferenceConfirmation: false,
       transitionSection,
     };

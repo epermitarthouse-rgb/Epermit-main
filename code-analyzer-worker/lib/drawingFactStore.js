@@ -28,18 +28,197 @@ function missingTable(error) {
   return code === "PGRST205" || code === "42P01" || /schema cache|does not exist|could not find the table/i.test(message);
 }
 
-function counts(doc) {
+const TEXT_BYTES = 4000;
+const PROPERTIES_BYTES = 24000;
+const BBOX_BYTES = 2000;
+const FACT_BATCH = 40;
+const ZERO_COUNTS = {
+  element_count: 0,
+  dimension_count: 0,
+  note_count: 0,
+  schedule_count: 0,
+  schedule_row_count: 0,
+  calculation_count: 0,
+  reference_count: 0,
+  relationship_count: 0,
+  evidence_count: 0,
+};
+const RASTER_KEY = /imagebase64|data:image|raster/i;
+
+function octetLength(value) {
+  return Buffer.byteLength(String(value ?? ""), "utf8");
+}
+
+function cleanString(value, maxBytes) {
+  const text = String(value ?? "").replace(/\u0000/g, "");
+  if (!text) return null;
+  if (octetLength(text) <= maxBytes) return text;
+  let end = Math.min(text.length, maxBytes);
+  while (end > 0 && octetLength(text.slice(0, end)) > maxBytes) end -= 1;
+  return text.slice(0, end) || null;
+}
+
+function stripRaster(value, depth = 0) {
+  if (depth > 8) return null;
+  if (Array.isArray(value)) {
+    return value.slice(0, 40).map((item) => stripRaster(item, depth + 1)).filter((item) => item != null);
+  }
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, child] of Object.entries(value)) {
+      if (RASTER_KEY.test(key)) continue;
+      const next = stripRaster(child, depth + 1);
+      if (next != null) out[key] = next;
+    }
+    return out;
+  }
+  if (typeof value === "string") {
+    if (RASTER_KEY.test(value)) return null;
+    return value.replace(/\u0000/g, "");
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "boolean") return value;
+  return null;
+}
+
+function fitProperties(value) {
+  let current = stripRaster(value) || {};
+  const size = () => octetLength(JSON.stringify(current));
+  if (size() <= PROPERTIES_BYTES) return current;
+  if (current && typeof current === "object" && !Array.isArray(current)) {
+    for (const key of ["cells", "geometry", "headers", "location", "operands", "association_basis", "evidence_ids"]) {
+      if (current[key] == null) continue;
+      current = { ...current, storage_limitation: "properties_trimmed_to_fit" };
+      delete current[key];
+      if (size() <= PROPERTIES_BYTES) return current;
+    }
+  }
+  return { storage_limitation: "properties_exceeded_storage_limit" };
+}
+
+function fitBbox(value) {
+  if (!value || typeof value !== "object") return null;
+  const compact = ["x", "y", "width", "height"].reduce((box, key) => {
+    const number = Number(value[key]);
+    if (Number.isFinite(number)) box[key] = number;
+    return box;
+  }, {});
+  const chosen = Object.keys(compact).length ? compact : stripRaster(value);
+  if (!chosen || octetLength(JSON.stringify(chosen)) > BBOX_BYTES) return null;
+  return chosen;
+}
+
+function sanitizeFactRow(row) {
+  if (!row?.fact_key) return null;
+  const properties = fitProperties(row.properties);
+  if (RASTER_KEY.test(JSON.stringify(properties || {}))) return null;
+  const factKey = cleanString(row.fact_key, 500);
+  if (!factKey) return null;
   return {
-    element_count: doc.elements.length,
-    dimension_count: doc.dimensions.length,
-    note_count: doc.notes.length,
-    schedule_count: doc.schedules.length,
-    schedule_row_count: doc.schedules.reduce((sum, schedule) => sum + (schedule.rows || []).length, 0),
-    calculation_count: doc.calculations.length,
-    reference_count: doc.drawing_references.length,
-    relationship_count: (doc.relationships || []).length,
-    evidence_count: (doc.evidence || []).length,
+    ...row,
+    fact_key: factKey,
+    parent_fact_key: row.parent_fact_key ? cleanString(row.parent_fact_key, 500) : null,
+    text: cleanString(row.text, TEXT_BYTES),
+    value_text: cleanString(row.value_text, TEXT_BYTES),
+    original_text: cleanString(row.original_text, TEXT_BYTES),
+    value_numeric: typeof row.value_numeric === "number" && Number.isFinite(row.value_numeric) ? row.value_numeric : null,
+    confidence: typeof row.confidence === "number" && Number.isFinite(row.confidence) ? row.confidence : null,
+    bbox: fitBbox(row.bbox),
+    properties,
+    related_fact_keys: Array.isArray(row.related_fact_keys)
+      ? row.related_fact_keys.map((key) => cleanString(key, 200)).filter(Boolean).slice(0, 40)
+      : [],
+    related_sheet_refs: Array.isArray(row.related_sheet_refs)
+      ? row.related_sheet_refs.map((key) => cleanString(key, 80)).filter(Boolean).slice(0, 20)
+      : [],
   };
+}
+
+function dedupeFactRows(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows) {
+    const clean = sanitizeFactRow(row);
+    if (!clean?.fact_key || seen.has(clean.fact_key)) continue;
+    seen.add(clean.fact_key);
+    out.push(clean);
+  }
+  return out;
+}
+
+function countsFromRows(rows) {
+  const tally = {
+    element: 0,
+    dimension: 0,
+    note: 0,
+    schedule: 0,
+    schedule_row: 0,
+    calculation: 0,
+    reference: 0,
+    relationship: 0,
+    evidence: 0,
+  };
+  for (const row of rows) {
+    if (tally[row.kind] != null) tally[row.kind] += 1;
+  }
+  return {
+    element_count: tally.element,
+    dimension_count: tally.dimension,
+    note_count: tally.note,
+    schedule_count: tally.schedule,
+    schedule_row_count: tally.schedule_row,
+    calculation_count: tally.calculation,
+    reference_count: tally.reference,
+    relationship_count: tally.relationship,
+    evidence_count: tally.evidence,
+  };
+}
+
+function headerFactTotal(header) {
+  return Object.keys(ZERO_COUNTS).reduce((sum, key) => sum + Number(header?.[key] || 0), 0);
+}
+
+function factsCoverHeader(header, facts) {
+  const tally = {};
+  for (const fact of facts || []) tally[fact.kind] = (tally[fact.kind] || 0) + 1;
+  const expected = {
+    element: header.element_count,
+    dimension: header.dimension_count,
+    note: header.note_count,
+    schedule: header.schedule_count,
+    schedule_row: header.schedule_row_count,
+    calculation: header.calculation_count,
+    reference: header.reference_count,
+    relationship: header.relationship_count,
+    evidence: header.evidence_count,
+  };
+  return Object.entries(expected).every(([kind, count]) => (tally[kind] || 0) >= Number(count || 0));
+}
+
+async function loadFactRows(supabase, extractionId) {
+  const pageSize = 1000;
+  const all = [];
+  for (let from = 0; ; from += pageSize) {
+    const result = await supabase
+      .from(FACTS)
+      .select("*")
+      .eq("extraction_id", extractionId)
+      .eq("superseded", false)
+      .range(from, from + pageSize - 1);
+    if (result.error) return result;
+    const batch = result.data || [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return { data: all, error: null };
+}
+
+async function countFactRows(supabase, extractionId) {
+  return supabase
+    .from(FACTS)
+    .select("id", { count: "exact", head: true })
+    .eq("extraction_id", extractionId)
+    .eq("superseded", false);
 }
 
 function factRows(extractionId, projectId, sheetId, doc) {
@@ -233,12 +412,7 @@ async function loadSheetExtraction(supabase, { projectId, sheetId, sourceFingerp
     throw error;
   }
   if (!data || !["completed", "partial", "extracting", "failed"].includes(data.status)) return null;
-  const facts = await supabase
-    .from(FACTS)
-    .select("*")
-    .eq("extraction_id", data.id)
-    .eq("superseded", false)
-    .limit(1000);
+  const facts = await loadFactRows(supabase, data.id);
   if (facts.error) {
     if (missingTable(facts.error)) return { persisted: false, reason: "not_migrated" };
     throw facts.error;
@@ -246,8 +420,12 @@ async function loadSheetExtraction(supabase, { projectId, sheetId, sourceFingerp
   const document = documentFrom(data, facts.data || []);
   const validation = validateDrawingDocument(document);
   const coverage = data.coverage || {};
+  const factsMissing = data.status === "completed"
+    && headerFactTotal(data) > 0
+    && !factsCoverHeader(data, facts.data || []);
   const completeAndValid =
     data.status === "completed" &&
+    !factsMissing &&
     validation.ok &&
     (data.unreadable_regions || []).length === 0 &&
     Number(coverage.pages_completed || 0) >= Number(coverage.pages_total || 1) &&
@@ -255,7 +433,8 @@ async function loadSheetExtraction(supabase, { projectId, sheetId, sourceFingerp
   return {
     persisted: true,
     reused: completeAndValid,
-    resume: !completeAndValid,
+    resume: !completeAndValid && !factsMissing,
+    factsMissing,
     retryAllowed: !completeAndValid && Number(data.retry_count || 0) < Number(data.retry_limit || 3),
     validation,
     extractionId: data.id,
@@ -300,8 +479,12 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
     return { persisted: false, reason: "missing_identity", document: reviewDocument(document) };
   }
   const validation = validateDrawingDocument(document);
-  const status = validation.ok ? document.extraction.status : "failed";
-  const header = {
+  const finalStatus = validation.ok ? document.extraction.status : "failed";
+  const limitations = [
+    ...(document.extraction.limitations || []),
+    ...validation.errors.map((error) => `validation:${error}`),
+  ];
+  const identity = {
     project_id: projectId,
     document_id: documentId || document.file_id || null,
     sheet_id: sheetId,
@@ -311,25 +494,38 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
     source_fingerprint: document.source_fingerprint,
     schema_version: SCHEMA_VERSION,
     extractor_version: EXTRACTOR_VERSION,
-    status,
     methods: document.extraction.methods || [],
     coverage: document.extraction.coverage || {},
     unreadable_regions: document.extraction.unreadable_regions || [],
-    limitations: [
-      ...(document.extraction.limitations || []),
-      ...validation.errors.map((error) => `validation:${error}`),
-    ],
     retry_count: document.extraction.retry_count || 0,
     retry_limit: document.extraction.retry_limit || 3,
     retry_status: document.extraction.retry_status || null,
     last_attempt_at: document.extraction.last_attempt_at || new Date().toISOString(),
-    ...counts(document),
     extracted_at: new Date().toISOString(),
     superseded: false,
   };
+  const prior = await supabase
+    .from(EXTRACTIONS)
+    .select("id, status, element_count, dimension_count, note_count, schedule_count, schedule_row_count, calculation_count, reference_count, relationship_count, evidence_count")
+    .eq("project_id", projectId)
+    .eq("sheet_id", sheetId)
+    .eq("source_fingerprint", document.source_fingerprint)
+    .eq("extractor_version", EXTRACTOR_VERSION)
+    .maybeSingle();
+  if (!prior.error && prior.data?.status === "completed" && headerFactTotal(prior.data) > 0) {
+    const priorFacts = await loadFactRows(supabase, prior.data.id);
+    if (!priorFacts.error && factsCoverHeader(prior.data, priorFacts.data || [])) {
+      return { persisted: true, reused: true, extractionId: prior.data.id, document: reviewDocument(document) };
+    }
+  }
   const written = await supabase
     .from(EXTRACTIONS)
-    .upsert(header, { onConflict: "project_id,sheet_id,source_fingerprint,extractor_version" })
+    .upsert({
+      ...identity,
+      status: "extracting",
+      limitations,
+      ...ZERO_COUNTS,
+    }, { onConflict: "project_id,sheet_id,source_fingerprint,extractor_version" })
     .select("id")
     .maybeSingle();
   if (written.error) {
@@ -337,17 +533,76 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
     return { persisted: false, reason: "write_failed", message: written.error.message, document: reviewDocument(document) };
   }
   const extractionId = written.data?.id;
-  if (!extractionId || status === "failed") {
-    return { persisted: Boolean(extractionId), reason: status === "failed" ? "invalid" : "write_failed", document: reviewDocument({ ...document, extraction: { ...document.extraction, status } }) };
+  if (!extractionId) {
+    return { persisted: false, reason: "write_failed", document: reviewDocument(document) };
   }
-  await supabase.from(FACTS).delete().eq("extraction_id", extractionId);
-  const rows = factRows(extractionId, projectId, sheetId, document);
-  for (let index = 0; index < rows.length; index += 100) {
-    const batch = await supabase.from(FACTS).insert(rows.slice(index, index + 100));
-    if (batch.error && !missingTable(batch.error)) {
-      return { persisted: false, reason: "write_failed", message: batch.error.message, document: reviewDocument(document) };
+  const fail = async (message) => {
+    await supabase
+      .from(EXTRACTIONS)
+      .update({
+        status: "failed",
+        ...ZERO_COUNTS,
+        limitations: [...limitations, `fact_write_failed:${String(message || "facts were not stored").slice(0, 300)}`],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", extractionId)
+      .in("status", ["extracting", "failed"]);
+    return {
+      persisted: false,
+      reason: finalStatus === "failed" ? "invalid" : "write_failed",
+      message,
+      extractionId,
+      document: reviewDocument({ ...document, extraction: { ...document.extraction, status: "failed" } }),
+    };
+  };
+  if (finalStatus === "failed") return fail(validation.errors[0] || "invalid drawing document");
+  const rows = dedupeFactRows(factRows(extractionId, projectId, sheetId, document));
+  for (let index = 0; index < rows.length; index += FACT_BATCH) {
+    const batch = await supabase
+      .from(FACTS)
+      .upsert(rows.slice(index, index + FACT_BATCH), { onConflict: "extraction_id,fact_key" });
+    if (batch.error) {
+      if (missingTable(batch.error)) return { persisted: false, reason: "not_migrated", extractionId, document: reviewDocument(document) };
+      return fail(batch.error.message);
     }
   }
+  const existing = await loadFactRows(supabase, extractionId);
+  if (existing.error) {
+    if (missingTable(existing.error)) return { persisted: false, reason: "not_migrated", extractionId, document: reviewDocument(document) };
+    return fail(existing.error.message);
+  }
+  const keep = new Set(rows.map((row) => row.fact_key));
+  const stale = (existing.data || []).map((row) => row.fact_key).filter((key) => key && !keep.has(key));
+  for (let index = 0; index < stale.length; index += 100) {
+    const deleted = await supabase
+      .from(FACTS)
+      .delete()
+      .eq("extraction_id", extractionId)
+      .in("fact_key", stale.slice(index, index + 100));
+    if (deleted.error && !missingTable(deleted.error)) return fail(deleted.error.message);
+  }
+  const stored = await countFactRows(supabase, extractionId);
+  if (stored.error) {
+    if (missingTable(stored.error)) return { persisted: false, reason: "not_migrated", extractionId, document: reviewDocument(document) };
+    return fail(stored.error.message);
+  }
+  if (Number(stored.count || 0) < rows.length) {
+    return fail(`stored ${stored.count || 0} of ${rows.length} drawing facts`);
+  }
+  const storedCounts = countsFromRows(rows);
+  const committed = await supabase
+    .from(EXTRACTIONS)
+    .update({
+      ...identity,
+      status: finalStatus,
+      limitations,
+      ...storedCounts,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", extractionId)
+    .select("id")
+    .maybeSingle();
+  if (committed.error) return fail(committed.error.message);
   await supabase
     .from(EXTRACTIONS)
     .update({ superseded: true, updated_at: new Date().toISOString() })

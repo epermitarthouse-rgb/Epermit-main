@@ -1316,6 +1316,17 @@ function reviewDocument(doc) {
   };
 }
 
+function measurementIsProven(dimension, elementIds) {
+  if (!dimension) return false;
+  if (dimension.role === "requirement" || dimension.role === "calculation_operand") return false;
+  if (["calculation_operand", "candidate", "unbound", "requirement_note"].includes(dimension.binding_status)) return false;
+  if (dimension.association_status === "candidate" || dimension.association_status === "none") return false;
+  const tied = (dimension.related_element_ids || []).some((id) => elementIds.has(id));
+  if (!tied) return false;
+  return dimension.association_status === "verified"
+    || (dimension.binding_status === "bound" && dimension.association_status === "inferred");
+}
+
 function gateMeasuredFact(doc, claim, numbers) {
   if (!doc || !claim?.element || doc.extraction?.status === "failed") return null;
   const relevantElements = (doc.elements || []).filter((element) => element.type === claim.element.id);
@@ -1327,14 +1338,7 @@ function gateMeasuredFact(doc, claim, numbers) {
         .test(String(dimension.original_content || dimension.value_text || "")));
   const dimensions = (doc.dimensions || []).filter(mentions);
   if (!dimensions.length) return null;
-  const verified = dimensions.some((dimension) =>
-    dimension.association_status === "verified" &&
-    (dimension.related_element_ids || []).some((id) => elementIds.has(id)));
-  if (verified) return null;
-  const inferred = dimensions.some((dimension) =>
-    dimension.binding_status === "bound" &&
-    (dimension.related_element_ids || []).some((id) => elementIds.has(id)));
-  if (inferred) return null;
+  if (dimensions.some((dimension) => measurementIsProven(dimension, elementIds))) return null;
   if (dimensions.every((dimension) => dimension.role === "requirement")) {
     return {
       reason: "requirement_note_not_measurement",
@@ -1343,7 +1347,26 @@ function gateMeasuredFact(doc, claim, numbers) {
   }
   return {
     reason: "value_not_bound_to_element",
-    detail: `Structured extraction did not establish ${numbers.join(" and ")} as a measurement of the ${claim.element.label}. Candidate proximity and unbound values cannot prove that relationship.`,
+    detail: `Structured extraction did not establish ${numbers.join(" and ")} as a measurement of the ${claim.element.label}. Unbound values, calculation operands, and candidate proximity cannot prove that relationship. A text anchor locates the label, not a physical boundary.`,
+  };
+}
+
+/**
+ * A missing-attribute claim is not "not stated" when the element is on the sheet and the
+ * only values are unbound, operands, or proximity candidates.
+ */
+function unboundMeasurement(doc, claim) {
+  if (!doc || !claim?.element || doc.extraction?.status === "failed") return null;
+  const relevantElements = (doc.elements || []).filter((element) => element.type === claim.element.id);
+  if (!relevantElements.length) return null;
+  const dimensions = doc.dimensions || [];
+  if (!dimensions.length) return null;
+  const elementIds = new Set(relevantElements.map((element) => element.id));
+  if (dimensions.some((dimension) => measurementIsProven(dimension, elementIds))) return null;
+  const attribute = (claim.attributes || [])[0] || "measurement";
+  return {
+    reason: "value_not_bound_to_element",
+    detail: `Structured extraction found the ${claim.element.label}, but no dimension is bound to that element. Unbound values, calculation operands, and candidate proximity are not measurements of it. A text anchor locates the label, not a physical boundary, so the ${attribute} is not established as absent or compliant.`,
   };
 }
 
@@ -1364,5 +1387,6 @@ module.exports = {
   validateDrawingDocument,
   reviewDocument,
   gateMeasuredFact,
+  unboundMeasurement,
   summarizeForReview,
 };

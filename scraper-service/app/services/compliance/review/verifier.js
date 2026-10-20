@@ -24,7 +24,7 @@ const {
   NOT_TEXT_ATTRIBUTES,
   outcomeForReason,
 } = require("./evaluation.js");
-const { gateMeasuredFact } = require("../rag/drawingStructureV2.js");
+const { gateMeasuredFact, unboundMeasurement } = require("../rag/drawingStructureV2.js");
 
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;
@@ -695,8 +695,64 @@ const RATED_PREMISE_ON_SHEET_RE =
 /** Elements whose requirement applies only when the sheet establishes a premise about them. */
 const ELEMENT_PREMISES = { fire_rated_assembly: RATED_PREMISE_ON_SHEET_RE };
 const MEASURED_ATTRIBUTES = new Set(["width", "clearance", "height", "distance", "opening", "riser_tread", "thickness"]);
-/** Reasons whose publication already rests on bound evidence or a stated calculation. */
-const SELF_EVIDENCED = new Set(["evidence_chain", "calculation_reconciled"]);
+/** A stated calculation already carries its own evidence. An evidence-chain accept does not. */
+const SELF_EVIDENCED = new Set(["calculation_reconciled"]);
+const CORPUS_UNAVAILABLE = "Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus.";
+
+function corpusUnavailableSentence(issue) {
+  const citation = String(issue?.codeReference || "").trim();
+  return citation
+    ? `${CORPUS_UNAVAILABLE} Missing provision: ${citation}.`
+    : CORPUS_UNAVAILABLE;
+}
+
+function echoesSheetNote(issue, corpus) {
+  const words = distinctiveTokens(claimText(issue));
+  if (words.length < 3) return false;
+  const hay = String(corpus || "").toLowerCase();
+  if (!hay) return false;
+  const hits = words.filter((word) => hay.includes(word)).length;
+  return hits >= Math.min(4, words.length) && hits / words.length >= 0.6;
+}
+
+/**
+ * An evidence-chain accept with an unverified citation cannot be published as a warning
+ * when the observation is empty, graphic evidence is unavailable, or the text restates a note.
+ */
+function withholdUnsupportedClaim(issue, decision, ctx) {
+  if (!decision || decision.disposition !== "accept" || decision.reason !== "evidence_chain") return null;
+  if (decision.provenance?.codeSourceStatus === "authoritative") return null;
+  const claim = parseClaim(issue);
+  const state = evidenceState(claim, ctx);
+  const provenance = { ...(decision.provenance || {}), gated: true, priorReason: decision.reason };
+  const sentence = corpusUnavailableSentence(issue);
+  const page = String(ctx?.pageText || ctx?.corpus || "");
+  if (!state.quote || state.state === "absent" || state.state === "unreadable" || state.reason === "graphic_evidence_unavailable") {
+    return {
+      disposition: "reject",
+      reason: state.reason === "value_not_bound_to_element" ? "value_not_bound_to_element" : (state.reason || "graphic_evidence_unavailable"),
+      detail: `A published warning cannot rest on an absent observation. ${sentence}`,
+      provenance,
+    };
+  }
+  if (isDocumentedProvision(issue, page) || isRestatement(issue, page) || echoesSheetNote(issue, page)) {
+    return {
+      disposition: "reject",
+      reason: "requirement_already_on_sheet",
+      detail: `The finding restates a drawing note. That note is not a verified deficiency. ${sentence}`,
+      provenance,
+    };
+  }
+  if (issue.severity === "warning" || issue.findingType === "potential_concern" || issue.evidenceStrength === "weak") {
+    return {
+      disposition: "reject",
+      reason: "governing_code_unverified",
+      detail: sentence,
+      provenance,
+    };
+  }
+  return null;
+}
 
 function numbersIn(values) {
   return [...new Set(values.map((value) => (String(value).match(/\d+(?:\.\d+)?/) || [])[0]).filter(Boolean))];
@@ -710,6 +766,8 @@ function numbersIn(values) {
  */
 function publicationGate(issue, decision, ctx) {
   if (!decision || !PUBLISHING.has(decision.disposition) || SELF_EVIDENCED.has(String(decision.reason || ""))) return decision;
+  const unsupported = withholdUnsupportedClaim(issue, decision, ctx);
+  if (unsupported) return unsupported;
   if (String(issue?.findingType || "") === "confirmed_violation" && decision.disposition === "accept") return decision;
   const claim = parseClaim(issue);
   const provenance = { ...(decision.provenance || {}), gated: true, priorReason: decision.reason || decision.disposition };
@@ -768,6 +826,10 @@ function publicationGate(issue, decision, ctx) {
   const structured = gateMeasuredFact(ctx?.structuredDrawing, claim, numbers);
   if (structured) {
     return { disposition: "reject", reason: structured.reason, detail: structured.detail, provenance };
+  }
+  if (claim.kind === "missing") {
+    const unbound = unboundMeasurement(ctx?.structuredDrawing, claim);
+    if (unbound) return { disposition: "reject", reason: unbound.reason, detail: unbound.detail, provenance };
   }
   if (claim.kind !== "missing" && numbers.length) {
     const measuredSpans = spans.filter((span) => !NORMATIVE_NOTE_RE.test(span.text));
@@ -949,6 +1011,10 @@ function challengeEvidence(issue, decision, ctx) {
   // Absent after a full read of this sheet, including its graphic text, and the related sheets,
   // on a sheet that names the element: the question is anchored to drawing evidence.
   if (claim.kind === "missing" && state.adequate && state.named && ownsElement(ctx, claim.element)) {
+    const unbound = unboundMeasurement(ctx?.structuredDrawing, claim);
+    if (unbound) {
+      return { disposition: "reject", reason: unbound.reason, detail: unbound.detail, provenance: prior };
+    }
     const relatedNames = related.filter((source) => elementSpans(source.text, claim.element).length).map((source) => source.sheet);
     return {
       disposition: "accept_question",
@@ -984,8 +1050,20 @@ function originalDiagnostics(issue) {
   };
 }
 
+function visibleCopy(issue, decision) {
+  const authoritative = decision.provenance?.codeSourceStatus === "authoritative";
+  const sentence = corpusUnavailableSentence(issue);
+  const detail = String(decision.detail || "");
+  const description = authoritative || detail.includes(CORPUS_UNAVAILABLE) ? detail : `${detail} ${sentence}`.trim();
+  const fix = String(issue.suggestedFix || "");
+  const inventedThreshold = /\d/.test(fix) && /\b(?:inch(?:es)?|mm|gpm|minimum|maximum|between|at least)\b/i.test(fix);
+  const suggestedFix = authoritative ? issue.suggestedFix : (inventedThreshold ? sentence : (fix || sentence));
+  return { description, suggestedFix };
+}
+
 function applyDecision(issue, decision) {
   const codeSourceStatus = decision.provenance?.codeSourceStatus || "unverified";
+  const copy = visibleCopy(issue, decision);
   if (decision.disposition === "reject") {
     return {
       ...issue,
@@ -1008,7 +1086,8 @@ function applyDecision(issue, decision) {
       codeSourceStatus,
       diagnostics: originalDiagnostics(issue),
       title: decision.disposition === "accept_question" ? issue.title : `${topic} — verification required`,
-      description: decision.detail,
+      description: copy.description,
+      suggestedFix: copy.suggestedFix,
       findingType: issue.findingType === "unverified" ? "unverified" : "missing_information",
       evidenceTier: "verification",
       severity: "advisory",
@@ -1027,7 +1106,8 @@ function applyDecision(issue, decision) {
       codeSourceStatus,
       diagnostics: originalDiagnostics(issue),
       title: `${cleanTopic(issue.title)} — verification required`,
-      description: `${decision.detail || "This is not a confirmed violation."}${redirect} The code citation is not a verified excerpt.`,
+      description: `${decision.detail || "This is not a confirmed violation."}${redirect} The code citation is not a verified excerpt.${codeSourceStatus === "authoritative" ? "" : ` ${corpusUnavailableSentence(issue)}`}`,
+      suggestedFix: copy.suggestedFix,
       findingType: "missing_information",
       evidenceTier: "verification",
       severity: "advisory",
@@ -1042,6 +1122,8 @@ function applyDecision(issue, decision) {
     validationDetail: decision.detail,
     provenance: { ...decision.provenance, codeSourceStatus },
     codeSourceStatus,
+    description: copy.description,
+    suggestedFix: copy.suggestedFix,
     userVisible: true,
   };
 }

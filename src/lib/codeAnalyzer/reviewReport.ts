@@ -101,6 +101,7 @@ export type ReviewMetadataLike = {
     sourceStatus?: string | null;
     warning?: string | null;
     unresolvedReasons?: string[] | null;
+    requestedReviewScope?: string | null;
   } | null;
   codeCoverage?: {
     status?: string | null;
@@ -302,6 +303,65 @@ function evaluationSheets(candidate: StoredCandidate): string[] {
     .filter(Boolean);
 }
 
+type StoredLegal = NonNullable<ReviewMetadataLike["legalApplicability"]>;
+type StoredCoverage = NonNullable<ReviewMetadataLike["codeCoverage"]>;
+
+const CORPUS_SENTENCE = "Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus.";
+
+function editionAligned(legal: StoredLegal | null | undefined): boolean {
+  const selected = String(legal?.selectedEdition || "").trim();
+  if (!selected || !legal) return false;
+  const base = String(legal.adoptedBaseCode || "");
+  const adopted = String(legal.adoptedEdition || "");
+  return base === selected || base.endsWith(` ${selected}`) || adopted.endsWith(selected);
+}
+
+function corpusDetail(legal: StoredLegal | null | undefined, coverage: StoredCoverage | null | undefined): string {
+  const named = [legal?.adoptedEdition, legal?.adoptedBaseCode].filter(Boolean).join(" / ")
+    || legal?.selectedEdition
+    || "the selected code";
+  const source = legal?.officialSourceUrl ? ` Source: ${legal.officialSourceUrl}.` : "";
+  const coverageNote = coverage?.status ? ` Code source coverage: ${String(coverage.status).replace(/_/g, " ")}.` : "";
+  return `${CORPUS_SENTENCE} No authoritative code requirement for the reviewed elements was available for ${named}.${coverageNote}${source} This is missing code text, not a missing drawing dimension.`;
+}
+
+function presentLegal(
+  legal: StoredLegal | null | undefined,
+): StoredLegal | null {
+  if (!legal || legal.status !== "unresolved" || legal.requestedReviewScope === "reference_only" || !editionAligned(legal)) {
+    return legal || null;
+  }
+  const reason = (legal.unresolvedReasons || []).filter(Boolean).join(" ");
+  return {
+    ...legal,
+    reviewScope: "permit_compliance",
+    warning: reason || legal.warning,
+  };
+}
+
+function presentLimitation(
+  limitation: ReviewLimitation,
+  legal: StoredLegal | null | undefined,
+  coverage: StoredCoverage | null | undefined,
+): ReviewLimitation {
+  if (
+    limitation.code === "reference_only_scope"
+    && legal?.status === "unresolved"
+    && legal.requestedReviewScope !== "reference_only"
+    && editionAligned(legal)
+  ) {
+    return {
+      ...limitation,
+      code: "permit_applicability_unresolved",
+      detail: `${(legal.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition matches the verified adopted base code (${legal.adoptedBaseCode || legal.adoptedEdition}). Permit compliance stays unresolved until that fact is documented.`,
+    };
+  }
+  if (limitation.code === "no_authoritative_requirement" && !String(limitation.detail || "").includes("verified Code RAG corpus")) {
+    return { ...limitation, detail: corpusDetail(legal, coverage) };
+  }
+  return limitation;
+}
+
 /**
  * Stored reasons first. Older rows have none, so the same reasons are read from
  * legal applicability, code coverage, checklist evidence, and withheld candidates.
@@ -317,14 +377,24 @@ export function reviewLimitations(metadata: ReviewMetadataLike[]): ReviewLimitat
     if (reviewOutcome({ ...summary, totalIssues: 0 }) === "verified_compliant") continue;
     if (Array.isArray(summary.limitations) && summary.limitations.length > 0) {
       summary.limitations.forEach((limitation) =>
-        add(isUnresolvedCheck(limitation) ? withCheckDetail(limitation, item) : limitation),
+        add(isUnresolvedCheck(limitation)
+          ? withCheckDetail(limitation, item)
+          : presentLimitation(limitation, item.legalApplicability, item.codeCoverage)),
       );
       if (!summary.limitations.some(isUnresolvedCheck)) addOpenChecks(item, add);
       continue;
     }
     if (summary.reviewState === "failed" || summary.reviewState === "not_reviewed") continue;
     const legal = item.legalApplicability;
-    if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
+    const unresolvedMatch = legal?.status === "unresolved"
+      && legal.requestedReviewScope !== "reference_only"
+      && editionAligned(legal);
+    if (unresolvedMatch) {
+      add({
+        code: "permit_applicability_unresolved",
+        detail: `${(legal?.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition matches the verified adopted base code (${legal?.adoptedBaseCode || legal?.adoptedEdition}). Permit compliance stays unresolved until that fact is documented.`,
+      });
+    } else if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
       add({
         code: "reference_only_scope",
         detail: legal?.selectedEdition
@@ -335,7 +405,7 @@ export function reviewLimitations(metadata: ReviewMetadataLike[]): ReviewLimitat
     if (!item.codeCoverage || (item.codeCoverage.enforceableProvisionCount ?? 0) === 0) {
       add({
         code: "no_authoritative_requirement",
-        detail: `No authoritative code requirement for the reviewed elements was available${item.codeCoverage?.status ? ` (code source coverage: ${item.codeCoverage.status.replace(/_/g, " ")})` : ""}, so drawing labels could not be checked against a requirement.`,
+        detail: corpusDetail(legal, item.codeCoverage),
       });
     }
     const checklist = summary.checklist ?? [];
@@ -432,7 +502,7 @@ export function buildReviewReportView(
 ): ReviewReportView {
   const scope = metadata.map((item) => item.jurisdictionScope).find(Boolean) || null;
   const diagnostics = metadata.map((item) => item.jurisdictionDiagnostics).find(Boolean) || null;
-  const legalApplicability = metadata.map((item) => item.legalApplicability).find(Boolean) || null;
+  const legalApplicability = presentLegal(metadata.map((item) => item.legalApplicability).find(Boolean) || null);
   const codeCoverage = metadata.map((item) => item.codeCoverage).find(Boolean) || null;
   const selectedScope = scope?.selectedScope || diagnostics?.selectedScope || "Unselected";
   const detectedLocation = scope?.detectedLocation || diagnostics?.detectedLocation || "None recorded";
@@ -630,6 +700,13 @@ export function sheetFindingsHeadline(summary: ReviewOutcomeSummary | null | und
   if (total > 0) return `${total} ${total === 1 ? "Finding" : "Findings"} · ${label}`;
   const open = (summary?.limitations ?? []).filter(isUnresolvedCheck).length;
   if (open > 0) return `0 Findings · ${label} · ${open} unresolved ${open === 1 ? "check" : "checks"}`;
-  if (reviewOutcome(summary) === "no_findings_unverified") return "0 Findings · Code compliance unverified";
+  if (reviewOutcome(summary) === "no_findings_unverified") {
+    const corpusGap = (summary?.limitations ?? []).some((item) =>
+      item.code === "no_authoritative_requirement"
+      || String(item.detail || "").includes("verified Code RAG corpus"));
+    return corpusGap
+      ? "0 Findings · Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus."
+      : "0 Findings · Code compliance unverified";
+  }
   return `0 Findings · ${label}`;
 }
