@@ -16,6 +16,8 @@ const MAX_REGIONS = 6;
 const MAX_GRAPHIC_REGIONS = 8;
 const MAX_REGION_IMAGES = 2;
 const TILE_MAX_PX = 1700;
+/** Tesseract needs about 20 px per capital to read small CAD lettering; Vision reads it at 1700. */
+const TILE_MAX_PX_BY_ENGINE = { tesseract: 2600 };
 const CROP_MAX_PX = 1200;
 const OCR_CONFIDENCE_MIN = 0.45;
 const GRAPHIC_INTEREST_RE =
@@ -116,14 +118,19 @@ function tileBoxes(pageWidth, pageHeight) {
   const rows = pageHeight >= 1200 ? 2 : 1;
   const tileW = pageWidth / columns;
   const tileH = pageHeight / rows;
+  // Tiles overlap so a label on a seam ("1H ONE HOUR FIRE RATED WALLS") is read whole by one tile.
+  const overlapX = tileW * 0.06;
+  const overlapY = tileH * 0.06;
   const boxes = [];
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < columns; col += 1) {
+      const x = Math.max(0, col * tileW - overlapX);
+      const y = Math.max(0, pageHeight - (row + 1) * tileH - overlapY);
       boxes.push({
-        x: col * tileW,
-        y: pageHeight - (row + 1) * tileH,
-        width: tileW,
-        height: tileH,
+        x,
+        y,
+        width: Math.min(pageWidth, (col + 1) * tileW + overlapX) - x,
+        height: Math.min(pageHeight, pageHeight - row * tileH + overlapY) - y,
       });
     }
   }
@@ -136,9 +143,12 @@ function scaleForBox(box, maxPx) {
   return Math.max(0.5, Math.min(4, maxPx / longest));
 }
 
-function textLayerIsSparse(items, pageWidth, pageHeight) {
-  const count = (items || []).length;
-  return pageWidth > 1000 && pageHeight > 700 && count < 200;
+/**
+ * A drawing-size page. Its graphic text is read even when the text layer is dense: a dense layer
+ * can still leave legends, tags, rotated dimensions, and stamped notes only in the linework.
+ */
+function isDrawingPage(pageWidth, pageHeight) {
+  return pageWidth > 1000 && pageHeight > 700;
 }
 
 /**
@@ -272,16 +282,70 @@ function wordToPdfBox(tile, word, pixelWidth, pixelHeight) {
  * @param {number} pageHeight
  * @param {{ ocr?: Function }} options
  */
+/**
+ * Tesseract word boxes from an image rotated 90° clockwise, mapped back to the unrotated image.
+ * Text that reads bottom to top (rotated CAD dimensions and labels) is horizontal there.
+ */
+function unrotatedWord(word, originalHeight) {
+  return {
+    ...word,
+    left: Number(word.top),
+    top: originalHeight - (Number(word.left) + Number(word.width)),
+    width: Number(word.height),
+    height: Number(word.width),
+    rotated: true,
+  };
+}
+
+function overlapsAny(box, boxes) {
+  return boxes.some((other) => {
+    const w = Math.min(box.x + box.width, other.x + other.width) - Math.max(box.x, other.x);
+    const h = Math.min(box.y + box.height, other.y + other.height) - Math.max(box.y, other.y);
+    return w > 0 && h > 0 && w * h >= 0.5 * Math.min(box.width * box.height, other.width * other.height);
+  });
+}
+
+/**
+ * Tesseract's sparse-text mode does not read rotated text, so each tile is also read rotated;
+ * only words that are vertical on the sheet are kept from that pass.
+ */
+async function rotatedTesseractWords(rendered, options) {
+  let sharp;
+  try {
+    sharp = require("sharp");
+  } catch {
+    return [];
+  }
+  const png = await sharp(rendered.png).rotate(90).png().toBuffer().catch(() => null);
+  if (!png) return [];
+  const recognized = await recognizePng(png, options);
+  if (recognized.unavailable || recognized.failed) return [];
+  return (recognized.words || [])
+    .filter((word) => word.origin === "top-left-px" && String(word.text || "").replace(/\s/g, "").length >= 2)
+    .map((word) => unrotatedWord(word, rendered.pixelHeight));
+}
+
 async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
   const tiles = tileBoxes(pageWidth, pageHeight);
+  const engine = ocrEngine(options);
+  const tileMaxPx = TILE_MAX_PX_BY_ENGINE[engine] || TILE_MAX_PX;
   const lines = [];
   const words = [];
   let unavailable = 0;
+  let read = 0;
+  const started = Date.now();
+  const budgetMs = Number(options.graphicsBudgetMs ?? process.env.CODE_ANALYZER_GRAPHICS_BUDGET_MS) || 150000;
   for (const tile of tiles) {
-    const scale = scaleForBox(tile, TILE_MAX_PX);
+    // Tiles left when the budget runs out are recorded unreadable, never as having no text.
+    if (Date.now() - started > budgetMs) {
+      unavailable += 1;
+      lines.push({ tile, readable: false, quote: null, confidence: null, extractionMethod: engine || "none", limitations: "region_unreadable" });
+      continue;
+    }
+    const scale = scaleForBox(tile, tileMaxPx);
     let rendered;
     try {
-      rendered = await renderPdfClip(page, { ...tile, pageWidth, pageHeight }, scale);
+      rendered = await renderPdfClip(page, { ...tile, pageWidth, pageHeight }, scale, tileMaxPx);
     } catch {
       rendered = null;
     }
@@ -302,13 +366,24 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
       });
       continue;
     }
+    read += 1;
     const clip = rendered.clip || tile;
-    for (const word of recognized.words || []) {
+    const tileWords = [...(recognized.words || [])];
+    if (recognized.engine === "tesseract" && Date.now() - started < budgetMs * 0.75) {
+      const placed = tileWords.map((word) => wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight));
+      for (const word of await rotatedTesseractWords(rendered, options)) {
+        const box = wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight);
+        if (box.height > 1.6 * box.width && !overlapsAny(box, placed)) tileWords.push(word);
+      }
+    }
+    for (const word of tileWords) {
       const text = String(word.text || "").trim();
       if (!text) continue;
+      const box = wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight);
       const confident = Number(word.confidence) >= OCR_CONFIDENCE_MIN;
-      if (confident) {
-        words.push({ text, confidence: Number(word.confidence), box: wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight) });
+      // Overlapping tiles read a label near a seam twice; the first read is kept.
+      if (confident && !words.some((other) => other.text === text && overlapsAny(box, [other.box]))) {
+        words.push({ text, confidence: Number(word.confidence), box, ...(word.rotated ? { rotated: true } : {}) });
       }
       if (!GRAPHIC_INTEREST_RE.test(text)) continue;
       lines.push({
@@ -318,7 +393,7 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
         confidence: Number(word.confidence),
         extractionMethod: recognized.engine,
         limitations: confident ? null : "region_unreadable",
-        box: wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight),
+        box,
         reason: reasonFor(text),
       });
     }
@@ -349,11 +424,13 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
     });
   }
 
+  // Readable words mean the graphic text was read, whether or not a region of interest was found.
   let readStatus = "unreadable";
-  if (regions.some((region) => region.readable && region.quote)) readStatus = "recognized";
+  if (words.length || regions.some((region) => region.readable && region.quote)) readStatus = "recognized";
   else if (unavailable === tiles.length) readStatus = "ocr_unavailable";
   else if (!regions.length && unavailable === 0) readStatus = "no_graphic_text";
-  if (readStatus === "unreadable" && words.length) readStatus = "recognized";
+  // A tile that could not be read leaves part of the sheet unread.
+  if (readStatus === "recognized" && unavailable > 0 && read < tiles.length) readStatus = "unreadable";
   return { regions, readStatus, words };
 }
 
@@ -693,8 +770,7 @@ async function comprehendPdfPage(filePath, pageNumber, options = {}) {
 
       let graphic = { regions: [], readStatus: "text-layer", words: [], indexLines: [] };
       const textLayer = items.map((item) => item.str).join(" ");
-      const sparse = textLayerIsSparse(items, viewport.width, viewport.height);
-      const discover = options.discoverGraphics !== false && sparse;
+      const discover = options.discoverGraphics !== false && isDrawingPage(viewport.width, viewport.height);
       if (discover) {
         const key = cacheKey(buffer, pageNum);
         const cached = options.ocr ? null : graphicCache.get(key);

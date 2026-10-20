@@ -266,6 +266,42 @@ export function sheetResultPresentation<T extends CombinedModeResult>(
   };
 }
 
+export type FindingCardFilter = "all" | "critical" | "warning" | "advisory" | "no_findings";
+
+function severityBucket(severity: string | undefined): "critical" | "warning" | "advisory" {
+  if (severity === "critical" || severity === "warning") return severity;
+  return "advisory";
+}
+
+/** Sheets for a summary card. Both scopes count; failed sheets only appear unfiltered. */
+export function groupMatchesFindingFilter(
+  group: { failed?: boolean; ibcResult: CombinedModeResult | null; localResult: CombinedModeResult | null },
+  filter: FindingCardFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (group.failed || (!group.ibcResult && !group.localResult)) return false;
+  if (filter === "no_findings") return combineSheetSummaries(group.ibcResult, group.localResult).totalIssues === 0;
+  return combinedSheetIssues(group.ibcResult, group.localResult).some(
+    (issue) => severityBucket(issue.severity) === filter,
+  );
+}
+
+/** Opens the scope that holds the filtered findings, else the scope that has any findings. */
+export function defaultSheetScope(
+  group: { ibcResult: CombinedModeResult | null; localResult: CombinedModeResult | null },
+  filter: FindingCardFilter,
+): "ibc" | "local" {
+  const has = (result: CombinedModeResult | null) =>
+    (result?.issues ?? []).some((issue) =>
+      filter === "critical" || filter === "warning" || filter === "advisory"
+        ? severityBucket(issue.severity) === filter
+        : true,
+    );
+  if (has(group.ibcResult)) return "ibc";
+  if (has(group.localResult)) return "local";
+  return group.ibcResult ? "ibc" : "local";
+}
+
 /** Score text for headers and exports. Absent scores stay words, never 0% or 100%. */
 export function exportScoreText(summary?: {
   overallScore?: number | null;

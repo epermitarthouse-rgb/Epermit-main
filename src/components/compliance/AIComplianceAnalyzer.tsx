@@ -103,7 +103,13 @@ import {
   exportReportButtonLabel,
   selectSheetsForExport,
 } from "@/lib/complianceAnalysisExport";
-import { combineSheetSummaries, sheetResultPresentation } from "@/lib/codeAnalyzer/combinedSheetSummary";
+import {
+  combineSheetSummaries,
+  defaultSheetScope,
+  groupMatchesFindingFilter,
+  sheetResultPresentation,
+  type FindingCardFilter,
+} from "@/lib/codeAnalyzer/combinedSheetSummary";
 import { cn } from "@/lib/utils";
 import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { useRecentlyUsed } from "@/hooks/useRecentlyUsed";
@@ -378,6 +384,7 @@ export function AIComplianceAnalyzer() {
     COMPLIANCE_SCORE_FILTER_ALL,
   );
   const [sheetResultsSearch, setSheetResultsSearch] = useState("");
+  const [findingCardFilter, setFindingCardFilter] = useState<FindingCardFilter>("all");
   const [loadingExisting, setLoadingExisting] = useState(false);
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -674,7 +681,12 @@ export function AIComplianceAnalyzer() {
       try {
         const result = await recheckDrawingIndex();
         if (!cancelled) {
-          setIndexCompleteness(result);
+          // A live prescreen that finds no index must not replace an index the run already read by OCR.
+          setIndexCompleteness((prev) =>
+            prev?.hasIndex && !result?.hasIndex
+              ? { ...prev, analysisCoverage: result?.analysisCoverage ?? prev.analysisCoverage }
+              : result,
+          );
           setIndexPrescreenError(null);
         }
       } catch (err) {
@@ -2943,13 +2955,16 @@ export function AIComplianceAnalyzer() {
     return filterSheetResultsBySearch(byScore, sheetResultsSearch);
   }, [resultGroups, resultsDocumentFilter, filterMatchFileName, complianceScoreFilter, sheetResultsSearch]);
 
-  /** Aggregate KPI strip across displayed analyzed sheets' real results — never seeded. */
-  const aggregateFindingStats = useMemo(() => {
+  /** Aggregate KPI strip across displayed analyzed sheets' real results (IBC + Local) — never seeded. */
+  const findingStatsFor = (groups: typeof resultGroups) => {
     let critical = 0;
     let warnings = 0;
     let advisory = 0;
+    let ibc = 0;
+    let local = 0;
+    let noFindings = 0;
     let sheetsWithResults = 0;
-    for (const group of displayedResultGroups) {
+    for (const group of groups) {
       if (group.failed) continue;
       if (!group.ibcResult && !group.localResult) continue;
       sheetsWithResults += 1;
@@ -2957,9 +2972,22 @@ export function AIComplianceAnalyzer() {
       critical += combined.critical;
       warnings += combined.warnings;
       advisory += combined.advisory;
+      ibc += group.ibcResult?.issues?.length ?? 0;
+      local += group.localResult?.issues?.length ?? 0;
+      if (combined.totalIssues === 0) noFindings += 1;
     }
-    return { critical, warnings, advisory, sheetsWithResults };
-  }, [displayedResultGroups]);
+    return { critical, warnings, advisory, ibc, local, noFindings, sheetsWithResults };
+  };
+  const aggregateFindingStats = useMemo(() => findingStatsFor(displayedResultGroups), [displayedResultGroups]);
+  const allScopeFindingStats = useMemo(() => findingStatsFor(resultGroups), [resultGroups]);
+  const statsAreFiltered = displayedResultGroups.length !== resultGroups.length;
+
+  const cardFilteredResultGroups = useMemo(
+    () => displayedResultGroups.filter((group) => groupMatchesFindingFilter(group, findingCardFilter)),
+    [displayedResultGroups, findingCardFilter],
+  );
+  const toggleFindingCardFilter = (filter: FindingCardFilter) =>
+    setFindingCardFilter((current) => (current === filter ? "all" : filter));
 
   const runAnalysisContext = useMemo(() => {
     const failedIds = new Set(failedBatchFiles.map((f) => f.id));
@@ -3227,7 +3255,7 @@ export function AIComplianceAnalyzer() {
       );
     }
 
-    const tab = fileResultTabs[group.id] ?? (group.ibcResult ? "ibc" : "local");
+    const tab = fileResultTabs[group.id] ?? defaultSheetScope(group, findingCardFilter);
     const presentation = sheetResultPresentation(group, tab, responses, group.id);
     const groupResult = presentation.findingsResult;
     if (!groupResult) return null;
@@ -3653,7 +3681,15 @@ export function AIComplianceAnalyzer() {
         </CardHeader>
 
         <CardContent className="p-0">
-          <Tabs defaultValue="all" className="w-full">
+          <Tabs
+            key={findingCardFilter}
+            defaultValue={
+              findingCardFilter === "critical" || findingCardFilter === "warning" || findingCardFilter === "advisory"
+                ? findingCardFilter
+                : "all"
+            }
+            className="w-full"
+          >
             {/* Severity filter tabs */}
             <div className="border-b border-border/40 bg-muted/15 px-4 py-3 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-muted/25">
               <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/50 border border-border/50 dark:bg-card/40 dark:border-[hsl(var(--border-obsidian-strong)/0.28)]">
@@ -4720,25 +4756,39 @@ export function AIComplianceAnalyzer() {
           >
             {/* Findings KPI strip — aggregated across every analyzed file's real results */}
             {showComplianceKpiStrip ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard
-                label="Critical"
-                value={aggregateFindingStats.critical}
-                icon={AlertCircle}
-                detail="Blocking issues across all analyzed files"
-              />
-              <MetricCard
-                label="Warnings"
-                value={aggregateFindingStats.warnings}
-                icon={AlertTriangle}
-                detail="Should be resolved before submission"
-              />
-              <MetricCard
-                label="Advisory"
-                value={aggregateFindingStats.advisory}
-                icon={Info}
-                detail="Informational, non-blocking notes"
-              />
+            <div className="space-y-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {(
+                [
+                  { filter: "critical", label: "Critical", value: aggregateFindingStats.critical, all: allScopeFindingStats.critical, icon: AlertCircle, detail: "Blocking issues · IBC + Local" },
+                  { filter: "warning", label: "Warnings", value: aggregateFindingStats.warnings, all: allScopeFindingStats.warnings, icon: AlertTriangle, detail: "Should be resolved before submission · IBC + Local" },
+                  { filter: "advisory", label: "Advisory", value: aggregateFindingStats.advisory, all: allScopeFindingStats.advisory, icon: Info, detail: "Informational, non-blocking · IBC + Local" },
+                  { filter: "no_findings", label: "No Findings", value: aggregateFindingStats.noFindings, all: allScopeFindingStats.noFindings, icon: CheckCircle2, detail: "Sheets with no published findings — not a verified pass" },
+                ] as const
+              ).map((card) => (
+                <MetricCard
+                  key={card.filter}
+                  label={card.label}
+                  value={card.value}
+                  icon={card.icon}
+                  detail={statsAreFiltered ? `${card.detail} · filtered view (all sheets: ${card.all})` : card.detail}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={findingCardFilter === card.filter}
+                  data-testid={`kpi-filter-${card.filter}`}
+                  onClick={() => toggleFindingCardFilter(card.filter)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggleFindingCardFilter(card.filter);
+                    }
+                  }}
+                  className={cn(
+                    "cursor-pointer transition-shadow hover:ring-1 hover:ring-primary/40",
+                    findingCardFilter === card.filter && "ring-2 ring-primary",
+                  )}
+                />
+              ))}
               <MetricCard
                 label="Sheets Analyzed"
                 value={`${dashboardSheetProgress.completed} / ${dashboardSheetProgress.total}`}
@@ -4753,6 +4803,27 @@ export function AIComplianceAnalyzer() {
                   .filter(Boolean)
                   .join(" · ")}
               />
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground" data-testid="kpi-scope-totals">
+              <span>
+                {statsAreFiltered ? "Filtered view" : "All sheets"}:{" "}
+                {aggregateFindingStats.ibc + aggregateFindingStats.local} findings (IBC {aggregateFindingStats.ibc} · Local{" "}
+                {aggregateFindingStats.local})
+                {statsAreFiltered
+                  ? ` · All sheets: ${allScopeFindingStats.ibc + allScopeFindingStats.local} (IBC ${allScopeFindingStats.ibc} · Local ${allScopeFindingStats.local})`
+                  : ""}
+              </span>
+              {findingCardFilter !== "all" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="button-clear-finding-filter"
+                  onClick={() => setFindingCardFilter("all")}
+                >
+                  Clear filter · Show all
+                </Button>
+              ) : null}
+            </div>
             </div>
             ) : null}
 
@@ -4790,11 +4861,29 @@ export function AIComplianceAnalyzer() {
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
                 {resultGroups.length > 0 && (
-                  <p className="text-sm font-medium text-foreground" data-testid="sheet-results-counter">
-                    {formatSheetResultsCounter(displayedResultGroups.length, resultGroups.length)}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm font-medium text-foreground" data-testid="sheet-results-counter">
+                      {formatSheetResultsCounter(cardFilteredResultGroups.length, resultGroups.length)}
+                      {findingCardFilter !== "all"
+                        ? ` · ${
+                            findingCardFilter === "no_findings"
+                              ? "No published findings (verification may be incomplete)"
+                              : `${findingCardFilter === "warning" ? "Warning" : findingCardFilter === "critical" ? "Critical" : "Advisory"} findings`
+                          }`
+                        : ""}
+                    </p>
+                    {findingCardFilter !== "all" ? (
+                      <Button variant="ghost" size="sm" onClick={() => setFindingCardFilter("all")}>
+                        Show all
+                      </Button>
+                    ) : null}
+                  </div>
                 )}
-                {displayedResultGroups.length === 0 ? (
+                {findingCardFilter !== "all" && displayedResultGroups.length > 0 && cardFilteredResultGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground" data-testid="finding-filter-empty">
+                    No sheets match this summary card.
+                  </p>
+                ) : displayedResultGroups.length === 0 ? (
                   <div className="space-y-3" data-testid="compliance-results-empty">
                     <p className="text-sm text-muted-foreground">
                       {resultsEmptyMessage}
@@ -4814,7 +4903,7 @@ export function AIComplianceAnalyzer() {
                     )}
                   </div>
                 ) : (
-                  displayedResultGroups.map((group) => renderFileResultGroup(group))
+                  cardFilteredResultGroups.map((group) => renderFileResultGroup(group))
                 )}
               </div>
 

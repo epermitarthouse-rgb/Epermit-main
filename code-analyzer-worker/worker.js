@@ -57,7 +57,11 @@ async function runIngestionJob(job) {
 
 async function runSheetJob(job) {
   const supabase = getSupabaseAdmin();
-  const { completeSheetJob } = require("./lib/sheetClaim");
+  const { completeSheetJob, heartbeatSheetJob } = require("./lib/sheetClaim");
+  // Graphical OCR on a dense sheet can outlast the lease; renew it while the job runs.
+  const keepAlive = setInterval(() => {
+    heartbeatSheetJob(supabase, job.id, WORKER_ID, LEASE_TTL_SECONDS).catch(() => {});
+  }, Math.max(15, LEASE_TTL_SECONDS / 3) * 1000);
   try {
     await processSheetJob({ supabase, job, workerId: WORKER_ID, leaseTtlSeconds: LEASE_TTL_SECONDS });
   } catch (err) {
@@ -74,6 +78,8 @@ async function runSheetJob(job) {
           ? null
           : new Date(Date.now() + Math.min(60000, 5000 * 2 ** job.attempt_count)).toISOString(),
     });
+  } finally {
+    clearInterval(keepAlive);
   }
 }
 

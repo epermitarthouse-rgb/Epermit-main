@@ -688,12 +688,109 @@ function calculationDecision(issue, claim, ctx, provenance) {
   };
 }
 
+/** Words on the sheet that establish an assembly is fire-rated. A firestopping note is not one. */
+const RATED_PREMISE_ON_SHEET_RE =
+  /\bfire[\s-]*(?:rated|rating|resist\w*|separation)\b|\b\d\s*-?\s*(?:hr|hour)s?\b|\bone[\s-]+hours?\b|\b[1-4]\s*h\b|\brated\b|\bul\s*(?:design\s*)?(?:no\.?\s*)?[a-z]?-?\d{3}\b|\bfire\s+(?:barrier|partition|wall)s?\b/i;
+/** Elements whose requirement applies only when the sheet establishes a premise about them. */
+const ELEMENT_PREMISES = { fire_rated_assembly: RATED_PREMISE_ON_SHEET_RE };
+const MEASURED_ATTRIBUTES = new Set(["width", "clearance", "height", "distance", "opening", "riser_tread", "thickness"]);
+/** Reasons whose publication already rests on bound evidence or a stated calculation. */
+const SELF_EVIDENCED = new Set(["evidence_chain", "calculation_reconciled"]);
+
+function numbersIn(values) {
+  return [...new Set(values.map((value) => (String(value).match(/\d+(?:\.\d+)?/) || [])[0]).filter(Boolean))];
+}
+
+/**
+ * A published advisory needs an identified element this sheet names, the premise that makes the
+ * requirement apply, and, for a measured claim, a value tied to that element. A requirement note
+ * ("WITHIN 24 INCHES OF A DOOR") is the requirement, not a measurement. Failing any of these the
+ * candidate stays an unresolved check; it is never published as a generic allegation.
+ */
+function publicationGate(issue, decision, ctx) {
+  if (!decision || !PUBLISHING.has(decision.disposition) || SELF_EVIDENCED.has(String(decision.reason || ""))) return decision;
+  if (String(issue?.findingType || "") === "confirmed_violation" && decision.disposition === "accept") return decision;
+  const claim = parseClaim(issue);
+  const provenance = { ...(decision.provenance || {}), gated: true, priorReason: decision.reason || decision.disposition };
+  const pageText = String(ctx?.pageText || "");
+  const topic = cleanTopic(issue?.title) || "This check";
+  if (!claim.element) {
+    return {
+      disposition: "reject",
+      reason: "element_not_established",
+      detail: `${topic} does not name a building element the drawings can be checked against, so it is not published. It stays an unresolved check.`,
+      provenance,
+    };
+  }
+  const spans = elementSpans(pageText, claim.element);
+  if (!spans.length) {
+    const read = graphicReadComplete(ctx);
+    return {
+      disposition: "reject",
+      reason: read ? "element_not_established" : "graphic_evidence_unavailable",
+      detail: read
+        ? `This sheet's text and graphic text do not show the ${claim.element.label}, so "${topic}" is not established here. It stays an unresolved check.`
+        : `The ${claim.element.label} is not named in this sheet's readable text, and its graphic text was not fully read, so absence is not inferred. The check stays open.`,
+      provenance,
+    };
+  }
+  const premise = ELEMENT_PREMISES[claim.element.id];
+  if (premise && !spans.some((span) => premise.test(span.text))) {
+    return {
+      disposition: "reject",
+      reason: "rated_assembly_not_established",
+      detail: `This sheet shows walls or partitions ("${spans[0].text.slice(0, 100)}"), but none is identified here as a fire-rated assembly, so whether a rating is required is not established. Check the wall-type legend and the code basis for a rated separation; the check stays open.`,
+      provenance,
+    };
+  }
+  const measured = claim.attributes.filter((id) => MEASURED_ATTRIBUTES.has(id));
+  if (claim.kind !== "missing" && measured.length) {
+    const own = attributeEvidence([{ text: pageText, sheet: ctx?.fileName || null }], { ...claim, attributes: measured });
+    if (!own.answered) {
+      return {
+        disposition: "reject",
+        reason: "value_not_bound_to_element",
+        detail: `No ${measured.join(" or ")} on this sheet is tied to the ${claim.element.label}; a dimension of another element does not establish it. "${topic}" stays an unresolved check until the ${claim.element.label} and its measured value are identified.`,
+        provenance,
+      };
+    }
+    if (onlyRequirementNotes(own.found)) {
+      return {
+        disposition: "reject",
+        reason: "requirement_note_not_measurement",
+        detail: `The ${measured.join(" and ")} printed for the ${claim.element.label} is a requirement note, not a measured condition, so "${topic}" stays an unresolved check.`,
+        provenance,
+      };
+    }
+  }
+  const numbers = numbersIn(claim.values);
+  if (claim.kind !== "missing" && numbers.length) {
+    const measuredSpans = spans.filter((span) => !NORMATIVE_NOTE_RE.test(span.text));
+    const bound = numbers.some((number) => measuredSpans.some((span) => new RegExp(`(?<![\\d.])${number.replace(".", "\\.")}(?![\\d.])`).test(span.text)));
+    if (!bound) {
+      return {
+        disposition: "reject",
+        reason: "requirement_note_not_measurement",
+        detail: `The values ${numbers.join(" and ")} are not tied to a specific ${claim.element.label} on this sheet${spans.some((span) => NORMATIVE_NOTE_RE.test(span.text)) ? "; they appear in a requirement note" : ""}. "${topic}" stays an unresolved check until the ${claim.element.label} they describe is identified.`,
+        provenance,
+      };
+    }
+  }
+  return decision;
+}
+
+const NORMATIVE_NOTE_RE = /\b(?:shall|provide[ds]?|must|required|install|within)\b/i;
+
+function challengeDecision(issue, decision, ctx) {
+  return publicationGate(issue, challengeEvidence(issue, decision, ctx), ctx);
+}
+
 /**
  * Challenge a decision in both directions with element-bound evidence. A suppression must show
  * the passage that resolves it; a published "not shown" must survive a read of the full sheet.
  * Graphic content that was not read leaves the check open, never resolved or confirmed.
  */
-function challengeDecision(issue, decision, ctx) {
+function challengeEvidence(issue, decision, ctx) {
   if (!decision) return decision;
   const claim = parseClaim(issue);
   const provenance = { ...(decision.provenance || {}), challenged: true };

@@ -113,6 +113,11 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
               <span>
                 Uploaded: <strong className="text-foreground">{result.comparedSheetCount}</strong>
               </span>
+              {typeof result.matchedCount === "number" ? (
+                <span>
+                  Matched: <strong className="text-foreground">{result.matchedCount}</strong>
+                </span>
+              ) : null}
               <span>
                 Missing: <strong className="text-foreground">{result.missing.length}</strong>
               </span>
@@ -176,6 +181,21 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
                 </ul>
               </div>
             )}
+
+            {(result.unmatchedIndexRows ?? []).length > 0 && (
+              <div>
+                <p className="font-medium text-foreground mb-1">Index rows OCR could not match (likely misreads, not missing sheets)</p>
+                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
+                  {(result.unmatchedIndexRows ?? []).map((row) => (
+                    <li key={`${row.sheetNumber}-${row.rawLabel}`}>
+                      {row.rawLabel} — {row.reason === "ocr_fragment" ? "partial OCR read" : "close to an uploaded sheet number"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {result.indexReadNote ? <p className="text-xs text-muted-foreground">{result.indexReadNote}</p> : null}
 
             {result.numberingInconsistencies.length > 0 && (
               <div>

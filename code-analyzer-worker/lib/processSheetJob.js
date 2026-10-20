@@ -6,6 +6,7 @@ const { downloadToTempFile, removeTempFile } = require("./download");
 const { extractPdfPageText, extractPdfPagesFromFile } = require("./pdfExtract");
 const { classifySheetContent } = require("./classify");
 const { isPdfFile } = require("./mediaType");
+const { reconcileOcrIndex } = require("./indexReconcile");
 const {
   buildJurisdictionDiagnostics,
   resolveJurisdictionDecisionFromInput,
@@ -525,7 +526,7 @@ async function refreshRunAnalysisCoverage(supabase, runId, projectId) {
 
   const { data: sheets } = await supabase
     .from("code_analyzer_sheets")
-    .select("id, file_name, excluded")
+    .select("id, file_name, sheet_label, excluded")
     .in("id", sheetIds.length ? sheetIds : ["00000000-0000-0000-0000-000000000000"]);
   const eligibleSheets = (sheets || []).filter((s) => !s.excluded);
   const eligibleSheetCount = eligibleSheets.length;
@@ -574,10 +575,17 @@ async function refreshRunAnalysisCoverage(supabase, runId, projectId) {
     updatedAt: new Date().toISOString(),
   };
 
+  let index = null;
+  try {
+    index = await reconcileOcrIndex(supabase, { projectId, eligibleSheets, prior });
+  } catch (err) {
+    console.warn("[code-analyzer-worker] index reconcile failed:", err instanceof Error ? err.message : err);
+  }
+
   await supabase
     .from("code_analyzer_runs")
     .update({
-      index_completeness: { ...prior, analysisCoverage },
+      index_completeness: { ...prior, ...(index || {}), analysisCoverage },
       updated_at: new Date().toISOString(),
     })
     .eq("id", runId);

@@ -89,6 +89,7 @@ const ELEMENTS = [
   { id: "rooftop_equipment", label: "rooftop equipment", claim: /\brooftop\b|\brtu\b|\broof\s+(?:equipment|opening|curb)s?\b|\bmechanical\s+equipment\s+clearances?\b/i, owners: ["M", "S"], attributes: ["clearance", "location"] },
   { id: "duct", label: "ductwork", claim: /\bduct(?:work|s)?\b/i, owners: ["M"], attributes: ["location"] },
   { id: "insulation", label: "pipe or duct insulation", claim: /\binsulat(?:ion|ed)\b/i, owners: ["M", "P"], attributes: ["thickness"] },
+  { id: "piping", label: "piping", claim: /\bpip(?:e|es|ing)\b/i, owners: ["P", "M", "FP"], attributes: ["material", "location"] },
   { id: "emergency_lighting", label: "emergency lighting", claim: /\bemergency\s+light\w*|\begress\s+light\w*|\binverter\b/i, owners: ["E"], attributes: ["location", "duration", "illumination"] },
   { id: "exit_sign", label: "exit sign", claim: /\bexit\s+signs?\b/i, owners: ["E", "A"], attributes: ["location"] },
   { id: "gfci", label: "GFCI protection", claim: /\bgfci\b|\bground[\s-]*fault\b/i, owners: ["E"], attributes: ["location"] },
@@ -108,6 +109,7 @@ const ELEMENTS = [
   { id: "occupant_load", label: "occupant load and egress capacity", claim: /\boccupant\s+loads?\b|\begress\s+capacit\w*|\boccupancy\s+calculations?\b|\bsignage\b(?=[^.]{0,30}\boccupant)/i, owners: ["A"], attributes: ["occupant_load", "width"] },
   { id: "fire_rated_assembly", label: "fire-rated wall or partition", claim: /\bfire[\s-]*(?:rated|rating|resist\w*|separation)\b(?=[^.]{0,60}\b(?:partitions?|walls?|assembl\w+|barriers?|separations?|structural|components?|elements?)\b)|\b(?:partitions?|walls?)\b(?=[^.]{0,40}\bfire[\s-]*(?:rat|resist|separation))|\bfire\s+(?:barriers?|partitions?|walls?|separations?)\b|\brated\s+(?:partitions?|walls?|assembl\w+)\b|\b(?:hour|hr)[\s-]*rated\s+partitions?\b/i, mention: /\bpartitions?\b|\bwalls?\b(?![\s-]*(?:mount\w*|hung|packs?|sconces?|cabinets?|sections?)\b)|\bwall\s+types?\b|\bassembl(?:y|ies)\b|\bfire\s+barriers?\b|\bfire\s+separations?\b/i, owners: ["A", "G"], attributes: ["rating", "location"] },
   { id: "egress_path", label: "egress path", claim: /\begress(?:\s+(?:path|route|width))?\b|\bmeans\s+of\s+egress\b|\bexit\s+access\b|\bcorridors?\b|\baisles?\b|\bexit\s+(?:path|route|discharge)\b/i, owners: ["A"], attributes: ["width", "clearance", "location", "obstruction"] },
+  { id: "glazing", label: "glazing", claim: /\bglaz(?:ing|ed)\b|\bsafety\s+glass\b|\btempered\s+glass\b/i, owners: ["A"], attributes: ["height", "location", "listing"] },
   { id: "door", label: "door", claim: /\bdoors?(?:way)?s?\b/i, owners: ["A"], attributes: ["width", "clearance", "rating"] },
   { id: "accessible_route", label: "accessible route", claim: /\baccessib(?:le|ility)\b|\bada\b/i, mention: /\baccessible\s+(?:routes?|paths?|entrances?|parking|means\s+of\s+egress)\b|\bada\s+(?:routes?|paths?|entrances?)\b/i, owners: ["A"], attributes: ["width", "clearance"] },
   { id: "structural_framing", label: "structural framing and connections", claim: /\bconnections?\b|\bbeams?\b|\bcolumns?\b|\bjoists?\b|\bframing\b|\bstructural\s+(?:details?|notes?|elements?|components?)\b|\bfootings?\b/i, owners: ["S"], attributes: [] },
@@ -406,9 +408,12 @@ const DRAWING_TITLE_RE = /\b(?:sections?|details?|elevations?|plans?)\s*(?:@|at)
 
 const TABLE_RE = /\b(?:schedule|table|calculations?|legend)\b/i;
 
-/** The sheet's graphic text was read (or it had none), so a fact not found is absent, not unread. */
+/**
+ * The sheet's graphic text was read (or it had none), so a fact not found is absent, not unread.
+ * "text-layer" means graphic OCR was skipped: drawn labels were not read, so absence is not inferred.
+ */
 function graphicReadComplete(ctx) {
-  return /^(?:recognized|no_graphic_text|text-layer)$/.test(String(ctx?.graphicalReadStatus || ""));
+  return /^(?:recognized|no_graphic_text)$/.test(String(ctx?.graphicalReadStatus || ""));
 }
 
 const NORMATIVE_NOTE_RE = /\b(?:shall|provide[ds]?|must|required|install)\b/i;
@@ -563,7 +568,8 @@ const OPEN = new Set([
   "special_inspection_retrieval_unavailable", "drawing_retrieval_unavailable", "claim_not_tied_to_evidence",
   "incomplete_question", "graphic_evidence_unavailable", "resolution_not_element_bound", "fact_not_found",
   "calculation_unresolved", "model_reported_present", "schedule_values_not_bound", "existing_element_scope",
-  "value_not_bound_to_element",
+  "value_not_bound_to_element", "element_not_established", "rated_assembly_not_established",
+  "requirement_note_not_measurement",
 ]);
 
 /** Why a check stays open, in the words a reviewer uses. */
@@ -582,6 +588,9 @@ const OPEN_REASON = {
   claim_not_tied_to_evidence: "fact_not_found",
   incomplete_question: "fact_not_found",
   rated_assembly_unconfirmed: "premise_unconfirmed",
+  rated_assembly_not_established: "premise_unconfirmed",
+  element_not_established: "premise_unconfirmed",
+  requirement_note_not_measurement: "premise_unconfirmed",
   existing_element_scope: "premise_unconfirmed",
   calculation_unresolved: "calculation_unresolved",
   documented_design_provision: "requirement_unverified",

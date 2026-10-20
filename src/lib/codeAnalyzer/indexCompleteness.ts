@@ -56,6 +56,12 @@ export interface IndexCompletenessResult {
   indexSource?: "text" | "vision" | "vision+ocr" | "ocr" | null;
   /** Why rows could not be read when the index sheet was found. */
   indexReadError?: string | null;
+  /** Uploaded sheets whose number is listed on the index (worker OCR reconcile). */
+  matchedCount?: number;
+  /** OCR index rows that match no upload but look like misreads or fragments, not missing sheets. */
+  unmatchedIndexRows?: Array<{ sheetNumber: string; rawLabel: string; reason: "likely_misread" | "ocr_fragment" | string }>;
+  indexReadNote?: string | null;
+  reconciledAt?: string | null;
 }
 
 export interface ActualSheetLabel {
