@@ -187,7 +187,7 @@ describe("combined sheet summary", () => {
     assert.equal(summary.reviewState, "reviewed_clear");
     assert.equal(summary.overallScore, null);
     assert.equal(exportScoreText(summary), "No findings identified · Code compliance unverified");
-    assert.equal(fileSectionScoreLabel(summary), "No findings identified · Code compliance unverified");
+    assert.equal(fileSectionScoreLabel(summary), "0 Findings · Code compliance unverified");
     assert.equal(summary.outcome, "no_findings_unverified");
     assert.notEqual(exportScoreText(summary), "0%");
   });

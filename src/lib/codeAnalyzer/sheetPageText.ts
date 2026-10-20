@@ -43,6 +43,8 @@ export async function fetchSheetPageText(projectId: string): Promise<Record<stri
     .eq("project_id", projectId)
     .eq("superseded", false)
     .limit(5000);
-  if (error || !Array.isArray(data)) return {};
+  if (error || !Array.isArray(data)) {
+    throw new Error("Sheet text could not be loaded, so the drawing index was not checked.");
+  }
   return pageTextBySheetFromChunks(data as DrawingChunkTextRow[]);
 }

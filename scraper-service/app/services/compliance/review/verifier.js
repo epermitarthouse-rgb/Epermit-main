@@ -1,6 +1,13 @@
 "use strict";
 
-const { assessApplicability, finalizeMissingQuestion, claimsMissing, composePublication } = require("./applicability.js");
+const {
+  assessApplicability,
+  finalizeMissingQuestion,
+  claimsMissing,
+  composePublication,
+  requirementReminderDecision,
+  tracesValueComparison,
+} = require("./applicability.js");
 const { verifyAuthoritativeCitation } = require("./codeCitationVerification.js");
 
 const MEASURABLE_RE =
@@ -102,6 +109,7 @@ function tokenInWindow(window, token) {
  */
 function isDocumentedProvision(issue, corpus) {
   const claim = claimText(issue);
+  if (tracesValueComparison(issue, corpus)) return false;
   const element = elementClaim(issue);
   const tokens = measureTokens(claim);
   const linked = Boolean(element && tokens.some((token) => linkedSpan(corpus, element.re, token)));
@@ -134,6 +142,7 @@ function isDocumentedProvision(issue, corpus) {
 
 function isRestatement(issue, corpus) {
   const claim = claimText(issue);
+  if (tracesValueComparison(issue, corpus)) return false;
   const traced = traceMeasures(issue, corpus);
   if (traced.ok && traced.matched.length && /\b(does not meet|below|insufficient|too narrow)\b/i.test(claim)) {
     return false;
@@ -249,6 +258,62 @@ function unsupportedCodeAssertion(issue) {
   return true;
 }
 
+const CODE_FAMILY_SOURCE =
+  "(?:IECC|IBC|IRC|IMC|IPC|IFC|IFGC|IEBC|NEC|NFPA\\s*\\d+|ASHRAE\\s*90\\.1|ICC\\s*A117\\.1|(?:[A-Z]{2,4}\\s+)?(?:Energy(?:\\s+Conservation)?|Building|Construction|Mechanical|Plumbing|Fire|Electrical)\\s+Codes?)";
+const EDITION_RE = new RegExp(`\\b(?:((?:19|20)\\d{2})\\s+${CODE_FAMILY_SOURCE}|${CODE_FAMILY_SOURCE}\\s*[,(]?\\s*((?:19|20)\\d{2}))\\b`, "gi");
+const SHEET_CITES_RE =
+  /\b(?:sheet|drawing|certificate|plan|notes?|document|title block|form|comcheck)\b[^.]{0,80}\b(?:references?|referenced|cites?|cited|lists?|listed|states?|stated|shows?|indicates?|uses?|based on|complies with)\b|\b(?:references?|referenced|cites?|cited|lists?|listed)\s+(?:the\s+|an?\s+)?(?:19|20)\d{2}\b/i;
+
+function editionFamily(text) {
+  return String(text || "")
+    .replace(/(?:19|20)\d{2}/g, "")
+    .replace(/\b(?:energy\s+conservation\s+codes?|energy\s+codes?|iecc)\b/i, "energy")
+    .replace(/[^a-z0-9.]+/gi, " ")
+    .trim()
+    .toLowerCase()
+    .split(" ")
+    .filter((word) => !["code", "codes", "dc", "the"].includes(word))
+    .pop() || "";
+}
+
+function editionsIn(text) {
+  return [...String(text || "").matchAll(EDITION_RE)].map((match) => ({
+    label: match[0].replace(/\s+/g, " ").trim(),
+    year: match[1] || match[2],
+    family: editionFamily(match[0]),
+  }));
+}
+
+/**
+ * A finding that says the sheet cites a code edition must find that edition in the
+ * readable sheet evidence. A model reading of an unreadable certificate is not a quote.
+ */
+function untracedCodeEdition(issue, ctx) {
+  const original = issue?.diagnostics || {};
+  const claim = `${original.originalTitle || issue.title || ""}. ${original.originalDescription || issue.description || ""}`;
+  const sentences = claim.split(/(?<=[.;])\s+/).filter((sentence) => SHEET_CITES_RE.test(sentence));
+  const claimed = sentences.flatMap(editionsIn);
+  if (!claimed.length) return null;
+  const evidence = editionsIn(String(ctx.corpus || ""));
+  for (const edition of claimed) {
+    if (evidence.some((found) => found.year === edition.year && found.family === edition.family)) continue;
+    const conflicting = evidence.filter((found) => found.family === edition.family && found.year !== edition.year);
+    const adopted = ctx.legalApplicability?.adoptedEdition || null;
+    const project = adopted ? ` The project record names ${adopted}.` : "";
+    if (conflicting.length) {
+      return {
+        reason: "code_edition_contradicted",
+        detail: `The finding says the sheet cites ${edition.label}, but the sheet text names ${conflicting.map((item) => item.label).join(", ")}.${project} It is not published.`,
+      };
+    }
+    return {
+      reason: "code_edition_not_in_evidence",
+      detail: `The finding says the sheet cites ${edition.label}, but that edition does not appear in the readable sheet text or quoted evidence.${project} It is not published.`,
+    };
+  }
+  return null;
+}
+
 function asPublishedQuestion(decision, issue, ctx) {
   if (!decision || (decision.disposition !== "downgrade" && decision.disposition !== "accept_question")) {
     return decision;
@@ -261,6 +326,9 @@ function asPublishedQuestion(decision, issue, ctx) {
       detail: "The sheet text does not mention the element this question is about, so the quoted drawing evidence does not support it. The check stays open.",
       provenance: decision.provenance,
     };
+  }
+  if (publication.evidenceLimit) {
+    return { disposition: "reject", ...publication.evidenceLimit, provenance: decision.provenance };
   }
   if (!publication.complete) {
     return {
@@ -296,6 +364,9 @@ function decideCandidate(issue, ctx) {
   if (applicability.disposition === "reject" || applicability.disposition === "retain_limitation") {
     return withProjectContext({ ...applicability, provenance }, applicability.projectContext);
   }
+
+  const edition = untracedCodeEdition(issue, ctx);
+  if (edition) return { disposition: "reject", ...edition, provenance };
 
   if (unsupportedCodeAssertion(issue)) {
     return {
@@ -502,6 +573,9 @@ function decideCandidate(issue, ctx) {
       ctx,
     );
   }
+
+  const reminder = requirementReminderDecision(issue, ctx);
+  if (reminder) return { ...reminder, provenance };
 
   return {
     disposition: "accept",

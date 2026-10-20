@@ -150,8 +150,10 @@ const TOPIC_OWNERS = [
  * @param {Record<string, unknown>} record
  * @param {Record<string, unknown>} ctx
  * @param {(passage: string) => boolean} statesFact
+ * @param {{ wholeBody?: boolean }} [opts] wholeBody lets a same-discipline sheet answer anywhere
+ *   in its text. Only a detector for one specific fact may use it; word overlap may not.
  */
-function recordCanAnswer(issue, record, ctx, statesFact) {
+function recordCanAnswer(issue, record, ctx, statesFact, opts = {}) {
   const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
   const subject = titleObjective.length ? titleObjective : subjectTokens(issue);
   if (!subject.length) return false;
@@ -164,7 +166,7 @@ function recordCanAnswer(issue, record, ctx, statesFact) {
   if (!general && !sameDiscipline && !owners.has(theirs)) return false;
   const body = recordBody(record);
   // A legend or section in the same discipline can state the fact without repeating the title words.
-  if (sameDiscipline && statesFact(body)) return true;
+  if (opts.wholeBody && sameDiscipline && statesFact(body)) return true;
   const lower = body.toLowerCase();
   for (const token of subject) {
     let from = 0;
@@ -519,6 +521,150 @@ function assessApplicability(issue, ctx) {
   return { disposition: "continue", projectContext: context };
 }
 
+const FACT_TERMS = [
+  ["travel distance", /\btravel\s+distances?\b/i],
+  ["egress capacity", /\begress\s+capacit(?:y|ies)\b/i],
+  ["occupant load", /\boccupant\s+loads?\b|\boccupancy\s+calculations?\b/i],
+  ["riser and tread dimensions", /\b(?:risers?|treads?)\b/i],
+  ["clearance", /\bclearances?\b|\bclear\s+floor\s+space\b|\bturning\s+space\b/i],
+  ["fire-resistance rating", /\bfire[\s-]*(?:resistance|resistive)?[\s-]*(?:rating|rated)s?\b|\bhour\s+ratings?\b/i],
+  ["width", /\bwidths?\b/i],
+  ["slope", /\bslopes?\b/i],
+  ["height", /\bheights?\b/i],
+  ["dimensions", /\bdimension(?:s|ed)?\b/i],
+  ["location", /\blocations?\b|\bplacements?\b/i],
+  ["size", /\bsiz(?:e|es|ing)\b/i],
+  ["spacing", /\bspacing\b/i],
+  ["thickness", /\bthickness(?:es)?\b/i],
+  ["flow rate", /\bflow\s+rates?\b/i],
+  ["setpoint", /\bset\s*points?\b/i],
+  ["illumination level", /\bfoot[\s-]*candles?\b|\billumination\s+levels?\b/i],
+];
+const HEDGE_RE = /\b(?:if\s+(?:present|any|applicable|provided)|where\s+(?:applicable|present|provided))\b/i;
+const QUESTION_BOILERPLATE_RE = /This is a question, not a violation\.|The code citation is unverified\.|\s*[—-]\s*verification required/gi;
+const DEFICIENCY_RE = new RegExp(
+  `${MISSING_CLAIM_RE.source}|\\b(?:exceeds?|insufficient|inadequate|not\\s+(?:meet|comply|clearly)|below|fails?|conflicts?|discrepanc\\w*|inconsisten\\w*|non-?complian\\w*|may\\s+not|does\\s+not|cannot)\\b`,
+  "i",
+);
+const NORMATIVE_RE = /\b(?:must|should|shall|ensure|needs?\s+to|required\s+to|are\s+required)\b/i;
+
+function originalClaim(issue) {
+  return [
+    issue?.diagnostics?.originalTitle || issue?.title,
+    issue?.diagnostics?.originalDescription || issue?.description,
+  ].filter(Boolean).join(". ").replace(QUESTION_BOILERPLATE_RE, " ");
+}
+
+/** The specific facts a candidate says are unresolved, without facts named only as "if present". */
+function namedFacts(issue) {
+  const clauses = originalClaim(issue).split(/[,;.]|\band\b/i).filter((clause) => !HEDGE_RE.test(clause));
+  const facts = [];
+  for (const [label, pattern] of FACT_TERMS) {
+    if (clauses.some((clause) => pattern.test(clause)) && !facts.includes(label)) facts.push(label);
+  }
+  return facts;
+}
+
+/** States what a design must do without saying what this sheet lacks or shows wrong. */
+function isRequirementReminder(issue) {
+  const claim = originalClaim(issue);
+  return NORMATIVE_RE.test(claim) && !DEFICIENCY_RE.test(claim);
+}
+
+function factStatedOnSheet(fact, ctx) {
+  const entry = FACT_TERMS.find(([label]) => label === fact);
+  return Boolean(entry && entry[1].test(String(ctx?.pageText || "")));
+}
+
+const COMPARED_VALUE_RE =
+  /\b(\d+(?:\.\d+)?)\s*(?:gpm|psi|cfm|°\s*f|degrees?\s*f|gallons?|lbs?|psf|kw|kva|amps?|volts?|inch(?:es)?|in\.|ft|feet|"|″)/gi;
+
+/**
+ * Two or more different measured values from the claim, all printed on the sheet, are a
+ * discrepancy read from the drawing. A sheet that prints them does not resolve the conflict.
+ */
+function tracesValueComparison(issue, corpus) {
+  const claim = `${issue?.diagnostics?.originalDescription || ""} ${issue?.title || ""} ${issue?.description || ""}`;
+  const values = [...new Set([...claim.matchAll(COMPARED_VALUE_RE)].map((match) => match[1]))];
+  if (values.length < 2) return null;
+  const hay = String(corpus || "");
+  const printed = values.filter((value) => new RegExp(`(^|[^\\d.])${value.replace(".", "\\.")}(?![\\d])`).test(hay));
+  return printed.length >= 2 ? printed : null;
+}
+
+/**
+ * A candidate that only restates what a design must do. It is withdrawn when it names no fact,
+ * and it stays an unresolved check when the fact it names is not on this sheet.
+ */
+function requirementReminderDecision(issue, ctx) {
+  if (!isRequirementReminder(issue) || tracesValueComparison(issue, ctx?.pageText)) return null;
+  const search = searchProjectEvidence(issue, ctx);
+  if (search.resolved) return null;
+  const open = namedFacts(issue).filter((fact) => !factStatedOnSheet(fact, ctx));
+  const what = String(issue?.diagnostics?.originalTitle || issue?.title || "This condition")
+    .replace(QUESTION_BOILERPLATE_RE, "").replace(/\s+/g, " ").trim();
+  if (!open.length) {
+    return {
+      disposition: "reject",
+      reason: "no_specific_condition",
+      detail: `${what} restates a requirement without naming a fact this sheet lacks, so it is not published.`,
+    };
+  }
+  return {
+    disposition: "reject",
+    reason: "requirement_reminder",
+    detail: `${what}: the ${open.join(" and ")} is not stated on this sheet and was not found on a related sheet. The candidate only restated the requirement, so this stays an unresolved check.`,
+  };
+}
+
+const DRAWING_TITLE_RE = /\bscale\s*:|\bn\.?\s*t\.?\s*s\.?\b|\d+\/\d+"?\s*=\s*1'/i;
+
+/** The element is named only in drawing titles ("5 TYPICAL INTERIOR PARTITION N.T.S."). */
+function namedOnlyInDrawingTitles(text, tokens) {
+  const lower = String(text || "").toLowerCase();
+  let seen = false;
+  for (const token of tokens) {
+    let from = 0;
+    while (from < lower.length) {
+      const at = lower.indexOf(token, from);
+      if (at < 0) break;
+      seen = true;
+      const window = lower.slice(Math.max(0, at - 50), at + token.length + 50);
+      if (!DRAWING_TITLE_RE.test(window)) return false;
+      from = at + token.length;
+    }
+  }
+  return seen;
+}
+
+/** The clause where the candidate states what is wrong, lower-cased for a sentence. */
+function statedDeficiency(issue) {
+  const clause = originalClaim(issue)
+    .split(/(?<=[.;])\s+/)
+    .map((part) => part.replace(/[.;]+$/, "").trim())
+    .find((part) => DEFICIENCY_RE.test(part) && !NORMATIVE_RE.test(part) && !HEDGE_RE.test(part));
+  if (!clause || clause.length < 12) return "";
+  return clause.charAt(0).toLowerCase() + clause.slice(1);
+}
+
+function cleanTitle(issue) {
+  return String(issue?.diagnostics?.originalTitle || issue?.title || "this condition")
+    .replace(QUESTION_BOILERPLATE_RE, "").replace(/\s+/g, " ").trim();
+}
+
+/** CAD and PDF file names in title blocks are not drawing content. */
+function withoutFileReferences(text) {
+  return String(text || "").replace(/[^\s]*\.(?:dwg|dxf|rvt|pdf)\b/gi, " ");
+}
+
+function hasUnreadableRegions(ctx) {
+  return (ctx?.regions || []).some((region) =>
+    region && (region.readable === false || /unavailable|unreadable|failed/i.test(String(region.status || region.ocrStatus || ""))));
+}
+
+const RATED_PREMISE_RE = /\b(?:through|penetrat\w*|in)\s+(?:the\s+)?(?:fire|smoke)[\s-]*(?:resistance[\s-]*)?rated\s+(?:assembl\w*|walls?|barriers?|partitions?|floors?|construction)\b/i;
+const RATING_EVIDENCE_RE = /\b\d\s*-?\s*(?:hr|hour)\b|\bfire[\s-]*(?:resistance\s+)?rat(?:ed|ing)\b|\bul\s*(?:design\s*)?(?:no\.?\s*)?[a-z]?-?\d{3}\b|\bfire\s+(?:barrier|partition|wall)\b/i;
+
 function finalizeMissingQuestion(issue, ctx) {
   if (!claimsMissing(issue)) return null;
   const search = searchProjectEvidence(issue, ctx);
@@ -530,6 +676,8 @@ function finalizeMissingQuestion(issue, ctx) {
       redirectFile: search.where,
     };
   }
+  const reminder = requirementReminderDecision(issue, ctx);
+  if (reminder) return reminder;
   if (search.unavailable) {
     const what = String(issue.title || "This condition").replace(/\s+/g, " ").trim();
     return {
@@ -554,7 +702,7 @@ function finalizeMissingQuestion(issue, ctx) {
 
 function objectiveTokens(issue) {
   const claim = claimText(issue);
-  const match = claim.match(/\b(corridor(?:\s+width)?|exit access(?:\s+width)?|egress(?:\s+width)?|stair(?:\s+riser|\s+width)?|riser|door(?:\s+width)?|insulation|accessible(?:\s+route|\s+entrance|\s+parking)?|accessibility|fire(?:[\s-]*resistance)?(?:\s+rating)?|emergency lighting|special inspections?|grease interceptor|guard(?:rail)?|handrail|clearance|turning space|compartment|restroom|toilet(?:\s+room)?|sprinkler|beam|drain|fixture|parking|connections?|fasteners?|anchorage|pipe material|piping|ductwork|fire dampers?|smoke control|grounding|conductor|ventilation|exhaust)\b/i);
+  const match = claim.match(/\b(corridor(?:\s+width)?|exit access(?:\s+width)?|egress(?:\s+width)?|stair(?:\s+riser|\s+width)?|riser|door(?:\s+width)?|insulation|accessible(?:\s+route|\s+entrance|\s+parking)?|accessibility|fire dampers?|fire(?:[\s-]*resistance)?(?:\s+rating)?|emergency lighting|special inspections?|grease interceptor|guard(?:rail)?|handrail|clearance|turning space|compartment|restroom|toilet(?:\s+room)?|sprinkler|beam|drain|fixture|parking|connections?|fasteners?|anchorage|pipe material|piping|ductwork|smoke control|grounding|conductor|ventilation|exhaust)\b/i);
   if (!match) return { label: "", tokens: [] };
   const label = match[0];
   const generic = new Set(["width", "note", "plan", "type", "size", "area", "room", "sheet", "rating"]);
@@ -576,13 +724,15 @@ function subjectTokens(issue) {
 }
 
 function evidenceSnippet(corpus, tokens) {
-  const text = String(corpus || "");
+  const text = String(corpus || "").replace(/(?:[<>\\*|]\s*){2,}/g, " ");
   const lower = text.toLowerCase();
   const ordered = [...tokens].sort((a, b) => b.length - a.length);
   for (const token of ordered) {
     const at = lower.indexOf(token);
     if (at < 0) continue;
-    return text.slice(Math.max(0, at - 24), at + token.length + 70).replace(/\s+/g, " ").trim().slice(0, 180);
+    const start = Math.max(0, at - 24);
+    const lead = start > 0 ? text.slice(start, at).search(/\s/) + 1 : 0;
+    return text.slice(start + Math.max(0, lead), at + token.length + 70).replace(/\s+/g, " ").trim().slice(0, 180);
   }
   return "";
 }
@@ -596,11 +746,11 @@ function evidenceSnippet(corpus, tokens) {
  */
 function composePublication(issue, ctx, decision) {
   const objective = objectiveTokens(issue);
-  const corpus = [
+  const corpus = withoutFileReferences([
     ctx?.pageText,
     ctx?.corpus,
     ...(ctx?.observations || []).map((item) => item?.quote || ""),
-  ].filter(Boolean).join("\n");
+  ].filter(Boolean).join("\n"));
   const lowerCorpus = corpus.toLowerCase();
   const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
   const titleSubject = subjectTokens(issue);
@@ -625,15 +775,48 @@ function composePublication(issue, ctx, decision) {
   const scope = ctx?.jurisdictionScope;
   const edition = scope?.enforcedJurisdiction || null;
   const year = ctx?.codeYear || null;
-  const unresolved = decision?.reason === "unverified_threshold" || decision?.reason === "unsupported_confirmed_finding"
+  const facts = namedFacts(issue).filter((fact) => !factStatedOnSheet(fact, ctx));
+  const presence = /\b(?:not shown|not indicated|not provided|not labeled|missing|absent)\b/i.test(originalClaim(issue));
+  const element = objective.label ? objective.label.toLowerCase() : "element";
+  const elementWord = element.split(/[\s-]+/)[0];
+  const factPhrase = facts.some((fact) => fact.startsWith(elementWord))
+    ? facts.join(" and ")
+    : `${element} ${facts.join(" and ")}`;
+  const compared = tracesValueComparison(issue, ctx?.pageText || corpus);
+  const deficiency = statedDeficiency(issue);
+  const pageOnly = withoutFileReferences(ctx?.pageText);
+  let evidenceLimit = null;
+  if (hasUnreadableRegions(ctx) && subjectHits.length
+    && namedOnlyInDrawingTitles(pageOnly, subjectHits)) {
+    evidenceLimit = {
+      reason: "detail_unreadable",
+      detail: `This sheet names the detail ("${evidenceSnippet(pageOnly, subjectHits)}"), but the detail body is graphic and could not be read. ${facts.length ? `Whether it states the ${facts.join(" and ")} is unresolved.` : `Whether it resolves "${cleanTitle(issue)}" is unresolved.`}`,
+    };
+  } else if (RATED_PREMISE_RE.test(originalClaim(issue)) && !RATING_EVIDENCE_RE.test(corpus)) {
+    evidenceLimit = {
+      reason: "rated_assembly_unconfirmed",
+      detail: `The candidate assumes a fire-rated assembly, but no readable sheet states a fire-resistance rating. Whether the ${element} is required is unresolved until the rated assemblies are identified.`,
+    };
+  }
+  const unverified = decision?.reason === "unverified_threshold" || decision?.reason === "unsupported_confirmed_finding";
+  const unresolved = unverified && !facts.length && !compared
     ? "The unresolved condition is that no verified edition threshold confirms a violation."
-    : "The unresolved condition is the element fact that this sheet does not state.";
+    : compared
+      ? `The unresolved condition is that this sheet states ${compared.join(" and ")} for the ${element}, and does not show how the selection reconciles those values.`
+    : facts.length
+      ? `The unresolved condition is that this sheet does not state the ${factPhrase}.`
+      : deficiency
+        ? `The unresolved condition is that ${deficiency}.`
+        : presence
+          ? `The unresolved condition is that this sheet does not show the ${element}.`
+          : "";
   const scopeLine = edition
     ? `Selected code scope is ${edition}${year ? ` ${year}` : ""}.`
     : "The run has no selected code edition to verify.";
   const complete = Boolean(objective.label && evidence && unresolved && why);
   return {
     complete,
+    evidenceLimit,
     tiedToEvidence: tied,
     text: [
       `${objective.label} is the review objective.`,
@@ -657,6 +840,8 @@ module.exports = {
   claimsMissing,
   searchProjectEvidence,
   composePublication,
+  requirementReminderDecision,
+  tracesValueComparison,
   recordCanAnswer,
   sheetDiscipline,
 };

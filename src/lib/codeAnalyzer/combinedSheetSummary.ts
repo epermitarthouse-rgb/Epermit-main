@@ -7,6 +7,7 @@ import { computeComplianceOverallScore } from "@/lib/complianceBatchProcessor";
 import {
   reviewOutcome,
   reviewOutcomeLabel,
+  sheetFindingsHeadline,
   type ReviewLimitation,
   type ReviewOutcomeName,
   type ReviewStateName,
@@ -283,6 +284,5 @@ export function fileSectionScoreLabel(summary?: {
   codeCoverageVerified?: boolean;
   limitations?: ReviewLimitation[] | null;
 } | null): string {
-  const issues = summary?.totalIssues ?? 0;
-  return issues > 0 ? `${exportScoreText(summary)} · ${issues} issues` : exportScoreText(summary);
+  return sheetFindingsHeadline(summary);
 }

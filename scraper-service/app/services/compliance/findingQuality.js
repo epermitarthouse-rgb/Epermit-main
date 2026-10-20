@@ -399,6 +399,8 @@ function isScheduleRequirementRestatement(issue, ctx) {
   if (!isSchedule || !body.trim()) return false;
   const claim = `${issue.title || ""} ${issue.description || ""}`;
   if (MISSING_FACT_RE.test(claim) || MEASURED_DEFECT_RE.test(claim)) return false;
+  // Only door-hardware requirements restate a schedule row; other schedules carry values to check.
+  if (!/\b(hardware|closer|lockset|door)\b/i.test(claim)) return false;
   if (!/\b(required|shall|must|provide|hardware|closer|lockset)\b/i.test(claim)) return false;
 
   const lower = body.toLowerCase();
@@ -635,7 +637,9 @@ function otherRecordSuppliesFact(issue, ctx) {
   const records = Array.isArray(ctx.drawingRecords) ? ctx.drawingRecords : [];
   for (const record of records) {
     if (isCurrentSheetEntry({ fileName: record.fileName, sheetId: record.sheetId }, ctx)) continue;
-    if (recordCanAnswer(issue, record, ctx, (passage) => pageTextSuppliesMissingFact(issue, passage))) return record;
+    if (recordCanAnswer(issue, record, ctx, (passage) => pageTextSuppliesMissingFact(issue, passage), { wholeBody: true })) {
+      return record;
+    }
   }
   return null;
 }
@@ -844,6 +848,7 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     authoritativeCode: options.corpusCtx?.authoritativeCode,
     drawingRetrieval: options.corpusCtx?.drawingRetrieval,
     unresolved,
+    sheetFileName: options.corpusCtx?.fileName || null,
   });
   const decision = resolveReviewState({
     callStatus: options.callStatus || "completed",
@@ -893,6 +898,9 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
  */
 const OPEN_CHECK_REJECTIONS = new Set([
   "cross_sheet_owner",
+  "requirement_reminder",
+  "detail_unreadable",
+  "rated_assembly_unconfirmed",
   "documented_design_provision",
   "requirement_already_on_sheet",
   "requirement_already_specified",
@@ -925,6 +933,7 @@ function limitationTopic(candidate) {
  *   authoritativeCode?: unknown[] | null;
  *   drawingRetrieval?: Record<string, unknown> | null;
  *   unresolved: Array<Record<string, unknown>>;
+ *   sheetFileName?: string | null;
  * }} input
  */
 function reviewLimitations(input) {
@@ -966,9 +975,15 @@ function reviewLimitations(input) {
     });
   }
   for (const candidate of input.unresolved.slice(0, 5)) {
+    const check = limitationTopic(candidate);
+    const missingEvidence = String(candidate.validationDetail || "withheld, not verified").trim();
+    const named = missingEvidence.match(/\b[A-Z]{1,3}[- ]?\d[\w.\- ]*?\.pdf\b/g) || [];
     out.push({
       code: "open_check",
-      detail: `${limitationTopic(candidate)}: ${String(candidate.validationDetail || "withheld, not verified").trim()} Withholding it is not proof of compliance.`,
+      detail: `${check}: ${missingEvidence} Withholding it is not proof of compliance.`,
+      check,
+      missingEvidence,
+      relatedSheets: [...new Set([input.sheetFileName, ...named].filter(Boolean))],
     });
   }
   return out;
@@ -1129,6 +1144,7 @@ module.exports = {
   isScheduleRequirementRestatement,
   normalizeChecklist,
   dedupKey,
+  OPEN_CHECK_REJECTIONS,
   semanticDedupKey,
   dedupAgainstRun,
   MEASURABLE_TOPIC_RE,

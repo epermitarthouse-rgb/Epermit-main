@@ -143,7 +143,7 @@ export function ReviewEvidenceReport({
           <ReportList title="Confirmed findings" items={view.confirmedFindings.map((issue) => issue.title || "Finding")} empty="None" />
           <ReportList title="Verification questions" items={view.verificationQuestions.map((issue) => issue.title || "Question")} empty="None" />
           <ReportList title="Evidence-backed checks" items={view.cleanChecks} empty="None scored" />
-          <ReportList title="Unresolved checks" items={view.unresolvedChecks} empty="None" />
+          <OpenCheckList checks={view.openChecks ?? []} />
           <ReportList title="Why code compliance is unverified" items={view.unreviewable} empty="None" />
         </div>
         {view.evidence.length > 0 ? (
@@ -161,6 +161,26 @@ export function ReviewEvidenceReport({
         ) : null}
       </div>
     </AnalyzerDisclosure>
+  );
+}
+
+function OpenCheckList({ checks }: { checks: ReviewReportView["openChecks"] }) {
+  return (
+    <div className="min-w-0" data-testid="unresolved-checks">
+      <p className="font-medium text-foreground">Unresolved checks ({checks.length})</p>
+      {checks.length === 0 ? <p className="text-muted-foreground">None</p> : null}
+      {checks.length > 0 ? (
+        <ul className="mt-0.5 space-y-1 list-disc pl-4 text-muted-foreground">
+          {checks.map((item) => (
+            <li key={item.detail}>
+              <span className="text-foreground">{item.check || "Unresolved check"}</span>
+              {item.missingEvidence ? <span>. Missing evidence: {item.missingEvidence}</span> : null}
+              {item.relatedSheets?.length ? <span> Sheets: {item.relatedSheets.join(", ")}.</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

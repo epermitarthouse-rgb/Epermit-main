@@ -17,7 +17,14 @@ export type ReviewIssueLike = {
   codeReference?: string | null;
 };
 
-export type ReviewLimitation = { code: string; detail: string };
+export type ReviewLimitation = {
+  code: string;
+  detail: string;
+  /** Open checks only: what was checked, what evidence is missing, and where to look. */
+  check?: string;
+  missingEvidence?: string;
+  relatedSheets?: string[];
+};
 
 export type ReviewMetadataLike = {
   summary?: {
@@ -52,7 +59,12 @@ export type ReviewMetadataLike = {
     questionId?: string;
     drawing?: Array<{ fileName?: string | null; quote?: string | null; pageNumber?: number | null; region?: unknown }>;
   }>;
-  rejectedCandidates?: Array<{ validationReason?: string; validationDetail?: string; title?: string }>;
+  rejectedCandidates?: Array<{
+    validationReason?: string;
+    validationDetail?: string;
+    title?: string;
+    diagnostics?: { originalTitle?: string | null } | null;
+  }>;
   legalApplicability?: {
     status?: string | null;
     reviewScope?: string | null;
@@ -88,6 +100,8 @@ export type ReviewReportView = {
   unreviewable: string[];
   /** Specific substantive checks the review could not resolve. */
   unresolvedChecks: string[];
+  /** The same checks with what is missing and the sheets involved. */
+  openChecks: ReviewLimitation[];
   /** Why the review is not a verified pass. Empty only for a verified compliant review. */
   limitations: ReviewLimitation[];
   evidence: Array<{ where: string; quote: string; hasRegion: boolean }>;
@@ -215,6 +229,9 @@ export function reviewAssessment(input: {
 
 const OPEN_CHECK_REJECTIONS = new Set([
   "cross_sheet_owner",
+  "requirement_reminder",
+  "detail_unreadable",
+  "rated_assembly_unconfirmed",
   "documented_design_provision",
   "requirement_already_on_sheet",
   "requirement_already_specified",
@@ -239,7 +256,10 @@ export function reviewLimitations(metadata: ReviewMetadataLike[]): ReviewLimitat
     if (!summary) continue;
     if (reviewOutcome({ ...summary, totalIssues: 0 }) === "verified_compliant") continue;
     if (Array.isArray(summary.limitations) && summary.limitations.length > 0) {
-      summary.limitations.forEach(add);
+      summary.limitations.forEach((limitation) =>
+        add(isUnresolvedCheck(limitation) ? withCheckDetail(limitation, item) : limitation),
+      );
+      if (!summary.limitations.some(isUnresolvedCheck)) addOpenChecks(item, add);
       continue;
     }
     if (summary.reviewState === "failed" || summary.reviewState === "not_reviewed") continue;
@@ -268,17 +288,54 @@ export function reviewLimitations(metadata: ReviewMetadataLike[]): ReviewLimitat
         detail: "One or more completed checks were not tied to a quote found in the sheet text.",
       });
     }
-    const open = (item.rejectedCandidates ?? []).filter((candidate) =>
-      OPEN_CHECK_REJECTIONS.has(String(candidate.validationReason || "")),
-    );
-    for (const candidate of open.slice(0, 5)) {
-      add({
-        code: "open_check",
-        detail: `${candidate.title || "A candidate check"}: ${candidate.validationDetail || "withheld, not verified"} Withholding it is not proof of compliance.`,
-      });
-    }
+    addOpenChecks(item, add);
   }
   return out;
+}
+
+const SHEET_FILE_RE = /\b[A-Z]{1,3}[- ]?\d[\w.\- ]*?\.pdf\b/g;
+
+function cleanCheckTitle(value: string | null | undefined): string {
+  return String(value || "A candidate check")
+    .replace(/\s*[—-]\s*verification required/gi, "")
+    .replace(/\s+/g, " ")
+    .trim() || "A candidate check";
+}
+
+function sheetsFor(text: string, item: ReviewMetadataLike): string[] {
+  const own = item.sheet_file_name || item.file_name || "";
+  const named = String(text || "").match(SHEET_FILE_RE) ?? [];
+  return [...new Set([own, ...named].map((name) => name.trim()).filter(Boolean))];
+}
+
+/** Older open-check rows carry one sentence. Split it into the check and the missing evidence. */
+function withCheckDetail(limitation: ReviewLimitation, item: ReviewMetadataLike): ReviewLimitation {
+  if (limitation.check && limitation.missingEvidence) return limitation;
+  const text = limitation.detail.replace(/\s*Withholding it is not proof of compliance\.?$/, "");
+  const split = text.indexOf(": ");
+  return {
+    ...limitation,
+    check: limitation.check || (split > 0 ? text.slice(0, split) : "Unresolved check"),
+    missingEvidence: limitation.missingEvidence || (split > 0 ? text.slice(split + 2) : text),
+    relatedSheets: limitation.relatedSheets?.length ? limitation.relatedSheets : sheetsFor(text, item),
+  };
+}
+
+function addOpenChecks(item: ReviewMetadataLike, add: (limitation: ReviewLimitation) => void): void {
+  const open = (item.rejectedCandidates ?? []).filter((candidate) =>
+    OPEN_CHECK_REJECTIONS.has(String(candidate.validationReason || "")),
+  );
+  for (const candidate of open.slice(0, 5)) {
+    const check = cleanCheckTitle(candidate.diagnostics?.originalTitle || candidate.title);
+    const missingEvidence = String(candidate.validationDetail || "Withheld, not verified.").trim();
+    add({
+      code: "open_check",
+      detail: `${check}: ${missingEvidence} Withholding it is not proof of compliance.`,
+      check,
+      missingEvidence,
+      relatedSheets: sheetsFor(missingEvidence, item),
+    });
+  }
 }
 
 /**
@@ -309,7 +366,8 @@ export function buildReviewReportView(
   ];
   const states = metadata.map((item) => item.summary?.reviewState).filter(Boolean);
   const limitations = reviewLimitations(metadata);
-  const unresolvedChecks = limitations.filter(isUnresolvedCheck).map((item) => item.detail);
+  const openChecks = limitations.filter(isUnresolvedCheck);
+  const unresolvedChecks = openChecks.map((item) => item.detail);
   const unreviewable: string[] = limitations.filter((item) => !isUnresolvedCheck(item)).map((item) => item.detail);
   if (states.includes("reviewed_partial") && limitations.length === 0) {
     unreviewable.push("The model finished, but the evidence was not complete enough to score this sheet.");
@@ -367,6 +425,7 @@ export function buildReviewReportView(
     cleanChecks,
     unreviewable,
     unresolvedChecks,
+    openChecks,
     limitations,
     evidence: evidence.slice(0, 12),
     withheldReasons: withheld,
@@ -393,8 +452,11 @@ export function reviewEvidenceStripSummary(
   const jurisdictionLabel = view.amendmentsEnforced
     ? view.detectedLocation
     : `${view.detectedLocation} · amendments not enforced`;
-  const countLabel =
-    view.evidence.length > 0
+  const findings = context?.totalIssues ?? view.confirmedFindings.length + view.verificationQuestions.length;
+  const openCount = (view.openChecks ?? []).length;
+  const countLabel = findings === 0 && openCount > 0
+    ? `${openCount} unresolved ${openCount === 1 ? "check" : "checks"}`
+    : view.evidence.length > 0
       ? `${view.evidence.length} evidence`
       : view.verificationQuestions.length === 1
         ? "1 verification question"
@@ -414,4 +476,64 @@ export function reviewEvidenceStripSummary(
     }),
     countLabel,
   };
+}
+
+function uniqueBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const k = key(item);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/**
+ * One sheet-level view over the IBC and Local reviews. Findings from both scopes are kept,
+ * including two findings about the same physical condition.
+ */
+export function mergeReviewReportViews(
+  views: Array<ReviewReportView | null | undefined>,
+): ReviewReportView | null {
+  const present = views.filter((view): view is ReviewReportView => Boolean(view));
+  if (present.length === 0) return null;
+  if (present.length === 1) return present[0];
+  const [first] = present;
+  const strings = (pick: (view: ReviewReportView) => string[]) => [...new Set(present.flatMap(pick))];
+  const limitations = uniqueBy(present.flatMap((view) => view.limitations), (item) => `${item.code}|${item.detail}`);
+  const openChecks = limitations.filter(isUnresolvedCheck);
+  return {
+    ...first,
+    selectedScope: strings((view) => [view.selectedScope]).join(" + "),
+    amendmentsEnforced: present.some((view) => view.amendmentsEnforced),
+    disclosure: present.map((view) => view.disclosure).find(Boolean) ?? null,
+    userEmphasis: present.map((view) => view.userEmphasis).find(Boolean) ?? null,
+    documentsReviewed: strings((view) => view.documentsReviewed),
+    disciplines: strings((view) => view.disciplines),
+    confirmedFindings: present.flatMap((view) => view.confirmedFindings),
+    verificationQuestions: present.flatMap((view) => view.verificationQuestions),
+    cleanChecks: strings((view) => view.cleanChecks),
+    unreviewable: strings((view) => view.unreviewable),
+    unresolvedChecks: openChecks.map((item) => item.detail),
+    openChecks,
+    limitations,
+    evidence: uniqueBy(present.flatMap((view) => view.evidence), (item) => `${item.where}|${item.quote}`).slice(0, 12),
+    withheldReasons: strings((view) => view.withheldReasons).slice(0, 6),
+    legalApplicability: present.map((view) => view.legalApplicability).find(Boolean) ?? null,
+    codeCoverage: present.map((view) => view.codeCoverage).find(Boolean) ?? null,
+  };
+}
+
+/**
+ * Sheet headline. The count is findings from every scope. Zero findings never reads as a pass:
+ * open checks read "Verification incomplete" with their count.
+ */
+export function sheetFindingsHeadline(summary: ReviewOutcomeSummary | null | undefined): string {
+  const total = summary?.totalIssues ?? 0;
+  const label = reviewOutcomeLabel(summary);
+  if (total > 0) return `${total} ${total === 1 ? "Finding" : "Findings"} · ${label}`;
+  const open = (summary?.limitations ?? []).filter(isUnresolvedCheck).length;
+  if (open > 0) return `0 Findings · ${label} · ${open} unresolved ${open === 1 ? "check" : "checks"}`;
+  if (reviewOutcome(summary) === "no_findings_unverified") return "0 Findings · Code compliance unverified";
+  return `0 Findings · ${label}`;
 }

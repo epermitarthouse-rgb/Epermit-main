@@ -62,6 +62,39 @@ export function credibleIndexEntries(entries: IndexSheetEntry[]): IndexSheetEntr
   return out;
 }
 
+/** "Not found" needs every included sheet's text. A sheet without text may be the index. */
+export class IndexTextUnavailableError extends Error {
+  readonly textlessSheets: number;
+  constructor(textlessSheets: number) {
+    super(
+      `Sheet text is not ready for ${textlessSheets} ${textlessSheets === 1 ? "sheet" : "sheets"}, so the drawing index was not checked.`,
+    );
+    this.name = "IndexTextUnavailableError";
+    this.textlessSheets = textlessSheets;
+  }
+}
+
+function sheetsWithoutText(sheets: CodeAnalyzerSheet[], pageTextBySheetId?: Record<string, string>): number {
+  return sheets.filter((sheet) => !sheet.excluded && !pageTextBySheetId?.[sheet.id]?.trim()).length;
+}
+
+/**
+ * The prescreen a run stores. A held result that found the index is kept. An empty or
+ * "not found" result is checked again on current text, so a stale miss is not persisted.
+ */
+export async function indexSnapshotForRun(
+  held: IndexCompletenessResult | null | undefined,
+  recheck: () => Promise<IndexCompletenessResult>,
+): Promise<IndexCompletenessResult | undefined> {
+  if (held?.hasIndex) return held;
+  try {
+    return await recheck();
+  } catch (err) {
+    console.warn("[index prescreen] Run snapshot not taken:", err);
+    return undefined;
+  }
+}
+
 /** Run prescreen; uses vision only when an index sheet exists but text parsing is empty. */
 export async function runDrawingIndexPrescreen(params: {
   sheets: CodeAnalyzerSheet[];
@@ -73,6 +106,8 @@ export async function runDrawingIndexPrescreen(params: {
 }): Promise<IndexCompletenessResult> {
   const indexSheet = detectIndexSheet(params.sheets, { pageTextBySheetId: params.pageTextBySheetId });
   if (!indexSheet) {
+    const textless = sheetsWithoutText(params.sheets, params.pageTextBySheetId);
+    if (textless > 0) throw new IndexTextUnavailableError(textless);
     return runIndexCompletenessPrescreen(params.sheets, { pageTextBySheetId: params.pageTextBySheetId });
   }
 

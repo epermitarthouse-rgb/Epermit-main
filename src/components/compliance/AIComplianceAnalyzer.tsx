@@ -138,7 +138,12 @@ import {
   type PermitApplicabilityFacts,
 } from "@/lib/codeAnalyzer/jurisdictionEditionVerification";
 import { jurisdictionForAnalyzerProject } from "@/lib/codeAnalyzer/analyzerJurisdiction";
-import { reviewOutcome, reviewOutcomeLabel } from "@/lib/codeAnalyzer/reviewReport";
+import {
+  mergeReviewReportViews,
+  reviewOutcome,
+  reviewOutcomeLabel,
+  sheetFindingsHeadline,
+} from "@/lib/codeAnalyzer/reviewReport";
 import {
   aggregateSheetAnalysisResults,
   fetchAnnotationRefsForHydrateResolution,
@@ -147,7 +152,7 @@ import {
   formatSheetResultsCounter,
 } from "@/lib/codeAnalyzer/sheetResults";
 import { ReviewEvidenceReport } from "@/components/compliance/ReviewEvidenceReport";
-import { runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
+import { indexSnapshotForRun, runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
 import { fetchSheetPageText } from "@/lib/codeAnalyzer/sheetPageText";
 import {
   analyzerSheetFingerprint,
@@ -622,6 +627,20 @@ export function AIComplianceAnalyzer() {
   );
   const indexPrescreenKeyRef = useRef("");
   const asyncStandardTerminalRef = useRef("");
+
+  const recheckDrawingIndex = useCallback(async () => {
+    if (!selectedProjectId) throw new Error("Open a project before checking the drawing index.");
+    return runDrawingIndexPrescreen({
+      sheets: persistedSheets,
+      pageTextBySheetId: await fetchSheetPageText(selectedProjectId),
+      getDownloadUrl: async (documentId) => {
+        const doc = sheetDocuments.find((d) => d.id === documentId);
+        if (doc) return getDownloadUrl(doc);
+        const fetched = await fetchDocumentsByIds([documentId]);
+        return fetched[0] ? getDownloadUrl(fetched[0]) : null;
+      },
+    });
+  }, [selectedProjectId, persistedSheets, sheetDocuments, getDownloadUrl]);
   const asyncModTerminalRef = useRef("");
 
   // Drawing index completeness prescreen (deterministic diff; vision only when index text is sparse).
@@ -653,25 +672,15 @@ export function AIComplianceAnalyzer() {
     setIndexPrescreenError(null);
     void (async () => {
       try {
-        const pageTextBySheetId = selectedProjectId
-          ? await fetchSheetPageText(selectedProjectId).catch(() => ({}))
-          : {};
-        const result = await runDrawingIndexPrescreen({
-          sheets: persistedSheets,
-          pageTextBySheetId,
-          getDownloadUrl: async (documentId) => {
-            const doc = sheetDocuments.find((d) => d.id === documentId);
-            if (doc) return getDownloadUrl(doc);
-            const fetched = await fetchDocumentsByIds([documentId]);
-            return fetched[0] ? getDownloadUrl(fetched[0]) : null;
-          },
-        });
+        const result = await recheckDrawingIndex();
         if (!cancelled) {
           setIndexCompleteness(result);
           setIndexPrescreenError(null);
         }
       } catch (err) {
         console.error("Index prescreen failed:", err);
+        // A check that could not read sheet text is tried again on the next dataset load.
+        indexPrescreenKeyRef.current = "";
         if (!cancelled) {
           setIndexPrescreenError(err instanceof Error ? err.message : "Prescreen failed");
         }
@@ -686,11 +695,9 @@ export function AIComplianceAnalyzer() {
   }, [
     sheetFingerprint,
     sheetDocIdsKey,
-    getDownloadUrl,
     isModificationMode,
     persistedSheets,
-    sheetDocuments,
-    selectedProjectId,
+    recheckDrawingIndex,
   ]);
 
   const pendingDrawingCount = files.filter(isPendingSessionUpload).length;
@@ -2507,7 +2514,7 @@ export function AIComplianceAnalyzer() {
             analysisModes:
               analysisMode === "both" ? ["ibc", "local"] : analysisMode === "local" ? ["local"] : ["ibc"],
             analysisInstructions,
-            indexCompleteness: indexCompleteness ?? undefined,
+            indexCompleteness: await indexSnapshotForRun(indexCompleteness, recheckDrawingIndex),
             requestedReviewScope,
             permitFacts,
             referenceReviewConfirmed,
@@ -2548,6 +2555,7 @@ export function AIComplianceAnalyzer() {
       referenceReviewConfirmed,
       editionVerification,
       indexCompleteness,
+      recheckDrawingIndex,
       codeYear,
       displayRun?.id,
       documentsWithAnalysis,
@@ -3224,6 +3232,7 @@ export function AIComplianceAnalyzer() {
     const groupResult = presentation.findingsResult;
     if (!groupResult) return null;
     const combinedSummary = presentation.summary;
+    const sheetReport = mergeReviewReportViews([group.ibcResult?.reviewReport, group.localResult?.reviewReport]);
     const isExpanded = expandedResultGroups[group.id] ?? false;
 
     return (
@@ -3238,9 +3247,8 @@ export function AIComplianceAnalyzer() {
             <span className="truncate text-sm font-medium text-foreground">{group.fileName}</span>
           </div>
           <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-            {combinedSummary.totalIssues > 0 ? <span>{combinedSummary.totalIssues} issues</span> : null}
-            <span className={`font-semibold ${scoreToneClass(combinedSummary)}`}>
-              {formatReviewScore(combinedSummary)}
+            <span className={`font-semibold ${scoreToneClass(combinedSummary)}`} data-testid="sheet-findings-headline">
+              {sheetFindingsHeadline(combinedSummary)}
             </span>
             <span>{isExpanded ? "Hide" : "Show"}</span>
           </div>
@@ -3342,14 +3350,14 @@ export function AIComplianceAnalyzer() {
           </Card>
         )}
 
-        {groupResult.reviewReport ? (
+        {sheetReport ? (
           <ReviewEvidenceReport
-            view={groupResult.reviewReport}
+            view={sheetReport}
             sourceFileName={group.fileName}
-            reviewState={groupResult.summary.reviewState ?? null}
-            overallScore={groupResult.summary.overallScore ?? null}
-            totalIssues={groupResult.issues.length}
-            codeCoverageVerified={groupResult.summary.codeCoverageVerified === true}
+            reviewState={combinedSummary.reviewState ?? null}
+            overallScore={combinedSummary.overallScore ?? null}
+            totalIssues={combinedSummary.totalIssues}
+            codeCoverageVerified={combinedSummary.codeCoverageVerified === true}
             expanded={reviewEvidenceExpanded[group.id] ?? false}
             onExpandedChange={(open) =>
               setReviewEvidenceExpanded((prev) => ({ ...prev, [group.id]: open }))

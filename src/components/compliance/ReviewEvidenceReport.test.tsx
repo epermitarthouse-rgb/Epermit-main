@@ -133,6 +133,8 @@ describe("ReviewEvidenceReport", () => {
     );
     assert.match(html, /Verification incomplete/);
     assert.match(html, /Unresolved checks/);
-    assert.match(html, /Equipment grounding: The sheet note states the requirement\./);
+    assert.match(html, /Unresolved checks \(1\)/);
+    assert.match(html, /Equipment grounding.*Missing evidence: The sheet note states the requirement\./s);
+    assert.match(html, /Sheets: E-1\.1\.pdf\./);
   });
 });
