@@ -368,6 +368,7 @@ function documentFrom(header, facts) {
       binding_status: fact.binding_status,
       observation_status: fact.observation_status,
       association_status: fact.association_status,
+      status: fact.kind === "relationship" ? (fact.association_status || null) : (fact.properties?.status || undefined),
       confidence: fact.confidence == null ? null : Number(fact.confidence),
       inferred: fact.inferred,
       page: fact.page_number,

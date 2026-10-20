@@ -1407,6 +1407,7 @@ function reviewDocument(doc) {
       type: element.type,
       discipline: element.discipline,
       tag: element.tag,
+      source_label: element.source_label ? String(element.source_label).slice(0, 160) : null,
       location: {
         text_anchor_bbox: element.location?.text_anchor_bbox || null,
         geometry_status: element.location?.geometry_status || "not_recovered",
