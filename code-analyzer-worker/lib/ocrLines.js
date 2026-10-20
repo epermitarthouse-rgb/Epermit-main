@@ -10,6 +10,17 @@ const INDEX_TITLE_RE =
 const SHEET_TOKEN_RE = /^[A-Z]{1,3}-?\d{1,4}(?:\.\d{1,2})?(?:-\d{1,2})?$/;
 const MIN_INDEX_ROWS = 5;
 
+/** Cyrillic and Greek capitals OCR returns for Latin letters ("Е-4.3" with a Cyrillic E). */
+const HOMOGLYPHS = {
+  "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T", "Х": "X", "Ѕ": "S", "І": "I", "Ј": "J",
+  "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",
+};
+const HOMOGLYPH_RE = new RegExp(`[${Object.keys(HOMOGLYPHS).join("")}]`, "g");
+
+function foldHomoglyphs(text) {
+  return String(text || "").replace(HOMOGLYPH_RE, (char) => HOMOGLYPHS[char]);
+}
+
 function wordBox(word) {
   const box = word?.box || word;
   const x = Number(box?.x);
@@ -21,78 +32,99 @@ function wordBox(word) {
 }
 
 /**
- * Words in PDF points (bottom-left origin) grouped into reading lines. Words on the same
- * baseline but far apart stay separate lines, so table columns and notes do not merge.
+ * Rotated drawing text (dimension strings, vertical labels) has a box much taller than wide.
+ * Its glyph size is the box width, not the height.
+ */
+function isVertical(text, box) {
+  return text.replace(/\s/g, "").length >= 2 && box.height > 1.6 * box.width;
+}
+
+/**
+ * Reading-axis view of a box: `along` runs with the text, `across` is the glyph size.
+ * Horizontal text reads left to right; vertical text reads bottom to top (90° CAD rotation).
+ */
+function axes(box, vertical) {
+  return vertical
+    ? { start: box.y, end: box.y + box.height, low: box.x, high: box.x + box.width, size: box.width }
+    : { start: box.x, end: box.x + box.width, low: box.y, high: box.y + box.height, size: box.height };
+}
+
+/**
+ * Words in PDF points (bottom-left origin) grouped into reading lines. Words join only when
+ * they share an orientation, sit on the same baseline, and are close along it, so table
+ * columns, stacked labels, and rotated dimension strings stay separate lines.
  * @param {Array<{ text?: string; t?: string; confidence?: number; c?: number; box?: Record<string, number> }>} words
- * @returns {Array<{ text: string; box: { x: number; y: number; width: number; height: number }; confidence: number; words: number }>}
+ * @returns {Array<{ text: string; box: { x: number; y: number; width: number; height: number }; confidence: number; words: number; vertical: boolean }>}
  */
 function groupWordsIntoLines(words) {
   const items = [];
   for (const word of words || []) {
-    const text = String(word?.text ?? word?.t ?? "").trim();
+    const text = foldHomoglyphs(word?.text ?? word?.t ?? "").trim();
     const box = wordBox(word);
     if (!text || !box) continue;
-    items.push({ text, box, confidence: Number(word?.confidence ?? word?.c) || 0 });
+    const vertical = isVertical(text, box);
+    items.push({ text, box, vertical, axis: axes(box, vertical), confidence: Number(word?.confidence ?? word?.c) || 0 });
   }
-  items.sort((a, b) => (b.box.y + b.box.height) - (a.box.y + a.box.height) || a.box.x - b.box.x);
+  items.sort((a, b) => Number(a.vertical) - Number(b.vertical)
+    || (b.box.y + b.box.height) - (a.box.y + a.box.height) || a.box.x - b.box.x);
   const lines = [];
   for (const item of items) {
-    const center = item.box.y + item.box.height / 2;
+    const { axis } = item;
+    const center = (axis.low + axis.high) / 2;
     let best = null;
     let bestGap = Infinity;
     for (const line of lines) {
-      const tolerance = 0.5 * Math.max(item.box.height, line.height);
-      if (Math.abs(center - line.center) > tolerance) continue;
-      const gap = item.box.x - line.right;
-      const maxGap = Math.max(2.5 * Math.max(item.box.height, line.height), 12);
-      if (gap > maxGap || item.box.x < line.left - item.box.height) continue;
+      if (line.vertical !== item.vertical) continue;
+      const size = Math.max(axis.size, line.size);
+      if (Math.abs(center - (line.low + line.high) / 2) > 0.5 * size) continue;
+      const gap = axis.start >= line.end ? axis.start - line.end : line.start - axis.end;
+      if (gap > Math.max(2.5 * size, 12) || gap < -size) continue;
       if (gap < bestGap) {
         best = line;
         bestGap = gap;
       }
     }
     if (!best) {
-      lines.push({
-        items: [item],
-        left: item.box.x,
-        right: item.box.x + item.box.width,
-        top: item.box.y + item.box.height,
-        bottom: item.box.y,
-        center,
-        height: item.box.height,
-      });
+      lines.push({ items: [item], vertical: item.vertical, ...axis });
       continue;
     }
     best.items.push(item);
-    best.left = Math.min(best.left, item.box.x);
-    best.right = Math.max(best.right, item.box.x + item.box.width);
-    best.top = Math.max(best.top, item.box.y + item.box.height);
-    best.bottom = Math.min(best.bottom, item.box.y);
-    best.height = Math.max(best.height, item.box.height);
-    best.center = (best.top + best.bottom) / 2;
+    best.start = Math.min(best.start, axis.start);
+    best.end = Math.max(best.end, axis.end);
+    best.low = Math.min(best.low, axis.low);
+    best.high = Math.max(best.high, axis.high);
+    best.size = Math.max(best.size, axis.size);
   }
   return lines
     .map((line) => {
-      const ordered = line.items.sort((a, b) => a.box.x - b.box.x);
+      const ordered = line.items.sort((a, b) => a.axis.start - b.axis.start);
+      const left = Math.min(...ordered.map((item) => item.box.x));
+      const bottom = Math.min(...ordered.map((item) => item.box.y));
+      const right = Math.max(...ordered.map((item) => item.box.x + item.box.width));
+      const top = Math.max(...ordered.map((item) => item.box.y + item.box.height));
       return {
         text: ordered.map((item) => item.text).join(" "),
-        box: { x: line.left, y: line.bottom, width: line.right - line.left, height: line.top - line.bottom },
+        box: { x: left, y: bottom, width: right - left, height: top - bottom },
         confidence: Math.min(...ordered.map((item) => item.confidence)),
         words: ordered.length,
+        vertical: line.vertical,
       };
     })
     .sort((a, b) => (b.box.y + b.box.height) - (a.box.y + a.box.height) || a.box.x - b.box.x);
 }
 
-const PREFIX_DIGIT_LETTER = { 5: "S", 6: "G", 8: "B" };
+const PREFIX_DIGIT_LETTER = { 4: "A", 5: "S", 6: "G", 8: "B" };
 
 /**
- * Hand-lettered CAD fonts read "1" as I, "0" as O, S as 5, and G as 6. The numeric part and a
- * single leading prefix digit are corrected; a word such as "WALL" or "POOL" is never a sheet number.
+ * Hand-lettered CAD fonts read "1" as I, "0" as O or an open C, S as 5, and G as 6. The numeric
+ * part and a single leading prefix digit are corrected; a word such as "WALL" or "POOL" is never
+ * a sheet number. C counts as 0 only after the first numeric character ("FP30C", "E-1.3-C").
  */
 function correctedSheetToken(raw) {
-  let token = String(raw || "").replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/gi, "").toUpperCase();
-  const digitPrefix = token.match(/^([568])(-[0-9OI].*)$/);
+  const trimmed = foldHomoglyphs(raw).trim();
+  let token = trimmed.replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/gi, "").toUpperCase();
+  // ".6-00" is the tail of "P-1.6-00", not sheet G-00: only a token that starts with the digit is corrected.
+  const digitPrefix = token === trimmed.replace(/[^A-Z0-9]+$/gi, "").toUpperCase() && token.match(/^([4568])(-[0-9OI].*)$/);
   if (digitPrefix) token = `${PREFIX_DIGIT_LETTER[digitPrefix[1]]}${digitPrefix[2]}`;
   if (SHEET_TOKEN_RE.test(token) && /\d/.test(token)) return token;
   for (let size = 1; size <= 3; size += 1) {
@@ -101,10 +133,10 @@ function correctedSheetToken(raw) {
     if (!/^[A-Z]+$/.test(prefix) || !rest) continue;
     const separator = /^[-.]/.test(rest) ? rest[0] : "";
     const body = rest.slice(separator.length);
-    if (!/^[0-9OIL|][0-9OIL|.-]*$/.test(body)) continue;
+    if (!/^[0-9OIL|][0-9OIL|C.-]*$/.test(body)) continue;
     const printed = /\d/.test(body) || separator;
     if (!printed && !/^[OI]{3,}$/.test(body)) continue;
-    const fixed = `${prefix}${separator}${body.replace(/O/g, "0").replace(/[IL|]/g, "1")}`;
+    const fixed = `${prefix}${separator}${body.replace(/[OC]/g, "0").replace(/[IL|]/g, "1")}`;
     if (SHEET_TOKEN_RE.test(fixed)) return fixed;
   }
   return null;

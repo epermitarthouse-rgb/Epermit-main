@@ -3,9 +3,10 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-const { recognizePng } = require("./ocr.js");
+const { ocrEngine, recognizePng } = require("./ocr.js");
 const {
   composeSheetText,
+  correctedSheetToken,
   groupWordsIntoLines,
   indexRowsFromLines,
   pageIsTitledIndex,
@@ -246,6 +247,7 @@ async function renderPdfClip(page, region, scale, maxPx = CROP_MAX_PX) {
     pixelWidth: canvas.width,
     pixelHeight: canvas.height,
     scale: usedScale,
+    clip: { x, y, width: canvas.width / usedScale, height: canvas.height / usedScale },
   };
 }
 
@@ -300,12 +302,13 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
       });
       continue;
     }
+    const clip = rendered.clip || tile;
     for (const word of recognized.words || []) {
       const text = String(word.text || "").trim();
       if (!text) continue;
       const confident = Number(word.confidence) >= OCR_CONFIDENCE_MIN;
       if (confident) {
-        words.push({ text, confidence: Number(word.confidence), box: wordToPdfBox(tile, word, rendered.pixelWidth, rendered.pixelHeight) });
+        words.push({ text, confidence: Number(word.confidence), box: wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight) });
       }
       if (!GRAPHIC_INTEREST_RE.test(text)) continue;
       lines.push({
@@ -315,7 +318,7 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
         confidence: Number(word.confidence),
         extractionMethod: recognized.engine,
         limitations: confident ? null : "region_unreadable",
-        box: wordToPdfBox(tile, word, rendered.pixelWidth, rendered.pixelHeight),
+        box: wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight),
         reason: reasonFor(text),
       });
     }
@@ -355,37 +358,98 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
 }
 
 const INDEX_CROP_MAX_PX = 4000;
+/**
+ * Render scales (px per point) for the index re-read. Tesseract drops most hand-lettered sheet
+ * numbers above about 2.5 px/pt, and each scale misses different rows, so it reads each column
+ * at several. Other engines read the whole index once at the highest scale.
+ */
+const INDEX_REREAD_SCALES = { tesseract: [1.2, 1.7, 2.2] };
 
 /**
- * Tile OCR is too coarse for small index text. When the page is an index, the column of
- * sheet-number rows (plus the title column to its right) is read again at high resolution.
+ * Lines read from one crop. A word below the confidence floor is kept when it parses as a
+ * sheet number: these lines only feed index rows, which must still align in a column.
  */
-async function rereadIndexColumns(page, pageWidth, pageHeight, tileLines, options) {
-  const rows = indexRowsFromLines(tileLines, { minRows: 3 });
-  if (!rows.length) return [];
-  const left = Math.min(...rows.map((row) => row.box.x));
-  const right = Math.max(...rows.map((row) => row.box.x + row.box.width));
-  const bottom = Math.min(...rows.map((row) => row.box.y));
-  const top = Math.max(...rows.map((row) => row.box.y + row.box.height));
-  const span = Math.max(right - left, 1);
-  const box = {
-    x: Math.max(0, left - 12),
-    y: Math.max(0, bottom - 24),
-    width: Math.min(pageWidth, right + span * 0.4 + 24) - Math.max(0, left - 12),
-    height: Math.min(pageHeight, top + 24) - Math.max(0, bottom - 24),
-    pageWidth,
-    pageHeight,
-  };
-  const scale = Math.min(4, INDEX_CROP_MAX_PX / Math.max(box.width, box.height));
+async function readIndexCrop(page, box, scale, options) {
   const rendered = await renderPdfClip(page, box, scale, INDEX_CROP_MAX_PX).catch(() => null);
   if (!rendered?.png) return [];
   const recognized = await recognizePng(rendered.png, options);
   if (recognized.unavailable || recognized.failed) return [];
-  const pad = 12;
-  const clip = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 };
   return groupWordsIntoLines((recognized.words || [])
-    .filter((word) => Number(word.confidence) >= OCR_CONFIDENCE_MIN)
-    .map((word) => ({ text: word.text, confidence: Number(word.confidence), box: wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight) })));
+    .filter((word) => Number(word.confidence) >= OCR_CONFIDENCE_MIN || correctedSheetToken(word.text))
+    .map((word) => ({ text: word.text, confidence: Number(word.confidence), box: wordToPdfBox(rendered.clip, word, rendered.pixelWidth, rendered.pixelHeight) })));
+}
+
+function boundsOf(rows, pageWidth, pageHeight, padX, padY, right = null) {
+  const left = Math.max(0, Math.min(...rows.map((row) => row.box.x)) - padX);
+  const bottom = Math.max(0, Math.min(...rows.map((row) => row.box.y)) - padY);
+  const edge = right ?? Math.max(...rows.map((row) => row.box.x + row.box.width)) + padX;
+  const top = Math.min(pageHeight, Math.max(...rows.map((row) => row.box.y + row.box.height)) + padY);
+  return { x: left, y: bottom, width: Math.min(pageWidth, edge) - left, height: top - bottom, pageWidth, pageHeight };
+}
+
+/** Index rows grouped into left-aligned columns, as indexRowsFromLines aligns them. */
+function indexColumns(rows) {
+  const columns = [];
+  for (const row of rows) {
+    const tolerance = Math.max(18, 2 * row.box.height);
+    const column = columns.find((existing) => Math.abs(existing.x - row.box.x) <= tolerance);
+    if (column) column.rows.push(row);
+    else columns.push({ x: row.box.x, rows: [row] });
+  }
+  return columns;
+}
+
+/**
+ * One line per physical row from several reads of a column: the sheet number most reads agree
+ * on (separators ignored), then the most confident, then the reading that kept its separators.
+ */
+function votedRowLines(lines) {
+  const slots = [];
+  for (const line of lines) {
+    const token = correctedSheetToken(line.text.trim().split(/\s+/)[0] || "");
+    if (!token) continue;
+    const center = line.box.y + line.box.height / 2;
+    const slot = slots.find((item) => Math.abs(item.center - center) <= 0.6 * Math.max(item.height, line.box.height));
+    const reading = { line, token, key: token.replace(/[-.]/g, "") };
+    if (slot) slot.readings.push(reading);
+    else slots.push({ center, height: line.box.height, readings: [reading] });
+  }
+  return slots.map((slot) => {
+    const votes = new Map();
+    for (const reading of slot.readings) votes.set(reading.key, (votes.get(reading.key) || 0) + 1);
+    return [...slot.readings].sort((a, b) => votes.get(b.key) - votes.get(a.key)
+      || b.line.confidence - a.line.confidence
+      || b.token.length - a.token.length)[0].line;
+  });
+}
+
+/**
+ * Tile OCR is too coarse for small index text. When the page is an index, the sheet-number
+ * rows are read again from the original PDF at a higher resolution.
+ */
+async function rereadIndexColumns(page, pageWidth, pageHeight, tileLines, options) {
+  const rows = indexRowsFromLines(tileLines, { minRows: 3 });
+  if (!rows.length) return [];
+  const scales = INDEX_REREAD_SCALES[ocrEngine(options)];
+  if (!scales) {
+    const right = Math.max(...rows.map((row) => row.box.x + row.box.width));
+    const span = Math.max(right - Math.min(...rows.map((row) => row.box.x)), 1);
+    const box = boundsOf(rows, pageWidth, pageHeight, 12, 24, right + span * 0.4 + 24);
+    return readIndexCrop(page, box, Math.min(4, INDEX_CROP_MAX_PX / Math.max(box.width, box.height)), options);
+  }
+  const lines = [];
+  for (const column of indexColumns(rows)) {
+    const rowHeight = Math.max(...column.rows.map((row) => row.box.height));
+    const numberWidth = Math.max(...column.rows.map((row) => {
+      const text = row.title ? `${row.sheetNumber} ${row.title}` : row.sheetNumber;
+      return row.box.width * Math.min(1, (row.sheetNumber.length + 1) / text.length);
+    }));
+    const box = boundsOf(column.rows, pageWidth, pageHeight, 6, 3 * rowHeight, Math.min(...column.rows.map((row) => row.box.x)) + numberWidth + 12);
+    const readings = [];
+    for (const scale of scales) readings.push(...await readIndexCrop(page, box, scale, options));
+    lines.push(...votedRowLines(readings));
+  }
+  return lines;
 }
 
 const QUESTION_CUES = [

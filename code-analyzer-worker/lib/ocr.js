@@ -68,9 +68,18 @@ function recognizeWithVision(pngBuffer) {
   }
 }
 
+let tesseractPresent = undefined;
+
+function tesseractAvailable() {
+  if (tesseractPresent === undefined) {
+    const probe = spawnSync("tesseract", ["--version"], { encoding: "utf8" });
+    tesseractPresent = !(probe.status !== 0 && probe.error);
+  }
+  return tesseractPresent;
+}
+
 function recognizeWithTesseract(pngBuffer) {
-  const probe = spawnSync("tesseract", ["--version"], { encoding: "utf8" });
-  if (probe.status !== 0 && probe.error) return null;
+  if (!tesseractAvailable()) return null;
   const tmp = path.join(os.tmpdir(), `epermit-tess-${process.pid}-${Date.now()}.png`);
   fs.writeFileSync(tmp, pngBuffer);
   try {
@@ -127,7 +136,16 @@ async function recognizePng(pngBuffer, options = {}) {
   return { engine: null, words: [], unavailable: true };
 }
 
+/** The engine recognizePng will use with these options, without reading anything. */
+function ocrEngine(options = {}) {
+  if (typeof options.ocr === "function") return "injected";
+  if (ensureVisionBinary()) return "macos-vision";
+  if (tesseractAvailable()) return "tesseract";
+  return null;
+}
+
 module.exports = {
   recognizePng,
   ensureVisionBinary,
+  ocrEngine,
 };
