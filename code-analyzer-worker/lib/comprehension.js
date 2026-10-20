@@ -827,6 +827,7 @@ async function comprehendPdfPage(filePath, pageNumber, options = {}) {
         pageWidth: viewport.width,
         pageHeight: viewport.height,
         graphicalReadStatus: graphic.readStatus,
+        words: graphic.words || [],
         sourcePdf: filePath,
       };
     } finally {
@@ -871,6 +872,7 @@ function emptyPage() {
     pageWidth: 0,
     pageHeight: 0,
     graphicalReadStatus: "no_page",
+    words: [],
   };
 }
 

@@ -145,7 +145,7 @@ async function prepareEvidenceForSheet(input) {
   let regions = [];
   let regionImages = [];
   let pageText = input.pageText || "";
-  let pageMeta = { pageWidth: 0, pageHeight: 0, graphicalReadStatus: null, sourcePdf: false, ocrLineCount: 0, indexRowCount: 0 };
+  let pageMeta = { pageWidth: 0, pageHeight: 0, graphicalReadStatus: null, sourcePdf: false, ocrLineCount: 0, indexRowCount: 0, words: [], evidenceItems: [] };
   if (input.pdfPath) {
     try {
       const page = await comprehendPdfPage(input.pdfPath, input.sheet.page_number || input.sheet.pageNumber || 1, {
@@ -164,6 +164,8 @@ async function prepareEvidenceForSheet(input) {
         sourcePdf: true,
         ocrLineCount: page.ocrLineCount || 0,
         indexRowCount: (page.indexRows || []).length,
+        words: page.words || [],
+        evidenceItems: items,
       };
     } catch (err) {
       console.warn(

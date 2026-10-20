@@ -24,6 +24,7 @@ const {
   NOT_TEXT_ATTRIBUTES,
   outcomeForReason,
 } = require("./evaluation.js");
+const { gateMeasuredFact } = require("../rag/drawingStructure.js");
 
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;
@@ -764,6 +765,10 @@ function publicationGate(issue, decision, ctx) {
     }
   }
   const numbers = numbersIn(claim.values);
+  const structured = gateMeasuredFact(ctx?.structuredDrawing, claim, numbers);
+  if (structured) {
+    return { disposition: "reject", reason: structured.reason, detail: structured.detail, provenance };
+  }
   if (claim.kind !== "missing" && numbers.length) {
     const measuredSpans = spans.filter((span) => !NORMATIVE_NOTE_RE.test(span.text));
     const bound = numbers.some((number) => measuredSpans.some((span) => new RegExp(`(?<![\\d.])${number.replace(".", "\\.")}(?![\\d.])`).test(span.text)));

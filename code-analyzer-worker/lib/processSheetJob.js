@@ -7,6 +7,11 @@ const { extractPdfPageText, extractPdfPagesFromFile } = require("./pdfExtract");
 const { classifySheetContent } = require("./classify");
 const { isPdfFile } = require("./mediaType");
 const { reconcileOcrIndex } = require("./indexReconcile");
+const { hashFile, loadSheetExtraction, saveSheetExtraction } = require("./drawingFactStore");
+const {
+  buildDrawingDocument,
+  summarizeForReview,
+} = require("../../scraper-service/app/services/compliance/rag/drawingStructure.js");
 const {
   buildJurisdictionDiagnostics,
   resolveJurisdictionDecisionFromInput,
@@ -705,8 +710,28 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
   seedDrawingIndex(run.id, includedSheets, (sheetId) => cachedSheetText(run.id, sheetId));
   const drawingStore = drawingStoreFor(supabase);
   const hydrated = await rehydrateDrawingIndex(run.id, job.project_id, drawingStore);
-  const prepared = await withSourcePdf(supabase, sheet, (pdfPath) =>
-    prepareEvidenceForSheet({
+  const prepared = await withSourcePdf(supabase, sheet, async (pdfPath) => {
+    let sourceFingerprint = null;
+    if (pdfPath) {
+      try {
+        sourceFingerprint = await hashFile(pdfPath);
+      } catch {
+        sourceFingerprint = null;
+      }
+    }
+    let stored = null;
+    if (sourceFingerprint) {
+      try {
+        stored = await loadSheetExtraction(supabase, {
+          projectId: job.project_id,
+          sheetId: sheet.id,
+          sourceFingerprint,
+        });
+      } catch (err) {
+        console.warn("[code-analyzer-worker] structured drawing load failed:", err instanceof Error ? err.message : err);
+      }
+    }
+    const evidence = await prepareEvidenceForSheet({
       runId: run.id,
       projectId: job.project_id,
       sheet,
@@ -720,8 +745,64 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
       codeYear: run.code_year || null,
       renderRegions: true,
       embedTexts: drawingEmbedder(),
-    }),
-  );
+      discoverGraphics: stored?.document ? false : undefined,
+    });
+    let structuredDrawing = stored?.document || null;
+    let extractionWrite = stored?.document
+      ? { persisted: true, reused: true, reason: "unchanged_source" }
+      : null;
+    if (!structuredDrawing) {
+      const built = buildDrawingDocument({
+        sourceFingerprint: sourceFingerprint || `text:${sheet.id}`,
+        sheet,
+        documentId: sheet.source_document_id,
+        sheetId: sheet.id,
+        fileName: sheetFileName,
+        pageText: evidence.pageText || pageText,
+        evidenceItems: evidence.evidenceItems || [],
+        words: evidence.words || [],
+        regions: evidence.record?.regions || [],
+        graphicalReadStatus: evidence.graphicalReadStatus,
+        pageNumber: sheet.page_number || 1,
+      });
+      try {
+        extractionWrite = await saveSheetExtraction(supabase, {
+          projectId: job.project_id,
+          documentId: sheet.source_document_id,
+          sheetId: sheet.id,
+          document: built,
+        });
+        structuredDrawing = extractionWrite.document || built;
+      } catch (err) {
+        console.warn("[code-analyzer-worker] structured drawing save failed:", err instanceof Error ? err.message : err);
+        structuredDrawing = built;
+        extractionWrite = { persisted: false, reason: "write_failed" };
+      }
+    }
+    if (structuredDrawing?.sheet_number) {
+      const related = await supabase
+        .from("code_analyzer_drawing_facts")
+        .select("sheet_id, element_type, text, binding_status, related_sheet_refs")
+        .eq("project_id", job.project_id)
+        .contains("related_sheet_refs", [String(structuredDrawing.sheet_number).toUpperCase()])
+        .eq("superseded", false)
+        .limit(15);
+      if (!related.error && related.data?.length) {
+        structuredDrawing = {
+          ...structuredDrawing,
+          cross_sheet: related.data
+            .filter((row) => row.sheet_id !== sheet.id)
+            .map((row) => ({
+              sheet_id: row.sheet_id,
+              element_type: row.element_type,
+              text: String(row.text || "").slice(0, 160),
+              binding_status: row.binding_status,
+            })),
+        };
+      }
+    }
+    return { ...evidence, structuredDrawing, extractionWrite };
+  });
   const sheetChunks = evidenceIndexForRun(run.id).list().filter((record) => {
     if (record.projectId && job.project_id && String(record.projectId) !== String(job.project_id)) return false;
     if (sheet.id && record.sheetId && String(record.sheetId) === String(sheet.id)) return true;
@@ -772,7 +853,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     sheetIndex,
     jurisdictionDiagnostics,
     jurisdictionScope: jurisdictionDecision,
-    reviewContext: prepared.promptBlock,
+    reviewContext: [prepared.promptBlock, summarizeForReview(prepared.structuredDrawing)].filter(Boolean).join("\n\n"),
     drawingRecords: prepared.drawingRecords,
     drawingRetrieval,
     requestedReviewScope: run.requested_review_scope || "reference_only",
@@ -784,6 +865,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     fileName: sheetFileName,
     pageText: prepared.pageText || pageText,
     graphicalReadStatus: prepared.graphicalReadStatus || null,
+    structuredDrawing: prepared.structuredDrawing || null,
   });
 
   await persistSheetFindings(supabase, {
