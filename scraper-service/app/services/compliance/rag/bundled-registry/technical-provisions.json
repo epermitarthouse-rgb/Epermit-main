@@ -13,13 +13,24 @@
     "text": "The provisions of Chapter 11 of the Building Code and Appendix E (except Section E110 Airports) of the International Building Code, as amended, shall control the design and construction of facilities for accessibility to persons with physical disabilities. Appendix E of the International Building Code, as amended, is adopted as Appendix E of the Building Code.",
     "exactTextStored": true,
     "provisionType": "scoping",
-    "topics": ["accessibility", "chapter 11", "appendix E"],
+    "topics": [
+      "accessibility",
+      "chapter 11",
+      "appendix E"
+    ],
     "thresholds": [],
-    "exceptions": ["Section E110 Airports is excluded from the adopted Appendix E scope statement."],
-    "elementTypes": ["accessible_route", "toilet_clearance"],
+    "exceptions": [
+      "Section E110 Airports is excluded from the adopted Appendix E scope statement."
+    ],
+    "elementTypes": [
+      "accessible_route",
+      "toilet_clearance"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1101",
     "sourceLocator": "12-A DCMR § 1101.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -44,13 +55,19 @@
     "text": "Fractional numbers resulting from applying the calculations and percentages in Section 1107 shall be rounded up to the next whole number.",
     "exactTextStored": true,
     "provisionType": "calculation",
-    "topics": ["accessibility", "rounding", "dwelling units"],
+    "topics": [
+      "accessibility",
+      "rounding",
+      "dwelling units"
+    ],
     "thresholds": [],
     "exceptions": [],
     "elementTypes": [],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1101",
     "sourceLocator": "12-A DCMR § 1101.3, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -75,13 +92,23 @@
     "text": "Existing buildings shall comply with the Existing Building Code.",
     "exactTextStored": true,
     "provisionType": "applicability",
-    "topics": ["accessibility", "existing building", "alteration"],
+    "topics": [
+      "accessibility",
+      "existing building",
+      "alteration"
+    ],
     "thresholds": [],
     "exceptions": [],
-    "elementTypes": ["accessible_route", "toilet_clearance"],
+    "elementTypes": [
+      "accessible_route",
+      "toilet_clearance"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["alteration", "existing_building"]
+      "workScopes": [
+        "alteration",
+        "existing_building"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1103",
     "sourceLocator": "12-A DCMR § 1103.2.15, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -106,7 +133,12 @@
     "text": "The exit discharge and exit passageways in a means of egress system shall be allowed to have a ceiling height of not less than 7 feet (2134 mm).",
     "exactTextStored": true,
     "provisionType": "exception",
-    "topics": ["egress", "ceiling height", "exit discharge", "exit passageway"],
+    "topics": [
+      "egress",
+      "ceiling height",
+      "exit discharge",
+      "exit passageway"
+    ],
     "thresholds": [
       {
         "name": "exit_discharge_and_passageway_ceiling_height",
@@ -118,10 +150,14 @@
       }
     ],
     "exceptions": [],
-    "elementTypes": ["egress_path"],
+    "elementTypes": [
+      "egress_path"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1003",
     "sourceLocator": "12-A DCMR § 1003.2 Exception 9, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -146,13 +182,24 @@
     "text": "Where a toilet room is provided for the use of multiple occupants, the egress door for the room shall not be lockable from the inside of the room. This section does not apply to family or assisted-use toilet rooms.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["egress", "door", "toilet room", "locking"],
+    "topics": [
+      "egress",
+      "door",
+      "toilet room",
+      "locking"
+    ],
     "thresholds": [],
-    "exceptions": ["This section does not apply to family or assisted-use toilet rooms."],
-    "elementTypes": ["door"],
+    "exceptions": [
+      "This section does not apply to family or assisted-use toilet rooms."
+    ],
+    "elementTypes": [
+      "door"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1010",
     "sourceLocator": "12-A DCMR § 1010.1.9.5.2, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -177,11 +224,16 @@
     "text": "Delayed egress locking systems are authorized to be installed on doors serving Group E in buildings that are equipped throughout with an automatic fire alarm system in accordance with § 907.2.3. The locking system shall be installed and operated in accordance with all of the following: The delay electronics of the delayed egress locking system shall deactivate upon actuation of the automatic fire alarm system, allowing immediate, free egress. The delay electronics of the delayed egress locking system shall deactivate upon loss of power controlling the lock or lock mechanism, allowing immediate free egress. The delayed egress locking system shall have the capability of being deactivated at the fire command center and other approved locations, if a fire command center is provided. An attempt to egress shall initiate an irreversible process that shall allow such egress in not more than 15 seconds when a physical effort to exit is applied to the egress side door hardware for not more than 3 seconds. Initiation of the irreversible process shall activate an audible signal in the vicinity of the door. Once the delay electronics have been deactivated, rearming the delay electronics shall be by manual means only. Exception: Where approved, a delay of not more than 30 seconds is permitted on a delayed egress door. The egress path from any point shall not pass through more than one delayed egress locking system. A sign shall be provided on the door and shall be located above and within 12 inches (305 mm) of the door exit hardware. For doors that swing in the direction of egress, the sign shall read: PUSH UNTIL ALARM SOUNDS. DOOR CAN BE OPENED IN 15 [30] SECONDS. For doors that swing in the opposite direction of egress, the sign shall read: PULL UNTIL ALARM SOUNDS. DOOR CAN BE OPENED IN 15 [30] SECONDS. The sign shall comply with the visual character requirements in ICC A117. Emergency lighting shall be provided on the egress side of the door. The delayed egress locking system units shall be listed in accordance with UL 294.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["egress", "delayed egress", "Group E", "door"],
+    "topics": [
+      "egress",
+      "delayed egress",
+      "Group E",
+      "door"
+    ],
     "thresholds": [
       {
         "name": "delayed_egress_release",
-        "property": "duration",
+        "property": "release_delay",
         "operator": "max",
         "value": 15,
         "unit": "seconds",
@@ -189,7 +241,7 @@
       },
       {
         "name": "delayed_egress_effort",
-        "property": "duration",
+        "property": "effort_duration",
         "operator": "max",
         "value": 3,
         "unit": "seconds",
@@ -197,7 +249,7 @@
       },
       {
         "name": "delayed_egress_sign_offset",
-        "property": "distance",
+        "property": "sign_offset",
         "operator": "max",
         "value": 12,
         "unit": "in",
@@ -207,11 +259,17 @@
     "exceptions": [
       "Where approved, a delay of not more than 30 seconds is permitted on a delayed egress door."
     ],
-    "elementTypes": ["door"],
+    "elementTypes": [
+      "door"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "occupancies": ["E"],
-      "workScopes": ["any"]
+      "occupancies": [
+        "E"
+      ],
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1010",
     "sourceLocator": "12-A DCMR § 1010.1.9.7.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -220,7 +278,7 @@
     "verificationStatus": "verified",
     "licenseStatus": "official_government_publication_excerpt",
     "authoritative": true,
-    "supportsConfirmedViolation": false
+    "supportsConfirmedViolation": true
   },
   {
     "id": "dc-2017-12a-2901.1",
@@ -236,13 +294,22 @@
     "text": "The provisions of this chapter and the Plumbing Code shall govern the erection, installation, alteration, repairs, relocation, replacement, addition to, use or maintenance of plumbing equipment and systems. Toilet and bathing rooms shall be constructed in accordance with Section 1210. Plumbing systems and equipment shall be constructed, installed and maintained in accordance with the Plumbing Code.",
     "exactTextStored": true,
     "provisionType": "scoping",
-    "topics": ["plumbing", "alteration", "toilet room"],
+    "topics": [
+      "plumbing",
+      "alteration",
+      "toilet room"
+    ],
     "thresholds": [],
     "exceptions": [],
-    "elementTypes": ["grease_interceptor", "toilet_clearance"],
+    "elementTypes": [
+      "grease_interceptor",
+      "toilet_clearance"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A2901",
     "sourceLocator": "12-A DCMR § 2901.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -267,7 +334,12 @@
     "text": "Drinking fountains shall not be required to be located in individual tenant spaces provided that public drinking fountains are located within a distance of travel of 500 feet (152 m) of the most remote location in the tenant space and not more than one story above or below the served floor level of the tenant space. Where the tenant space is in a covered or open mall, such distance shall not exceed 300 feet (91 m), measured from the main entrance of any store or tenant space. Drinking fountains in buildings or facilities required to be accessible by the Building Code shall be located on an accessible route.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["plumbing", "drinking fountain", "travel distance", "accessible route"],
+    "topics": [
+      "plumbing",
+      "drinking fountain",
+      "travel distance",
+      "accessible route"
+    ],
     "thresholds": [
       {
         "name": "public_drinking_fountain_travel",
@@ -287,10 +359,14 @@
       }
     ],
     "exceptions": [],
-    "elementTypes": ["accessible_route"],
+    "elementTypes": [
+      "accessible_route"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-F403",
     "sourceLocator": "12-F DCMR § 403.5, Plumbing Code Supplement of 2017, Final Rulemaking 67 DCR 6148 (May 29, 2020)",
@@ -315,7 +391,11 @@
     "text": "At least one 125-volt, single-phase, 20-ampere-rated GFCI receptacle outlet shall be installed within 7.5m (25 ft) of the electrical service equipment. Exception: The receptacle outlet shall not be required to be installed in one- and two-family dwellings.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["electrical", "gfci", "service equipment"],
+    "topics": [
+      "electrical",
+      "gfci",
+      "service equipment"
+    ],
     "thresholds": [
       {
         "name": "service_receptacle_rating",
@@ -337,10 +417,14 @@
     "exceptions": [
       "The receptacle outlet shall not be required to be installed in one- and two-family dwellings."
     ],
-    "elementTypes": ["gfci"],
+    "elementTypes": [
+      "gfci"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-C210",
     "sourceLocator": "12-C DCMR Article 210.64, Electrical Code Supplement of 2017, Final Rulemaking 67 DCR 6069 (May 29, 2020)",
@@ -349,7 +433,7 @@
     "verificationStatus": "verified",
     "licenseStatus": "official_government_publication_excerpt",
     "authoritative": true,
-    "supportsConfirmedViolation": false
+    "supportsConfirmedViolation": true
   },
   {
     "id": "dc-2017-12j-801.3",
@@ -365,7 +449,12 @@
     "text": "All new construction elements, components, systems and spaces shall comply with the requirements of the Building Code. Exceptions: Windows may be added without requiring compliance with the light and ventilation requirements of the Building Code. Newly installed electrical equipment shall comply with the requirements of Section 808. The length of dead-end corridors in newly constructed spaces shall only be required to comply with the provisions of Section 805.6. The minimum ceiling height of the newly created habitable and occupiable spaces and corridors shall be 7 feet (2134 mm). A lower clearance than that set forth in Exceptions to Subsection 1208.2 of the Building Code is permitted in special cases where the code official determines that a lower clearance will pose no undue health or safety hazard to the occupants.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["alteration", "level 2", "ceiling height", "egress"],
+    "topics": [
+      "alteration",
+      "level 2",
+      "ceiling height",
+      "egress"
+    ],
     "thresholds": [
       {
         "name": "new_habitable_space_ceiling_height",
@@ -382,10 +471,15 @@
       "Dead-end corridors in newly constructed spaces shall comply with Section 805.6.",
       "The code official may permit a lower ceiling clearance where it poses no undue health or safety hazard."
     ],
-    "elementTypes": ["egress_path"],
+    "elementTypes": [
+      "egress_path"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["alteration", "existing_building"]
+      "workScopes": [
+        "alteration",
+        "existing_building"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-J801",
     "sourceLocator": "12-J DCMR § 801.3, Existing Building Code Supplement of 2017, Final Rulemaking 67 DCR 6491 (May 29, 2020)",
@@ -409,12 +503,21 @@
     "text": "Industrial Users including, but not limited to, restaurants, cafeterias, hotel kitchens, church kitchens, school kitchens, hospital cafeterias, bars, or other facilities that have the potential to discharge oil or grease laden wastewater shall provide and maintain a grease abatement system for the proper handling of wastewater containing excessive amounts of oil and grease in accordance with the District of Columbia Plumbing Code or as WASA requires.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["plumbing", "grease interceptor", "pretreatment", "food service"],
+    "topics": [
+      "plumbing",
+      "grease interceptor",
+      "pretreatment",
+      "food service"
+    ],
     "thresholds": [],
     "exceptions": [],
-    "elementTypes": ["grease_interceptor"],
+    "elementTypes": [
+      "grease_interceptor"
+    ],
     "applicability": {
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcwater.com/sites/default/files/Customer%20Compliance%20S/211502%20Pretreatment.pdf",
     "sourceLocator": "21 DCMR § 1502.16, Notice of Final Rulemaking, 59 DCR 1021, 1034 (February 10, 2012)",
@@ -438,7 +541,12 @@
     "text": "Industrial Users that have the potential of discharging grease, oil, or sand laden wastewater into the District's wastewater system shall comply with the following requirements: (a) Implement appropriate best management practices for minimizing the discharge of grease, oil, or sand laden wastewater into the sewer system; (b) All grease abatement systems and interceptors shall comply with the currently approved District of Columbia Plumbing Code requirements and shall be easily accessible for cleaning and inspection; (c) Grease abatement systems and interceptors shall be maintained and inspected regularly and repaired as needed by the Industrial User at their expense; (d) Grease, oil, and settled solids shall be removed from such grease abatement systems and interceptors at a frequency necessary to ensure proper operation and to prevent pass-through of these materials into the District's wastewater system; (e) Cleaning frequency shall not exceed thirty (30) days for a flow-based grease abatement system and ninety (90) days for a volume-based grease abatement system, unless granted a written variance by WASA for those Industrial Users identified in §1502.16. A written variance may be issued if the Industrial User can satisfactorily demonstrate that the accumulation of grease, oils, and solids does not exceed twenty-five percent (25%) of the liquid retention capacity of the grease abatement system during the Industrial User's proposed cleaning frequency. The entire contents of the grease abatement system shall be pumped out and properly disposed of to allow for thorough cleaning of the grease abatement system. All costs for removal of material or cleaning of the grease abatement system shall be at the Industrial User's expense; and (f) Documentation of the most recent cleaning of the grease abatement system or interceptor shall be retained on site and shall include, at a minimum, the date cleaned, the company or person performing the cleaning, the volume of material removed, and the method and location of disposal. Cleaning records shall be retained for a period of at least three (3) years.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["plumbing", "grease interceptor", "cleaning frequency", "pretreatment"],
+    "topics": [
+      "plumbing",
+      "grease interceptor",
+      "cleaning frequency",
+      "pretreatment"
+    ],
     "thresholds": [
       {
         "name": "flow_based_cleaning_interval",
@@ -468,9 +576,13 @@
     "exceptions": [
       "WASA may grant a written variance from the 30-day and 90-day cleaning maxima for Industrial Users identified in § 1502.16 when accumulation of grease, oils, and solids does not exceed twenty-five percent (25%) of the liquid retention capacity."
     ],
-    "elementTypes": ["grease_interceptor"],
+    "elementTypes": [
+      "grease_interceptor"
+    ],
     "applicability": {
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcwater.com/sites/default/files/Customer%20Compliance%20S/211502%20Pretreatment.pdf",
     "sourceLocator": "21 DCMR § 1502.18, Notice of Final Rulemaking, 59 DCR 1021, 1034 (February 10, 2012)",
@@ -495,7 +607,11 @@
     "text": "The room shall be of sufficient size to accommodate all equipment and features required by this section but not less than 96 square feet (8.9 m²). A minimum clear aisle width of 48 inches (1220 mm) shall be provided in front of all equipment panels.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["fire", "fire command center", "aisle width"],
+    "topics": [
+      "fire",
+      "fire command center",
+      "aisle width"
+    ],
     "thresholds": [
       {
         "name": "fire_command_center_area",
@@ -515,10 +631,14 @@
       }
     ],
     "exceptions": [],
-    "elementTypes": ["fire_command_center"],
+    "elementTypes": [
+      "fire_command_center"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A911",
     "sourceLocator": "12-A DCMR § 911.1.3, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -543,16 +663,24 @@
     "text": "Where two exits, exit access doorways, exit access stairways or ramps, or any combination thereof, are required from any portion of the exit access, they shall be placed a distance apart equal to not less than one-half of the length of the maximum overall diagonal dimension of the building or area to be served measured in a straight line between them. Interlocking or scissor stairways shall be counted as one exit stairway. Exceptions: Where interior exit stairways or ramps are interconnected by a 1-hour fire-resistance-rated corridor conforming to the requirements of Section 1020, the required exit separation shall be measured along the shortest direct line of travel within the corridor. Where a building is equipped throughout with an automatic sprinkler system in accordance with Sections 903.3.1.1 or 903.3.1.2, the separation distance shall not be less than one-fourth of the length of the maximum overall diagonal dimension of the area served.",
     "exactTextStored": true,
     "provisionType": "requirement",
-    "topics": ["egress", "exit separation", "exit access"],
+    "topics": [
+      "egress",
+      "exit separation",
+      "exit access"
+    ],
     "thresholds": [],
     "exceptions": [
       "Where interior exit stairways or ramps are interconnected by a 1-hour fire-resistance-rated corridor conforming to Section 1020, separation is measured along the shortest direct line of travel within the corridor.",
       "Where the building is equipped throughout with an automatic sprinkler system in accordance with Section 903.3.1.1 or 903.3.1.2, the separation distance shall not be less than one-fourth of the maximum overall diagonal dimension of the area served."
     ],
-    "elementTypes": ["egress_path"],
+    "elementTypes": [
+      "egress_path"
+    ],
     "applicability": {
       "effectiveFrom": "2020-05-29",
-      "workScopes": ["any"]
+      "workScopes": [
+        "any"
+      ]
     },
     "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1007",
     "sourceLocator": "12-A DCMR § 1007.1.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
@@ -561,6 +689,1213 @@
     "verificationStatus": "verified",
     "licenseStatus": "official_government_publication_excerpt",
     "authoritative": true,
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-911.1.1.1",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "911.1.1.1",
+    "heading": "Fire command center identification",
+    "text": "The entrance door to the fire command center shall be illuminated and clearly marked \"Fire Command Center\" with letters a minimum of 3 inches (76 mm) in height on a contrasting background. In instances where the fire command center is not located near the building's main entrance, a sign indicating the location of the fire control room shall be conspicuously posted near the building's main entrance.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "fire command center",
+      "sign"
+    ],
+    "thresholds": [
+      {
+        "name": "fire_command_center_letter_height",
+        "property": "letter_height",
+        "operator": "min",
+        "value": 3,
+        "unit": "in",
+        "element": "fire_command_center"
+      }
+    ],
+    "exceptions": [],
+    "elementTypes": [
+      "fire_command_center"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A911",
+    "sourceLocator": "12-A DCMR § 911.1.1.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12h-508.1.1.1",
+    "codeBook": "12-H DCMR",
+    "baseCodeFamily": "IFC",
+    "baseCodeEdition": "2015",
+    "section": "508.1.1.1",
+    "heading": "Fire command center identification",
+    "text": "The entrance door to the fire command center shall be illuminated and clearly marked \"Fire Command Center\" with letters a minimum of 3 inches (76 mm) in height on a contrasting background. In instances where the fire command center is not located near the building's main entrance, a sign indicating the location of the fire control room shall be conspicuously posted near the building's main entrance.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "fire command center",
+      "sign"
+    ],
+    "thresholds": [
+      {
+        "name": "fire_command_center_letter_height",
+        "property": "letter_height",
+        "operator": "min",
+        "value": 3,
+        "unit": "in",
+        "element": "fire_command_center"
+      }
+    ],
+    "exceptions": [],
+    "elementTypes": [
+      "fire_command_center"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-H508",
+    "sourceLocator": "12-H DCMR § 508.1.1.1, Fire Code Supplement of 2017, Final Rulemaking 67 DCR 6232 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12h-508.1.3",
+    "codeBook": "12-H DCMR",
+    "baseCodeFamily": "IFC",
+    "baseCodeEdition": "2015",
+    "section": "508.1.3",
+    "heading": "Fire command center size",
+    "text": "The fire command center shall be of sufficient size to accommodate all equipment and features required by this section but not less than 96 square feet (8.9 m²). A minimum clear aisle width of 48 inches (1220 mm) shall be provided in front of all equipment panels.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "fire command center",
+      "aisle width"
+    ],
+    "thresholds": [
+      {
+        "name": "fire_command_center_area",
+        "property": "area",
+        "operator": "min",
+        "value": 96,
+        "unit": "sq ft",
+        "element": "fire_command_center"
+      },
+      {
+        "name": "fire_command_center_aisle_width",
+        "property": "width",
+        "operator": "min",
+        "value": 48,
+        "unit": "in",
+        "element": "fire_command_center"
+      }
+    ],
+    "exceptions": [],
+    "elementTypes": [
+      "fire_command_center"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-H508",
+    "sourceLocator": "12-H DCMR § 508.1.3, Fire Code Supplement of 2017, Final Rulemaking 67 DCR 6232 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1023.9.2.1",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1023.9.2.1",
+    "heading": "Stairway identification sign mounting height",
+    "text": "Signs shall be provided for all interior exit stairways and ramps connecting more than three stories, and for all interior exit stairways and ramps in buildings with three or more interior exit stairways or ramps. The stairway identification sign shall be located entirely between 5 feet (1524 mm) and 8 feet (2438 mm) above the floor landing in a position that is readily visible when the doors are in the open and closed positions. Exception: Stairway identification signs are not required to identify the story of, and direction to the exit discharge in interior exit stairways and ramps that connect less than three stories.",
+    "provisionType": "requirement",
+    "topics": [
+      "egress",
+      "stair",
+      "sign",
+      "mounting height"
+    ],
+    "thresholds": [
+      {
+        "name": "stair_sign_mounting_height_min",
+        "property": "mounting_height",
+        "operator": "min",
+        "value": 5,
+        "unit": "ft",
+        "element": "stair_identification_sign"
+      },
+      {
+        "name": "stair_sign_mounting_height_max",
+        "property": "mounting_height",
+        "operator": "max",
+        "value": 8,
+        "unit": "ft",
+        "element": "stair_identification_sign"
+      }
+    ],
+    "exceptions": [
+      "Stairway identification signs are not required to identify the story of, and direction to the exit discharge in interior exit stairways and ramps that connect less than three stories. That exception does not change the 5-foot to 8-foot mounting range when the sign is required."
+    ],
+    "elementTypes": [
+      "stair_identification_sign"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1023",
+    "sourceLocator": "12-A DCMR § 1023.9.2.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1023.9.2.1.1",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1023.9.2.1.1",
+    "heading": "Stairway identification sign dimensions",
+    "text": "The signs shall be a minimum size of 18 inches (457 mm) by 12 inches (305 mm). The characters designating the stair or ramp shall be a minimum of 1 1/2 inches (38 mm) in height but not greater than one-third the height of the floor level identification characters. The numerals or capital letters designating the floor level shall be a minimum of 5 inches (127 mm) in height and located in the center of the sign. All other lettering and numbers shall be a minimum of 1 inch (25 mm) in height but not greater than the stair or ramp identification characters. The directional arrow shall be a minimum of 4 inches (102 mm) in length.",
+    "provisionType": "requirement",
+    "topics": [
+      "egress",
+      "stair",
+      "sign"
+    ],
+    "thresholds": [
+      {
+        "name": "stair_sign_first_dimension",
+        "property": "sign_first_dimension",
+        "operator": "min",
+        "value": 18,
+        "unit": "in",
+        "element": "stair_identification_sign"
+      },
+      {
+        "name": "stair_sign_second_dimension",
+        "property": "sign_second_dimension",
+        "operator": "min",
+        "value": 12,
+        "unit": "in",
+        "element": "stair_identification_sign"
+      },
+      {
+        "name": "floor_level_character_height",
+        "property": "floor_character_height",
+        "operator": "min",
+        "value": 5,
+        "unit": "in",
+        "element": "stair_identification_sign"
+      },
+      {
+        "name": "stair_designation_character_height",
+        "property": "stair_character_height",
+        "operator": "min",
+        "value": 1.5,
+        "unit": "in",
+        "element": "stair_identification_sign"
+      },
+      {
+        "name": "other_character_height",
+        "property": "other_character_height",
+        "operator": "min",
+        "value": 1,
+        "unit": "in",
+        "element": "stair_identification_sign"
+      },
+      {
+        "name": "directional_arrow_length",
+        "property": "arrow_length",
+        "operator": "min",
+        "value": 4,
+        "unit": "in",
+        "element": "stair_identification_sign"
+      }
+    ],
+    "exceptions": [
+      "Stair or ramp designation characters shall not be greater than one-third the height of the floor level identification characters.",
+      "All other lettering and numbers shall not be greater than the stair or ramp identification characters."
+    ],
+    "elementTypes": [
+      "stair_identification_sign"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1023",
+    "sourceLocator": "12-A DCMR § 1023.9.2.1.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-906.1-cooking",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "906.1",
+    "heading": "Portable fire extinguishers at cooking equipment",
+    "text": "Portable fire extinguishers shall be installed within 30 feet (9144 mm) distance of travel from commercial cooking equipment and from domestic cooking equipment in Group I-1; I-2, Condition 1; and R-2 college dormitory occupancies.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "extinguisher",
+      "cooking"
+    ],
+    "thresholds": [
+      {
+        "name": "cooking_extinguisher_travel",
+        "property": "travel_distance",
+        "operator": "max",
+        "value": 30,
+        "unit": "ft",
+        "element": "fire_extinguisher"
+      }
+    ],
+    "exceptions": [
+      "The 30-foot limit applies to commercial cooking equipment, and to domestic cooking equipment only in Group I-1, Group I-2 Condition 1, and R-2 college dormitory occupancies."
+    ],
+    "elementTypes": [
+      "fire_extinguisher"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A906",
+    "sourceLocator": "12-A DCMR § 906.1 Item 2, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020); as amended by Final Rulemaking 68 DCR 1267 (January 22, 2021) and Errata Notice 68 DCR 3282 (March 26, 2021)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12h-906.1-cooking",
+    "codeBook": "12-H DCMR",
+    "baseCodeFamily": "IFC",
+    "baseCodeEdition": "2015",
+    "section": "906.1",
+    "heading": "Portable fire extinguishers at cooking equipment",
+    "text": "Portable fire extinguishers shall be installed within 30 feet (9144 mm) distance of travel from commercial cooking equipment and from domestic cooking equipment in Group I-1; I-2, Condition 1; and R-2 college dormitory occupancies.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "extinguisher",
+      "cooking"
+    ],
+    "thresholds": [
+      {
+        "name": "cooking_extinguisher_travel",
+        "property": "travel_distance",
+        "operator": "max",
+        "value": 30,
+        "unit": "ft",
+        "element": "fire_extinguisher"
+      }
+    ],
+    "exceptions": [
+      "The 30-foot limit applies to commercial cooking equipment, and to domestic cooking equipment only in Group I-1, Group I-2 Condition 1, and R-2 college dormitory occupancies."
+    ],
+    "elementTypes": [
+      "fire_extinguisher"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-H906",
+    "sourceLocator": "12-H DCMR § 906.1 Item 2, Fire Code Supplement of 2017, Final Rulemaking 67 DCR 6232 (May 29, 2020); as amended by Final Rulemaking 68 DCR 1267 (January 22, 2021) and Errata Notice 68 DCR 3282 (March 26, 2021)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1205.2",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1205.2",
+    "heading": "Natural light for bedrooms, living rooms, and sleeping units",
+    "text": "Artificial light shall not be used to meet the lighting requirements for bedrooms, living rooms and sleeping units. The minimum net glazed area shall be not less than 8 percent of the floor area of the room or rooms served. At least 50 percent of required glazing shall be clear glass; it is permissible for the remainder of the required glazing to be obscure glass, glass block or other approved translucent material.",
+    "provisionType": "requirement",
+    "topics": [
+      "lighting",
+      "natural light",
+      "glazing"
+    ],
+    "thresholds": [
+      {
+        "name": "net_glazed_area_ratio",
+        "property": "glazed_area_percent",
+        "operator": "min",
+        "value": 8,
+        "unit": "percent",
+        "element": "natural_light"
+      },
+      {
+        "name": "clear_glass_share",
+        "property": "clear_glass_percent",
+        "operator": "min",
+        "value": 50,
+        "unit": "percent",
+        "element": "natural_light"
+      }
+    ],
+    "exceptions": [
+      "These glazed-area minimums are confirmed only for bedrooms, living rooms, and sleeping units, because the amendment states that artificial light shall not be used to meet the lighting requirements for those rooms."
+    ],
+    "elementTypes": [
+      "natural_light"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1205",
+    "sourceLocator": "12-A DCMR §§ 1205.1 Exception and 1205.2, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1207.2",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1207.2",
+    "heading": "Air-borne sound transmission between dwelling and sleeping units",
+    "text": "Walls, partitions and floor/ceiling assemblies separating dwelling units and sleeping units from each other or from public or service areas shall have a sound transmission class (STC) of not less than 50 (45 if field tested) for air-borne noise when tested in accordance with ASTM E 90. Walls, partitions and floor/ceiling assemblies separating Group A-2 occupancies from dwelling units and sleeping units shall have an STC of not less than 55 and shall be field tested to achieve a rating of not less than 50 for air-borne noise. This requirement shall not apply to dwelling unit and sleeping unit entrance doors; however, such doors shall be tight fitting to the frame and sill. Exception: Group A-2 occupancies that do not utilize amplified music as part of their use shall be exempt from these provisions.",
+    "provisionType": "requirement",
+    "topics": [
+      "sound",
+      "STC",
+      "dwelling unit"
+    ],
+    "thresholds": [
+      {
+        "name": "airborne_stc",
+        "property": "stc",
+        "operator": "min",
+        "value": 50,
+        "unit": "STC",
+        "element": "sound_assembly"
+      }
+    ],
+    "exceptions": [
+      "Where the assembly is field tested, the minimum air-borne rating for separations other than Group A-2 is 45 rather than 50.",
+      "This requirement does not apply to dwelling unit and sleeping unit entrance doors.",
+      "Group A-2 occupancies that do not utilize amplified music as part of their use are exempt.",
+      "A separation between a Group A-2 occupancy and a dwelling or sleeping unit shall be STC 55 and field tested to not less than 50. Those ratings are stated in this section and must be applied instead of the STC 50 rating."
+    ],
+    "elementTypes": [
+      "sound_assembly"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1207",
+    "sourceLocator": "12-A DCMR § 1207.2, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12f-403.5-tenant",
+    "codeBook": "12-F DCMR",
+    "baseCodeFamily": "IPC",
+    "baseCodeEdition": "2015",
+    "section": "403.5",
+    "heading": "Drinking fountain travel, other than a mall",
+    "text": "Drinking fountains shall not be required to be located in individual tenant spaces provided that public drinking fountains are located within a distance of travel of 500 feet (152 m) of the most remote location in the tenant space and not more than one story above or below the served floor level of the tenant space. Drinking fountains in buildings or facilities required to be accessible by the Building Code shall be located on an accessible route.",
+    "provisionType": "requirement",
+    "topics": [
+      "plumbing",
+      "drinking fountain",
+      "travel distance"
+    ],
+    "thresholds": [
+      {
+        "name": "public_drinking_fountain_travel",
+        "property": "travel_distance",
+        "operator": "max",
+        "value": 500,
+        "unit": "ft",
+        "element": "drinking_fountain"
+      }
+    ],
+    "exceptions": [
+      "Where the tenant space is in a covered or open mall, this 500-foot limit does not apply. The mall sentence of Section 403.5 limits that distance to 300 feet measured from the main entrance of any store or tenant space."
+    ],
+    "elementTypes": [
+      "drinking_fountain"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-F403",
+    "sourceLocator": "12-F DCMR § 403.5, Plumbing Code Supplement of 2017, Final Rulemaking 67 DCR 6148 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12f-608.18",
+    "codeBook": "12-F DCMR",
+    "baseCodeFamily": "IPC",
+    "baseCodeEdition": "2015",
+    "section": "608.18",
+    "heading": "Fire hydrant use connections",
+    "text": "Connection to a fire hydrant for any use other than firefighting operations shall require pre-approval by DC Water, shall be metered and shall be protected against backflow in accordance with Section 608. The connection shall include a reduced pressure principle backflow preventer conforming to ASSE 1013, suitable for high-hazard applications, which shall carry a current inspection tag less than six (6) months old. The assembly shall be installed within 10 feet (3048 mm) of the hydrant water meter and ahead of any water outlet. Exceptions: Metering shall not be required for hydrant operations performed by DC Water. Where authorized by DC Water the use of an air gap in lieu of a backflow preventer shall be allowed for hydrant operations performed by or on behalf of DC Water or an agency of the District of Columbia government.",
+    "provisionType": "requirement",
+    "topics": [
+      "plumbing",
+      "backflow",
+      "hydrant"
+    ],
+    "thresholds": [
+      {
+        "name": "hydrant_backflow_distance",
+        "property": "meter_distance",
+        "operator": "max",
+        "value": 10,
+        "unit": "ft",
+        "element": "backflow"
+      },
+      {
+        "name": "hydrant_backflow_inspection_tag_age",
+        "property": "inspection_tag_age",
+        "operator": "max",
+        "value": 6,
+        "unit": "months",
+        "element": "backflow"
+      }
+    ],
+    "exceptions": [
+      "Metering shall not be required for hydrant operations performed by DC Water.",
+      "Where authorized by DC Water, an air gap may be used in lieu of a backflow preventer for hydrant operations performed by or on behalf of DC Water or an agency of the District of Columbia government."
+    ],
+    "elementTypes": [
+      "backflow"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-F608",
+    "sourceLocator": "12-F DCMR § 608.18, Plumbing Code Supplement of 2017, Final Rulemaking 67 DCR 6148 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12j-805.3.1.1-window",
+    "codeBook": "12-J DCMR",
+    "baseCodeFamily": "IEBC",
+    "baseCodeEdition": "2015",
+    "section": "805.3.1.1",
+    "heading": "Group R-2 below-grade single-exit window",
+    "text": "In buildings of Group R-2 occupancy that are equipped throughout with an automatic fire sprinkler system, a single exit shall be permitted from a basement or story below grade if every dwelling unit on that floor is equipped with an approved window providing a clear opening of at least 5 square feet (0.47 m²) in area, a minimum net clear opening of 24 inches (610 mm) in height and 20 inches (508 mm) in width and a sill height of not more than 44 inches (1118 mm) above the finished floor.",
+    "provisionType": "requirement",
+    "topics": [
+      "existing building",
+      "egress",
+      "emergency escape",
+      "Group R-2"
+    ],
+    "thresholds": [
+      {
+        "name": "below_grade_window_area",
+        "property": "clear_opening_area",
+        "operator": "min",
+        "value": 5,
+        "unit": "sq ft",
+        "element": "rescue_window"
+      },
+      {
+        "name": "below_grade_window_height",
+        "property": "clear_opening_height",
+        "operator": "min",
+        "value": 24,
+        "unit": "in",
+        "element": "rescue_window"
+      },
+      {
+        "name": "below_grade_window_width",
+        "property": "clear_opening_width",
+        "operator": "min",
+        "value": 20,
+        "unit": "in",
+        "element": "rescue_window"
+      },
+      {
+        "name": "below_grade_window_sill",
+        "property": "sill_height",
+        "operator": "max",
+        "value": 44,
+        "unit": "in",
+        "element": "rescue_window"
+      }
+    ],
+    "exceptions": [
+      "These opening dimensions are a condition of permitting one exit from a basement or story below grade in a Group R-2 building equipped throughout with an automatic fire sprinkler system. They apply to the window of every dwelling unit on that floor."
+    ],
+    "elementTypes": [
+      "rescue_window"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "occupancies": [
+        "R-2"
+      ],
+      "workScopes": [
+        "alteration",
+        "existing_building"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-J805",
+    "sourceLocator": "12-J DCMR § 805.3.1.1 Item 8, Existing Building Code Supplement of 2017, Final Rulemaking 67 DCR 6491 (May 29, 2020)",
+    "supportsConfirmedViolation": true
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-911.1.2",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "911.1.2",
+    "heading": "Fire command center separation",
+    "text": "The fire command center shall be separated from the remainder of the building by not less than a 1-hour fire barrier constructed in accordance with Section 707 or horizontal assembly constructed in accordance with Section 711, or both.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "fire command center",
+      "fire barrier"
+    ],
+    "thresholds": [
+      {
+        "name": "fire_command_center_separation",
+        "property": "rating",
+        "operator": "min",
+        "value": 1,
+        "unit": "hour",
+        "element": "fire_command_center"
+      }
+    ],
+    "exceptions": [
+      "The 1-hour rating is stated here. Construction of the fire barrier or horizontal assembly is in accordance with Sections 707 and 711, which are not stored in this excerpt."
+    ],
+    "elementTypes": [
+      "fire_command_center"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A911",
+    "sourceLocator": "12-A DCMR § 911.1.2, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-706.8",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "706.8",
+    "heading": "Openings in fire walls",
+    "text": "Each opening through a fire wall shall be protected in accordance with Section 716.5 and shall not exceed 156 square feet (15 m2) in total area. The aggregate width of openings at any floor level shall not exceed 25 percent of the length of the wall.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "fire wall",
+      "opening"
+    ],
+    "thresholds": [
+      {
+        "name": "fire_wall_opening_area",
+        "property": "area",
+        "operator": "max",
+        "value": 156,
+        "unit": "sq ft",
+        "element": "fire_rated_assembly"
+      },
+      {
+        "name": "fire_wall_opening_width_ratio",
+        "property": "width_percent",
+        "operator": "max",
+        "value": 25,
+        "unit": "percent",
+        "element": "fire_rated_assembly"
+      }
+    ],
+    "exceptions": [
+      "Openings are not permitted in party walls constructed in accordance with Section 706.1.1, unless authorized by and subject to the limitations of Section 705.8.7.",
+      "Openings are allowed pursuant to Section 705.8.7 where a fire wall can be replaced by two exterior walls.",
+      "Openings shall not be limited to 156 square feet (15 m2) where both buildings are equipped throughout with an automatic sprinkler system installed in accordance with Section 903.3.1.1."
+    ],
+    "elementTypes": [
+      "fire_rated_assembly"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A706",
+    "sourceLocator": "12-A DCMR § 706.8, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-905.3.1",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "905.3.1",
+    "heading": "Standpipe building height",
+    "text": "Class III standpipe systems shall be installed throughout buildings where the floor level of the highest story is located more than 30 feet (9144 mm) above the lowest level of fire department vehicle access, or where the floor level of the lowest story is located more than 30 feet (9144 mm) below the highest level of fire department vehicle access. Exceptions include Class I standpipes in buildings equipped throughout with an automatic sprinkler system in accordance with Section 903.3.1.1 or 903.3.1.2, and Class I manual standpipes in open parking garages where the highest floor is located not more than 150 feet (45720 mm) above the lowest level of fire department vehicle access.",
+    "provisionType": "requirement",
+    "topics": [
+      "fire",
+      "standpipe"
+    ],
+    "thresholds": [
+      {
+        "name": "class_iii_standpipe_height",
+        "property": "height",
+        "operator": "max",
+        "value": 30,
+        "unit": "ft",
+        "element": "sprinkler"
+      }
+    ],
+    "exceptions": [
+      "Class I standpipes are allowed where the building is equipped throughout with an automatic sprinkler system in accordance with Section 903.3.1.1 or 903.3.1.2.",
+      "Class I manual dry standpipes are allowed in open parking garages subject to freezing where hose connections are located as required for Class II standpipes in accordance with Section 905.5."
+    ],
+    "elementTypes": [
+      "sprinkler"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A905",
+    "sourceLocator": "12-A DCMR § 905.3.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1005.3",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1005.3",
+    "heading": "Means of egress capacity factors",
+    "text": "For other than Group H and I-2 occupancies, the capacity, in inches, of the means of egress stairways shall be calculated by multiplying the occupant load served by the stairway by a means of egress capacity factor of 0.2 inch (5.1 mm) per occupant in buildings equipped throughout with an automatic sprinkler system installed in accordance with Section 903.3.1.1 or 903.3.1.2. For other than Group H and I-2 occupancies, the capacity of means of egress components other than stairways shall be calculated by multiplying the occupant load served by such component by a means of egress capacity factor of 0.15 inch (3.8 mm) per occupant in buildings equipped throughout with an automatic sprinkler system installed in accordance with Section 903.3.1.1 or 903.3.1.2. Facilities with smoke-protected assembly seating shall be permitted to use the capacity factors in Table 1029.6.2, and facilities with outdoor smoke-protected assembly seating shall be permitted to use the capacity factors in Table 1029.6.3.",
+    "provisionType": "exception",
+    "topics": [
+      "egress",
+      "capacity",
+      "stair"
+    ],
+    "thresholds": [],
+    "exceptions": [
+      "The smoke-protected seating exceptions use Table 1029.6.2 and Table 1029.6.3, which are not stored. The sprinkler exceptions are installed in accordance with Section 903.3.1.1 or 903.3.1.2, which are not stored."
+    ],
+    "elementTypes": [
+      "egress_path",
+      "stair"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1005",
+    "sourceLocator": "12-A DCMR § 1005.3.1 and § 1005.3.2 Exceptions, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1010.1.9.12",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1010.1.9.12",
+    "heading": "Elevator lobby exit access control",
+    "text": "A readily accessible and visible manual unlocking device is installed 40- to 48-inches (1016 mm to 1219 mm) vertically above the floor and within 5 feet (1524 mm) horizontally of the secured doors, identified by a sign with minimum 1/2-inch (12.5 mm) high letters that reads \"EMERGENCY DOOR RELEASE – ACTIVATE TO OPEN DOORS\". Activation of the device shall unlock the doors for a minimum of 30 seconds.",
+    "provisionType": "requirement",
+    "topics": [
+      "egress",
+      "elevator lobby",
+      "door"
+    ],
+    "thresholds": [
+      {
+        "name": "lobby_release_height_min",
+        "property": "mounting_height",
+        "operator": "min",
+        "value": 40,
+        "unit": "in",
+        "element": "door"
+      },
+      {
+        "name": "lobby_release_height_max",
+        "property": "mounting_height",
+        "operator": "max",
+        "value": 48,
+        "unit": "in",
+        "element": "door"
+      },
+      {
+        "name": "lobby_release_horizontal",
+        "property": "horizontal_distance",
+        "operator": "max",
+        "value": 5,
+        "unit": "ft",
+        "element": "door"
+      },
+      {
+        "name": "lobby_release_letter_height",
+        "property": "letter_height",
+        "operator": "min",
+        "value": 0.5,
+        "unit": "in",
+        "element": "door"
+      },
+      {
+        "name": "lobby_release_unlock_duration",
+        "property": "unlock_duration",
+        "operator": "min",
+        "value": 30,
+        "unit": "seconds",
+        "element": "door"
+      }
+    ],
+    "exceptions": [
+      "The building must be equipped throughout with either an automatic sprinkler system in accordance with Subsection 903.1.1 or an approved automatic smoke or heat detection system installed in accordance with Section 907. Those sections are not stored."
+    ],
+    "elementTypes": [
+      "door"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1010",
+    "sourceLocator": "12-A DCMR § 1010.1.9.12, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1030.1",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1030.1",
+    "heading": "Emergency escape and rescue openings",
+    "text": "In addition to the means of egress required by this chapter, provisions shall be made for emergency escape and rescue openings in Group R-2 occupancies in accordance with Tables 1006.3.2(1) and 1006.3.2(2) and Group R-3 occupancies. Basements and sleeping rooms below the fourth story above grade plane shall have at least one exterior emergency escape and rescue opening in accordance with this section. Exceptions include basements with a ceiling height of less than 80 inches (2032 mm), basements without habitable spaces and having not more than 200 square feet (18.6 m2) in floor area, and a safe dispersal area of at least 5 square feet (0.46 m2) for each person located on the same lot at least 25 feet (7620 mm) away from the building where access to a public way cannot be provided.",
+    "provisionType": "requirement",
+    "topics": [
+      "egress",
+      "emergency escape",
+      "Group R"
+    ],
+    "thresholds": [],
+    "exceptions": [
+      "Group R-2 applicability is in accordance with Tables 1006.3.2(1) and 1006.3.2(2), which are not stored. Opening size other than the safe-dispersal and basement exceptions is not stated in this amendment."
+    ],
+    "elementTypes": [
+      "rescue_window"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1030",
+    "sourceLocator": "12-A DCMR § 1030.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12a-1203.1",
+    "codeBook": "12-A DCMR",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1203.1",
+    "heading": "Dwelling unit ventilation opening",
+    "text": "Each new dwelling unit shall be ventilated by mechanical means in accordance with Section 403 of the Mechanical Code and shall have at least one opening to the outdoors for natural ventilation of not less than 4 percent of the floor area of the habitable spaces of the dwelling unit.",
+    "provisionType": "requirement",
+    "topics": [
+      "ventilation",
+      "dwelling unit"
+    ],
+    "thresholds": [
+      {
+        "name": "dwelling_outdoor_opening_ratio",
+        "property": "outdoor_opening_percent",
+        "operator": "min",
+        "value": 4,
+        "unit": "percent",
+        "element": "ventilation"
+      }
+    ],
+    "exceptions": [
+      "Mechanical ventilation is required in accordance with Section 403 of the Mechanical Code, which is not stored. Meeting the 4 percent opening alone does not satisfy this section."
+    ],
+    "elementTypes": [
+      "ventilation"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1203",
+    "sourceLocator": "12-A DCMR § 1203.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12f-603.1",
+    "codeBook": "12-F DCMR",
+    "baseCodeFamily": "IPC",
+    "baseCodeEdition": "2015",
+    "section": "603.1",
+    "heading": "Size of water service pipe",
+    "text": "The water service pipe shall be sized to supply water to the structure in the quantities and at the pressures required in this code. New water service pipe shall be not less than 1 inch (25.4 mm) in nominal size diameter.",
+    "provisionType": "requirement",
+    "topics": [
+      "plumbing",
+      "water service"
+    ],
+    "thresholds": [
+      {
+        "name": "new_water_service_diameter",
+        "property": "diameter",
+        "operator": "min",
+        "value": 1,
+        "unit": "in",
+        "element": "piping"
+      }
+    ],
+    "exceptions": [
+      "The service must also supply the quantities and pressures required in the Plumbing Code. That sizing text is not stored, so a pipe of at least 1 inch is not by itself compliance."
+    ],
+    "elementTypes": [
+      "piping"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "any"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-F603",
+    "sourceLocator": "12-F DCMR § 603.1, Plumbing Code Supplement of 2017, Final Rulemaking 67 DCR 6148 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12j-804.3",
+    "codeBook": "12-J DCMR",
+    "baseCodeFamily": "IEBC",
+    "baseCodeEdition": "2015",
+    "section": "804.3",
+    "heading": "Standpipes in a Level 2 alteration",
+    "text": "Where the work area includes exits or corridors located more than 50 feet (15240 mm) above or below the lowest level of fire department access, a standpipe system shall be provided. Standpipes shall have an approved fire department connection with hose connections at each floor level above or below the lowest level of fire department access. Standpipe systems shall be installed in accordance with the Building Code. Exceptions: Installation of a manual, wet standpipe system is permitted to achieve compliance with this section. The interconnection of multiple standpipe risers shall not be required.",
+    "provisionType": "requirement",
+    "topics": [
+      "existing building",
+      "standpipe"
+    ],
+    "thresholds": [],
+    "exceptions": [
+      "The 50-foot figure is the trigger for providing a standpipe. It is not a maximum building height. Installation is in accordance with the Building Code, which is not restated here."
+    ],
+    "elementTypes": [
+      "sprinkler"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "alteration",
+        "existing_building"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-J804",
+    "sourceLocator": "12-J DCMR § 804.3, Existing Building Code Supplement of 2017, Final Rulemaking 67 DCR 6491 (May 29, 2020)",
+    "supportsConfirmedViolation": false
+  },
+  {
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "edition": "2017",
+    "exactTextStored": true,
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "id": "dc-2017-12j-805.6",
+    "codeBook": "12-J DCMR",
+    "baseCodeFamily": "IEBC",
+    "baseCodeEdition": "2015",
+    "section": "805.6",
+    "heading": "Dead-end corridors in a work area",
+    "text": "Dead-end corridors in any work area shall not exceed 35 feet (10670 mm). Exceptions: Where dead-end corridors of greater length are permitted by the Building Code. In other than Group A and H occupancies, an existing dead-end corridor may be 50 feet (15240 mm) with an automatic fire alarm system, 75 feet (22860 mm) where the floor is sprinklered, or 100 feet (30480 mm) where the building is sprinklered throughout, in accordance with the Building Code. Extended dead-end corridors in other than Group A and H may be 50 feet on a sprinklered floor or 75 feet in a building sprinklered throughout.",
+    "provisionType": "requirement",
+    "topics": [
+      "existing building",
+      "egress",
+      "dead-end corridor"
+    ],
+    "thresholds": [],
+    "exceptions": [
+      "Greater length is permitted where the Building Code allows it. That Building Code text is not stored, so the 35-foot limit cannot confirm a violation by itself."
+    ],
+    "elementTypes": [
+      "egress_path"
+    ],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": [
+        "alteration",
+        "existing_building"
+      ]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-J805",
+    "sourceLocator": "12-J DCMR § 805.6, Existing Building Code Supplement of 2017, Final Rulemaking 67 DCR 6491 (May 29, 2020)",
     "supportsConfirmedViolation": false
   }
 ]
