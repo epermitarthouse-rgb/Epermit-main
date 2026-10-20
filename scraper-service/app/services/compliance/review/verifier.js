@@ -24,7 +24,7 @@ const {
   NOT_TEXT_ATTRIBUTES,
   outcomeForReason,
 } = require("./evaluation.js");
-const { gateMeasuredFact } = require("../rag/drawingStructure.js");
+const { gateMeasuredFact } = require("../rag/drawingStructureV2.js");
 
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;

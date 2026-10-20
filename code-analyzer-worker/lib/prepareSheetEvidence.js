@@ -152,6 +152,7 @@ async function prepareEvidenceForSheet(input) {
         render: false,
         ocr: input.ocr,
         discoverGraphics: input.discoverGraphics,
+        graphicRegions: input.targetGraphicRegions,
       });
       items = page.items || [];
       regions = page.regions || [];

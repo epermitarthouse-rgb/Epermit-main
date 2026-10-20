@@ -305,6 +305,14 @@ function overlapsAny(box, boxes) {
   });
 }
 
+function intersects(box, region) {
+  if (!box || !region) return false;
+  return (
+    Math.min(box.x + box.width, region.x + region.width) > Math.max(box.x, region.x) &&
+    Math.min(box.y + box.height, region.y + region.height) > Math.max(box.y, region.y)
+  );
+}
+
 /**
  * Tesseract's sparse-text mode does not read rotated text, so each tile is also read rotated;
  * only words that are vertical on the sheet are kept from that pass.
@@ -326,7 +334,20 @@ async function rotatedTesseractWords(rendered, options) {
 }
 
 async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
-  const tiles = tileBoxes(pageWidth, pageHeight);
+  const requested = (options.graphicRegions || [])
+    .filter((region) => region && Number.isFinite(Number(region.x)) && Number.isFinite(Number(region.y)))
+    .map((region) => ({
+      x: Number(region.x),
+      y: Number(region.y),
+      width: Math.max(1, Number(region.width) || 1),
+      height: Math.max(1, Number(region.height) || 1),
+    }));
+  const allTiles = tileBoxes(pageWidth, pageHeight);
+  // A partial checkpoint retries only tiles intersecting unread regions. With no
+  // target, this is the ordinary full-page graphical pass.
+  const tiles = requested.length
+    ? allTiles.filter((tile) => requested.some((region) => intersects(tile, region)))
+    : allTiles;
   const engine = ocrEngine(options);
   const tileMaxPx = TILE_MAX_PX_BY_ENGINE[engine] || TILE_MAX_PX;
   const lines = [];

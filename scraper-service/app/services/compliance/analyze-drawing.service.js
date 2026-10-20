@@ -372,6 +372,10 @@ ${evidenceRules}
 - If the extracted text or a graphic label already states a rating, count, clearance, counter height, or door width, do not report that fact as missing.
 - observedEvidence must quote dimensions, labels, and notes you can actually read, including graphic dimensions.
 - A missing-information finding must name the place on this sheet you looked. If you cannot name that place, do not file it as a violation.
+- When STRUCTURED DRAWING FACTS are provided, use them as the primary source for exact values, element tags, schedule rows, and relationships; use semantic Drawing RAG as supporting context.
+- An unbound value is not a property of any element. A candidate relationship cannot prove compliance or noncompliance. An inferred relationship must retain its stated basis and is subject to independent verification.
+- A text-anchor box locates a label, not the physical boundary of a wall, room, door, route, or other construction element.
+- An unreadable or unextracted region is unknown, not evidence that required information is absent.
 Scoring: overallScore is 0-100 only after a real review. Every checklist item must include a non-empty evidence quote from this sheet (a dimension, a label, a note, or "shown on sheet <id>"). If checklist is empty and issues is empty, the sheet was not reviewed — do not set overallScore to 100. A generic checklist or "no failing condition" without that quote is not a pass. If any issue remains, overallScore must not be 100. Do not echo 85.
 ${formatContentClassBlock(contentClass, pageText)}${formatSheetIndexBlock(sheetIndex)}${formatSpecContextBlock(specChunks)}${formatStaffGuidanceBlock(analysisInstructions)}
 ${reviewContext ? `\nQUESTION-DRIVEN REVIEW CONTEXT:\n${String(reviewContext).slice(0, 6000)}\n` : ""}
