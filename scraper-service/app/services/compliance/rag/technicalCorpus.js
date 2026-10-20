@@ -53,6 +53,7 @@ const ELEMENT_FAMILY = {
   emergency_lighting: "NEC",
   gfci: "NEC",
   grounding: "NEC",
+  fire_command_center: "IBC",
   sprinkler: "IFC",
   fdc: "IFC",
   grease_interceptor: "IPC",
@@ -115,18 +116,27 @@ function editionList(provision) {
     .map(String);
 }
 
+function yearsIn(value) {
+  return [...String(value || "").matchAll(/\b((?:19|20)\d{2})\b/g)].map((match) => match[1]);
+}
+
 /**
  * A companion code may use a different year than the selected base edition
- * (NEC 2014 under an IBC 2015 adoption). A selected year that is not itself
- * adopted does not pull another edition's text.
+ * (NEC 2014 under an IBC 2015 adoption, or under the 2017 local edition).
+ * A selected year that is not itself adopted does not pull another edition's text.
  */
 function editionInScope(provision, selectedEdition, adoptedCodes) {
   if (!selectedEdition) return true;
   const editions = editionList(provision);
   if (!editions.length) return true;
-  if (editions.includes(String(selectedEdition))) return true;
+  const selected = String(selectedEdition);
+  if (editions.includes(selected)) return true;
+  const years = yearsIn(selected);
+  if (years.some((year) => editions.includes(year))) return true;
   const adopted = Array.isArray(adoptedCodes) ? adoptedCodes : [];
-  const selectedIsAdopted = adopted.some((code) => String(code.edition) === String(selectedEdition));
+  const selectedIsAdopted = adopted.some((code) =>
+    selected === String(code.edition) || years.includes(String(code.edition)),
+  );
   if (!selectedIsAdopted) return false;
   return adopted.some((code) =>
     (familiesMatch(code.family, provision.codeBook) || familiesMatch(code.family, provision.baseCodeFamily))
@@ -273,10 +283,13 @@ function adoptedFamily(adoptedCodes, family, year) {
   const codes = Array.isArray(adoptedCodes) ? adoptedCodes : [];
   const matches = codes.filter((code) => familiesMatch(code.family, family));
   if (!matches.length) return null;
-  if (year) {
-    return matches.find((code) => String(code.edition) === String(year)) || null;
-  }
-  return matches[0];
+  if (!year) return matches[0];
+  const exact = matches.find((code) => String(code.edition) === String(year));
+  if (exact) return exact;
+  // "NEC 2015" under an IBC 2015 / 2017 local package names the package year,
+  // not a different NEC edition. A year outside the package stays unmatched.
+  const yearBelongsToPackage = codes.some((code) => String(code.edition) === String(year));
+  return yearBelongsToPackage ? matches[0] : null;
 }
 
 function locatorFor(legal, family, edition, section) {
@@ -471,6 +484,8 @@ function factsFromDocument(doc, claim, threshold, crossSheet, sheet) {
     const calculation = element.properties?.calculation;
     const governing = calculation?.governing;
     if (!calculation || calculation.association_status === "candidate" || !governing) continue;
+    const operands = Array.isArray(calculation.operands) ? calculation.operands : [];
+    if (operands.some((operand) => Number(operand.value) === Number(governing.value))) continue;
     if (threshold.property && governing.property && governing.property !== threshold.property && threshold.property !== "capacity" && threshold.property !== "flow") {
       continue;
     }
@@ -532,10 +547,18 @@ function compareRequirementToFacts(provision, ctx, issue, claim) {
   }
   let sawFact = false;
   let incomparable = false;
+  let unmatched = 0;
   for (const threshold of thresholds) {
-    if (threshold.element && claim?.element && threshold.element !== claim.element.id) continue;
-    const facts = docs.flatMap((entry) => factsFromDocument(entry.doc, claim, threshold, entry.crossSheet, entry.sheet));
-    if (!facts.length) continue;
+    const requiredElement = threshold.element || null;
+    if (requiredElement && claim?.element && requiredElement !== claim.element.id) continue;
+    const scopedClaim = requiredElement && !claim?.element
+      ? { ...(claim || {}), element: { id: requiredElement } }
+      : claim;
+    const facts = docs.flatMap((entry) => factsFromDocument(entry.doc, scopedClaim, threshold, entry.crossSheet, entry.sheet));
+    if (!facts.length) {
+      unmatched += 1;
+      continue;
+    }
     sawFact = true;
     for (const fact of facts) {
       const measured = convert(fact.value, fact.unit, threshold.unit);
@@ -565,10 +588,16 @@ function compareRequirementToFacts(provision, ctx, issue, claim) {
       detail: "A verified technical provision is in the corpus, but no bound measurement, schedule cell, governing calculation, or cross-sheet fact is tied to this element. Unbound values, calculation operands, and candidate proximity are not measurements. This is missing drawing evidence, not missing code text.",
     };
   }
+  if (unmatched) {
+    return {
+      outcome: "insufficient_drawing_evidence",
+      detail: "A verified technical provision is in the corpus, but bound evidence does not cover every numeric threshold. Unbound values, calculation operands, and candidate proximity are not measurements. This is missing drawing evidence, not missing code text.",
+    };
+  }
   if (incomparable) return { outcome: "not_comparable", detail: null };
   return {
     outcome: "compliant",
-    detail: "The bound drawing evidence meets the verified requirement. It is not a violation.",
+    detail: "The bound drawing evidence meets every numeric threshold in the verified requirement. It is not a violation.",
   };
 }
 

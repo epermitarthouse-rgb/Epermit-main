@@ -300,6 +300,26 @@ function editionsIn(text) {
   }));
 }
 
+function yearIn(value) {
+  return (String(value || "").match(/\b((?:19|20)\d{2})\b/) || [])[1] || null;
+}
+
+/**
+ * The local building-code edition and its adopted IBC base are one adoption.
+ * "2017 DC Building Code" and "2015 IBC" are not a year conflict when the
+ * registry maps them. A different family, such as IECC 2012 against the 2017
+ * energy code, stays a conflict.
+ */
+function sameAdoptedBuildingCode(legal, edition) {
+  if (!legal || !edition?.year) return false;
+  const adoptedYear = yearIn(legal.adoptedEdition);
+  const baseYear = yearIn(legal.adoptedBaseCode);
+  const family = String(edition.family || "");
+  const localBuilding = edition.year === adoptedYear && (family === "building" || family === "construction");
+  const baseBuilding = edition.year === baseYear && (family === "ibc" || family === "building");
+  return localBuilding || baseBuilding;
+}
+
 /**
  * A finding that says the sheet cites a code edition must find that edition in the
  * readable sheet evidence. A model reading of an unreadable certificate is not a quote.
@@ -313,6 +333,10 @@ function untracedCodeEdition(issue, ctx) {
   const evidence = editionsIn(String(ctx.corpus || ""));
   for (const edition of claimed) {
     if (evidence.some((found) => found.year === edition.year && found.family === edition.family)) continue;
+    if (sameAdoptedBuildingCode(ctx.legalApplicability, edition)
+      && evidence.some((found) => sameAdoptedBuildingCode(ctx.legalApplicability, found))) {
+      continue;
+    }
     const conflicting = evidence.filter((found) => found.family === edition.family && found.year !== edition.year);
     const adopted = ctx.legalApplicability?.adoptedEdition || null;
     const project = adopted ? ` The project record names ${adopted}.` : "";
@@ -739,9 +763,10 @@ const CORPUS_UNAVAILABLE = "Code compliance unverified — applicable technical 
 
 function corpusUnavailableSentence(issue) {
   const citation = String(issue?.codeReference || "").trim();
+  const permission = "Exact model-code text requires an ICC license, a publisher API, or an authorized excerpt.";
   return citation
-    ? `${CORPUS_UNAVAILABLE} Missing provision: ${citation}.`
-    : CORPUS_UNAVAILABLE;
+    ? `${CORPUS_UNAVAILABLE} Missing provision: ${citation}. ${permission}`
+    : `${CORPUS_UNAVAILABLE} ${permission}`;
 }
 
 function echoesSheetNote(issue, corpus) {

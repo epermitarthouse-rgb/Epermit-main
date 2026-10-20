@@ -964,12 +964,33 @@ function limitationTopic(candidate) {
  *   sheetFileName?: string | null;
  * }} input
  */
+function yearsInLabel(value) {
+  return [...String(value || "").matchAll(/\b((?:19|20)\d{2})\b/g)].map((match) => match[1]);
+}
+
 function editionAligned(legal) {
   const selected = String(legal?.selectedEdition || "").trim();
-  if (!selected) return false;
+  if (!selected || !legal) return false;
   const base = String(legal?.adoptedBaseCode || "");
   const adopted = String(legal?.adoptedEdition || "");
-  return base === selected || base.endsWith(` ${selected}`) || adopted.endsWith(selected);
+  if (base === selected || base.endsWith(` ${selected}`) || adopted.endsWith(selected)) return true;
+  const years = yearsInLabel(selected);
+  const baseYear = yearsInLabel(base)[0];
+  const adoptedYear = yearsInLabel(adopted)[0];
+  const lower = selected.toLowerCase();
+  const namesIbc = /\bibc\b|international building code/.test(lower);
+  const namesLocal = /\b(?:building|construction)\s+codes?\b/.test(lower) || /\b(?:dc|d\.c\.|district of columbia)\b/.test(lower);
+  if (namesIbc && baseYear && years.includes(baseYear)) return true;
+  if (namesLocal && adoptedYear && years.includes(adoptedYear) && !namesIbc) return true;
+  if (namesLocal && namesIbc && adoptedYear && baseYear && years.includes(adoptedYear) && years.includes(baseYear)) return true;
+  if (years.length === 1 && (years[0] === baseYear || years[0] === adoptedYear)) return true;
+  const codes = Array.isArray(legal.adoptedCodes) ? legal.adoptedCodes : [];
+  return codes.some((code) => {
+    const family = String(code.family || "");
+    if (!years.includes(String(code.edition)) || !family) return false;
+    return new RegExp(`\\b${family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(selected)
+      || (/\bnec\b|\bnfpa\s*70\b/i.test(selected) && /^(?:NEC|NFPA 70)$/i.test(family));
+  });
 }
 
 function corpusUnavailableDetail(legal) {
@@ -977,7 +998,7 @@ function corpusUnavailableDetail(legal) {
     || legal?.selectedEdition
     || "the selected code";
   const source = legal?.officialSourceUrl ? ` Source: ${legal.officialSourceUrl}.` : "";
-  return `Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus. No authoritative code requirement for the reviewed elements was available for ${named}.${source} This is missing code text, not a missing drawing dimension.`;
+  return `Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus. No authoritative code requirement for the reviewed elements was available for ${named}.${source} Exact model-code text requires an ICC license, a publisher API, or an authorized excerpt. This is missing code text, not a missing drawing dimension.`;
 }
 
 function reviewLimitations(input) {
@@ -988,7 +1009,7 @@ function reviewLimitations(input) {
   if (unresolvedMatch) {
     out.push({
       code: "permit_applicability_unresolved",
-      detail: `${(legal.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition matches the verified adopted base code (${legal.adoptedBaseCode || legal.adoptedEdition}). Permit compliance stays unresolved until that fact is documented.`,
+      detail: `${(legal.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition is the verified adoption (${legal.adoptedEdition || "local edition"}${legal.adoptedBaseCode ? `, base ${legal.adoptedBaseCode}` : ""}). A missing permit date is not a different code edition. Permit compliance stays unresolved until that fact is documented.`,
     });
   } else if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
     out.push({

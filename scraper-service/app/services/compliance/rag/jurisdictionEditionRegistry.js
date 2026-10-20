@@ -44,11 +44,62 @@ function isoDate(value) {
   return Number.isNaN(date.getTime()) ? null : match[0];
 }
 
+function yearsIn(value) {
+  return [...String(value || "").matchAll(/\b((?:19|20)\d{2})\b/g)].map((match) => match[1]);
+}
+
+function adoptedCodeList(record) {
+  return [
+    {
+      family: record.jurisdictionCodeFamily,
+      edition: record.jurisdictionCodeEdition,
+      discipline: "local_edition",
+    },
+    ...(record.baseCodes || []),
+    ...(record.referencedStandards || []),
+  ];
+}
+
+/**
+ * A bare year is the local edition or the IBC base year. A label such as
+ * "2017 DC Building Code" is that same adoption as "IBC 2015"; a named
+ * companion such as "2014 NEC" or "2017 DC Electrical Code" is the companion
+ * adopted with that package. A different model year stays a mismatch.
+ */
 function editionMatches(record, selectedEdition) {
   const selected = String(selectedEdition || "").trim();
   if (!selected) return false;
-  return record.jurisdictionCodeEdition === selected
-    || (record.baseCodes || []).some((code) => code.family === "IBC" && code.edition === selected);
+  if (record.jurisdictionCodeEdition === selected) return true;
+  const codes = adoptedCodeList(record);
+  const ibc = codes.find((code) => code.family === "IBC");
+  if (ibc && ibc.edition === selected) return true;
+  const years = [...new Set(yearsIn(selected))];
+  const lower = selected.toLowerCase();
+  const namesIbc = /\bibc\b|international building code/.test(lower);
+  const namesBuilding = /\b(?:building|construction)\s+codes?\b/.test(lower);
+  const namesLocalBuilding = namesBuilding && !namesIbc;
+  const jurisdictionNamed = record.jurisdictionKey === "dc"
+    ? /\b(?:dc|d\.c\.|district of columbia)\b/i.test(selected)
+    : String(record.jurisdictionName || "").length > 2
+      && lower.includes(String(record.jurisdictionName).toLowerCase());
+  if (years.length === 2 && ibc && (namesBuilding || namesIbc || jurisdictionNamed)) {
+    const set = new Set(years);
+    if (set.has(String(record.jurisdictionCodeEdition)) && set.has(String(ibc.edition))) return true;
+  }
+  if (years.length !== 1) return false;
+  const year = years[0];
+  if (namesIbc && ibc && year === String(ibc.edition)) return true;
+  if (namesLocalBuilding && ibc && year === String(ibc.edition)) return true;
+  if ((namesLocalBuilding || jurisdictionNamed) && year === String(record.jurisdictionCodeEdition) && !namesIbc) {
+    return true;
+  }
+  return codes.some((code) => {
+    const family = String(code.family || "");
+    const named = family && new RegExp(`\\b${family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(selected);
+    const nec = /\bnec\b|\bnfpa\s*70\b/i.test(selected) && /^(?:NEC|NFPA 70)$/i.test(family);
+    if (!named && !nec) return false;
+    return String(code.edition) === year || year === String(record.jurisdictionCodeEdition);
+  });
 }
 
 function verifiedRecordsFor(jurisdiction, records = bundledEditions) {
@@ -103,14 +154,11 @@ function recordSummary(record) {
     sourceCoverage: record.coverage?.enforceableProvisionText === "unavailable"
       ? "applicability_only"
       : "partial",
-    adoptedCodes: [
-      ...(record.baseCodes || []),
-      ...(record.referencedStandards || []).map((code) => ({
-        family: code.family,
-        edition: code.edition,
-        discipline: code.discipline || null,
-      })),
-    ],
+    adoptedCodes: adoptedCodeList(record).map((code) => ({
+      family: code.family,
+      edition: code.edition,
+      discipline: code.discipline || null,
+    })),
   };
 }
 
@@ -163,7 +211,7 @@ function resolveLegalApplicability(input, records = bundledEditions) {
       ...unavailableResult(
         { ...input, requestedReviewScope },
         "conflict",
-        `Selected edition ${selectedEdition || "is blank"} does not match the verified current adoption (${recordSummary(current).adoptedBaseCode}). It will not be silently changed.`,
+        `Selected edition ${selectedEdition || "is blank"} is not the adopted local edition (${recordSummary(current).adoptedEdition}) or its base model code (${recordSummary(current).adoptedBaseCode}). A different model year is not the same adoption. It will not be silently changed.`,
       ),
       ...recordSummary(current),
       status: "conflict",
@@ -233,7 +281,7 @@ function resolveLegalApplicability(input, records = bundledEditions) {
       ...unavailableResult(
         { ...input, requestedReviewScope },
         "conflict",
-        `Selected edition ${selectedEdition || "is blank"} does not match the verified applicable edition (${summary.adoptedBaseCode}). It will not be silently changed.`,
+        `Selected edition ${selectedEdition || "is blank"} is not the adopted local edition (${summary.adoptedEdition}) or its base model code (${summary.adoptedBaseCode}). A different model year is not the same adoption. It will not be silently changed.`,
       ),
       ...summary,
       status: "conflict",

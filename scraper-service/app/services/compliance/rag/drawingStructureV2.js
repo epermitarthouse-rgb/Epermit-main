@@ -29,6 +29,7 @@ const INSTANCE_TYPES = [
     "emergency_lighting", "exit_sign", "gfci", "sprinkler", "fdc", "guard",
     "handrail", "stair", "seating", "toilet_clearance", "accessory", "counter",
     "fire_rated_assembly", "egress_path", "glazing", "door", "accessible_route",
+    "fire_command_center",
   ]).has(element.id)).map((element) => ({
     id: element.id,
     re: element.mention || element.claim,

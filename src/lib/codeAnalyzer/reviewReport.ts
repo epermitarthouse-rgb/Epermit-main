@@ -96,6 +96,7 @@ export type ReviewMetadataLike = {
     selectedEdition?: string | null;
     adoptedEdition?: string | null;
     adoptedBaseCode?: string | null;
+    adoptedCodes?: Array<{ family?: string | null; edition?: string | null }> | null;
     officialSourceUrl?: string | null;
     verificationDate?: string | null;
     sourceStatus?: string | null;
@@ -308,12 +309,33 @@ type StoredCoverage = NonNullable<ReviewMetadataLike["codeCoverage"]>;
 
 const CORPUS_SENTENCE = "Code compliance unverified — applicable technical provision not available in the verified Code RAG corpus.";
 
+function yearsInLabel(value: string): string[] {
+  return [...value.matchAll(/\b((?:19|20)\d{2})\b/g)].map((match) => match[1]);
+}
+
 function editionAligned(legal: StoredLegal | null | undefined): boolean {
   const selected = String(legal?.selectedEdition || "").trim();
   if (!selected || !legal) return false;
   const base = String(legal.adoptedBaseCode || "");
   const adopted = String(legal.adoptedEdition || "");
-  return base === selected || base.endsWith(` ${selected}`) || adopted.endsWith(selected);
+  if (base === selected || base.endsWith(` ${selected}`) || adopted.endsWith(selected)) return true;
+  const years = yearsInLabel(selected);
+  const baseYear = yearsInLabel(base)[0];
+  const adoptedYear = yearsInLabel(adopted)[0];
+  const lower = selected.toLowerCase();
+  const namesIbc = /\bibc\b|international building code/.test(lower);
+  const namesLocal = /\b(?:building|construction)\s+codes?\b/.test(lower) || /\b(?:dc|d\.c\.|district of columbia)\b/.test(lower);
+  if (namesIbc && baseYear && years.includes(baseYear)) return true;
+  if (namesLocal && adoptedYear && years.includes(adoptedYear) && !namesIbc) return true;
+  if (namesLocal && namesIbc && adoptedYear && baseYear && years.includes(adoptedYear) && years.includes(baseYear)) return true;
+  if (years.length === 1 && (years[0] === baseYear || years[0] === adoptedYear)) return true;
+  const codes = legal.adoptedCodes || [];
+  return codes.some((code) => {
+    const family = String(code.family || "");
+    if (!years.includes(String(code.edition)) || !family) return false;
+    return new RegExp(`\\b${family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(selected)
+      || (/\bnec\b|\bnfpa\s*70\b/i.test(selected) && /^(?:NEC|NFPA 70)$/i.test(family));
+  });
 }
 
 function corpusDetail(legal: StoredLegal | null | undefined, coverage: StoredCoverage | null | undefined): string {
@@ -322,7 +344,7 @@ function corpusDetail(legal: StoredLegal | null | undefined, coverage: StoredCov
     || "the selected code";
   const source = legal?.officialSourceUrl ? ` Source: ${legal.officialSourceUrl}.` : "";
   const coverageNote = coverage?.status ? ` Code source coverage: ${String(coverage.status).replace(/_/g, " ")}.` : "";
-  return `${CORPUS_SENTENCE} No authoritative code requirement for the reviewed elements was available for ${named}.${coverageNote}${source} This is missing code text, not a missing drawing dimension.`;
+  return `${CORPUS_SENTENCE} No authoritative code requirement for the reviewed elements was available for ${named}.${coverageNote}${source} Exact model-code text requires an ICC license, a publisher API, or an authorized excerpt. This is missing code text, not a missing drawing dimension.`;
 }
 
 function presentLegal(
@@ -353,7 +375,7 @@ function presentLimitation(
     return {
       ...limitation,
       code: "permit_applicability_unresolved",
-      detail: `${(legal.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition matches the verified adopted base code (${legal.adoptedBaseCode || legal.adoptedEdition}). Permit compliance stays unresolved until that fact is documented.`,
+      detail: `${(legal.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition is the verified adoption (${legal.adoptedEdition || "local edition"}${legal.adoptedBaseCode ? `, base ${legal.adoptedBaseCode}` : ""}). A missing permit date is not a different code edition. Permit compliance stays unresolved until that fact is documented.`,
     };
   }
   if (limitation.code === "no_authoritative_requirement" && !String(limitation.detail || "").includes("verified Code RAG corpus")) {
@@ -392,7 +414,7 @@ export function reviewLimitations(metadata: ReviewMetadataLike[]): ReviewLimitat
     if (unresolvedMatch) {
       add({
         code: "permit_applicability_unresolved",
-        detail: `${(legal?.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition matches the verified adopted base code (${legal?.adoptedBaseCode || legal?.adoptedEdition}). Permit compliance stays unresolved until that fact is documented.`,
+        detail: `${(legal?.unresolvedReasons || []).join(" ") || "Permit application or issue date is required."} The selected edition is the verified adoption (${legal?.adoptedEdition || "local edition"}${legal?.adoptedBaseCode ? `, base ${legal.adoptedBaseCode}` : ""}). A missing permit date is not a different code edition. Permit compliance stays unresolved until that fact is documented.`,
       });
     } else if (!legal || legal.reviewScope !== "permit_compliance" || legal.status !== "verified") {
       add({

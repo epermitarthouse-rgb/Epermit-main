@@ -30,6 +30,7 @@ export interface JurisdictionEditionRecord {
   jurisdictionCodeFamily: string;
   jurisdictionCodeEdition: string;
   baseCodes: Array<{ family: string; edition: string; discipline: string }>;
+  referencedStandards?: Array<{ family: string; edition: string; status?: string }>;
   effectiveFrom: string;
   supersededOn: string | null;
   officialSourceUrl: string;
@@ -87,8 +88,38 @@ export function normalizeRegistryJurisdiction(value: string | null | undefined):
 }
 
 function editionMatches(record: JurisdictionEditionRecord, selectedEdition: string): boolean {
-  return record.jurisdictionCodeEdition === selectedEdition
-    || record.baseCodes.some((code) => code.family === "IBC" && code.edition === selectedEdition);
+  const selected = String(selectedEdition || "").trim();
+  if (!selected) return false;
+  if (record.jurisdictionCodeEdition === selected) return true;
+  const codes = [
+    ...(record.baseCodes || []),
+    ...(record.referencedStandards || []),
+  ];
+  const ibc = codes.find((code) => code.family === "IBC");
+  if (ibc && ibc.edition === selected) return true;
+  const years = [...new Set([...selected.matchAll(/\b((?:19|20)\d{2})\b/g)].map((match) => match[1]))];
+  const lower = selected.toLowerCase();
+  const namesIbc = /\bibc\b|international building code/.test(lower);
+  const namesBuilding = /\b(?:building|construction)\s+codes?\b/.test(lower);
+  const jurisdictionNamed = record.jurisdictionKey === "dc"
+    ? /\b(?:dc|d\.c\.|district of columbia)\b/i.test(selected)
+    : false;
+  if (years.length === 2 && ibc && (namesBuilding || namesIbc || jurisdictionNamed)) {
+    const set = new Set(years);
+    if (set.has(record.jurisdictionCodeEdition) && set.has(ibc.edition)) return true;
+  }
+  if (years.length !== 1) return false;
+  const year = years[0];
+  if (namesIbc && ibc && year === ibc.edition) return true;
+  if (namesBuilding && !namesIbc && ibc && year === ibc.edition) return true;
+  if ((namesBuilding || jurisdictionNamed) && year === record.jurisdictionCodeEdition && !namesIbc) return true;
+  return codes.some((code) => {
+    const family = String(code.family || "");
+    const named = family.length > 0 && new RegExp(`\\b${family.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(selected);
+    const nec = /\bnec\b|\bnfpa\s*70\b/i.test(selected) && /^(?:NEC|NFPA 70)$/i.test(family);
+    if (!named && !nec) return false;
+    return code.edition === year || year === record.jurisdictionCodeEdition;
+  });
 }
 
 function verifiedRecords(jurisdiction: string): JurisdictionEditionRecord[] {
@@ -232,7 +263,7 @@ export function resolveJurisdictionEditionVerification(input: {
       reviewScope: "reference_only",
       ...fields,
       unresolvedReasons,
-      warning: `Selected ${selectedEdition || "edition"} conflicts with verified ${fields.adoptedBaseCode}. The selection will not be silently changed.`,
+      warning: `Selected ${selectedEdition || "edition"} is not the adopted local edition (${fields.adoptedEdition}) or its base model code (${fields.adoptedBaseCode}). A different model year is not the same adoption. The selection will not be silently changed.`,
       requiresReferenceConfirmation: true,
       transitionSection,
     };

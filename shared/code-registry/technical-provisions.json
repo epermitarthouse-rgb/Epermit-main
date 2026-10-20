@@ -480,5 +480,87 @@
     "licenseStatus": "official_government_publication_excerpt",
     "authoritative": true,
     "supportsConfirmedViolation": false
+  },
+  {
+    "id": "dc-2017-12a-911.1.3",
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "codeBook": "12-A DCMR",
+    "edition": "2017",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "911.1.3",
+    "heading": "Fire command center size",
+    "text": "The room shall be of sufficient size to accommodate all equipment and features required by this section but not less than 96 square feet (8.9 m²). A minimum clear aisle width of 48 inches (1220 mm) shall be provided in front of all equipment panels.",
+    "exactTextStored": true,
+    "provisionType": "requirement",
+    "topics": ["fire", "fire command center", "aisle width"],
+    "thresholds": [
+      {
+        "name": "fire_command_center_area",
+        "property": "area",
+        "operator": "min",
+        "value": 96,
+        "unit": "sq ft",
+        "element": "fire_command_center"
+      },
+      {
+        "name": "fire_command_center_aisle_width",
+        "property": "width",
+        "operator": "min",
+        "value": 48,
+        "unit": "in",
+        "element": "fire_command_center"
+      }
+    ],
+    "exceptions": [],
+    "elementTypes": ["fire_command_center"],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": ["any"]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A911",
+    "sourceLocator": "12-A DCMR § 911.1.3, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "supportsConfirmedViolation": true
+  },
+  {
+    "id": "dc-2017-12a-1007.1.1",
+    "registryRecordId": "dc-2017-construction-codes",
+    "jurisdiction": "dc",
+    "jurisdictionCodeEdition": "2017",
+    "codeBook": "12-A DCMR",
+    "edition": "2017",
+    "baseCodeFamily": "IBC",
+    "baseCodeEdition": "2015",
+    "section": "1007.1.1",
+    "heading": "Two exits or exit access doorways",
+    "text": "Where two exits, exit access doorways, exit access stairways or ramps, or any combination thereof, are required from any portion of the exit access, they shall be placed a distance apart equal to not less than one-half of the length of the maximum overall diagonal dimension of the building or area to be served measured in a straight line between them. Interlocking or scissor stairways shall be counted as one exit stairway. Exceptions: Where interior exit stairways or ramps are interconnected by a 1-hour fire-resistance-rated corridor conforming to the requirements of Section 1020, the required exit separation shall be measured along the shortest direct line of travel within the corridor. Where a building is equipped throughout with an automatic sprinkler system in accordance with Sections 903.3.1.1 or 903.3.1.2, the separation distance shall not be less than one-fourth of the length of the maximum overall diagonal dimension of the area served.",
+    "exactTextStored": true,
+    "provisionType": "requirement",
+    "topics": ["egress", "exit separation", "exit access"],
+    "thresholds": [],
+    "exceptions": [
+      "Where interior exit stairways or ramps are interconnected by a 1-hour fire-resistance-rated corridor conforming to Section 1020, separation is measured along the shortest direct line of travel within the corridor.",
+      "Where the building is equipped throughout with an automatic sprinkler system in accordance with Section 903.3.1.1 or 903.3.1.2, the separation distance shall not be less than one-fourth of the maximum overall diagonal dimension of the area served."
+    ],
+    "elementTypes": ["egress_path"],
+    "applicability": {
+      "effectiveFrom": "2020-05-29",
+      "workScopes": ["any"]
+    },
+    "sourceUrl": "https://www.dcregs.dc.gov/Common/DCMR/SectionList.aspx?SectionNumber=2017-12-A1007",
+    "sourceLocator": "12-A DCMR § 1007.1.1, Building Code Supplement of 2017, Final Rulemaking 67 DCR 5690 (May 29, 2020)",
+    "verificationDate": "2026-10-20",
+    "sourceStatus": "verified_text",
+    "verificationStatus": "verified",
+    "licenseStatus": "official_government_publication_excerpt",
+    "authoritative": true,
+    "supportsConfirmedViolation": false
   }
 ]

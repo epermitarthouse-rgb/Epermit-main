@@ -96,6 +96,7 @@ const ELEMENTS = [
   { id: "grounding", label: "equipment grounding conductor", claim: /\bgrounding\b|\bground(?:ing)?\s+conductors?\b/i, owners: ["E"], attributes: [] },
   { id: "sprinkler", label: "sprinkler system", claim: /\bsprinklers?\b|\bhydraulic\b/i, owners: ["FP"], attributes: ["location", "flow"] },
   { id: "fdc", label: "fire department connection", claim: /\bfire\s+department\s+connections?\b|\bfdc\b/i, owners: ["FP", "A"], attributes: ["location"] },
+  { id: "fire_command_center", label: "fire command center", claim: /\bfire\s+command\s+cent(?:er|re)s?\b/i, owners: ["A", "FP"], attributes: ["width", "area"] },
   { id: "special_inspection", label: "special inspections", claim: /\bspecial\s+inspections?\b/i, owners: ["S", "G"], attributes: [] },
   { id: "energy_compliance", label: "energy code compliance", claim: /\benergy\s+(?:code|compliance|conservation)\b|\biecc\b|\bcomcheck\b/i, owners: ["EN", "G", "A", "M", "E"], attributes: ["edition"] },
   { id: "guard", label: "guard", claim: /\bguard(?:\s*rail)?s?\b|\bguardrails?\b/i, owners: ["A"], attributes: ["height", "opening"] },
