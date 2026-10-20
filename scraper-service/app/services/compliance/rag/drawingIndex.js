@@ -12,7 +12,7 @@ const { prefixOf } = require("../review/disciplines.js");
 const MAX_HITS = 8;
 const MAX_QUOTE = 320;
 const MAX_CHUNK_CHARS = 1000;
-const MAX_CHUNKS = 16;
+const MAX_CHUNKS = 40;
 const CHUNK_OVERLAP = 80;
 
 const PREFIX_DISCIPLINE = {
@@ -40,9 +40,6 @@ const GENERIC_TOPIC = new Set([
   "provide", "floor", "section", "symbol", "typical", "shown", "missing",
 ]);
 
-const INTERESTING_RE =
-  /\b(?:shall|provide|insulation|corridor|egress|accessible|sprinkler|rating|schedule|see sheet|refer to|[A-Z]{1,4}-\d+(?:\.\d+)+)\b/gi;
-
 function unique(values) {
   const out = [];
   const seen = new Set();
@@ -64,43 +61,29 @@ function inferDiscipline(record) {
   return PREFIX_DISCIPLINE[prefix] || null;
 }
 
+/**
+ * Contiguous overlapping windows over the whole sheet. Windows placed only near
+ * "interesting" words used up the budget early and dropped the tail of a sheet
+ * (schedules, calculations), so retrieval could not find facts printed there.
+ */
 function splitEvidence(text) {
   if (!text) return [];
   if (text.length <= MAX_CHUNK_CHARS) {
     return [{ text, charStart: 0, charEnd: text.length }];
   }
-  const interesting = [];
-  const marker = new RegExp(INTERESTING_RE.source, "gi");
-  let match;
-  while ((match = marker.exec(text)) && interesting.length < MAX_CHUNKS) {
-    const start = Math.max(0, match.index - 180);
-    const end = Math.min(text.length, start + MAX_CHUNK_CHARS);
-    interesting.push({ charStart: start, charEnd: end });
-    if (match.index === marker.lastIndex) marker.lastIndex += 1;
-  }
-  const slots = Math.max(1, MAX_CHUNKS - interesting.length);
   const stride = Math.max(
     MAX_CHUNK_CHARS - CHUNK_OVERLAP,
-    Math.ceil((text.length - MAX_CHUNK_CHARS) / Math.max(1, slots - 1)),
+    Math.ceil((text.length - MAX_CHUNK_CHARS) / Math.max(1, MAX_CHUNKS - 1)),
   );
-  const sampled = [];
-  for (let index = 0; index < slots; index += 1) {
-    const start = Math.min(index * stride, Math.max(0, text.length - MAX_CHUNK_CHARS));
-    const end = Math.min(text.length, start + MAX_CHUNK_CHARS);
-    sampled.push({ charStart: start, charEnd: end });
+  const kept = [];
+  for (let start = 0; kept.length < MAX_CHUNKS; start += stride) {
+    const from = Math.min(start, Math.max(0, text.length - MAX_CHUNK_CHARS));
+    const end = Math.min(text.length, from + MAX_CHUNK_CHARS);
+    const slice = text.slice(from, end).trim();
+    if (slice) kept.push({ text: slice, charStart: from, charEnd: end });
     if (end >= text.length) break;
   }
-  const windows = [...interesting, ...sampled].sort((a, b) => a.charStart - b.charStart);
-  const kept = [];
-  for (const window of windows) {
-    const previous = kept[kept.length - 1];
-    if (previous && window.charStart < previous.charStart + 400) continue;
-    const slice = text.slice(window.charStart, window.charEnd).trim();
-    if (!slice) continue;
-    kept.push({ text: slice, charStart: window.charStart, charEnd: window.charEnd });
-    if (kept.length >= MAX_CHUNKS) break;
-  }
-  return kept.length ? kept : [{ text: text.slice(0, MAX_CHUNK_CHARS), charStart: 0, charEnd: Math.min(text.length, MAX_CHUNK_CHARS) }];
+  return kept;
 }
 
 /**

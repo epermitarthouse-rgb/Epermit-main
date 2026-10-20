@@ -451,6 +451,7 @@ async function persistSheetFindings(supabase, params) {
       ruleResults: params.ruleResults || null,
       regions: params.regions || null,
       drawingRetrieval: params.drawingRetrieval || null,
+      graphicRead: params.graphicRead || null,
       legalApplicability: result.codeVerification?.legalApplicability || null,
       codeCoverage: result.codeVerification?.coverage || null,
       spec_chunks_retrieved: specChunkCount ?? 0,
@@ -774,6 +775,7 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     regionImages,
     fileName: sheetFileName,
     pageText: prepared.pageText || pageText,
+    graphicalReadStatus: prepared.graphicalReadStatus || null,
   });
 
   await persistSheetFindings(supabase, {
@@ -802,6 +804,11 @@ async function processSheetJob({ supabase, job, workerId, leaseTtlSeconds }) {
     ruleResults: prepared.rules,
     regions: prepared.record?.regions || [],
     drawingRetrieval,
+    graphicRead: {
+      status: prepared.graphicalReadStatus || null,
+      ocrLines: prepared.ocrLineCount || 0,
+      indexRows: prepared.indexRowCount || 0,
+    },
   });
 
   await completeSheetJob(supabase, {

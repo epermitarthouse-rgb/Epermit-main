@@ -74,7 +74,8 @@ function recognizeWithTesseract(pngBuffer) {
   const tmp = path.join(os.tmpdir(), `epermit-tess-${process.pid}-${Date.now()}.png`);
   fs.writeFileSync(tmp, pngBuffer);
   try {
-    const result = spawnSync("tesseract", [tmp, "stdout", "--psm", "6", "tsv"], {
+    // Sparse-text mode: drawings are scattered labels and tables, not one uniform block.
+    const result = spawnSync("tesseract", [tmp, "stdout", "--psm", "11", "tsv"], {
       timeout: 45000,
       encoding: "utf8",
       maxBuffer: 5_000_000,

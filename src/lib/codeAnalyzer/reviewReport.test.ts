@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildReviewReportView,
+  mergeReviewReportViews,
   reviewAssessment,
   reviewOutcome,
   reviewOutcomeLabel,
@@ -134,5 +135,52 @@ describe("review report hydration", () => {
     assert.equal(view.evidence[0].hasRegion, true);
     assert.match(view.withheldReasons[0], /equipment plan/i);
     assert.match(view.disclosure || "", /not enforced/i);
+  });
+});
+
+describe("candidate dispositions", () => {
+  const candidate = (title: string, outcome: string | null, extra: Record<string, unknown> = {}) => ({
+    title,
+    validationReason: "requirement_already_on_sheet",
+    validationDetail: `${title} detail.`,
+    evaluation: outcome ? { verification: { outcome, openReason: outcome === "open_check" ? "fact_not_found" : null }, related: [] } : null,
+    ...extra,
+  });
+
+  it("lists every open check, not the first five", () => {
+    const rejectedCandidates = Array.from({ length: 9 }, (_, index) => candidate(`Check ${index}`, "open_check"));
+    const view = buildReviewReportView([{ summary: { reviewState: "reviewed_partial" }, rejectedCandidates }], []);
+    assert.equal(view.openChecks.length, 9);
+    assert.equal(view.openChecks[0].openReason, "fact_not_found");
+    assert.equal(view.dispositions.open_check, 9);
+  });
+
+  it("uses the recorded outcome over the stored reason, and names the resolving sheet", () => {
+    const view = buildReviewReportView([{
+      summary: { reviewState: "reviewed_partial" },
+      rejectedCandidates: [
+        candidate("Fire rating", "resolved_by_evidence", {
+          evaluation: {
+            verification: { outcome: "resolved_by_evidence", detail: 'A-1.00-00.pdf states the rating: "1H ONE HOUR FIRE RATED WALLS".' },
+            related: [{ sheet: "A-1.00-00.pdf", quote: "1H ONE HOUR FIRE RATED WALLS" }],
+          },
+        }),
+        candidate("Energy code edition", "correctly_rejected"),
+        candidate("Legacy restatement", null),
+      ],
+    }], []);
+    assert.deepEqual(view.openChecks.map((item) => item.check), ["Legacy restatement"]);
+    assert.equal(view.resolvedChecks.length, 1);
+    assert.deepEqual(view.resolvedChecks[0].relatedSheets, ["A-1.00-00.pdf"]);
+    assert.deepEqual(view.dispositions, { published: 0, open_check: 1, resolved_by_evidence: 1, correctly_rejected: 1, not_applicable: 0 });
+  });
+
+  it("IBC and Local views add their dispositions and keep every open check", () => {
+    const ibc = buildReviewReportView([{ summary: { reviewState: "reviewed_partial" }, rejectedCandidates: [candidate("A", "open_check"), candidate("B", "resolved_by_evidence")] }], []);
+    const local = buildReviewReportView([{ summary: { reviewState: "reviewed_partial" }, rejectedCandidates: [candidate("C", "open_check")] }], []);
+    const merged = mergeReviewReportViews([ibc, local]);
+    assert.equal(merged?.openChecks.length, 2);
+    assert.equal(merged?.dispositions.resolved_by_evidence, 1);
+    assert.equal(merged?.dispositions.open_check, 2);
   });
 });

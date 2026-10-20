@@ -24,6 +24,30 @@ export type ReviewLimitation = {
   check?: string;
   missingEvidence?: string;
   relatedSheets?: string[];
+  /** Why the check is open: evidence_unavailable, fact_not_found, premise_unconfirmed, ... */
+  openReason?: string | null;
+  outcome?: string | null;
+};
+
+/** Per-candidate disposition the verifier recorded. */
+export type CandidateEvaluationLike = {
+  verification?: {
+    outcome?: string | null;
+    reason?: string | null;
+    detail?: string | null;
+    openReason?: string | null;
+  } | null;
+  related?: Array<{ sheet?: string | null; quote?: string | null }> | null;
+};
+
+export type ResolvedCheck = { check: string; detail: string; relatedSheets: string[] };
+
+export type DispositionCounts = {
+  published: number;
+  open_check: number;
+  resolved_by_evidence: number;
+  correctly_rejected: number;
+  not_applicable: number;
 };
 
 export type ReviewMetadataLike = {
@@ -64,6 +88,7 @@ export type ReviewMetadataLike = {
     validationDetail?: string;
     title?: string;
     diagnostics?: { originalTitle?: string | null } | null;
+    evaluation?: CandidateEvaluationLike | null;
   }>;
   legalApplicability?: {
     status?: string | null;
@@ -102,6 +127,10 @@ export type ReviewReportView = {
   unresolvedChecks: string[];
   /** The same checks with what is missing and the sheets involved. */
   openChecks: ReviewLimitation[];
+  /** Candidates withheld because a named sheet states the fact, with that sheet. */
+  resolvedChecks: ResolvedCheck[];
+  /** How every withheld candidate was disposed of. Published findings are counted by the caller. */
+  dispositions: DispositionCounts;
   /** Why the review is not a verified pass. Empty only for a verified compliant review. */
   limitations: ReviewLimitation[];
   evidence: Array<{ where: string; quote: string; hasRegion: boolean }>;
@@ -227,6 +256,7 @@ export function reviewAssessment(input: {
   };
 }
 
+/** Reasons that leave a check open, for rows stored before candidates carried an evaluation. */
 const OPEN_CHECK_REJECTIONS = new Set([
   "cross_sheet_owner",
   "requirement_reminder",
@@ -241,6 +271,36 @@ const OPEN_CHECK_REJECTIONS = new Set([
   "claim_not_tied_to_evidence",
   "incomplete_question",
 ]);
+
+const OPEN_OUTCOMES = new Set(["open_check", "reconsider"]);
+
+const OPEN_REASON_LABELS: Record<string, string> = {
+  evidence_unavailable: "graphic or related-sheet evidence was not available",
+  fact_not_found: "the fact was not found on this or a related sheet",
+  premise_unconfirmed: "the candidate's premise is not confirmed by the drawings",
+  calculation_unresolved: "the printed values are not connected by a stated method",
+  requirement_unverified: "a note states the requirement but not that it is met",
+  reconsider: "the suppression was not backed by evidence for this element",
+};
+
+export function openReasonLabel(reason: string | null | undefined): string | null {
+  return reason ? OPEN_REASON_LABELS[reason] || reason.replace(/_/g, " ") : null;
+}
+
+type StoredCandidate = NonNullable<ReviewMetadataLike["rejectedCandidates"]>[number];
+
+/** The recorded outcome; older rows fall back to the rejection reason. */
+function candidateOutcome(candidate: StoredCandidate): string {
+  const recorded = candidate.evaluation?.verification?.outcome;
+  if (recorded) return recorded === "reconsider" ? "open_check" : recorded;
+  return OPEN_CHECK_REJECTIONS.has(String(candidate.validationReason || "")) ? "open_check" : "closed";
+}
+
+function evaluationSheets(candidate: StoredCandidate): string[] {
+  return (candidate.evaluation?.related ?? [])
+    .map((item) => String(item?.sheet || "").trim())
+    .filter(Boolean);
+}
 
 /**
  * Stored reasons first. Older rows have none, so the same reasons are read from
@@ -322,10 +382,8 @@ function withCheckDetail(limitation: ReviewLimitation, item: ReviewMetadataLike)
 }
 
 function addOpenChecks(item: ReviewMetadataLike, add: (limitation: ReviewLimitation) => void): void {
-  const open = (item.rejectedCandidates ?? []).filter((candidate) =>
-    OPEN_CHECK_REJECTIONS.has(String(candidate.validationReason || "")),
-  );
-  for (const candidate of open.slice(0, 5)) {
+  const open = (item.rejectedCandidates ?? []).filter((candidate) => candidateOutcome(candidate) === "open_check");
+  for (const candidate of open) {
     const check = cleanCheckTitle(candidate.diagnostics?.originalTitle || candidate.title);
     const missingEvidence = String(candidate.validationDetail || "Withheld, not verified.").trim();
     add({
@@ -333,9 +391,35 @@ function addOpenChecks(item: ReviewMetadataLike, add: (limitation: ReviewLimitat
       detail: `${check}: ${missingEvidence} Withholding it is not proof of compliance.`,
       check,
       missingEvidence,
-      relatedSheets: sheetsFor(missingEvidence, item),
+      relatedSheets: [...new Set([...sheetsFor(missingEvidence, item), ...evaluationSheets(candidate)])],
+      openReason: candidate.evaluation?.verification?.openReason ?? null,
+      outcome: "open_check",
     });
   }
+}
+
+function emptyDispositions(): DispositionCounts {
+  return { published: 0, open_check: 0, resolved_by_evidence: 0, correctly_rejected: 0, not_applicable: 0 };
+}
+
+/** Withheld candidates by recorded outcome; rows without an evaluation count only when open. */
+function candidateDispositions(metadata: ReviewMetadataLike[]): { counts: DispositionCounts; resolved: ResolvedCheck[] } {
+  const counts = emptyDispositions();
+  const resolved: ResolvedCheck[] = [];
+  for (const item of metadata) {
+    for (const candidate of item.rejectedCandidates ?? []) {
+      const outcome = candidateOutcome(candidate);
+      if (outcome in counts) counts[outcome as keyof DispositionCounts] += 1;
+      if (outcome !== "resolved_by_evidence") continue;
+      const detail = String(candidate.evaluation?.verification?.detail || candidate.validationDetail || "").trim();
+      resolved.push({
+        check: cleanCheckTitle(candidate.diagnostics?.originalTitle || candidate.title),
+        detail,
+        relatedSheets: [...new Set([...evaluationSheets(candidate), ...(detail.match(SHEET_FILE_RE) ?? []).map((name) => name.trim())])],
+      });
+    }
+  }
+  return { counts, resolved };
 }
 
 /**
@@ -406,6 +490,7 @@ export function buildReviewReportView(
       ),
     ),
   ].slice(0, 6);
+  const disposed = candidateDispositions(metadata);
 
   return {
     selectedScope,
@@ -426,6 +511,8 @@ export function buildReviewReportView(
     unreviewable,
     unresolvedChecks,
     openChecks,
+    resolvedChecks: disposed.resolved,
+    dispositions: { ...disposed.counts, open_check: openChecks.length },
     limitations,
     evidence: evidence.slice(0, 12),
     withheldReasons: withheld,
@@ -516,6 +603,15 @@ export function mergeReviewReportViews(
     unreviewable: strings((view) => view.unreviewable),
     unresolvedChecks: openChecks.map((item) => item.detail),
     openChecks,
+    resolvedChecks: uniqueBy(present.flatMap((view) => view.resolvedChecks ?? []), (item) => `${item.check}|${item.detail}`),
+    dispositions: {
+      ...present.reduce((sum, view) => {
+        const counts = view.dispositions ?? emptyDispositions();
+        (Object.keys(sum) as Array<keyof DispositionCounts>).forEach((key) => { sum[key] += counts[key]; });
+        return sum;
+      }, emptyDispositions()),
+      open_check: openChecks.length,
+    },
     limitations,
     evidence: uniqueBy(present.flatMap((view) => view.evidence), (item) => `${item.where}|${item.quote}`).slice(0, 12),
     withheldReasons: strings((view) => view.withheldReasons).slice(0, 6),

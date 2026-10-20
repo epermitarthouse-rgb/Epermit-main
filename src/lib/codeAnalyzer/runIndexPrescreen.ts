@@ -4,6 +4,7 @@ import {
   detectIndexSheet,
   isCredibleDrawingSheetNumber,
   parseIndexEntriesFromText,
+  parseOcrIndexEntries,
   runIndexCompletenessPrescreen,
   type IndexCompletenessResult,
   type IndexSheetEntry,
@@ -111,10 +112,10 @@ export async function runDrawingIndexPrescreen(params: {
     return runIndexCompletenessPrescreen(params.sheets, { pageTextBySheetId: params.pageTextBySheetId });
   }
 
-  let indexEntries: IndexSheetEntry[] = parseIndexEntriesFromText(
-    params.pageTextBySheetId?.[indexSheet.id],
-  );
-  let indexSource: "text" | "vision" | null = indexEntries.length ? "text" : null;
+  const indexText = params.pageTextBySheetId?.[indexSheet.id];
+  let indexEntries: IndexSheetEntry[] = parseIndexEntriesFromText(indexText);
+  const ocrEntries = credibleIndexEntries(parseOcrIndexEntries(indexText));
+  let indexSource: IndexCompletenessResult["indexSource"] = indexEntries.length ? "text" : null;
   let indexReadError: string | null = null;
 
   if (
@@ -141,6 +142,19 @@ export async function runDrawingIndexPrescreen(params: {
       console.warn("[index prescreen] Vision extract failed:", err);
       indexReadError = err instanceof Error ? err.message : "Index extraction failed.";
     }
+  }
+
+  if (indexSource === "vision" && ocrEntries.length) {
+    const read = new Set(indexEntries.map((entry) => entry.sheetNumber));
+    const added = ocrEntries.filter((entry) => !read.has(entry.sheetNumber));
+    if (added.length) {
+      indexEntries = [...indexEntries, ...added];
+      indexSource = "vision+ocr";
+    }
+  } else if (!indexEntries.length && ocrEntries.length) {
+    indexEntries = ocrEntries;
+    indexSource = "ocr";
+    indexReadError = null;
   }
 
   const result = runIndexCompletenessPrescreen(params.sheets, {

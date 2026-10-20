@@ -9,6 +9,21 @@ const {
   tracesValueComparison,
 } = require("./applicability.js");
 const { verifyAuthoritativeCitation } = require("./codeCitationVerification.js");
+const {
+  ELEMENTS,
+  parseClaim,
+  elementSpans,
+  attributeEvidence,
+  evidenceState,
+  ownsElement,
+  relatedSources,
+  reconcileCalculation,
+  onlyRequirementNotes,
+  graphicUnread,
+  graphicReadComplete,
+  NOT_TEXT_ATTRIBUTES,
+  outcomeForReason,
+} = require("./evaluation.js");
 
 const MEASURABLE_RE =
   /\b(width|clearance|slope|ramp|rise|run|dimension|distance|spacing|fire\s*rating|rated|hour)\b/i;
@@ -587,6 +602,276 @@ function decideCandidate(issue, ctx) {
   };
 }
 
+/** Rejections that claim the set already answers the candidate. */
+const ANSWERED_REASONS = new Set([
+  "requirement_already_specified", "cross_sheet_answers_question", "cross_sheet_supplies_fact",
+  "dimension_answered_on_other_sheet", "already_noted", "requirement_already_on_sheet", "information_present",
+]);
+/** Rejections about how the candidate was worded, not about the drawings. */
+const FORMAT_REASONS = new Set([
+  "incomplete_question", "claim_not_tied_to_evidence", "vague_question", "no_specific_condition",
+  "requirement_reminder", "evidence_gate", "cross_sheet_owner",
+]);
+const PUBLISHING = new Set(["accept", "accept_question", "downgrade"]);
+/** Rejections that say the sheet already states the requirement. */
+const RESTATEMENT_REASONS = new Set(["requirement_already_on_sheet", "documented_design_provision", "requirement_already_specified"]);
+
+function attributePhrase(claim, missing) {
+  const names = (missing && missing.length ? missing : claim.attributes).filter((name) => name !== "specification");
+  if (names.length) return names.map((name) => name.replace(/_/g, " and ")).join(" and ");
+  const typical = (claim.element?.attributes || []).map((name) => name.replace(/_/g, " and "));
+  return typical.length ? `specification (${typical.join(", ")})` : "specification";
+}
+
+function focusedQuestion(claim, state, ctx, related, issue) {
+  const sheet = ctx.fileName || ctx.sheetTitle || "this sheet";
+  const what = attributePhrase(claim, state.missing);
+  const stated = Object.entries(state.found || {}).map(([attribute, item]) => `${attribute}: "${item.quote}"`);
+  const citation = issue?.codeReference ? `The candidate cites ${issue.codeReference}; that text is not verified against the adopted code.` : "No verified provision was supplied.";
+  return [
+    `${claim.element.label}: the ${what} is not stated on ${sheet}. Its text and graphic text were read.`,
+    stated.length ? `It does state ${stated.join("; ")}.` : "",
+    related.length
+      ? `Related sheets that carry this element (${related.slice(0, 3).join(", ")}) do not state it either.`
+      : "No related sheet that carries this element states it.",
+    citation,
+    "This is a verification question, not a confirmed violation.",
+  ].filter(Boolean).join(" ");
+}
+
+function evidenceDetail(found, prefix) {
+  const quotes = Object.entries(found).map(([attribute, item]) =>
+    `${item.sheet ? `${item.sheet} ` : ""}states the ${attribute === "specification" ? "specification" : attribute}: "${item.quote}"`);
+  return `${prefix} ${quotes.join("; ")}.`;
+}
+
+/**
+ * Where the set states each attribute the claim names: this sheet first, then related sheets.
+ */
+function locateFacts(claim, ctx) {
+  const own = { text: String(ctx.pageText || ""), sheet: ctx.fileName || ctx.sheetTitle || null };
+  const related = relatedSources(claim, ctx);
+  const evidence = attributeEvidence([own, ...related], claim);
+  return { evidence, related };
+}
+
+/**
+ * The calculation a value comparison relies on, resolved before the values are compared.
+ * Values a stated method connects are not a discrepancy; the open question is the capacity.
+ */
+function calculationDecision(issue, claim, ctx, provenance) {
+  const calculation = reconcileCalculation(issue, ctx.pageText);
+  if (!calculation) return null;
+  if (!calculation.explained) {
+    return calculation.method
+      ? { disposition: "reject", reason: "calculation_unresolved", detail: calculation.summary, provenance }
+      : null;
+  }
+  const governing = calculation.governing;
+  const target = claim.element || ELEMENTS.find((element) => element.id === "grease_interceptor") || null;
+  const capacityClaim = { element: target, attributes: ["capacity"], kind: "missing" };
+  const { evidence } = locateFacts(capacityClaim, ctx);
+  if (evidence.answered) {
+    return {
+      disposition: "reject",
+      reason: "calculation_reconciled",
+      detail: `${calculation.summary} ${evidenceDetail(evidence.found, "The rated capacity is stated:")} Whether it is at least ${governing.value} ${governing.unit} is the remaining check.`,
+      provenance,
+    };
+  }
+  const label = target?.label || "equipment";
+  return {
+    disposition: "accept_question",
+    reason: "calculation_reconciled",
+    detail: `${calculation.summary} No sheet states the rated capacity of the ${label}. Confirm the ${label} is rated for at least ${governing.value} ${governing.unit}. This is a verification question, not a confirmed violation.`,
+    provenance,
+  };
+}
+
+/**
+ * Challenge a decision in both directions with element-bound evidence. A suppression must show
+ * the passage that resolves it; a published "not shown" must survive a read of the full sheet.
+ * Graphic content that was not read leaves the check open, never resolved or confirmed.
+ */
+function challengeDecision(issue, decision, ctx) {
+  if (!decision) return decision;
+  const claim = parseClaim(issue);
+  const provenance = { ...(decision.provenance || {}), challenged: true };
+  const calc = calculationDecision(issue, claim, ctx, provenance);
+  if (calc && outcomeForReason(String(decision.reason || ""), false) !== "not_applicable") {
+    return { ...calc, provenance: { ...provenance, priorReason: decision.reason || null } };
+  }
+  if (!claim.element) return decision;
+  const reason = String(decision.reason || "");
+  const graphicOnly = claim.attributes.filter((id) => NOT_TEXT_ATTRIBUTES.has(id));
+  if (graphicOnly.length && decision.disposition === "reject"
+    && (ANSWERED_REASONS.has(reason) || reason === "special_inspection_documented")) {
+    return {
+      disposition: "reject",
+      reason: "graphic_evidence_unavailable",
+      detail: `The ${attributePhrase(claim, graphicOnly)} of the ${claim.element.label} is shown graphically, so extracted text can neither confirm nor rule it out. Check the drawing; the check stays open.`,
+      provenance: { ...provenance, priorReason: reason },
+    };
+  }
+  const restatement = decision.disposition === "reject" && RESTATEMENT_REASONS.has(reason);
+  const answeredClaim = decision.disposition === "reject" && ANSWERED_REASONS.has(reason);
+  const formatClaim = decision.disposition === "reject" && FORMAT_REASONS.has(reason);
+  const publishing = PUBLISHING.has(decision.disposition);
+  const published = publishing && claim.kind === "missing";
+  const prior = { ...provenance, priorReason: reason || decision.disposition };
+
+  // A published deficiency read from a sheet whose graphic text was not read is not established.
+  if (publishing && claim.kind !== "missing" && graphicUnread(ctx) && !attributeEvidence([{ text: String(ctx.pageText || "") }], claim).answered) {
+    return {
+      disposition: "reject",
+      reason: "graphic_evidence_unavailable",
+      detail: `The ${claim.element.label} condition this candidate alleges is not stated in the readable sheet text, and the sheet's graphic text was not read. It is not published until the drawing is read.`,
+      provenance: prior,
+    };
+  }
+  // A published concern about an element this sheet does not name is not tied to its evidence.
+  if (publishing && claim.kind !== "missing" && graphicReadComplete(ctx)
+    && !elementSpans(String(ctx.pageText || ""), claim.element).length) {
+    const notOwned = !ownsElement(ctx, claim.element);
+    return {
+      disposition: "reject",
+      reason: notOwned ? "element_not_on_this_discipline_sheet" : "claim_not_tied_to_evidence",
+      detail: notOwned
+        ? `This sheet does not show the ${claim.element.label}, and its discipline does not normally carry it.`
+        : `This sheet's text and graphic text do not name the ${claim.element.label}, so the concern is not tied to drawing evidence. It stays an unresolved check.`,
+      provenance: prior,
+    };
+  }
+  if (!restatement && !answeredClaim && !formatClaim && !published) return decision;
+
+  const state = evidenceState(claim, ctx);
+  const { evidence, related } = locateFacts(claim, ctx);
+  // A sheet that states the value, not only the requirement, answers a claim that it is missing.
+  // A reminder to comply stays open: a design note is not verification.
+  if (restatement && claim.kind === "missing" && state.state === "present" && !state.uncorroborated && !onlyRequirementNotes(state.found)) {
+    return { disposition: "reject", reason: "information_present", detail: evidenceDetail(state.found, "This sheet"), provenance: prior };
+  }
+  if (restatement) return { ...decision, provenance: { ...provenance, boundEvidence: state.found || {} } };
+  // A resolution the bound evidence confirms keeps the verifier's own reason and cites the quote.
+  if (answeredClaim && evidence.answered) {
+    const where = Object.values(evidence.found).map((item) => item.sheet).find((sheet) => sheet && sheet !== (ctx.fileName || ctx.sheetTitle)) || null;
+    const notesOnly = onlyRequirementNotes(evidence.found);
+    const keepsOpen = outcomeForReason(reason) !== "resolved_by_evidence";
+    if (notesOnly && keepsOpen) {
+      return {
+        ...decision,
+        detail: `${evidenceDetail(evidence.found, "The set")} The note states the requirement; it is not evidence the condition is shown or met, so the check stays open.`,
+        provenance: { ...provenance, boundEvidence: evidence.found },
+      };
+    }
+    return {
+      ...decision,
+      reason: keepsOpen ? (where ? "cross_sheet_supplies_fact" : "information_present") : reason,
+      detail: evidenceDetail(evidence.found, "Resolved by bound evidence:"),
+      redirectFile: where || decision.redirectFile || null,
+      provenance: { ...provenance, boundEvidence: evidence.found, fileName: where || provenance.fileName || null },
+    };
+  }
+  if (state.state === "present" && !state.uncorroborated) {
+    if (onlyRequirementNotes(state.found)) {
+      return {
+        disposition: "reject",
+        reason: "requirement_already_on_sheet",
+        detail: `${evidenceDetail(state.found, "This sheet")} The note states the requirement; it is not evidence the condition is shown or met, so the check stays open.`,
+        provenance: prior,
+      };
+    }
+    return { disposition: "reject", reason: "information_present", detail: evidenceDetail(state.found, "This sheet"), provenance: prior };
+  }
+  if (evidence.answered) {
+    const where = Object.values(evidence.found).map((item) => item.sheet).find((sheet) => sheet && sheet !== (ctx.fileName || ctx.sheetTitle)) || null;
+    return {
+      disposition: "reject",
+      reason: "cross_sheet_supplies_fact",
+      detail: evidenceDetail(evidence.found, "The set states it:"),
+      redirectFile: where,
+      provenance: { ...prior, fileName: where },
+    };
+  }
+  if (state.state === "present" && state.uncorroborated) {
+    return {
+      disposition: "reject",
+      reason: "model_reported_present",
+      detail: `The model read the ${claim.element.label} ${attributePhrase(claim)} from the drawing image, but no extracted text confirms it. The check stays open until the reading is confirmed.`,
+      provenance: prior,
+    };
+  }
+  if (state.state === "unreadable" || state.reason === "graphic_evidence_unavailable") {
+    const graphicOnly = state.state !== "unreadable" && graphicReadComplete(ctx);
+    return {
+      disposition: "reject",
+      reason: "graphic_evidence_unavailable",
+      detail: graphicOnly
+        ? `Whether this sheet shows the ${claim.element.label} ${attributePhrase(claim, state.missing)} is unresolved: that is shown graphically (linework or a stamp), which extracted text can neither confirm nor rule out. Check the drawing.`
+        : `Whether this sheet shows the ${claim.element.label} ${attributePhrase(claim, state.missing)} is unresolved: its graphic content was not read, so absence is not inferred. Re-run with graphic text extraction or check the drawing.`,
+      provenance: prior,
+    };
+  }
+  if (state.state === "not_relevant") {
+    return {
+      disposition: "reject",
+      reason: "element_not_on_this_discipline_sheet",
+      detail: `This sheet does not show the ${claim.element.label}, and its discipline does not normally carry it.`,
+      provenance: prior,
+    };
+  }
+  if (state.reason === "existing_element_scope") {
+    return {
+      disposition: "reject",
+      reason: "existing_element_scope",
+      detail: `This sheet shows the ${claim.element.label} as existing ("${elementSpans(String(ctx.pageText || ""), claim.element)[0]?.text.slice(0, 120) || ""}"). Whether the work alters it, and so whether its ${attributePhrase(claim, state.missing)} must be documented, is unresolved.`,
+      provenance: prior,
+    };
+  }
+  if (state.reason === "value_not_bound_to_element") {
+    return {
+      disposition: "reject",
+      reason: "value_not_bound_to_element",
+      detail: `This sheet prints a ${attributePhrase(claim, state.missing)} value that the extracted text does not tie to the ${claim.element.label}; it may be the drawn dimension. Check the drawing; absence is not inferred.`,
+      provenance: prior,
+    };
+  }
+  if (state.reason === "schedule_values_not_bound") {
+    return {
+      disposition: "reject",
+      reason: "schedule_values_not_bound",
+      detail: `This sheet has a schedule or table for the ${claim.element.label}, but its ${attributePhrase(claim, state.missing)} values could not be tied to it in the extracted text. Check the schedule; absence is not inferred.`,
+      provenance: prior,
+    };
+  }
+  // Absent after a full read of this sheet, including its graphic text, and the related sheets,
+  // on a sheet that names the element: the question is anchored to drawing evidence.
+  if (claim.kind === "missing" && state.adequate && state.named && ownsElement(ctx, claim.element)) {
+    const relatedNames = related.filter((source) => elementSpans(source.text, claim.element).length).map((source) => source.sheet);
+    return {
+      disposition: "accept_question",
+      reason: "fact_not_stated",
+      detail: focusedQuestion(claim, state, ctx, relatedNames, issue),
+      provenance: prior,
+    };
+  }
+  if (published) return decision;
+  if (answeredClaim) {
+    return {
+      disposition: "reject",
+      reason: "resolution_not_element_bound",
+      detail: `${decision.detail || "The candidate was closed as answered."} No passage on this or a related sheet states the ${claim.element.label} ${attributePhrase(claim, state.missing)}, so the check is reconsidered and stays open.`,
+      provenance: prior,
+    };
+  }
+  return {
+    disposition: "reject",
+    reason: "fact_not_found",
+    detail: `The ${claim.element.label} ${attributePhrase(claim, state.missing)} is not stated on this sheet or a related sheet. The candidate does not establish a deficiency, so it stays an unresolved check.`,
+    provenance: prior,
+  };
+}
+
 function originalDiagnostics(issue) {
   return {
     originalTitle: issue.title || null,
@@ -661,6 +946,7 @@ function applyDecision(issue, decision) {
 
 module.exports = {
   decideCandidate,
+  challengeDecision,
   applyDecision,
   traceMeasures,
   sheetRole,

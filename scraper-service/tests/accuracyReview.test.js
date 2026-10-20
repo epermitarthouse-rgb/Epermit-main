@@ -194,7 +194,10 @@ describe("cross-sheet verification and citation limits", () => {
       },
     );
     assert.equal(hardened.issues.length, 0);
-    assert.equal(hardened.rejectedCandidates[0].validationReason, "cross_sheet_answers_question");
+    const evaluation = hardened.rejectedCandidates[0].evaluation;
+    assert.equal(evaluation.verification.outcome, "resolved_by_evidence");
+    assert.equal(evaluation.related[0].sheet, "egress-plan.pdf");
+    assert.match(evaluation.related[0].quote, /STAIR A WIDTH 44 INCHES/);
   });
 
   it("keeps an unsupported citation unverified and does not confirm it", () => {

@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { exportScoreText, fileSectionScoreLabel } from './codeAnalyzer/combinedSheetSummary';
 import { findingCaptionLines } from './complianceAnalysisExport';
-import { isUnresolvedCheck, reviewOutcome } from './codeAnalyzer/reviewReport';
+import { isUnresolvedCheck, openReasonLabel, reviewOutcome } from './codeAnalyzer/reviewReport';
 
 interface ComplianceIssue {
   id: string;
@@ -30,7 +30,7 @@ interface AnalysisSummary {
   overallScore: number | null;
   reviewState?: string | null;
   codeCoverageVerified?: boolean;
-  limitations?: Array<{ code: string; detail: string }>;
+  limitations?: Array<{ code: string; detail: string; openReason?: string | null }>;
 }
 
 interface IssueResponse {
@@ -429,8 +429,13 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     });
   };
 
-  const renderReasons = (title: string, items: Array<{ detail?: string }>) => {
-    const reasons = items.map((item) => safeText(item?.detail)).filter(Boolean);
+  const renderReasons = (title: string, items: Array<{ detail?: string; openReason?: string | null }>, limit = 5) => {
+    const reasons = items
+      .map((item) => {
+        const why = openReasonLabel(item?.openReason);
+        return safeText(why ? `${item?.detail ?? ''} Open because ${why}.` : item?.detail);
+      })
+      .filter(Boolean);
     if (reasons.length === 0) return;
     doc.setTextColor(100, 116, 139);
     doc.setFont('helvetica', 'normal');
@@ -438,7 +443,7 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
     checkPageBreak(14);
     doc.text(title, margin + 2, y);
     y += 10;
-    for (const reason of reasons.slice(0, 5)) {
+    for (const reason of reasons.slice(0, limit)) {
       checkPageBreak(12);
       const lines = doc.splitTextToSize(`- ${reason}`, contentWidth - 8);
       doc.text(lines.slice(0, 2).map(safeText), margin + 4, y);
@@ -497,25 +502,30 @@ export function exportComplianceReportPDF(options: ExportOptions): void {
         doc.text('No findings identified for this file.', margin + 2, y);
         y += 14;
         const limitations = section.summary?.limitations ?? [];
-        renderReasons('Unresolved checks:', limitations.filter((item) => isUnresolvedCheck(item)));
+        const open = limitations.filter((item) => isUnresolvedCheck(item));
+        renderReasons(`Unresolved checks (${open.length}):`, open, Infinity);
         renderReasons('Why code compliance is unverified:', limitations.filter((item) => !isUnresolvedCheck(item)));
         return;
       }
 
       renderIssuesByCategory(section.issues, section.fileId);
+      const open = (section.summary?.limitations ?? []).filter((item) => isUnresolvedCheck(item));
+      renderReasons(`Unresolved checks (${open.length}):`, open, Infinity);
     });
   } else {
     // Single-file (or legacy) path: flat category grouping
     const singleFileId = sections[0]?.fileId;
     const singleIssues = sections[0]?.issues ?? issues;
+    const singleOpen = (sections[0]?.summary?.limitations ?? summary.limitations ?? []).filter((item) => isUnresolvedCheck(item));
     if (singleIssues.length === 0) {
       doc.setTextColor(100, 116, 139);
       doc.setFontSize(10);
-      doc.text('No issues found.', margin, y);
+      doc.text(singleOpen.length ? 'No findings identified. Verification incomplete.' : 'No issues found.', margin, y);
       y += 14;
     } else {
       renderIssuesByCategory(singleIssues, singleFileId);
     }
+    renderReasons(`Unresolved checks (${singleOpen.length}):`, singleOpen, Infinity);
   }
   
   // ==================== CODE CITATIONS ====================

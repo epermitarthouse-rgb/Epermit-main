@@ -707,6 +707,7 @@ async function analyzeDrawingWithOpenAI(params) {
     regions = null,
     regionImages = null,
     fileName = null,
+    graphicalReadStatus = null,
     logInfo = console.log,
     logError = console.error,
     downscaleFn = downscaleImageBase64,
@@ -733,6 +734,7 @@ async function analyzeDrawingWithOpenAI(params) {
     projectType,
     observations,
     regions,
+    graphicalReadStatus,
   };
 
   const legal = codeVerification?.legalApplicability || null;

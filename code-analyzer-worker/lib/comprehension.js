@@ -1,8 +1,15 @@
 "use strict";
 
+const crypto = require("crypto");
 const fs = require("fs/promises");
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
 const { recognizePng } = require("./ocr.js");
+const {
+  composeSheetText,
+  groupWordsIntoLines,
+  indexRowsFromLines,
+  pageIsTitledIndex,
+} = require("./ocrLines.js");
 
 const MAX_REGIONS = 6;
 const MAX_GRAPHIC_REGIONS = 8;
@@ -195,8 +202,9 @@ function selectInspectionRegions(items, page) {
 
 const graphicCache = new Map();
 
-function cacheKey(filePath, pageNumber, stat) {
-  return `${filePath}:${pageNumber}:${stat?.mtimeMs || 0}:${stat?.size || 0}`;
+/** Keyed by file content: each job downloads the same PDF to a new temp path. */
+function cacheKey(buffer, pageNumber) {
+  return `${crypto.createHash("sha1").update(buffer).digest("hex")}:${pageNumber}`;
 }
 
 /**
@@ -205,7 +213,7 @@ function cacheKey(filePath, pageNumber, stat) {
  * @param {{ x: number; y: number; width: number; height: number; pageWidth?: number; pageHeight?: number }} region
  * @param {number} scale
  */
-async function renderPdfClip(page, region, scale) {
+async function renderPdfClip(page, region, scale, maxPx = CROP_MAX_PX) {
   let createCanvas;
   try {
     ({ createCanvas } = require("canvas"));
@@ -218,8 +226,8 @@ async function renderPdfClip(page, region, scale) {
   const y = Math.max(0, Number(region.y) - pad);
   const widthPt = Math.max(1, Number(region.width) + pad * 2);
   const heightPt = Math.max(1, Number(region.height) + pad * 2);
-  const pixelW = Math.max(8, Math.min(CROP_MAX_PX, Math.ceil(widthPt * scale)));
-  const pixelH = Math.max(8, Math.min(CROP_MAX_PX, Math.ceil(heightPt * scale)));
+  const pixelW = Math.max(8, Math.min(maxPx, Math.ceil(widthPt * scale)));
+  const pixelH = Math.max(8, Math.min(maxPx, Math.ceil(heightPt * scale)));
   const usedScale = Math.min(scale, pixelW / widthPt, pixelH / heightPt);
   const canvas = createCanvas(Math.max(8, Math.ceil(widthPt * usedScale)), Math.max(8, Math.ceil(heightPt * usedScale)));
   const context = canvas.getContext("2d");
@@ -265,6 +273,7 @@ function wordToPdfBox(tile, word, pixelWidth, pixelHeight) {
 async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
   const tiles = tileBoxes(pageWidth, pageHeight);
   const lines = [];
+  const words = [];
   let unavailable = 0;
   for (const tile of tiles) {
     const scale = scaleForBox(tile, TILE_MAX_PX);
@@ -293,8 +302,12 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
     }
     for (const word of recognized.words || []) {
       const text = String(word.text || "").trim();
-      if (!text || !GRAPHIC_INTEREST_RE.test(text)) continue;
+      if (!text) continue;
       const confident = Number(word.confidence) >= OCR_CONFIDENCE_MIN;
+      if (confident) {
+        words.push({ text, confidence: Number(word.confidence), box: wordToPdfBox(tile, word, rendered.pixelWidth, rendered.pixelHeight) });
+      }
+      if (!GRAPHIC_INTEREST_RE.test(text)) continue;
       lines.push({
         tile,
         readable: confident,
@@ -337,7 +350,42 @@ async function discoverGraphicalRegions(page, pageWidth, pageHeight, options) {
   if (regions.some((region) => region.readable && region.quote)) readStatus = "recognized";
   else if (unavailable === tiles.length) readStatus = "ocr_unavailable";
   else if (!regions.length && unavailable === 0) readStatus = "no_graphic_text";
-  return { regions, readStatus };
+  if (readStatus === "unreadable" && words.length) readStatus = "recognized";
+  return { regions, readStatus, words };
+}
+
+const INDEX_CROP_MAX_PX = 4000;
+
+/**
+ * Tile OCR is too coarse for small index text. When the page is an index, the column of
+ * sheet-number rows (plus the title column to its right) is read again at high resolution.
+ */
+async function rereadIndexColumns(page, pageWidth, pageHeight, tileLines, options) {
+  const rows = indexRowsFromLines(tileLines, { minRows: 3 });
+  if (!rows.length) return [];
+  const left = Math.min(...rows.map((row) => row.box.x));
+  const right = Math.max(...rows.map((row) => row.box.x + row.box.width));
+  const bottom = Math.min(...rows.map((row) => row.box.y));
+  const top = Math.max(...rows.map((row) => row.box.y + row.box.height));
+  const span = Math.max(right - left, 1);
+  const box = {
+    x: Math.max(0, left - 12),
+    y: Math.max(0, bottom - 24),
+    width: Math.min(pageWidth, right + span * 0.4 + 24) - Math.max(0, left - 12),
+    height: Math.min(pageHeight, top + 24) - Math.max(0, bottom - 24),
+    pageWidth,
+    pageHeight,
+  };
+  const scale = Math.min(4, INDEX_CROP_MAX_PX / Math.max(box.width, box.height));
+  const rendered = await renderPdfClip(page, box, scale, INDEX_CROP_MAX_PX).catch(() => null);
+  if (!rendered?.png) return [];
+  const recognized = await recognizePng(rendered.png, options);
+  if (recognized.unavailable || recognized.failed) return [];
+  const pad = 12;
+  const clip = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 };
+  return groupWordsIntoLines((recognized.words || [])
+    .filter((word) => Number(word.confidence) >= OCR_CONFIDENCE_MIN)
+    .map((word) => ({ text: word.text, confidence: Number(word.confidence), box: wordToPdfBox(clip, word, rendered.pixelWidth, rendered.pixelHeight) })));
 }
 
 const QUESTION_CUES = [
@@ -543,7 +591,6 @@ async function renderRegionCrops(page, regions) {
  */
 async function comprehendPdfPage(filePath, pageNumber, options = {}) {
   const buffer = await fs.readFile(filePath);
-  const stat = await fs.stat(filePath).catch(() => null);
   const pdf = await pdfjsLib.getDocument({
     data: new Uint8Array(buffer),
     useSystemFonts: true,
@@ -580,16 +627,21 @@ async function comprehendPdfPage(filePath, pageNumber, options = {}) {
         limitations: null,
       }));
 
-      let graphic = { regions: [], readStatus: "text-layer" };
+      let graphic = { regions: [], readStatus: "text-layer", words: [], indexLines: [] };
+      const textLayer = items.map((item) => item.str).join(" ");
       const sparse = textLayerIsSparse(items, viewport.width, viewport.height);
       const discover = options.discoverGraphics !== false && sparse;
       if (discover) {
-        const key = cacheKey(filePath, pageNum, stat);
+        const key = cacheKey(buffer, pageNum);
         const cached = options.ocr ? null : graphicCache.get(key);
         if (cached) {
           graphic = cached;
         } else {
           graphic = await discoverGraphicalRegions(page, viewport.width, viewport.height, options);
+          const tileLines = groupWordsIntoLines(graphic.words);
+          graphic.indexLines = pageIsTitledIndex(tileLines, textLayer)
+            ? await rereadIndexColumns(page, viewport.width, viewport.height, tileLines, options)
+            : [];
           if (!options.ocr) {
             graphicCache.set(key, graphic);
             if (graphicCache.size > 8) graphicCache.delete(graphicCache.keys().next().value);
@@ -622,11 +674,12 @@ async function comprehendPdfPage(filePath, pageNumber, options = {}) {
       if (options.render && selection.regions.length) {
         regionImages = await renderRegionCrops(page, selection.regions);
       }
-      const textLayer = items.map((item) => item.str).join(" ");
-      const ocrText = graphicItems.map((item) => item.str).join("\n");
+      const composed = composeSheetText(textLayer, groupWordsIntoLines(graphic.words || []), graphic.indexLines || []);
       return {
-        text: [textLayer, ocrText].filter(Boolean).join("\n"),
+        text: composed.text,
         textLayer,
+        indexRows: composed.indexRows,
+        ocrLineCount: composed.ocrLineCount,
         items: [...items, ...graphicItems, ...unreadableItems],
         regions,
         regionImages,
@@ -669,6 +722,8 @@ function emptyPage() {
   return {
     text: "",
     textLayer: "",
+    indexRows: [],
+    ocrLineCount: 0,
     items: [],
     regions: [],
     regionImages: [],

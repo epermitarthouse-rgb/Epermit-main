@@ -102,7 +102,13 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
             <div className="flex flex-wrap gap-4 text-muted-foreground">
               <span>
                 Expected: <strong className="text-foreground">{result.expectedCount}</strong>
-                {result.indexSource === "vision" ? " (read from the index image)" : ""}
+                {result.indexSource === "vision"
+                  ? " (read from the index image)"
+                  : result.indexSource === "vision+ocr"
+                    ? " (read from the index image; OCR added rows the image read missed)"
+                    : result.indexSource === "ocr"
+                      ? " (read by OCR from the index graphic; OCR can miss rows, so an extra sheet may be listed in the index)"
+                      : ""}
               </span>
               <span>
                 Uploaded: <strong className="text-foreground">{result.comparedSheetCount}</strong>

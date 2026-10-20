@@ -1,6 +1,7 @@
 "use strict";
 
 const { extractIdentifiers, normalizeIdentifier } = require("../rag/identifiers.js");
+const { parseClaim, attributeEvidence, sheetDiscipline, reconcileCalculation, answerRank } = require("./evaluation.js");
 
 const TOKEN_STOP = new Set([
   "this", "that", "with", "from", "have", "been", "sheet", "shown", "show", "indicate",
@@ -115,21 +116,6 @@ function documentRoles(ctx) {
   return roles;
 }
 
-/** Discipline letter from a sheet name (A, S, M, P, E, FP, ...); "" when none. */
-function sheetDiscipline(record) {
-  const name = `${record?.fileName || ""} ${record?.sheetNumber || ""}`.toUpperCase();
-  const prefix = (name.match(/(?:^|[\s/])([A-Z]{1,3})[-.\s]?\d/) || [])[1] || "";
-  if (prefix === "FP" || prefix === "F") return "FP";
-  if (prefix === "EN") return "EN";
-  if (prefix === "LS") return "A";
-  if (/^(G|CV|T|GI|GN)$/.test(prefix)) return "G";
-  if (/^(MD|M)$/.test(prefix)) return "M";
-  if (/^(PD|P)$/.test(prefix)) return "P";
-  if (/^(ED|E)$/.test(prefix)) return "E";
-  if (/^(AD|A|DM|D|ID|I)$/.test(prefix)) return "A";
-  return prefix.slice(0, 1);
-}
-
 /** Disciplines whose sheets normally state a topic. Empty when the topic is not recognized. */
 const TOPIC_OWNERS = [
   [/\b(emergency\s+light\w*|exit\s+signs?|grounding|conductors?|panel(?:board)?s?|circuits?|receptacles?|gfci)\b/i, ["E"]],
@@ -149,24 +135,29 @@ const TOPIC_OWNERS = [
  * @param {Record<string, unknown>} issue
  * @param {Record<string, unknown>} record
  * @param {Record<string, unknown>} ctx
+ * A recognized element is answered only by a passage about that element that states every
+ * attribute the claim names.
  * @param {(passage: string) => boolean} statesFact
- * @param {{ wholeBody?: boolean }} [opts] wholeBody lets a same-discipline sheet answer anywhere
- *   in its text. Only a detector for one specific fact may use it; word overlap may not.
  */
-function recordCanAnswer(issue, record, ctx, statesFact, opts = {}) {
+function recordCanAnswer(issue, record, ctx, statesFact) {
+  const parsed = parseClaim(issue);
   const titleObjective = objectiveTokens({ title: issue?.diagnostics?.originalTitle || issue?.title || "" }).tokens;
   const subject = titleObjective.length ? titleObjective : subjectTokens(issue);
-  if (!subject.length) return false;
+  if (!subject.length && !parsed.element) return false;
   const own = sheetDiscipline({ fileName: ctx?.fileName || ctx?.sheetTitle, sheetNumber: ctx?.sheetNumber });
   const theirs = sheetDiscipline(record);
   const claim = `${issue?.diagnostics?.originalTitle || issue?.title || ""} ${issue?.description || ""}`;
-  const owners = new Set(TOPIC_OWNERS.filter(([pattern]) => pattern.test(claim)).flatMap(([, list]) => list));
+  const owners = new Set(parsed.element
+    ? parsed.element.owners
+    : TOPIC_OWNERS.filter(([pattern]) => pattern.test(claim)).flatMap(([, list]) => list));
   const general = theirs === "G" || isGeneralNotesSheet({ fileName: record?.fileName, sheetTitle: record?.title, contentClass: record?.contentClass });
   const sameDiscipline = Boolean(own) && theirs === own;
   if (!general && !sameDiscipline && !owners.has(theirs)) return false;
   const body = recordBody(record);
-  // A legend or section in the same discipline can state the fact without repeating the title words.
-  if (opts.wholeBody && sameDiscipline && statesFact(body)) return true;
+  if (parsed.element) {
+    return answerRank(parsed, own, record) >= 0
+      && attributeEvidence([{ text: body }], parsed).answered && statesFact(body);
+  }
   const lower = body.toLowerCase();
   for (const token of subject) {
     let from = 0;
@@ -468,11 +459,14 @@ function assessApplicability(issue, ctx) {
   }
 
   if (claimsMissing(issue) && !isSpecialInspectionGap(issue)) {
+    const parsed = parseClaim(issue);
     const tokens = documentationTokens(issue);
     // Documentation-style gaps close on one specified token. Other missing-detail
     // claims need two distinct tokens stated as a requirement before they close.
     const needed = /\b(documentation|information|insulation)\b/i.test(claimText(issue)) ? 1 : 2;
-    const specifies = (body) => tokens.filter((token) => affirmativeNear(body, token)).length >= needed;
+    const specifies = parsed.element
+      ? (body) => attributeEvidence([{ text: body }], parsed).answered
+      : (body) => tokens.filter((token) => affirmativeNear(body, token)).length >= needed;
     const here = `${ctx.pageText || ""}\n${ctx.corpus || ""}`;
     if (specifies(here)) {
       return {
@@ -581,12 +575,13 @@ const COMPARED_VALUE_RE =
 
 /**
  * Two or more different measured values from the claim, all printed on the sheet, are a
- * discrepancy read from the drawing. A sheet that prints them does not resolve the conflict.
+ * discrepancy read from the drawing, unless a calculation printed on the sheet connects them.
  */
 function tracesValueComparison(issue, corpus) {
   const claim = `${issue?.diagnostics?.originalDescription || ""} ${issue?.title || ""} ${issue?.description || ""}`;
   const values = [...new Set([...claim.matchAll(COMPARED_VALUE_RE)].map((match) => match[1]))];
   if (values.length < 2) return null;
+  if (reconcileCalculation(issue, corpus)?.explained) return null;
   const hay = String(corpus || "");
   const printed = values.filter((value) => new RegExp(`(^|[^\\d.])${value.replace(".", "\\.")}(?![\\d])`).test(hay));
   return printed.length >= 2 ? printed : null;

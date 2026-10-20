@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import type { ReviewReportView } from "@/lib/codeAnalyzer/reviewReport";
-import { reviewEvidenceStripSummary } from "@/lib/codeAnalyzer/reviewReport";
+import { openReasonLabel, reviewEvidenceStripSummary } from "@/lib/codeAnalyzer/reviewReport";
 import { AnalyzerDisclosure } from "@/components/compliance/AnalyzerDisclosure";
 
 /** Compact strip above findings. Expanded details keep the full review record. */
@@ -145,7 +145,15 @@ export function ReviewEvidenceReport({
           <ReportList title="Evidence-backed checks" items={view.cleanChecks} empty="None scored" />
           <OpenCheckList checks={view.openChecks ?? []} />
           <ReportList title="Why code compliance is unverified" items={view.unreviewable} empty="None" />
+          <ResolvedCheckList checks={view.resolvedChecks ?? []} />
         </div>
+        {view.dispositions ? (
+          <p className="text-muted-foreground" data-testid="candidate-dispositions">
+            Withheld candidates: {view.dispositions.open_check} open, {view.dispositions.resolved_by_evidence} resolved by
+            evidence, {view.dispositions.correctly_rejected} rejected, {view.dispositions.not_applicable} not applicable.
+            A withheld candidate is not proof of compliance.
+          </p>
+        ) : null}
         {view.evidence.length > 0 ? (
           <ul className="space-y-1 text-muted-foreground">
             {view.evidence.map((item, index) => (
@@ -175,11 +183,29 @@ function OpenCheckList({ checks }: { checks: ReviewReportView["openChecks"] }) {
             <li key={item.detail}>
               <span className="text-foreground">{item.check || "Unresolved check"}</span>
               {item.missingEvidence ? <span>. Missing evidence: {item.missingEvidence}</span> : null}
+              {openReasonLabel(item.openReason) ? <span> Open because {openReasonLabel(item.openReason)}.</span> : null}
               {item.relatedSheets?.length ? <span> Sheets: {item.relatedSheets.join(", ")}.</span> : null}
             </li>
           ))}
         </ul>
       ) : null}
+    </div>
+  );
+}
+
+function ResolvedCheckList({ checks }: { checks: ReviewReportView["resolvedChecks"] }) {
+  if (checks.length === 0) return null;
+  return (
+    <div className="min-w-0" data-testid="resolved-checks">
+      <p className="font-medium text-foreground">Resolved by evidence ({checks.length})</p>
+      <ul className="mt-0.5 space-y-1 list-disc pl-4 text-muted-foreground">
+        {checks.map((item) => (
+          <li key={`${item.check}|${item.detail}`}>
+            <span className="text-foreground">{item.check}</span>
+            {item.detail ? <span>. {item.detail}</span> : null}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -52,7 +52,8 @@ export interface IndexCompletenessResult {
   /** Filled incrementally during async V2 analysis runs. */
   analysisCoverage?: AnalysisCoverageSnapshot | null;
   /** Where the index rows came from: the sheet's text layer or the multimodal reader. */
-  indexSource?: "text" | "vision" | null;
+  /** "vision+ocr": vision rows with OCR-read rows it missed. "ocr": vision unavailable; OCR may miss rows. */
+  indexSource?: "text" | "vision" | "vision+ocr" | "ocr" | null;
   /** Why rows could not be read when the index sheet was found. */
   indexReadError?: string | null;
 }
@@ -233,9 +234,47 @@ function parseFlattenedIndexEntries(text: string): IndexSheetEntry[] {
   return entries.length >= 2 ? entries : [];
 }
 
+/** Worker headings in stored sheet text. See code-analyzer-worker/lib/ocrLines.js. */
+const OCR_INDEX_HEADING = "INDEX OF SHEETS (OCR):";
+const OCR_TEXT_HEADING = "GRAPHIC TEXT (OCR):";
+/** A table row is short. A longer line is a flattened text layer, not one index row. */
+const MAX_INDEX_ROW_CHARS = 160;
+
+/**
+ * Sheet numbers the worker read from the index graphic by OCR. OCR can miss a row, so these
+ * fill gaps in a vision read or stand in when vision is unavailable; they never replace it.
+ */
+export function parseOcrIndexEntries(text: string | null | undefined): IndexSheetEntry[] {
+  if (typeof text !== "string") return [];
+  const at = text.indexOf(OCR_INDEX_HEADING);
+  if (at < 0) return [];
+  const line = text.slice(at + OCR_INDEX_HEADING.length).split(/\r?\n/)[0] ?? "";
+  const entries: IndexSheetEntry[] = [];
+  const seen = new Set<string>();
+  for (const match of line.matchAll(FLAT_SHEET_TOKEN_PATTERN)) {
+    const key = canonicalSheetNumber(match[0]);
+    if (!key || !isCredibleDrawingSheetNumber(key) || /^\d+$/.test(key) || seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ sheetNumber: key, rawLabel: match[0], title: null });
+  }
+  return entries;
+}
+
+/** Text-layer rows only: the OCR index line and the OCR text block are read separately. */
+function textLayerPortion(text: string): string {
+  const withoutIndex = text
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().startsWith(OCR_INDEX_HEADING))
+    .join("\n");
+  const at = withoutIndex.indexOf(OCR_TEXT_HEADING);
+  return at < 0 ? withoutIndex : withoutIndex.slice(0, at);
+}
+
 /** Parse index table rows from plain text (deterministic). */
 export function parseIndexEntriesFromText(text: string | null | undefined): IndexSheetEntry[] {
   if (typeof text !== "string" || !text.trim()) return [];
+  text = textLayerPortion(text);
+  if (!text.trim()) return [];
   if (!/\r?\n/.test(text.trim())) return parseFlattenedIndexEntries(text);
   const entries: IndexSheetEntry[] = [];
   const seen = new Set<string>();
@@ -243,6 +282,7 @@ export function parseIndexEntriesFromText(text: string | null | undefined): Inde
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || INDEX_TITLE_PATTERN.test(line)) continue;
+    if (line.length > MAX_INDEX_ROW_CHARS) continue;
 
     const sheetTokenPattern = String.raw`((?:[A-Z]{1,3}[-.]?\d{1,4}(?:\.\d+)?)|(?:G[-.]?\d{2,4})|(?:\d{2,4}))`;
     const rowMatch =

@@ -1,8 +1,9 @@
 "use strict";
 
-const { decideCandidate, applyDecision, sheetRoles, cleanTopic } = require("./review/verifier.js");
+const { decideCandidate, challengeDecision, applyDecision, sheetRoles, cleanTopic } = require("./review/verifier.js");
 const { resolveReviewState, reviewOutcome, reviewAssessment } = require("./review/reviewStates.js");
 const { recordCanAnswer } = require("./review/applicability.js");
+const { buildEvaluation, parseClaim, attributeEvidence, outcomeForReason, graphicUnread } = require("./review/evaluation.js");
 const {
   isUnselectedJurisdiction,
   resolveJurisdictionDecision,
@@ -213,6 +214,11 @@ function pageTextSuppliesMissingFact(issue, pageText) {
   const claim = claimText(issue);
   if (!claimsMissingFact(issue)) return false;
   if (MEASURED_DEFECT_RE.test(claim) && /\d/.test(claim) && !/\bnot shown\b/i.test(claim)) return false;
+
+  // A recognized element is answered only by a passage about that element stating every
+  // attribute the claim names; a dimension or keyword elsewhere on the sheet is not an answer.
+  const parsed = parseClaim(issue);
+  if (parsed.element) return attributeEvidence([{ text: body }], parsed).answered;
 
   const fireOrRatedMissing =
     /\b(fire[\s-]*(rating|resistance|resist)|fire[\s-]*rated|hour\s+rating|rated\s+(?:wall|partition|door)|minute\s+door|door\s+rating|hour\s+(?:wall|partition))\b/i.test(
@@ -637,7 +643,7 @@ function otherRecordSuppliesFact(issue, ctx) {
   const records = Array.isArray(ctx.drawingRecords) ? ctx.drawingRecords : [];
   for (const record of records) {
     if (isCurrentSheetEntry({ fileName: record.fileName, sheetId: record.sheetId }, ctx)) continue;
-    if (recordCanAnswer(issue, record, ctx, (passage) => pageTextSuppliesMissingFact(issue, passage), { wholeBody: true })) {
+    if (recordCanAnswer(issue, record, ctx, (passage) => pageTextSuppliesMissingFact(issue, passage))) {
       return record;
     }
   }
@@ -645,6 +651,13 @@ function otherRecordSuppliesFact(issue, ctx) {
 }
 
 /** Why the evidence gate withheld a candidate. A restated note keeps the check open. */
+const GATE_DETAILS = {
+  cross_sheet_owner: "Another sheet in the set normally carries this information, but it was not confirmed there. Check that sheet.",
+  requirement_already_on_sheet: "The sheet or the set already states this requirement. A stated requirement is not proof the condition is shown or met, so the check stays open; it is not published as a finding.",
+  operational_note: "The candidate concerns construction or operating practice, not a condition the drawings must show, so it is not published as a finding.",
+  evidence_gate: "The candidate is not tied to an element and value read from the sheet, so it is not published as a finding.",
+};
+
 function evidenceGateReason(issue, ctx) {
   const text = `${issue.title || ""} ${issue.description || ""}`;
   if (pageTextSuppliesMissingFact(issue, evidenceCorpus(ctx))) return "requirement_already_on_sheet";
@@ -672,42 +685,7 @@ function hardenIssues(issues, ctx) {
       issue.evidenceTier = "verification";
     }
 
-    const gated = applyEvidenceGate(issue, ctx);
-    if (!gated) {
-      const gateReason = evidenceGateReason(issue, ctx);
-      rejectedCandidates.push({
-        ...issue,
-        validationDisposition: "reject",
-        validationReason: gateReason,
-        validationDetail: gateReason === "cross_sheet_owner"
-          ? "Another sheet in the set normally carries this information, but it was not confirmed there. Check that sheet."
-          : "The sheet or the set already covers this item, so it is not published as a finding.",
-        userVisible: false,
-        diagnostics: { originalTitle: issue.title || null },
-      });
-      continue;
-    }
-    issue = gated;
-
-    const supplied = otherRecordSuppliesFact(issue, ctx);
-    if (supplied) {
-      rejectedCandidates.push({
-        ...issue,
-        validationDisposition: "reject",
-        validationReason: "cross_sheet_supplies_fact",
-        validationDetail: `Related sheet ${supplied.fileName || supplied.sheetNumber || "in the set"} already states this fact.`,
-        userVisible: false,
-        provenance: {
-          verifier: "cross-sheet",
-          fileName: supplied.fileName || null,
-          sheetId: supplied.sheetId || null,
-          pageNumber: supplied.pageNumber || null,
-        },
-      });
-      continue;
-    }
-
-    const decision = decideCandidate(issue, {
+    const verifierCtx = {
       corpus: evidenceCorpus(ctx),
       pageText: ctx.pageText,
       sheetTitle: ctx.sheetTitle,
@@ -722,22 +700,58 @@ function hardenIssues(issues, ctx) {
       drawingRetrieval: ctx.drawingRetrieval || null,
       sheetIndex: ctx.sheetIndex || [],
       observations: ctx.observations || [],
+      observedEvidence: ctx.observedEvidence || [],
+      graphicalReadStatus: ctx.graphicalReadStatus || null,
       authoritativeCode: ctx.authoritativeCode || [],
       legalApplicability: ctx.legalApplicability || null,
-    });
+      codeYear: ctx.codeYear || null,
+    };
+
+    let decision;
+    const gated = applyEvidenceGate(issue, ctx);
+    if (!gated) {
+      const gateReason = evidenceGateReason(issue, ctx);
+      decision = {
+        disposition: "reject",
+        reason: gateReason,
+        detail: GATE_DETAILS[gateReason] || GATE_DETAILS.evidence_gate,
+        provenance: { verifier: "evidence-gate" },
+      };
+    } else {
+      issue = gated;
+      const supplied = otherRecordSuppliesFact(issue, ctx);
+      decision = supplied
+        ? {
+          disposition: "reject",
+          reason: "cross_sheet_supplies_fact",
+          detail: `Related sheet ${supplied.fileName || supplied.sheetNumber || "in the set"} already states this fact.`,
+          redirectFile: supplied.fileName || null,
+          provenance: {
+            verifier: "cross-sheet",
+            fileName: supplied.fileName || null,
+            sheetId: supplied.sheetId || null,
+            pageNumber: supplied.pageNumber || null,
+          },
+        }
+        : decideCandidate(issue, verifierCtx);
+    }
+    decision = challengeDecision(issue, decision, verifierCtx);
     issue = applyDecision(issue, decision);
+    issue.evaluation = buildEvaluation(issue, verifierCtx);
     if (issue.validationDisposition === "reject") {
       rejectedCandidates.push(issue);
       continue;
     }
     if (!sheetContextAllowsIssue(issue, sheetCtx)) {
-      rejectedCandidates.push({
+      const outside = {
         ...issue,
         validationDisposition: "reject",
         validationReason: "outside_sheet_scope",
         validationDetail: "This sheet type is not reviewed for that category.",
         userVisible: false,
-      });
+      };
+      outside.evaluation = buildEvaluation(outside, verifierCtx);
+      rejectedCandidates.push(outside);
       continue;
     }
 
@@ -849,6 +863,7 @@ function buildSummaryFromIssues(issues, overallScore, checklist, options = {}) {
     drawingRetrieval: options.corpusCtx?.drawingRetrieval,
     unresolved,
     sheetFileName: options.corpusCtx?.fileName || null,
+    graphicUnread: graphicUnread(options.corpusCtx || {}),
   });
   const decision = resolveReviewState({
     callStatus: options.callStatus || "completed",
@@ -912,7 +927,10 @@ const OPEN_CHECK_REJECTIONS = new Set([
 ]);
 
 function rejectionLeavesCheckOpen(candidate) {
-  return OPEN_CHECK_REJECTIONS.has(String(candidate?.validationReason || ""));
+  const outcome = candidate?.evaluation?.verification?.outcome;
+  if (outcome) return outcome === "open_check" || outcome === "reconsider";
+  return OPEN_CHECK_REJECTIONS.has(String(candidate?.validationReason || ""))
+    || outcomeForReason(String(candidate?.validationReason || ""), false) === "open_check";
 }
 
 function limitationTopic(candidate) {
@@ -974,15 +992,24 @@ function reviewLimitations(input) {
       detail: "Cross-sheet drawing retrieval was unavailable, so related sheets were not searched.",
     });
   }
-  for (const candidate of input.unresolved.slice(0, 5)) {
+  if (input.graphicUnread) {
+    out.push({
+      code: "graphic_content_unread",
+      detail: "Graphic text on this sheet (tags, legends, dimensions drawn as linework) was not read, so facts that may be drawn there were not treated as absent.",
+    });
+  }
+  for (const candidate of input.unresolved) {
     const check = limitationTopic(candidate);
     const missingEvidence = String(candidate.validationDetail || "withheld, not verified").trim();
     const named = missingEvidence.match(/\b[A-Z]{1,3}[- ]?\d[\w.\- ]*?\.pdf\b/g) || [];
+    const verification = candidate.evaluation?.verification || null;
     out.push({
       code: "open_check",
       detail: `${check}: ${missingEvidence} Withholding it is not proof of compliance.`,
       check,
       missingEvidence,
+      openReason: verification?.openReason || null,
+      outcome: verification?.outcome || "open_check",
       relatedSheets: [...new Set([input.sheetFileName, ...named].filter(Boolean))],
     });
   }

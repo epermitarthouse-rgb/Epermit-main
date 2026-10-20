@@ -8,7 +8,8 @@ cmds = ["echo skip frontend build"]
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "python3", "pkg-config", "cairo", "pango", "libjpeg", "giflib", "librsvg"]
-aptPkgs = ["build-essential", "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev", "librsvg2-dev", "libuuid1"]
+# tesseract-ocr reads graphic text (index tables, calculations, tags) on Linux; without it the worker reports ocr_unavailable.
+aptPkgs = ["build-essential", "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev", "librsvg2-dev", "libuuid1", "tesseract-ocr", "tesseract-ocr-eng"]
 
 [phases.install]
 cmds = [

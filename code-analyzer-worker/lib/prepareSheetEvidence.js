@@ -112,7 +112,8 @@ function verifierRecords(index) {
     discipline: record.discipline || null,
     revision: record.revision || null,
     contentClass: record.contentClass || null,
-    text: String(record.text || "").slice(0, 4000),
+    // OCR lines follow the text layer, so a short cap would drop graphic evidence from related sheets.
+    text: String(record.text || "").slice(0, 12000),
     observations: (record.observations || []).slice(0, 12),
     regions: record.regions || [],
     identifiers: record.identifiers || [],
@@ -144,7 +145,7 @@ async function prepareEvidenceForSheet(input) {
   let regions = [];
   let regionImages = [];
   let pageText = input.pageText || "";
-  let pageMeta = { pageWidth: 0, pageHeight: 0, graphicalReadStatus: null, sourcePdf: false };
+  let pageMeta = { pageWidth: 0, pageHeight: 0, graphicalReadStatus: null, sourcePdf: false, ocrLineCount: 0, indexRowCount: 0 };
   if (input.pdfPath) {
     try {
       const page = await comprehendPdfPage(input.pdfPath, input.sheet.page_number || input.sheet.pageNumber || 1, {
@@ -161,6 +162,8 @@ async function prepareEvidenceForSheet(input) {
         pageHeight: page.pageHeight,
         graphicalReadStatus: page.graphicalReadStatus || null,
         sourcePdf: true,
+        ocrLineCount: page.ocrLineCount || 0,
+        indexRowCount: (page.indexRows || []).length,
       };
     } catch (err) {
       console.warn(
