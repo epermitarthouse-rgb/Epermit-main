@@ -159,6 +159,10 @@ import {
 } from "@/lib/codeAnalyzer/sheetResults";
 import { ReviewEvidenceReport } from "@/components/compliance/ReviewEvidenceReport";
 import { indexSnapshotForRun, runDrawingIndexPrescreen } from "@/lib/codeAnalyzer/runIndexPrescreen";
+import {
+  asIndexCompletenessResult,
+  mergeIndexCompleteness,
+} from "@/lib/codeAnalyzer/indexCompletenessView";
 import { fetchSheetPageText } from "@/lib/codeAnalyzer/sheetPageText";
 import {
   analyzerSheetFingerprint,
@@ -682,11 +686,7 @@ export function AIComplianceAnalyzer() {
         const result = await recheckDrawingIndex();
         if (!cancelled) {
           // A live prescreen that finds no index must not replace an index the run already read by OCR.
-          setIndexCompleteness((prev) =>
-            prev?.hasIndex && !result?.hasIndex
-              ? { ...prev, analysisCoverage: result?.analysisCoverage ?? prev.analysisCoverage }
-              : result,
-          );
+          setIndexCompleteness((prev) => mergeIndexCompleteness(prev, result));
           setIndexPrescreenError(null);
         }
       } catch (err) {
@@ -845,22 +845,13 @@ export function AIComplianceAnalyzer() {
       setIndexCompleteness(null);
       setIndexPrescreenError(null);
       indexPrescreenKeyRef.current = "";
-    } else if (display?.index_completeness) {
-      setIndexCompleteness((prev) => {
-        const incoming = display.index_completeness ?? null;
-        if (!incoming) return prev ?? null;
-        if (!prev) return incoming;
-        // The run stores the prescreen taken at run creation. A live recheck that
-        // found the index keeps its result; the run only adds analysis coverage.
-        if (prev.hasIndex && !incoming.hasIndex) {
-          return { ...prev, analysisCoverage: incoming.analysisCoverage ?? prev.analysisCoverage };
-        }
-        return {
-          ...prev,
-          ...incoming,
-          analysisCoverage: incoming.analysisCoverage ?? prev.analysisCoverage,
-        };
-      });
+    } else {
+      const liveIndex = asIndexCompletenessResult(
+        standardInProgress?.index_completeness ?? display?.index_completeness,
+      );
+      if (liveIndex) {
+        setIndexCompleteness((prev) => mergeIndexCompleteness(prev, liveIndex));
+      }
     }
     const ids = [
       ...new Set(
@@ -911,6 +902,11 @@ export function AIComplianceAnalyzer() {
         setStandardInProgressRun(inProgress);
         setDisplayRun(displayRunFromList(runs, ANALYSIS_TYPE_STANDARD));
         setCurrentRun(currentRunFromList(runs, ANALYSIS_TYPE_STANDARD));
+
+        const liveIndex = asIndexCompletenessResult(inProgress?.index_completeness);
+        if (liveIndex && selectedProjectIdRef.current === projectId) {
+          setIndexCompleteness((prev) => mergeIndexCompleteness(prev, liveIndex));
+        }
 
         if (inProgress?.id) {
           const jobs = await fetchSheetJobsForRun(inProgress.id);

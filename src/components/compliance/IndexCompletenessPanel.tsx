@@ -1,8 +1,14 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, AlertTriangle, Info, Loader2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
 import type { IndexCompletenessResult } from "@/lib/codeAnalyzer/indexCompleteness";
+import {
+  presentIndexCompleteness,
+  type PresentedSheetRef,
+} from "@/lib/codeAnalyzer/indexCompletenessView";
 
 interface IndexCompletenessPanelProps {
   result: IndexCompletenessResult | null;
@@ -11,34 +17,89 @@ interface IndexCompletenessPanelProps {
   recheckError?: string | null;
 }
 
-function statusBadge(result: IndexCompletenessResult) {
-  if (result.status === "complete") {
+function statusBadge(label: "Detected" | "Partial" | "Not Detected", tone: "clear" | "attention") {
+  if (label === "Not Detected") return <Badge variant="secondary">Not Detected</Badge>;
+  if (label === "Detected" && tone === "clear") {
     return (
       <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-        Complete
+        Detected
       </Badge>
     );
   }
-  if (result.status === "no_index") {
-    return <Badge variant="secondary">No index detected</Badge>;
-  }
-  if (result.status === "index_unreadable") {
-    return <Badge variant="secondary">Index found · rows unreadable</Badge>;
-  }
   return (
     <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-      Incomplete
+      {label}
     </Badge>
   );
 }
 
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2 min-w-0">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-semibold text-foreground tabular-nums truncate">{value}</div>
+    </div>
+  );
+}
+
+function DetailGroup({
+  title,
+  count,
+  note,
+  entries,
+  emptyLabel,
+}: {
+  title: string;
+  count: number;
+  note?: string | null;
+  entries: PresentedSheetRef[];
+  emptyLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-border">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="font-medium text-foreground">{title}</span>
+        <span className="flex items-center gap-2 text-muted-foreground">
+          <span className="tabular-nums">{count}</span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open ? (
+        <div className="border-t border-border px-3 py-2">
+          {note ? <p className="mb-2 text-xs text-muted-foreground">{note}</p> : null}
+          {entries.length === 0 ? (
+            count === 0 ? <p className="text-sm text-muted-foreground">{emptyLabel}</p> : null
+          ) : (
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-sm text-muted-foreground">
+              {entries.map((entry) => (
+                <li key={entry.key}>
+                  <span className="text-foreground">{entry.label}</span>
+                  {entry.detail ? ` — ${entry.detail}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function IndexCompletenessPanel({ result, loading, recheckError }: IndexCompletenessPanelProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   if (!result && loading) {
     return (
       <Card className="border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Pre-Screening · Drawing Set Completeness</CardTitle>
-          <CardDescription>Checking index against uploaded sheets…</CardDescription>
+          <CardTitle className="text-base">Drawing Set Completeness</CardTitle>
+          <CardDescription>Checking the drawing index against uploaded sheets…</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -46,11 +107,16 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
 
   if (!result) return null;
 
+  const view = presentIndexCompleteness(result);
+
   return (
     <Card className="border-border" data-testid="index-completeness-panel">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">Pre-Screening · Drawing Set Completeness</CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="text-base">Drawing Set Completeness</CardTitle>
+            <CardDescription>{view.headline}</CardDescription>
+          </div>
           <div className="flex items-center gap-2">
             {loading ? (
               <Badge variant="outline" className="gap-1">
@@ -58,178 +124,104 @@ export function IndexCompletenessPanel({ result, loading, recheckError }: IndexC
                 Rechecking…
               </Badge>
             ) : null}
-            {statusBadge(result)}
+            {statusBadge(
+              view.statusLabel,
+              view.missingSheets === 0 && view.extraSheets === 0 ? "clear" : "attention",
+            )}
           </div>
         </div>
-        <CardDescription>
-          Deterministic comparison of the drawing index (when present) against included sheets.
-        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {recheckError ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Recheck failed — showing the last result. {recheckError}
-            </AlertDescription>
+            <AlertDescription>Recheck failed — showing the last result. {recheckError}</AlertDescription>
           </Alert>
         ) : null}
 
-        {result.status === "index_unreadable" ? (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              An index of sheets was found, but its rows could not be read from the sheet text or the
-              visual extraction, so the uploaded set was not compared against it ({result.actualCount}{" "}
-              included sheet{result.actualCount === 1 ? "" : "s"} present
-              {result.duplicates.length > 0
-                ? `; duplicate sheet numbers: ${result.duplicates.map((dup) => dup.rawLabels.join(", ")).join("; ")}`
-                : ""}
-              ).{result.indexReadError ? ` ${result.indexReadError}` : ""}
-            </AlertDescription>
-          </Alert>
-        ) : result.status === "no_index" ? (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              No Drawing Index sheet was detected. Upload a sheet titled &quot;Drawing Index&quot; or
-              similar to enable completeness checking ({result.actualCount} included sheet
-              {result.actualCount === 1 ? "" : "s"} present).
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-4 text-muted-foreground">
-              <span>
-                Expected: <strong className="text-foreground">{result.expectedCount}</strong>
-                {result.indexSource === "vision"
-                  ? " (read from the index image)"
-                  : result.indexSource === "vision+ocr"
-                    ? " (read from the index image; OCR added rows the image read missed)"
-                    : result.indexSource === "ocr"
-                      ? " (read by OCR from the index graphic; OCR can miss rows, so an extra sheet may be listed in the index)"
-                      : ""}
-              </span>
-              <span>
-                Uploaded: <strong className="text-foreground">{result.comparedSheetCount}</strong>
-              </span>
-              {typeof result.matchedCount === "number" ? (
-                <span>
-                  Matched: <strong className="text-foreground">{result.matchedCount}</strong>
-                </span>
-              ) : null}
-              <span>
-                Missing: <strong className="text-foreground">{result.missing.length}</strong>
-              </span>
-              <span>
-                Extra: <strong className="text-foreground">{result.extra.length}</strong>
-              </span>
-              <span>
-                Duplicates: <strong className="text-foreground">{result.duplicates.length}</strong>
-              </span>
-            </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Stat label="Index status" value={view.statusLabel} />
+          <Stat label="Uploaded sheets" value={view.uploadedSheets} />
+          <Stat label="Matched sheets" value={view.indexStatus === "not_detected" ? "—" : view.matchedSheets} />
+          <Stat label="Missing sheets" value={view.indexStatus === "not_detected" ? "—" : view.missingSheets} />
+          <Stat label="Extra sheets" value={view.extraSheets == null ? "Not assessed" : view.extraSheets} />
+          <Stat label="OCR uncertain" value={view.ocrUncertain} />
+        </div>
 
-            {result.status === "complete" ? (
-              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                <span>Index matches the included drawing set.</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>Index and uploaded sheets differ — review before relying on analysis.</span>
-              </div>
-            )}
+        {view.note ? <p className="text-xs text-muted-foreground">{view.note}</p> : null}
 
-            {result.missing.length > 0 && (
-              <div>
-                <p className="font-medium text-foreground mb-1">Missing from upload</p>
-                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
-                  {result.missing.map((row) => (
-                    <li key={row.sheetNumber}>
-                      {row.rawLabel}
-                      {row.title ? ` — ${row.title}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+        {view.coverageLine ? (
+          <div className="space-y-1">
+            <p className="text-sm text-foreground">{view.coverageLine}</p>
+            <p className="text-xs text-muted-foreground">{view.coverageDisclaimer}</p>
+          </div>
+        ) : null}
 
-            {result.extra.length > 0 && (
-              <div>
-                <p className="font-medium text-foreground mb-1">Extra (not on index)</p>
-                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
-                  {result.extra.map((row) => (
-                    <li key={`${row.sheetNumber}-${row.rawLabel}`}>
-                      {row.rawLabel}
-                      {row.title ? ` — ${row.title}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full sm:w-auto"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          {detailsOpen ? "Hide Details" : "View Details"}
+        </Button>
 
-            {result.duplicates.length > 0 && (
-              <div>
-                <p className="font-medium text-foreground mb-1">Duplicate sheet numbers</p>
-                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
-                  {result.duplicates.map((dup) => (
-                    <li key={dup.sheetNumber}>
-                      {dup.rawLabels.join(", ")} ({dup.sheetIds.length} sheets)
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {(result.unmatchedIndexRows ?? []).length > 0 && (
-              <div>
-                <p className="font-medium text-foreground mb-1">Index rows OCR could not match (likely misreads, not missing sheets)</p>
-                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
-                  {(result.unmatchedIndexRows ?? []).map((row) => (
-                    <li key={`${row.sheetNumber}-${row.rawLabel}`}>
-                      {row.rawLabel} — {row.reason === "ocr_fragment" ? "partial OCR read" : "close to an uploaded sheet number"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {result.indexReadNote ? <p className="text-xs text-muted-foreground">{result.indexReadNote}</p> : null}
-
-            {result.numberingInconsistencies.length > 0 && (
-              <div>
-                <p className="font-medium text-foreground mb-1">Numbering inconsistencies</p>
-                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
-                  {result.numberingInconsistencies.map((item) => (
-                    <li key={item.sheetNumber}>{item.variants.join(" vs ")}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {result.analysisCoverage ? (
-              <div className="pt-2 border-t border-border">
-                <p className="font-medium text-foreground mb-1">Analysis coverage</p>
-                <p className="text-muted-foreground">
-                  {result.analysisCoverage.sheetsAnalyzed} of {result.analysisCoverage.eligibleSheetCount}{" "}
-                  eligible sheets analyzed · {result.analysisCoverage.sheetsWithFindings} with findings ·{" "}
-                  {result.analysisCoverage.sheetsWithoutFindings.length} with no findings
-                  {result.analysisCoverage.sheetsPendingOrFailed > 0
-                    ? ` · ${result.analysisCoverage.sheetsPendingOrFailed} pending or failed`
-                    : ""}
-                </p>
-                {result.analysisCoverage.sheetsWithoutFindings.length > 0 ? (
-                  <ul className="list-disc pl-5 mt-1 space-y-0.5 text-muted-foreground">
-                    {result.analysisCoverage.sheetsWithoutFindings.slice(0, 12).map((name) => (
-                      <li key={name}>{name} — no issues flagged (sheet was analyzed)</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+        {detailsOpen ? (
+          <div className="space-y-2">
+            <DetailGroup
+              title="Missing from upload"
+              count={view.missing.length}
+              entries={view.missing}
+              emptyLabel="No confidently missing sheets."
+            />
+            <DetailGroup
+              title={view.extraGroupTitle}
+              count={view.extra.length}
+              note={view.extraGroupNote}
+              entries={view.extra}
+              emptyLabel="No uploaded sheets are absent from the index."
+            />
+            <DetailGroup
+              title="OCR uncertain or unrecognized"
+              count={view.uncertain.length}
+              note="These tokens were read from the index but are not confirmed missing drawings."
+              entries={view.uncertain}
+              emptyLabel="No uncertain OCR tokens."
+            />
+            <DetailGroup
+              title="Matched sheets"
+              count={view.matchedSheets}
+              note={view.matchedNote}
+              entries={[]}
+              emptyLabel={view.matchedNote}
+            />
+            <DetailGroup
+              title="Analysis coverage"
+              count={view.coverageSheets.length}
+              note={view.coverageLine ? `${view.coverageLine} ${view.coverageDisclaimer}` : view.coverageDisclaimer}
+              entries={view.coverageSheets.map((name) => ({ key: name, label: name, detail: null }))}
+              emptyLabel="No sheet-by-sheet coverage list is stored yet."
+            />
+            {view.duplicates.length > 0 ? (
+              <DetailGroup
+                title="Duplicate sheet numbers"
+                count={view.duplicates.length}
+                entries={view.duplicates}
+                emptyLabel="No duplicate sheet numbers."
+              />
             ) : null}
-          </>
-        )}
+            {view.inconsistencies.length > 0 ? (
+              <DetailGroup
+                title="Numbering inconsistencies"
+                count={view.inconsistencies.length}
+                entries={view.inconsistencies}
+                emptyLabel="No numbering inconsistencies."
+              />
+            ) : null}
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
