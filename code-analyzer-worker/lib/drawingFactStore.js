@@ -86,11 +86,24 @@ function fitProperties(value) {
   const size = () => octetLength(JSON.stringify(current));
   if (size() <= PROPERTIES_BYTES) return current;
   if (current && typeof current === "object" && !Array.isArray(current)) {
-    for (const key of ["cells", "geometry", "headers", "location", "operands", "association_basis", "evidence_ids"]) {
+    for (const key of ["cells", "geometry", "headers", "location", "association_basis", "evidence_ids"]) {
       if (current[key] == null) continue;
       current = { ...current, storage_limitation: "properties_trimmed_to_fit" };
       delete current[key];
       if (size() <= PROPERTIES_BYTES) return current;
+    }
+    if (current.governing || current.operands || current.method) {
+      return {
+        method: current.method || null,
+        governing: current.governing || null,
+        operands: current.operands || null,
+        role: current.role || null,
+        property: current.property || null,
+        context_text: current.context_text || null,
+        related_element_ids: current.related_element_ids || null,
+        related_calculation_ids: current.related_calculation_ids || null,
+        storage_limitation: "properties_trimmed_to_fit",
+      };
     }
   }
   return { storage_limitation: "properties_exceeded_storage_limit" };
@@ -264,7 +277,10 @@ function factRows(extractionId, projectId, sheetId, doc) {
         ...(fact.extraction_status ? { extraction_status: fact.extraction_status } : {}),
         ...(fact.ambiguity ? { ambiguity: fact.ambiguity } : {}),
         ...(fact.role ? { role: fact.role, property: fact.property } : {}),
+        ...(fact.context_text ? { context_text: String(fact.context_text).slice(0, 500) } : {}),
         ...(fact.related_element_ids ? { related_element_ids: fact.related_element_ids } : {}),
+        ...(fact.related_calculation_ids?.length ? { related_calculation_ids: fact.related_calculation_ids } : {}),
+        ...(fact.source_label ? { source_label: String(fact.source_label).slice(0, 160) } : {}),
         ...(fact.evidence_ids ? { evidence_ids: fact.evidence_ids } : {}),
         ...(fact.geometry ? { geometry: fact.geometry } : {}),
         ...(fact.association_basis ? { association_basis: fact.association_basis } : {}),
@@ -308,6 +324,22 @@ function factRows(extractionId, projectId, sheetId, doc) {
   return rows;
 }
 
+const ELEMENT_META_KEYS = new Set([
+  "source_ref", "location", "discipline", "extraction_status", "ambiguity", "role", "property",
+  "related_element_ids", "related_calculation_ids", "evidence_ids", "geometry", "association_basis",
+  "work_status", "low_confidence", "limitation", "context_text", "source_label", "headers", "status",
+  "cells", "row_index", "from_id", "to_id", "relationship_type", "basis", "independently_verified",
+  "source_type", "extraction_methods", "directly_observed", "governing", "method", "operands",
+]);
+
+function elementProperties(stored) {
+  const properties = {};
+  for (const [key, value] of Object.entries(stored || {})) {
+    if (!ELEMENT_META_KEYS.has(key)) properties[key] = value;
+  }
+  return properties;
+}
+
 function documentFrom(header, facts) {
   const grouped = {
     element: [],
@@ -341,8 +373,15 @@ function documentFrom(header, facts) {
       page: fact.page_number,
       bbox: fact.bbox,
       related_element_ids: fact.properties?.related_element_ids || [],
+      related_calculation_ids: fact.properties?.related_calculation_ids || [],
       related_sheet_refs: fact.related_sheet_refs || [],
-      properties: fact.kind === "element" ? (fact.properties || {}) : {},
+      role: fact.properties?.role || null,
+      property: fact.properties?.property || null,
+      context_text: fact.properties?.context_text || null,
+      association_basis: fact.properties?.association_basis || null,
+      geometry: fact.properties?.geometry || null,
+      source_label: fact.properties?.source_label || null,
+      properties: fact.kind === "element" ? elementProperties(fact.properties) : {},
       location: fact.properties?.location || null,
       work_status: fact.properties?.work_status || null,
       low_confidence: Boolean(fact.properties?.low_confidence),
@@ -504,6 +543,13 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
     extracted_at: new Date().toISOString(),
     superseded: false,
   };
+  const writeToken = crypto.randomUUID();
+  identity.coverage = { ...(identity.coverage || {}), write_token: writeToken };
+  const stillOwnsWrite = async () => {
+    const current = await supabase.from(EXTRACTIONS).select("coverage").eq("id", extractionId).maybeSingle();
+    if (current.error) return { ok: false, error: current.error };
+    return { ok: current.data?.coverage?.write_token === writeToken, error: null };
+  };
   const prior = await supabase
     .from(EXTRACTIONS)
     .select("id, status, element_count, dimension_count, note_count, schedule_count, schedule_row_count, calculation_count, reference_count, relationship_count, evidence_count")
@@ -537,6 +583,13 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
     return { persisted: false, reason: "write_failed", document: reviewDocument(document) };
   }
   const fail = async (message) => {
+    const owner = await stillOwnsWrite();
+    if (owner.error) {
+      return { persisted: false, reason: "write_failed", message: owner.error.message, extractionId, document: reviewDocument(document) };
+    }
+    if (!owner.ok) {
+      return { persisted: false, reason: "concurrent_write", extractionId, document: reviewDocument(document) };
+    }
     await supabase
       .from(EXTRACTIONS)
       .update({
@@ -546,6 +599,7 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
         updated_at: new Date().toISOString(),
       })
       .eq("id", extractionId)
+      .filter("coverage->>write_token", "eq", writeToken)
       .in("status", ["extracting", "failed"]);
     return {
       persisted: false,
@@ -565,6 +619,11 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
       if (missingTable(batch.error)) return { persisted: false, reason: "not_migrated", extractionId, document: reviewDocument(document) };
       return fail(batch.error.message);
     }
+  }
+  const owner = await stillOwnsWrite();
+  if (owner.error) return fail(owner.error.message);
+  if (!owner.ok) {
+    return { persisted: false, reason: "concurrent_write", extractionId, document: reviewDocument(document) };
   }
   const existing = await loadFactRows(supabase, extractionId);
   if (existing.error) {
@@ -600,9 +659,13 @@ async function saveSheetExtraction(supabase, { projectId, documentId, sheetId, d
       updated_at: new Date().toISOString(),
     })
     .eq("id", extractionId)
+    .filter("coverage->>write_token", "eq", writeToken)
     .select("id")
     .maybeSingle();
   if (committed.error) return fail(committed.error.message);
+  if (!committed.data?.id) {
+    return { persisted: false, reason: "concurrent_write", extractionId, document: reviewDocument(document) };
+  }
   await supabase
     .from(EXTRACTIONS)
     .update({ superseded: true, updated_at: new Date().toISOString() })
@@ -664,6 +727,8 @@ async function saveCrossSheetRelationships(
 
 module.exports = {
   hashFile,
+  documentFrom,
+  factRows,
   loadSheetExtraction,
   markSheetExtractionStarted,
   saveCrossSheetRelationships,

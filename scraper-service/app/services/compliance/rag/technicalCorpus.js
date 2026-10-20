@@ -484,11 +484,9 @@ function factsFromDocument(doc, claim, threshold, crossSheet, sheet) {
     const calculation = element.properties?.calculation;
     const governing = calculation?.governing;
     if (!calculation || calculation.association_status === "candidate" || !governing) continue;
-    const operands = Array.isArray(calculation.operands) ? calculation.operands : [];
-    if (operands.some((operand) => Number(operand.value) === Number(governing.value))) continue;
-    if (threshold.property && governing.property && governing.property !== threshold.property && threshold.property !== "capacity" && threshold.property !== "flow") {
-      continue;
-    }
+    // A lesser-of or greater-of result equals one operand. That selected value is the stated
+    // design flow. It is not the equipment's rated capacity, and it is not a length.
+    if (threshold.property && threshold.property !== "flow") continue;
     const value = Number(governing.value);
     if (!Number.isFinite(value)) continue;
     pushFact(facts, {
@@ -497,6 +495,31 @@ function factsFromDocument(doc, claim, threshold, crossSheet, sheet) {
       unit: governing.unit || null,
       sheet,
     });
+  }
+  if (threshold.property !== "capacity" && (!threshold.property || threshold.property === "flow")) {
+    for (const calculation of doc.calculations || []) {
+      const governing = calculation.governing;
+      const value = Number(governing?.value);
+      if (!Number.isFinite(value)) continue;
+      const statement = String(calculation.statement || calculation.original_content || "");
+      if (claim?.element?.id === "grease_interceptor") {
+        if (!/\binterceptor\b/i.test(statement)) continue;
+      } else if (claim?.element) {
+        const pattern = claim.element.claim || claim.element.mention;
+        if (pattern && !new RegExp(pattern.source, "i").test(statement)) continue;
+      } else {
+        continue;
+      }
+      if (facts.some((fact) => String(fact.kind).endsWith("calculation") && fact.value === value && fact.unit === (governing.unit || null))) {
+        continue;
+      }
+      pushFact(facts, {
+        kind: crossSheet ? "cross_sheet" : "calculation",
+        value,
+        unit: governing.unit || null,
+        sheet,
+      });
+    }
   }
   return facts;
 }

@@ -12,15 +12,15 @@ const base = require("./drawingStructure.js");
 const { ELEMENTS, reconcileCalculation } = require("../review/evaluation.js");
 
 const SCHEMA_VERSION = "1.1";
-const EXTRACTOR_VERSION = "drawing-structure-2";
+const EXTRACTOR_VERSION = "drawing-structure-2.1";
 const LOW_CONFIDENCE = 0.55;
 const REQUIREMENT_RE =
   /\b(?:shall|must|required|provide[ds]?|minimum|min\.?|maximum|max\.?|typical|typ\.|general notes?|code requires?)\b/i;
 const SCHEDULE_RE = /\b(?:door|window|partition|wall|finish|room|equipment|fixture|panel|beam|column|footing|foundation|damper|valve|sprinkler)?\s*schedule\b/i;
 const REFERENCE_RE =
   /\b(?:see|refer(?:ence)?\s+to|detail|section|elevation)\b[^.\n]{0,70}?([A-Z]{1,3}-\d{1,3}(?:\.\d{1,2})?)(?:\s*[/.-]\s*(\d{1,3}))?/gi;
-const DIMENSION_RE =
-  /\b(\d+(?:\.\d+)?)\s*(?:"|″|''|in(?:ch(?:es)?)?|ft|feet|gpm|cfm|psi|gal|amps?|a|kw|kva|volts?|v)\b|\b(\d+)\s*['′]\s*-?\s*(\d+)?(?:\s*["″])?/gi;
+const RELATION_TARGET_RE =
+  /\b(?:connected\s+to|select|to|of|for|from|per|into)\s+(?:the\s+|a\s+|an\s+|all\s+)?$/i;
 
 const INSTANCE_TYPES = [
   ...ELEMENTS.filter((element) => new Set([
@@ -273,6 +273,68 @@ function distinctiveInstance(row, type, tag) {
   ]).has(type);
 }
 
+function normalizeLabel(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function elementMentions(text, definition) {
+  if (!definition?.re) return [];
+  const re = new RegExp(definition.re.source, "gi");
+  const matches = [];
+  let match;
+  while ((match = re.exec(text))) {
+    matches.push(match);
+    if (match.index === re.lastIndex) re.lastIndex += 1;
+  }
+  return matches;
+}
+
+function mentionIsSubject(text, match) {
+  const before = String(text || "").slice(Math.max(0, match.index - 48), match.index);
+  return !RELATION_TARGET_RE.test(before);
+}
+
+function rowHasSubjectMention(text, definition) {
+  return elementMentions(text, definition).some((match) => {
+    if (!mentionIsSubject(text, match)) return false;
+    if (definition.id === "counter" && /^\s*mounted\b/i.test(String(text).slice(match.index + match[0].length))) return false;
+    if (definition.id === "toilet_clearance" && /\btoilet\s+rooms?\s+only\b/i.test(text)) return false;
+    return true;
+  });
+}
+
+function filePathRow(text) {
+  return /(?:\.pdf\b|\\[^\s]+\\|\bfile\s*:)/i.test(String(text || ""));
+}
+
+function inScaleExpression(text, start, end) {
+  const slice = String(text || "").slice(Math.max(0, start - 14), Math.min(String(text || "").length, end + 18));
+  return /\d+\s*\/\s*\d+\s*["″]\s*=|\bscale\b|=\s*\d+\s*['′]\s*-?\s*\d+/i.test(slice);
+}
+
+function mergeDuplicateLabels(elements) {
+  const kept = [];
+  for (const element of elements) {
+    const box = element.location?.text_anchor_bbox;
+    const label = normalizeLabel(element.source_label);
+    const prior = !element.tag && label
+      ? kept.find((other) => {
+          if (other.type !== element.type || other.tag) return false;
+          if (normalizeLabel(other.source_label) !== label) return false;
+          const otherBox = other.location?.text_anchor_bbox;
+          if (!box || !otherBox) return false;
+          return distanceBetween(box, otherBox) <= 96;
+        })
+      : null;
+    if (!prior) {
+      kept.push(element);
+      continue;
+    }
+    prior.evidence_ids = [...new Set([...(prior.evidence_ids || []), ...(element.evidence_ids || [])])];
+  }
+  return kept;
+}
+
 function observationStatus(row, tag) {
   if (tag) return "identified";
   if (row.bbox && row.text.length <= 160) return "located_ambiguous";
@@ -302,7 +364,7 @@ function makeElements(input, rows, evidence, fingerprint, page) {
   const byIdentity = new Map();
   const evidenceByRow = new Map();
   for (const row of rows) {
-    if (REQUIREMENT_RE.test(row.text)) continue;
+    if (REQUIREMENT_RE.test(row.text) || filePathRow(row.text)) continue;
     const types = elementTypes(row.text);
     if (!types.length) continue;
     const rowEvidence = evidenceRecord(fingerprint, page, row);
@@ -311,6 +373,7 @@ function makeElements(input, rows, evidence, fingerprint, page) {
     for (const definition of types) {
       const tag = tagFor(definition.id, row.text);
       if (!distinctiveInstance(row, definition.id, tag)) continue;
+      if (!tag && !rowHasSubjectMention(row.text, definition)) continue;
       const anchor = row.bbox;
       // A tag is a durable identity. Without one, the source region distinguishes
       // recoverable instances; an unlocated generic mention is kept ambiguous once.
@@ -351,6 +414,7 @@ function makeElements(input, rows, evidence, fingerprint, page) {
                 ? "proposed"
                 : null,
           ambiguity: tag ? null : "No unique drawing tag was read; identity is scoped to this observed region.",
+          source_label: row.text.slice(0, 160),
         };
         byIdentity.set(identity, element);
       } else if (!element.evidence_ids.includes(rowEvidence.id)) {
@@ -358,34 +422,82 @@ function makeElements(input, rows, evidence, fingerprint, page) {
       }
     }
   }
-  return { elements: [...byIdentity.values()].slice(0, 200), evidenceByRow };
+  return { elements: mergeDuplicateLabels([...byIdentity.values()]).slice(0, 200), evidenceByRow };
 }
 
 function parseValues(text) {
+  const source = String(text || "");
   const values = [];
-  for (const match of String(text || "").matchAll(DIMENSION_RE)) {
-    const original = match[0].trim();
-    let value = null;
-    let unit = null;
-    if (match[2] != null) {
-      value = Number(match[2]) * 12 + Number(match[3] || 0);
+  const occupied = [];
+  const take = (start, end, original, value, unit) => {
+    const clean = String(original || "").trim();
+    if (!clean || !Number.isFinite(value) || !unit) return;
+    if (inScaleExpression(source, start, end)) return;
+    if (occupied.some(([from, to]) => start < to && end > from)) return;
+    occupied.push([start, end]);
+    values.push({ original: clean, value, unit });
+  };
+  const feetRe = /\b(\d+)\s*['′]\s*-?\s*(\d+)?(?:\s*-?\s*(\d+)\s*\/\s*(\d+))?(?:\s*["″])?/g;
+  const affFeetRe = /\b(\d{1,2})\s*-\s*(\d{1,2})\s*["″](?=[^.\n]{0,24}A\.?\s*F\.?\s*F\.?\b)/gi;
+  for (const match of source.matchAll(feetRe)) {
+    const fraction = match[3] ? Number(match[3]) / Number(match[4]) : 0;
+    take(
+      match.index,
+      match.index + match[0].length,
+      match[0],
+      Number(match[1]) * 12 + Number(match[2] || 0) + fraction,
+      "in",
+    );
+  }
+  for (const match of source.matchAll(affFeetRe)) {
+    take(
+      match.index,
+      match.index + match[0].length,
+      match[0],
+      Number(match[1]) * 12 + Number(match[2]),
+      "in",
+    );
+  }
+  const quotedRe = /\b(\d+(?:\.\d+)?)\s*["″]/g;
+  for (const match of source.matchAll(quotedRe)) {
+    if (/\/\s*$/.test(source.slice(Math.max(0, match.index - 2), match.index))) continue;
+    const prefix = source.slice(Math.max(0, match.index - 6), match.index);
+    if (Number(match[1]) < 10 && /(?:^|\s)\d\s+$/.test(prefix)) continue;
+    take(match.index, match.index + match[0].length, match[0], Number(match[1]), "in");
+  }
+  const wordRe = /\b(\d+(?:\.\d+)?)\s*(in(?:ch(?:es)?)?|ft|feet|gpm|cfm|psi|gal(?:lons?)?|amps?|kva|kw|volts?)\b/gi;
+  for (const match of source.matchAll(wordRe)) {
+    const token = match[2].toLowerCase();
+    let value = Number(match[1]);
+    let unit = token;
+    if (token === "ft" || token === "feet") {
+      value *= 12;
       unit = "in";
-    } else {
-      value = Number(match[1]);
-      if (/gpm/i.test(original)) unit = "gpm";
-      else if (/cfm/i.test(original)) unit = "cfm";
-      else if (/psi/i.test(original)) unit = "psi";
-      else if (/gal/i.test(original)) unit = "gal";
-      else if (/kva/i.test(original)) unit = "kva";
-      else if (/kw/i.test(original)) unit = "kw";
-      else if (/amps?|\bA\b/i.test(original)) unit = "A";
-      else if (/volts?|\bV\b/i.test(original)) unit = "V";
-      else if (/ft|feet/i.test(original)) {
-        value *= 12;
-        unit = "in";
-      } else unit = "in";
-    }
-    if (Number.isFinite(value)) values.push({ original, value, unit });
+    } else if (token.startsWith("in")) unit = "in";
+    else if (token.startsWith("gal")) unit = "gal";
+    else if (token.startsWith("amp")) unit = "A";
+    else if (token === "kva") unit = "kva";
+    else if (token === "kw") unit = "kw";
+    else if (token.startsWith("volt")) unit = "V";
+    take(match.index, match.index + match[0].length, match[0], value, unit);
+  }
+  // A bare A/V is an electrical unit only when it is not a sheet id (A-1.02) or A.F.F.
+  const electricalRe = /\b(\d+(?:\.\d+)?)\s*([AVav])(?![\w.-])/g;
+  for (const match of source.matchAll(electricalRe)) {
+    const before = source.slice(Math.max(0, match.index - 1), match.index);
+    // Hyphenated model numbers such as "7954-38A" are not amperes or volts.
+    if (before === "-") continue;
+    take(
+      match.index,
+      match.index + match[0].length,
+      match[0],
+      Number(match[1]),
+      match[2].toUpperCase() === "A" ? "A" : "V",
+    );
+  }
+  const affRe = /\b(\d+(?:\.\d+)?)\s*(?=A\.?\s*F\.?\s*F\.?\b)/gi;
+  for (const match of source.matchAll(affRe)) {
+    take(match.index, match.index + match[0].length, match[0], Number(match[1]), "in");
   }
   return values;
 }
@@ -393,8 +505,9 @@ function parseValues(text) {
 function propertyKind(text, unit) {
   if (unit === "gpm" || unit === "cfm") return /\b(?:capacity|rated)\b/i.test(text) ? "capacity" : "flow";
   if (unit === "A" || unit === "V" || unit === "kw" || unit === "kva") return "electrical_rating";
-  if (/\bclear(?:ance)?|maneuvering|width\b/i.test(text)) return "clear_width";
-  if (/\bheight|a\.?\s*f\.?\s*f\.?\b/i.test(text)) return "height";
+  if (/\bclearances?\b|\bclear\s+floor\b|\bmaneuvering\b|\bturning\s+space\b/i.test(text)) return "clearance";
+  if (/\bwidths?\b|\bwide\b/i.test(text)) return "clear_width";
+  if (/\bheights?\b|\ba\.?\s*f\.?\s*f\.?\b|\bmounting\b/i.test(text)) return "height";
   if (/\b(?:hour|hr|fire rated|rating)\b/i.test(text)) return "fire_rating";
   if (/\bspacing|o\.?\s*c\.?\b/i.test(text)) return "spacing";
   return "dimension";
@@ -407,11 +520,19 @@ function distanceBetween(a, b) {
   return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
+function sameQuantity(operand, value) {
+  return Number(operand?.value) === value.value && (!operand?.unit || operand.unit === value.unit);
+}
+
+function matchingCalculations(value, calculations) {
+  return (calculations || []).filter((calc) =>
+    (calc.operands || []).some((operand) => sameQuantity(operand, value)) ||
+    sameQuantity(calc.governing, value));
+}
+
 function dimensionRole(row, value, calculations) {
   if (REQUIREMENT_RE.test(row.text)) return "requirement";
-  if (calculations.some((calc) =>
-    (calc.operands || []).some((operand) => Number(operand.value) === value.value) ||
-    Number(calc.governing?.value) === value.value)) return "calculation_operand";
+  if (matchingCalculations(value, calculations).length) return "calculation_operand";
   if (["gpm", "cfm", "A", "V", "kw", "kva", "psi", "gal"].includes(value.unit)) return "technical_value";
   return "measured_dimension";
 }
@@ -423,10 +544,11 @@ function makeDimensions(input, rows, elements, evidence, fingerprint, page, calc
     if (!values.length) continue;
     const rowEvidence = evidenceRecord(fingerprint, page, row, "measurement_text");
     if (!evidence.some((item) => item.id === rowEvidence.id)) evidence.push(rowEvidence);
-    const rowTypes = elementTypes(row.text).map((item) => item.id);
-    const sameRow = elements.filter((element) =>
-      rowTypes.includes(element.type) &&
-      element.evidence_ids.includes(rowEvidence.id));
+    const sameRow = elements.filter((element) => {
+      if (!element.evidence_ids.includes(rowEvidence.id)) return false;
+      const definition = INSTANCE_TYPES.find((item) => item.id === element.type);
+      return definition ? rowHasSubjectMention(row.text, definition) : false;
+    });
     for (const value of values) {
       const role = dimensionRole(row, value, calculations);
       let bindingStatus = role === "requirement"
@@ -446,9 +568,14 @@ function makeDimensions(input, rows, elements, evidence, fingerprint, page, calc
           evidence_ids: [rowEvidence.id],
           verified: false,
         };
-      } else if (role !== "requirement" && role !== "calculation_operand" && row.bbox) {
+      } else if (role !== "requirement" && role !== "calculation_operand" && value.unit === "in" && row.bbox) {
         const candidates = elements
           .filter((element) => element.location?.text_anchor_bbox)
+          .filter((element) => {
+            const definition = INSTANCE_TYPES.find((item) => item.id === element.type);
+            if (!definition || !elementMentions(row.text, definition).length) return true;
+            return rowHasSubjectMention(row.text, definition);
+          })
           .map((element) => ({
             element,
             distance: distanceBetween(row.bbox, element.location.text_anchor_bbox),
@@ -502,7 +629,17 @@ function makeDimensions(input, rows, elements, evidence, fingerprint, page, calc
         extraction_status: row.confidence != null && row.confidence < LOW_CONFIDENCE ? "low_confidence" : "observed",
         directly_observed: true,
         association_basis: basis,
+        related_calculation_ids: role === "calculation_operand"
+          ? matchingCalculations(value, calculations).map((calc) => calc.id)
+          : [],
       };
+      const duplicate = dimensions.some((prior) =>
+        prior.original_content === dimension.original_content &&
+        prior.unit === dimension.unit &&
+        prior.role === dimension.role &&
+        (prior.context_text.slice(0, 80) === dimension.context_text.slice(0, 80) ||
+          (prior.bbox && dimension.bbox && distanceBetween(prior.bbox, dimension.bbox) <= 24)));
+      if (duplicate) continue;
       dimensions.push(dimension);
       if (bindingStatus === "bound") {
         const element = elements.find((candidate) => candidate.id === related[0]);
@@ -915,16 +1052,21 @@ function makeRelationships(elements, dimensions, schedules, notes, references, c
   for (const calculation of calculations) {
     const grease = elements.filter((element) => element.type === "grease_interceptor");
     if (grease.length && /\bINTERCEPTOR\b/i.test(calculation.statement || "")) {
+      const tags = [...new Set(grease.map((element) => element.tag).filter(Boolean))];
+      // Distinct tags are different units. Repeated untagged labels are one stated target.
+      const unambiguous = tags.length <= 1;
+      const basis = tags.length > 1
+        ? "stated_calculation_target_but_multiple_tagged_units"
+        : tags.length === 1
+          ? "stated_calculation_target_and_single_tag"
+          : "stated_calculation_target_and_untagged_mentions";
       for (const element of grease) {
-        const unambiguous = grease.length === 1;
         push(
           calculation.id,
           element.id,
           "calculation_governs",
           unambiguous ? "inferred" : "candidate",
-          unambiguous
-            ? "stated_calculation_target_and_single_identified_element_type"
-            : "stated_calculation_target_but_multiple_untagged_element_candidates",
+          basis,
           [...(calculation.evidence_ids || []), ...element.evidence_ids],
         );
         if (unambiguous) {
@@ -933,7 +1075,7 @@ function makeRelationships(elements, dimensions, schedules, notes, references, c
             governing: calculation.governing,
             operands: calculation.operands,
             association_status: "inferred",
-            basis: "stated_calculation_target_and_single_identified_element_type",
+            basis,
             independently_verified: false,
           };
         }
@@ -1305,6 +1447,8 @@ function reviewDocument(doc) {
       binding_status: dimension.binding_status,
       association_status: dimension.association_status,
       related_element_ids: dimension.related_element_ids,
+      related_calculation_ids: dimension.related_calculation_ids || [],
+      context_text: dimension.context_text,
       geometry: dimension.geometry,
       evidence_ids: dimension.evidence_ids,
       confidence: dimension.confidence,
