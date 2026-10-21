@@ -26,11 +26,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useProjects } from "@/hooks/useProjects";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import {
-  AnalyzerProgressStrip,
   AnalyzerSideActions,
+  DrawingReviewList,
+  FindingsMatrix,
   PendingDrawingCards,
-  SheetFindings,
-  SheetNavigator,
+  type FindingSeverityFilter,
 } from "@/components/compliance/supabaseAnalyzerPresentation";
 import { bytesLabel, statusLabel } from "@/components/compliance/supabaseAnalyzerLabels";
 import {
@@ -47,7 +47,6 @@ import {
   type AnalyzerRunDataset,
   type SupabaseAnalyzerFinding,
   type SupabaseAnalyzerRun,
-  type SupabaseAnalyzerSheetJob,
 } from "@/lib/supabaseAnalyzer/client";
 import {
   analyzerCodeYears,
@@ -59,6 +58,13 @@ import {
   defaultCodeYearForAnalyzer,
   jurisdictionKeyFor,
 } from "@/lib/supabaseAnalyzer/taxonomy";
+import {
+  analysisModeShortLabel,
+  displayAnalysisMode,
+  resolveAnalyzerReviewScope,
+  type StoredAnalysisMode,
+} from "@/lib/supabaseAnalyzer/analysisMode";
+import { countSeverity, downloadSupabaseAnalyzerJson } from "@/lib/supabaseAnalyzer/exportDataset";
 import { exportSupabaseAnalyzerReport } from "@/lib/supabaseAnalyzer/report";
 import {
   analyzerSelectionSignature,
@@ -81,6 +87,7 @@ export function SupabaseCodeAnalyzer() {
   const [jurisdiction, setJurisdiction] = useState(DC_JURISDICTION);
   const [projectType, setProjectType] = useState("Commercial (General)");
   const [codeYear, setCodeYear] = useState(DC_CODE_EDITION);
+  const [analysisMode, setAnalysisMode] = useState<StoredAnalysisMode>("both");
   const [files, setFiles] = useState<File[]>([]);
   const [runs, setRuns] = useState<SupabaseAnalyzerRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -89,7 +96,9 @@ export function SupabaseCodeAnalyzer() {
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [activeDiscipline, setActiveDiscipline] = useState("all");
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [severityFilter, setSeverityFilter] = useState<FindingSeverityFilter>("all");
+  const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(() => new Set());
+  const [expandedFindingIds, setExpandedFindingIds] = useState<Set<string>>(() => new Set());
   const [uploadProgress, setUploadProgress] = useState<{
     completed: number;
     total: number;
@@ -139,6 +148,9 @@ export function SupabaseCodeAnalyzer() {
 
   useEffect(() => {
     setActiveDiscipline("all");
+    setSeverityFilter("all");
+    setExpandedJobIds(new Set());
+    setExpandedFindingIds(new Set());
     if (!selectedRunId) {
       setDataset(null);
       return;
@@ -185,6 +197,9 @@ export function SupabaseCodeAnalyzer() {
       if (typeof saved.jurisdiction === "string") setJurisdiction(saved.jurisdiction);
       if (typeof saved.projectType === "string") setProjectType(saved.projectType);
       if (typeof saved.codeYear === "string") setCodeYear(saved.codeYear);
+      if (saved.analysisMode === "both" || saved.analysisMode === "ibc_only" || saved.analysisMode === "local_only") {
+        setAnalysisMode(saved.analysisMode);
+      }
     } catch {
       // Invalid legacy local storage should not block the analyzer.
     }
@@ -194,9 +209,9 @@ export function SupabaseCodeAnalyzer() {
     if (!projectId) return;
     localStorage.setItem(
       `permitpilot:supabase-analyzer-config:${projectId}`,
-      JSON.stringify({ jurisdiction, projectType, codeYear }),
+      JSON.stringify({ jurisdiction, projectType, codeYear, analysisMode }),
     );
-  }, [projectId, jurisdiction, projectType, codeYear]);
+  }, [projectId, jurisdiction, projectType, codeYear, analysisMode]);
 
   const reportSelection = (notices: Parameters<typeof describeSelectionNotices>[0]) => {
     const message = describeSelectionNotices(notices);
@@ -288,6 +303,7 @@ export function SupabaseCodeAnalyzer() {
           projectType,
           codeEdition: codeYear,
           codeContext: codeContextForAnalyzer(jurisdiction, codeYear),
+          analysisMode,
         });
         runId = created.runId;
         uploads = created.uploads;
@@ -375,17 +391,6 @@ export function SupabaseCodeAnalyzer() {
     }
   };
 
-  const jobsByDiscipline = useMemo(() => {
-    const grouped = new Map<string, SupabaseAnalyzerSheetJob[]>();
-    for (const job of dataset?.jobs || []) {
-      const discipline = job.discipline || "Pending classification";
-      const list = grouped.get(discipline) || [];
-      list.push(job);
-      grouped.set(discipline, list);
-    }
-    return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
-  }, [dataset?.jobs]);
-
   const findingsByJob = useMemo(() => {
     const grouped = new Map<string, SupabaseAnalyzerFinding[]>();
     for (const finding of dataset?.findings || []) {
@@ -409,24 +414,38 @@ export function SupabaseCodeAnalyzer() {
     [],
   );
   const codeContext = codeContextForAnalyzer(jurisdiction, codeYear);
-  const selectedJob = dataset?.jobs.find((job) => job.id === selectedJobId) || dataset?.jobs[0] || null;
-  const selectedFindings = selectedJob ? findingsByJob.get(selectedJob.id) || [] : [];
+  const reviewScope = useMemo(
+    () => resolveAnalyzerReviewScope({
+      mode: analysisMode,
+      jurisdictionKey: jurisdictionKeyFor(jurisdiction),
+      jurisdictionLabel: jurisdiction,
+      codeEdition: codeYear,
+      codeContext,
+    }),
+    [analysisMode, jurisdiction, codeYear, codeContext],
+  );
+  const findingCounts = useMemo(
+    () => countSeverity(dataset?.findings || []),
+    [dataset?.findings],
+  );
   const finishedSheets = activeRun ? activeRun.completed_sheets + activeRun.failed_sheets : 0;
+  const runInProgress = Boolean(activeRun && ACTIVE_STATUSES.has(activeRun.status));
 
-  useEffect(() => {
-    const jobs = dataset?.jobs || [];
-    setSelectedJobId((current) => {
-      if (current && jobs.some((job) => job.id === current)) return current;
-      return jobs[0]?.id || null;
+  const toggleJob = (jobId: string) => {
+    setExpandedJobIds((current) => {
+      const next = new Set(current);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
     });
-  }, [dataset?.jobs]);
-
-  const selectDiscipline = (discipline: string) => {
-    setActiveDiscipline(discipline);
-    const jobs = discipline === "all"
-      ? dataset?.jobs || []
-      : jobsByDiscipline.find(([name]) => name === discipline)?.[1] || [];
-    setSelectedJobId((current) => (current && jobs.some((job) => job.id === current) ? current : jobs[0]?.id || null));
+  };
+  const toggleFinding = (findingId: string) => {
+    setExpandedFindingIds((current) => {
+      const next = new Set(current);
+      if (next.has(findingId)) next.delete(findingId);
+      else next.add(findingId);
+      return next;
+    });
   };
 
   return (
@@ -516,6 +535,24 @@ export function SupabaseCodeAnalyzer() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-foreground">Analysis mode</Label>
+            <Select
+              value={analysisMode}
+              disabled={submitting}
+              onValueChange={(value) => setAnalysisMode(value as StoredAnalysisMode)}
+            >
+              <SelectTrigger data-testid="select-analysis-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="both">Both — Base Code + Local Amendments</SelectItem>
+                <SelectItem value="ibc_only">IBC Only</SelectItem>
+                <SelectItem value="local_only">Local Only</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{reviewScope.limitation}</p>
           </div>
           <Badge variant="outline" className="h-auto whitespace-normal text-left font-normal">
             {codeContext}
@@ -664,12 +701,11 @@ export function SupabaseCodeAnalyzer() {
           className="space-y-6"
           data-testid="supabase-analyzer-results"
         >
-          <AnalyzerProgressStrip
-            total={activeRun.total_sheets}
-            queued={activeRun.queued_sheets}
-            processing={activeRun.processing_sheets}
-            completed={activeRun.completed_sheets}
-            failed={activeRun.failed_sheets}
+          <FindingsMatrix
+            counts={findingCounts}
+            active={severityFilter}
+            processing={runInProgress}
+            onSelect={setSeverityFilter}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2" data-testid="analysis-history-control">
@@ -681,34 +717,32 @@ export function SupabaseCodeAnalyzer() {
                 <SelectContent>
                   {runs.map((run) => (
                     <SelectItem key={run.id} value={run.id}>
-                      {new Date(run.created_at).toLocaleString()} · {statusLabel(run.status)} · {run.total_sheets} sheets
+                      {new Date(run.created_at).toLocaleString()} · {statusLabel(run.status)} · {analysisModeShortLabel(run.analysis_mode)} · {run.total_sheets} sheets
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <p className="text-sm text-muted-foreground">
-              {activeRun.jurisdiction_label} · {activeRun.code_context}
+              {activeRun.jurisdiction_label} · {activeRun.code_context} · {displayAnalysisMode(activeRun.analysis_mode)}
             </p>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-4">
-              {dataset && dataset.jobs.length > 0 && selectedJob ? (
-                <>
-                  <SheetNavigator
-                    groups={jobsByDiscipline}
-                    activeDiscipline={activeDiscipline}
-                    onDiscipline={selectDiscipline}
-                    selectedJobId={selectedJob.id}
-                    onSelectJob={setSelectedJobId}
-                  />
-                  <SheetFindings
-                    job={selectedJob}
-                    findings={selectedFindings}
-                    onRetry={(jobId) => void retryFailed([jobId])}
-                  />
-                </>
+              {dataset && dataset.jobs.length > 0 ? (
+                <DrawingReviewList
+                  jobs={dataset.jobs}
+                  findingsByJob={findingsByJob}
+                  severityFilter={severityFilter}
+                  activeDiscipline={activeDiscipline}
+                  onDiscipline={setActiveDiscipline}
+                  expandedJobIds={expandedJobIds}
+                  onToggleJob={toggleJob}
+                  expandedFindingIds={expandedFindingIds}
+                  onToggleFinding={toggleFinding}
+                  onRetry={(jobId) => void retryFailed([jobId])}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground">
                   {loading ? "Loading sheets" : "Sheets appear here after the drawings are queued."}
@@ -729,10 +763,20 @@ export function SupabaseCodeAnalyzer() {
                 variant="outlineGold"
                 className="w-full justify-start"
                 onClick={() => dataset && exportSupabaseAnalyzerReport(dataset, selectedProject?.name)}
-                disabled={!dataset || dataset.run.completed_sheets === 0}
+                disabled={!dataset}
               >
                 <Download className="mr-2 h-4 w-4" />
-                Download report
+                Download PDF
+              </Button>
+              <Button
+                variant="outlineGold"
+                className="w-full justify-start"
+                data-testid="download-analyzer-json"
+                onClick={() => dataset && downloadSupabaseAnalyzerJson(dataset, selectedProject?.name)}
+                disabled={!dataset}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download JSON
               </Button>
             </AnalyzerSideActions>
           </div>

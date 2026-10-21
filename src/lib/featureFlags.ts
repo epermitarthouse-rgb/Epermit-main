@@ -5,6 +5,7 @@ export const FEATURE_FLAG = {
   HOMEPAGE_SHOW_DEMO_VIDEO: 'homepage.show_demo_video',
   MODULE_DESIGN_CHECK: 'module.design_check',
   MODULE_CODE_ANALYZER: 'module.code_analyzer',
+  MODULE_CODE_ANALYZER_V2: 'module.code_analyzer_v2',
   MODULE_UTILITY_COORDINATION: 'module.utility_coordination',
   MODULE_JURISDICTION_MAP: 'module.jurisdiction_map',
   MODULE_PROVIDER_COMPARE: 'module.provider_compare',
@@ -42,6 +43,7 @@ export const DEFAULT_FEATURE_FLAG_VALUES: Record<FeatureFlagKey, boolean> = {
   [FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO]: false,
   [FEATURE_FLAG.MODULE_DESIGN_CHECK]: true,
   [FEATURE_FLAG.MODULE_CODE_ANALYZER]: true,
+  [FEATURE_FLAG.MODULE_CODE_ANALYZER_V2]: true,
   [FEATURE_FLAG.MODULE_UTILITY_COORDINATION]: true,
   [FEATURE_FLAG.MODULE_JURISDICTION_MAP]: true,
   [FEATURE_FLAG.MODULE_PROVIDER_COMPARE]: true,
@@ -70,7 +72,12 @@ export const flagUiConfig: Record<
   },
   [FEATURE_FLAG.MODULE_CODE_ANALYZER]: {
     label: 'Code Analyzer',
-    description: 'AI-powered code compliance analysis',
+    description: 'Permit drawing review at /code-analyzer',
+    category: 'Modules',
+  },
+  [FEATURE_FLAG.MODULE_CODE_ANALYZER_V2]: {
+    label: 'Code Analyzer V2',
+    description: 'Evidence-grounded drawing review at /code-compliance',
     category: 'Modules',
   },
   [FEATURE_FLAG.MODULE_UTILITY_COORDINATION]: {

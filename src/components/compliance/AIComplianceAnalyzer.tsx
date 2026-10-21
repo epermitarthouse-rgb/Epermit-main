@@ -255,6 +255,8 @@ import {
   removeAnalyzerSourceDocuments,
 } from "@/lib/codeAnalyzer/deleteDrawings";
 import { AnalyzerDrawingSet } from "@/components/compliance/AnalyzerDrawingSet";
+import { V2DisciplineNavigator } from "@/components/compliance/V2DisciplineNavigator";
+import { buildV2DisciplineNavigator } from "@/lib/codeAnalyzer/v2DisciplineNavigator";
 import { IndexCompletenessPanel } from "@/components/compliance/IndexCompletenessPanel";
 import { CodeModificationReviewResults } from "@/components/compliance/CodeModificationReviewResults";
 import {
@@ -389,6 +391,7 @@ export function AIComplianceAnalyzer() {
     COMPLIANCE_SCORE_FILTER_ALL,
   );
   const [sheetResultsSearch, setSheetResultsSearch] = useState("");
+  const [v2DisciplineFilter, setV2DisciplineFilter] = useState("all");
   const [findingCardFilter, setFindingCardFilter] = useState<FindingCardFilter>("all");
   const [loadingExisting, setLoadingExisting] = useState(false);
 
@@ -2983,6 +2986,31 @@ export function AIComplianceAnalyzer() {
     () => displayedResultGroups.filter((group) => groupMatchesFindingFilter(group, findingCardFilter)),
     [displayedResultGroups, findingCardFilter],
   );
+  const v2DisciplineNavigator = useMemo(
+    () => buildV2DisciplineNavigator({
+      groups: cardFilteredResultGroups.map((group) => ({
+        id: group.id,
+        fileName: group.fileName,
+        classificationDisciplines: [
+          ...(group.ibcResult?.reviewReport?.disciplines ?? []),
+          ...(group.localResult?.reviewReport?.disciplines ?? []),
+        ],
+      })),
+      sheets: persistedSheets.map((sheet) => ({
+        id: sheet.id,
+        fileName: sheet.file_name,
+        imageDocumentId: sheet.image_document_id,
+        sourceDocumentId: sheet.source_document_id,
+        discipline: sheet.discipline,
+      })),
+      selectedKey: v2DisciplineFilter,
+    }),
+    [cardFilteredResultGroups, persistedSheets, v2DisciplineFilter],
+  );
+  const visibleResultGroups = useMemo(() => {
+    const visible = new Set(v2DisciplineNavigator.visibleIds);
+    return cardFilteredResultGroups.filter((group) => visible.has(group.id));
+  }, [cardFilteredResultGroups, v2DisciplineNavigator.visibleIds]);
   const toggleFindingCardFilter = (filter: FindingCardFilter) =>
     setFindingCardFilter((current) => (current === filter ? "all" : filter));
 
@@ -4890,9 +4918,16 @@ export function AIComplianceAnalyzer() {
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <div className="space-y-10">
                 {resultGroups.length > 0 && (
+                  <V2DisciplineNavigator
+                    choices={v2DisciplineNavigator.choices}
+                    selectedKey={v2DisciplineNavigator.selectedKey}
+                    onSelect={setV2DisciplineFilter}
+                  />
+                )}
+                {resultGroups.length > 0 && (
                   <div className="flex flex-wrap items-center gap-3">
                     <p className="text-sm font-medium text-foreground" data-testid="sheet-results-counter">
-                      {formatSheetResultsCounter(cardFilteredResultGroups.length, resultGroups.length)}
+                      {formatSheetResultsCounter(visibleResultGroups.length, resultGroups.length)}
                       {findingCardFilter !== "all"
                         ? ` · ${
                             findingCardFilter === "no_findings"
@@ -4931,8 +4966,12 @@ export function AIComplianceAnalyzer() {
                       </Button>
                     )}
                   </div>
+                ) : visibleResultGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground" data-testid="v2-discipline-empty">
+                    No drawings in this discipline.
+                  </p>
                 ) : (
-                  cardFilteredResultGroups.map((group) => renderFileResultGroup(group))
+                  visibleResultGroups.map((group) => renderFileResultGroup(group))
                 )}
               </div>
 

@@ -1,5 +1,7 @@
 import jsPDF from "jspdf";
 import type { AnalyzerRunDataset, SupabaseAnalyzerFinding } from "./client";
+import { displayDisciplineForSheet } from "./disciplineDisplay";
+import { reportSummaryLines, supabaseAnalyzerExportFileName } from "./exportDataset";
 
 const severityColor: Record<string, [number, number, number]> = {
   critical: [185, 28, 28],
@@ -42,10 +44,7 @@ export function exportSupabaseAnalyzerReport(
   doc.setFont("helvetica", "normal");
   text("Preliminary Drawing Review Observations", 13);
   y += 2;
-  text(`Project: ${projectName || run.project_id}`);
-  text(`Jurisdiction: ${run.jurisdiction_label}`);
-  text(`Selected context: ${run.code_context}`);
-  text(`Sheets completed: ${run.completed_sheets} of ${run.total_sheets}`);
+  for (const line of reportSummaryLines(dataset, projectName)) text(line);
   text(`Generated: ${new Date().toLocaleString()}`);
   y += 3;
   doc.setFillColor(240, 249, 255);
@@ -65,8 +64,11 @@ export function exportSupabaseAnalyzerReport(
     findingsByJob.set(finding.sheet_job_id, list);
   }
 
-  for (const job of jobs) {
-    const sheetFindings = findingsByJob.get(job.id) || [];
+  const orderedJobs = [...jobs].sort((left, right) => left.ordinal - right.ordinal);
+  for (const job of orderedJobs) {
+    const sheetFindings = (findingsByJob.get(job.id) || [])
+      .sort((left, right) => left.finding_index - right.finding_index);
+    const discipline = displayDisciplineForSheet(job);
     ensure(28);
     doc.setFont("helvetica", "bold");
     text(
@@ -75,7 +77,7 @@ export function exportSupabaseAnalyzerReport(
       [15, 76, 92],
     );
     doc.setFont("helvetica", "normal");
-    text(`${job.discipline || "General"} · ${job.status.replace(/_/g, " ")}`, 9, [75, 85, 99]);
+    text(`${discipline.display} · ${job.status.replace(/_/g, " ")} · ${sheetFindings.length} findings`, 9, [75, 85, 99]);
     if (job.analysis_summary) text(job.analysis_summary, 9);
     if (job.status === "failed") {
       text("Processing note: This sheet could not be completed. Retry the sheet or contact support.", 9, [153, 27, 27]);
@@ -101,6 +103,5 @@ export function exportSupabaseAnalyzerReport(
     y += 5;
   }
 
-  const shortId = run.id.slice(0, 8);
-  doc.save(`PermitPilot-Code-Analyzer-${shortId}.pdf`);
+  doc.save(supabaseAnalyzerExportFileName(run.id, "pdf"));
 }

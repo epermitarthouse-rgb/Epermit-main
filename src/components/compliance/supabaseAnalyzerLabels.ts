@@ -50,3 +50,9 @@ export function sheetIdentity(job: Pick<SupabaseAnalyzerSheetJob, "detected_shee
   const number = job.detected_sheet_number || `Sheet ${job.ordinal}`;
   return job.detected_sheet_title ? `${number} — ${job.detected_sheet_title}` : number;
 }
+
+export function conciseObservation(value: string, max = 180): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}

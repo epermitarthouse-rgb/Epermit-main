@@ -57,9 +57,9 @@ function flagsWith(key: keyof typeof FEATURE_FLAG, enabled: boolean) {
 }
 
 describe('module feature flag allowlist', () => {
-  it('registers 12 known flags (1 homepage + 11 modules)', () => {
-    assert.equal(KNOWN_FEATURE_FLAG_KEYS.length, 12);
-    assert.equal(Object.keys(DEFAULT_FEATURE_FLAG_VALUES).length, 12);
+  it('registers 13 known flags (1 homepage + 12 modules)', () => {
+    assert.equal(KNOWN_FEATURE_FLAG_KEYS.length, 13);
+    assert.equal(Object.keys(DEFAULT_FEATURE_FLAG_VALUES).length, 13);
   });
 
   it('defaults all module flags ON and homepage demo video OFF', () => {
@@ -77,13 +77,25 @@ describe('module feature flag allowlist', () => {
     assert.equal((moduleMigrationSql.match(/'module\./g) ?? []).length, 11);
     assert.match(moduleMigrationSql, /'module\.design_check',\s*\n\s*true,/);
   });
+
+  it('v2 flag migration stays on and does not disable Code Analyzer', () => {
+    const v2Migration = readFileSync(
+      join(__dirname, '../../supabase/migrations/20261022120000_code_analyzer_v2_flag_and_analysis_mode.sql'),
+      'utf8',
+    );
+    assert.match(v2Migration, /'module\.code_analyzer_v2',\s*\n\s*true,/);
+    assert.match(v2Migration, /analysis_mode IS NULL/);
+    assert.doesNotMatch(v2Migration, /SET\s+enabled\s*=\s*false/i);
+    assert.equal(DEFAULT_FEATURE_FLAG_VALUES[FEATURE_FLAG.MODULE_CODE_ANALYZER_V2], true);
+    assert.equal(DEFAULT_FEATURE_FLAG_VALUES[FEATURE_FLAG.MODULE_CODE_ANALYZER], true);
+  });
 });
 
 describe('getModuleFlagForPath route mapping', () => {
   const cases: Array<[string, keyof typeof FEATURE_FLAG | null]> = [
     ['/designcheck', 'MODULE_DESIGN_CHECK'],
     ['/code-analyzer', 'MODULE_CODE_ANALYZER'],
-    ['/code-compliance', 'MODULE_CODE_ANALYZER'],
+    ['/code-compliance', 'MODULE_CODE_ANALYZER_V2'],
     ['/uci', 'MODULE_UTILITY_COORDINATION'],
     ['/uci/inbox', 'MODULE_UTILITY_COORDINATION'],
     ['/uci/portal-harvest', 'MODULE_UTILITY_COORDINATION'],
@@ -211,6 +223,27 @@ describe('isModuleHrefVisible', () => {
       isFeatureEnabled(flags, FEATURE_FLAG.MODULE_CODE_ANALYZER),
       true,
     );
+  });
+
+  it('hides Code Analyzer and Code Analyzer V2 independently', () => {
+    const analyzerOnly = {
+      ...DEFAULT_FEATURE_FLAG_VALUES,
+      [FEATURE_FLAG.MODULE_CODE_ANALYZER]: true,
+      [FEATURE_FLAG.MODULE_CODE_ANALYZER_V2]: false,
+    };
+    assert.equal(getModuleFlagForPath('/code-analyzer'), FEATURE_FLAG.MODULE_CODE_ANALYZER);
+    assert.equal(getModuleFlagForPath('/code-compliance'), FEATURE_FLAG.MODULE_CODE_ANALYZER_V2);
+    assert.equal(isModuleHrefVisible('/code-analyzer', analyzerOnly), true);
+    assert.equal(isModuleRouteEnabled('/code-compliance', analyzerOnly), false);
+    assert.equal(isModuleHrefVisible('/code-compliance', analyzerOnly), false);
+
+    const v2Only = {
+      ...DEFAULT_FEATURE_FLAG_VALUES,
+      [FEATURE_FLAG.MODULE_CODE_ANALYZER]: false,
+      [FEATURE_FLAG.MODULE_CODE_ANALYZER_V2]: true,
+    };
+    assert.equal(isModuleRouteEnabled('/code-analyzer', v2Only), false);
+    assert.equal(isModuleHrefVisible('/code-compliance', v2Only), true);
   });
 });
 

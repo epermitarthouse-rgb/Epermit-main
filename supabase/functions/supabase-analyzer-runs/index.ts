@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import {
+  normalizeNewRunAnalysisMode,
+  resolveAnalyzerReviewScope,
+} from "../_shared/analyzerReviewScope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,6 +159,17 @@ Deno.serve(async (req) => {
       const codeContext = String(
         body.codeContext || "2017 District of Columbia Construction Codes (2015 IBC base)",
       ).slice(0, 500);
+      const requestedMode = normalizeNewRunAnalysisMode(body.analysisMode);
+      if (typeof requestedMode !== "string") {
+        return json({ error: requestedMode.error }, 400);
+      }
+      const analysisScope = resolveAnalyzerReviewScope({
+        mode: requestedMode,
+        jurisdictionKey,
+        jurisdictionLabel,
+        codeEdition,
+        codeContext,
+      });
       const budget = Math.max(1, Math.min(Number(body.budgetLimitUsd) || 20, 100));
 
       const { error: runError } = await admin.from("supabase_analyzer_runs").insert({
@@ -166,6 +181,8 @@ Deno.serve(async (req) => {
         project_type: projectType,
         code_edition: codeEdition,
         code_context: codeContext,
+        analysis_mode: requestedMode,
+        analysis_scope: analysisScope,
         source_coverage: "adoption_metadata_only",
         ai_provider: "openai",
         ai_model: "gpt-4o",
@@ -223,7 +240,7 @@ Deno.serve(async (req) => {
         project_id: projectId,
         actor_id: user.id,
         event_type: "run_created",
-        metadata: { sheet_count: files.length, total_bytes: totalBytes },
+        metadata: { sheet_count: files.length, total_bytes: totalBytes, analysis_mode: requestedMode },
       });
 
       return json({ runId, uploads }, 201);

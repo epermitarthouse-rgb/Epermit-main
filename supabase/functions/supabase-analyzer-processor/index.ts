@@ -4,6 +4,7 @@ import {
   processorUnauthorizedResponse,
   verifyProcessorRequest,
 } from "../_shared/processorAuth.ts";
+import { processorReviewPrompt } from "../_shared/analyzerReviewScope.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +39,8 @@ type AnalyzerRun = {
   project_type: string;
   code_edition: string;
   code_context: string;
+  analysis_mode?: string | null;
+  analysis_scope?: { promptScope?: string } | null;
   source_coverage: string;
   ai_provider: string;
   ai_model: string;
@@ -195,23 +198,7 @@ async function processJob(
 
     const bytes = new Uint8Array(await fileBlob.arrayBuffer());
     const fileData = `data:application/pdf;base64,${encodeBase64(bytes)}`;
-    const systemPrompt = `You are performing a preliminary professional review of one commercial permit drawing sheet.
-
-Review context:
-- Jurisdiction: ${run.jurisdiction_label}
-- Selected adopted-code context: ${run.code_context}
-- Project type: ${run.project_type}
-- Source coverage: adoption metadata is recorded, but complete authoritative technical code text is not supplied.
-
-Rules:
-1. Analyze only content actually visible in the attached drawing. Never infer a condition from the filename.
-2. Every observation must quote or precisely describe its visible drawing evidence and location.
-3. Do not call an observation a confirmed violation. Use conservative professional review language.
-4. A code section is a proposed reference unless its authoritative text is present in the drawing itself.
-5. Do not invent numeric thresholds, local amendments, dimensions, labels, or code sections.
-6. If the drawing is illegible or lacks enough evidence, return no finding for that topic.
-7. Identify the printed sheet number, printed sheet title, and discipline from the drawing title block when visible.
-8. Return no more than 12 high-value observations.`;
+    const systemPrompt = processorReviewPrompt(run);
 
     const schema = {
       type: "object",

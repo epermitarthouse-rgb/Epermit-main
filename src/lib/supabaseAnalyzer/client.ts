@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import type { PersistedAnalysisScope, StoredAnalysisMode } from "@/lib/supabaseAnalyzer/analysisMode";
 
 export const SUPABASE_ANALYZER_BUCKET = "supabase-analyzer-drawings";
 export const SUPABASE_ANALYZER_MAX_SHEETS = 100;
@@ -24,6 +25,8 @@ export interface SupabaseAnalyzerRun {
   project_type: string;
   code_edition: string;
   code_context: string;
+  analysis_mode?: StoredAnalysisMode | null;
+  analysis_scope?: PersistedAnalysisScope | null;
   source_coverage: string;
   ai_provider: string;
   ai_model: string;
@@ -123,6 +126,7 @@ export async function createSupabaseAnalyzerRun(input: {
   projectType: string;
   codeEdition: string;
   codeContext: string;
+  analysisMode?: StoredAnalysisMode;
   budgetLimitUsd?: number;
 }) {
   return invokeRunAction<{
@@ -143,6 +147,7 @@ export async function createSupabaseAnalyzerRun(input: {
     projectType: input.projectType,
     codeEdition: input.codeEdition,
     codeContext: input.codeContext,
+    analysisMode: input.analysisMode ?? "both",
     budgetLimitUsd: input.budgetLimitUsd ?? 20,
     files: input.files.map((file) => ({
       name: file.name,

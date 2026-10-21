@@ -73,8 +73,9 @@ describe('featureFlags helpers', () => {
     assert.equal(isKnownFeatureFlagKey('unknown.flag'), false);
   });
 
-  it('allowlist includes 12 server-backed flags', () => {
-    assert.equal(Object.keys(FEATURE_FLAG).length, 12);
+  it('allowlist includes 13 server-backed flags', () => {
+    assert.equal(Object.keys(FEATURE_FLAG).length, 13);
+    assert.equal(isKnownFeatureFlagKey(FEATURE_FLAG.MODULE_CODE_ANALYZER_V2), true);
   });
 
   it('isAdminRequiredError detects admin guard', () => {
@@ -239,6 +240,8 @@ describe('FeatureFlagsPanel server-backed UI', () => {
     assert.match(featureFlagsSource, /Platform Demo Video/);
     assert.match(featureFlagsSource, /Show the interactive platform demo video/);
     assert.match(featureFlagsSource, /DesignCheck/);
+    assert.match(featureFlagsSource, /Code Analyzer V2/);
+    assert.match(featureFlagsSource, /module\.code_analyzer_v2/);
     assert.match(featureFlagsSource, /Utility Coordination/);
     assert.match(panelSource, /Last updated/);
     assert.match(panelSource, /toggleFlag/);

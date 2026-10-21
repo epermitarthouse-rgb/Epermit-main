@@ -1,11 +1,10 @@
-import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { useId, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
   BookOpen,
   CheckCircle2,
-  Clock,
+  ChevronDown,
   FileText,
   Info,
   Loader2,
@@ -18,16 +17,19 @@ import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MetricCard, Panel } from "@/components/design/ProductPrimitives";
+import { Panel } from "@/components/design/ProductPrimitives";
 import type { SupabaseAnalyzerFinding, SupabaseAnalyzerSheetJob } from "@/lib/supabaseAnalyzer/client";
+import { countSeverity, type SeverityTotals } from "@/lib/supabaseAnalyzer/exportDataset";
+import {
+  PENDING_DISCIPLINE,
+  disciplineSortIndex,
+  displayDisciplineForSheet,
+} from "@/lib/supabaseAnalyzer/disciplineDisplay";
 import { cn } from "@/lib/utils";
 import {
   bytesLabel,
-  disciplineName,
+  conciseObservation,
   sheetErrorMessage,
-  sheetIdentity,
   statusLabel,
   statusVariant,
 } from "@/components/compliance/supabaseAnalyzerLabels";
@@ -59,7 +61,23 @@ const severityConfig = {
   },
 } as const;
 
+export type FindingSeverityFilter = "all" | "critical" | "warning" | "advisory";
+
 const PENDING_GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3";
+
+function severityOf(severity: string) {
+  if (severity === "critical" || severity === "warning" || severity === "advisory") return severity;
+  return "advisory";
+}
+
+function sheetNumber(job: SupabaseAnalyzerSheetJob) {
+  return job.detected_sheet_number || `Sheet ${job.ordinal}`;
+}
+
+function findingCountLabel(job: SupabaseAnalyzerSheetJob, count: number) {
+  if (job.status !== "completed") return "—";
+  return String(count);
+}
 
 export function PendingDrawingCards({
   files,
@@ -104,96 +122,106 @@ export function PendingDrawingCards({
   );
 }
 
-export function AnalyzerProgressStrip({
-  total,
-  queued,
+export function FindingsMatrix({
+  counts,
+  active,
   processing,
-  completed,
-  failed,
+  onSelect,
 }: {
-  total: number;
-  queued: number;
-  processing: number;
-  completed: number;
-  failed: number;
+  counts: SeverityTotals;
+  active: FindingSeverityFilter;
+  processing: boolean;
+  onSelect: (filter: FindingSeverityFilter) => void;
 }) {
-  const cards: Array<{ label: string; value: number; icon: LucideIcon; detail: string; className?: string }> = [
-    { label: "Total", value: total, icon: FileText, detail: "Sheets in this analysis" },
-    { label: "Queued", value: queued, icon: Clock, detail: "Waiting to start" },
-    {
-      label: "Processing",
-      value: processing,
-      icon: Loader2,
-      detail: "Sheets currently in review",
-      className: "border-l-4 border-l-amber-500 dark:border-l-amber-400",
-    },
-    {
-      label: "Completed",
-      value: completed,
-      icon: CheckCircle2,
-      detail: "Sheets with a saved review",
-      className: "border-l-4 border-l-teal",
-    },
-    {
-      label: "Failed",
-      value: failed,
-      icon: AlertCircle,
-      detail: "Sheets that need a retry",
-      className: "border-l-4 border-l-destructive",
-    },
+  const cards: Array<{ key: FindingSeverityFilter; label: string; value: number }> = [
+    { key: "all", label: "All Findings", value: counts.all },
+    { key: "critical", label: "Critical", value: counts.critical },
+    { key: "warning", label: "Warning", value: counts.warning },
+    { key: "advisory", label: "Advisory", value: counts.advisory },
   ];
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5" data-testid="supabase-analyzer-progress">
-      {cards.map((card) => (
-        <MetricCard
-          key={card.label}
-          label={card.label}
-          value={card.value}
-          icon={card.icon}
-          detail={card.detail}
-          className={card.className}
-        />
-      ))}
+    <div className="space-y-2" data-testid="supabase-findings-matrix">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((card) => {
+          const selected = active === card.key;
+          return (
+            <button
+              key={card.key}
+              type="button"
+              aria-pressed={selected}
+              data-testid={`findings-matrix-${card.key}`}
+              onClick={() => onSelect(selected && card.key !== "all" ? "all" : card.key)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                selected ? "border-teal/50 bg-teal/[0.08]" : "border-border/60 bg-card hover:bg-muted/40",
+              )}
+            >
+              <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
+              <p className="text-xl font-semibold text-foreground">{card.value}</p>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {processing
+          ? "Observations from analyzed sheets. Sheets still in progress are not counted as zero findings."
+          : "Observations saved for this analysis."}
+      </p>
     </div>
   );
 }
 
-function severityOf(severity: string) {
-  if (severity === "critical" || severity === "warning" || severity === "advisory") return severity;
-  return "advisory";
-}
-
-export function SupabaseFindingCard({ finding }: { finding: SupabaseAnalyzerFinding }) {
+export function SupabaseFindingCard({
+  finding,
+  expanded,
+  onToggle,
+}: {
+  finding: SupabaseAnalyzerFinding;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const severity = severityOf(finding.severity);
   const config = severityConfig[severity];
   const Icon = config.icon;
+  const panelId = useId();
   return (
     <div
-      className={cn(
-        "rounded-xl border border-l-4 shadow-sm",
-        config.border,
-        config.bg,
-      )}
+      className={cn("rounded-xl border border-l-4 shadow-sm", config.border, config.bg)}
       data-testid="supabase-finding-card"
       data-severity={severity}
+      data-expanded={expanded ? "true" : "false"}
     >
-      <div className="p-4">
-        <div className="mb-2 flex items-start gap-3">
-          <div className={cn("shrink-0 rounded-lg p-2.5", config.iconBg)}>
-            <Icon className={cn("h-5 w-5", config.color)} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="font-semibold leading-tight text-foreground">{finding.title}</h4>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className="text-xs font-normal">{config.label}</Badge>
-              <Badge variant="secondary" className="text-xs font-normal">{finding.category}</Badge>
-              {finding.suggested_code_reference ? (
-                <Badge variant="secondary" className="font-mono text-xs">{finding.suggested_code_reference}</Badge>
-              ) : null}
-            </div>
-          </div>
+      <button
+        type="button"
+        className="flex w-full items-start gap-3 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={onToggle}
+      >
+        <div className={cn("shrink-0 rounded-lg p-2.5", config.iconBg)}>
+          <Icon className={cn("h-5 w-5", config.color)} />
         </div>
-        <div className="space-y-3 text-sm">
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold leading-tight text-foreground">{finding.title}</h4>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline" className="text-xs font-normal">{config.label}</Badge>
+            {finding.suggested_code_reference ? (
+              <Badge variant="secondary" className="font-mono text-xs">{finding.suggested_code_reference}</Badge>
+            ) : null}
+          </div>
+          {expanded ? null : (
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {conciseObservation(finding.observation)}
+            </p>
+          )}
+        </div>
+        <ChevronDown
+          className={cn("mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div id={panelId} className="space-y-3 px-4 pb-4 text-sm">
           <div>
             <p className="font-medium text-foreground">Observation</p>
             <p className="mt-1 leading-relaxed text-muted-foreground">{finding.observation}</p>
@@ -218,172 +246,189 @@ export function SupabaseFindingCard({ finding }: { finding: SupabaseAnalyzerFind
           <div className="rounded-lg border border-border/50 bg-muted/40 p-3 dark:border-[hsl(var(--border-obsidian-strong)/0.35)] dark:bg-card/35">
             <div className="mb-1.5 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-teal" />
-              <span className="text-sm font-medium text-foreground">Recommended action</span>
+              <span className="text-sm font-medium text-foreground">Recommended Action</span>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">{finding.recommendation}</p>
           </div>
         </div>
-      </div>
+      ) : (
+        <div id={panelId} hidden />
+      )}
     </div>
   );
 }
 
-export function SheetFindings({
-  job,
-  findings,
-  onRetry,
-}: {
-  job: SupabaseAnalyzerSheetJob;
-  findings: SupabaseAnalyzerFinding[];
-  onRetry: (jobId: string) => void;
-}) {
-  const counts = {
-    all: findings.length,
-    critical: findings.filter((finding) => finding.severity === "critical").length,
-    warning: findings.filter((finding) => finding.severity === "warning").length,
-    advisory: findings.filter((finding) => finding.severity === "advisory").length,
-  };
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sheet</p>
-          <p className="truncate text-sm font-medium text-foreground">{sheetIdentity(job)}</p>
-          <p className="truncate text-xs text-muted-foreground">{job.original_file_name}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{disciplineName(job.discipline)}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
-          {job.status === "failed" ? (
-            <Button size="sm" variant="outlineGold" onClick={() => onRetry(job.id)}>
-              Retry
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {job.status === "processing" || job.status === "queued" || job.status === "upload_pending" ? (
-        <div className="flex items-center text-sm text-muted-foreground">
-          <Loader2 className={cn("mr-2 h-4 w-4", job.status === "processing" && "animate-spin")} />
-          {job.status === "processing" ? "Reviewing drawing content" : statusLabel(job.status)}
-        </div>
-      ) : null}
-      {job.status === "failed" ? (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{sheetErrorMessage(job.error_code)}</AlertDescription>
-        </Alert>
-      ) : null}
-      {job.status === "completed" && job.analysis_summary ? (
-        <p className="text-sm text-muted-foreground">{job.analysis_summary}</p>
-      ) : null}
-      {job.status === "completed" && findings.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No supported review observations were returned for this sheet.
-        </p>
-      ) : null}
-      {findings.length > 0 ? (
-        <Tabs key={job.id} defaultValue="all" className="w-full">
-          <div className="rounded-lg border border-border/40 bg-muted/15 px-4 py-3">
-            <TabsList className="grid h-auto w-full grid-cols-4 border border-border/50 bg-muted/50 p-1">
-              <TabsTrigger value="all">All <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">{counts.all}</Badge></TabsTrigger>
-              <TabsTrigger value="critical">Critical <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-xs">{counts.critical}</Badge></TabsTrigger>
-              <TabsTrigger value="warning">Warning <Badge className="ml-1.5 h-5 border-0 bg-amber-100 px-1.5 text-xs text-amber-700">{counts.warning}</Badge></TabsTrigger>
-              <TabsTrigger value="advisory">Advisory <Badge className="ml-1.5 h-5 border-0 bg-blue-100 px-1.5 text-xs text-blue-700">{counts.advisory}</Badge></TabsTrigger>
-            </TabsList>
-          </div>
-          {(["all", "critical", "warning", "advisory"] as const).map((tab) => {
-            const visible = tab === "all" ? findings : findings.filter((finding) => finding.severity === tab);
-            return (
-              <TabsContent key={tab} value={tab} className="mt-3 space-y-3">
-                {visible.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    No {tab === "all" ? "" : `${tab} `}observations on this sheet.
-                  </p>
-                ) : visible.map((finding) => <SupabaseFindingCard key={finding.id} finding={finding} />)}
-              </TabsContent>
-            );
-          })}
-        </Tabs>
-      ) : null}
-    </div>
-  );
-}
-
-export function SheetNavigator({
-  groups,
+export function DrawingReviewList({
+  jobs,
+  findingsByJob,
+  severityFilter,
   activeDiscipline,
   onDiscipline,
-  selectedJobId,
-  onSelectJob,
+  expandedJobIds,
+  onToggleJob,
+  expandedFindingIds,
+  onToggleFinding,
+  onRetry,
 }: {
-  groups: Array<[string, SupabaseAnalyzerSheetJob[]]>;
+  jobs: SupabaseAnalyzerSheetJob[];
+  findingsByJob: Map<string, SupabaseAnalyzerFinding[]>;
+  severityFilter: FindingSeverityFilter;
   activeDiscipline: string;
   onDiscipline: (discipline: string) => void;
-  selectedJobId: string | null;
-  onSelectJob: (jobId: string) => void;
+  expandedJobIds: ReadonlySet<string>;
+  onToggleJob: (jobId: string) => void;
+  expandedFindingIds: ReadonlySet<string>;
+  onToggleFinding: (findingId: string) => void;
+  onRetry: (jobId: string) => void;
 }) {
-  const total = groups.reduce((sum, [, jobs]) => sum + jobs.length, 0);
-  const visible = activeDiscipline === "all"
-    ? groups.flatMap(([, jobs]) => jobs)
-    : groups.find(([name]) => name === activeDiscipline)?.[1] || [];
+  const grouped = new Map<string, SupabaseAnalyzerSheetJob[]>();
+  for (const job of jobs) {
+    const label = displayDisciplineForSheet(job).display;
+    const list = grouped.get(label) || [];
+    list.push(job);
+    grouped.set(label, list);
+  }
+  const groups = [...grouped.entries()].sort(
+    (left, right) => disciplineSortIndex(left[0]) - disciplineSortIndex(right[0]) || left[0].localeCompare(right[0]),
+  );
+  const visibleGroups = activeDiscipline === "all"
+    ? groups
+    : groups.filter(([discipline]) => discipline === activeDiscipline);
+
   return (
-    <div className="space-y-3" data-testid="supabase-sheet-navigator">
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-3" data-testid="supabase-drawing-list">
+      <div className="flex flex-wrap gap-2" role="toolbar" aria-label="Filter drawings by discipline">
         <Button
           type="button"
           size="sm"
           variant={activeDiscipline === "all" ? "tealData" : "outline"}
+          aria-pressed={activeDiscipline === "all"}
           onClick={() => onDiscipline("all")}
         >
           All disciplines
-          <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">{total}</Badge>
+          <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">{jobs.length}</Badge>
         </Button>
-        {groups.map(([discipline, jobs]) => (
+        {groups.map(([discipline, disciplineJobs]) => (
           <Button
             key={discipline}
             type="button"
             size="sm"
             variant={activeDiscipline === discipline ? "tealData" : "outline"}
+            aria-pressed={activeDiscipline === discipline}
             onClick={() => onDiscipline(discipline)}
           >
             {discipline}
-            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">{jobs.length}</Badge>
+            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">{disciplineJobs.length}</Badge>
           </Button>
         ))}
       </div>
-      <ScrollArea className="h-[28rem] rounded-lg border border-border/60">
-        <div className="space-y-1 p-2">
-          {visible.map((job) => {
-            const selected = job.id === selectedJobId;
-            return (
-              <button
-                key={job.id}
-                type="button"
-                onClick={() => onSelectJob(job.id)}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
-                  selected
-                    ? "border-teal/40 bg-teal/[0.08] ring-1 ring-teal/30"
-                    : "border-transparent hover:bg-muted/40",
-                )}
-                aria-current={selected ? "true" : undefined}
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-foreground">{sheetIdentity(job)}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{job.original_file_name}</span>
-                </span>
-                <Badge variant={statusVariant(job.status)} className="shrink-0 text-[10px]">
-                  {statusLabel(job.status)}
-                </Badge>
-              </button>
-            );
-          })}
-        </div>
-      </ScrollArea>
-      <p className="text-xs text-muted-foreground">
-        {visible.length} sheet{visible.length === 1 ? "" : "s"}
-        {activeDiscipline === "all" ? "" : ` in ${activeDiscipline}`}
-      </p>
+      <div className="space-y-4">
+        {visibleGroups.map(([discipline, disciplineJobs]) => (
+          <section key={discipline} className="space-y-2" aria-label={discipline}>
+            {activeDiscipline === "all" ? (
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{discipline}</h3>
+            ) : null}
+            <div className="space-y-2">
+              {disciplineJobs.map((job) => {
+                const findings = findingsByJob.get(job.id) || [];
+                const visibleFindings = severityFilter === "all"
+                  ? findings
+                  : findings.filter((finding) => finding.severity === severityFilter);
+                const counts = countSeverity(findings);
+                const expanded = expandedJobIds.has(job.id);
+                const panelId = `sheet-panel-${job.id}`;
+                const disciplineLabel = displayDisciplineForSheet(job).display;
+                return (
+                  <div key={job.id} className="rounded-lg border border-border/60" data-testid="supabase-sheet-row">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-expanded={expanded}
+                      aria-controls={panelId}
+                      onClick={() => onToggleJob(job.id)}
+                    >
+                      <ChevronDown
+                        className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {sheetNumber(job)}
+                          {job.detected_sheet_title ? ` — ${job.detected_sheet_title}` : ""}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {disciplineLabel}
+                          {job.original_file_name ? ` · ${job.original_file_name}` : ""}
+                        </span>
+                      </span>
+                      <Badge variant={statusVariant(job.status)} className="shrink-0 text-[10px]">
+                        {statusLabel(job.status)}
+                      </Badge>
+                      <span
+                        className="w-8 shrink-0 text-right text-xs text-muted-foreground"
+                        aria-label={job.status === "completed" ? `${findings.length} findings` : "Finding count pending"}
+                      >
+                        {findingCountLabel(job, findings.length)}
+                      </span>
+                    </button>
+                    <div id={panelId} hidden={!expanded}>
+                    {expanded ? (
+                      <div className="space-y-3 border-t border-border/60 px-3 py-3">
+                        {job.status === "processing" || job.status === "queued" || job.status === "upload_pending" ? (
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Loader2 className={cn("mr-2 h-4 w-4", job.status === "processing" && "animate-spin")} />
+                            {job.status === "processing" ? "Reviewing drawing content" : statusLabel(job.status)}
+                          </div>
+                        ) : null}
+                        {job.status === "failed" ? (
+                          <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                              <span>{sheetErrorMessage(job.error_code)}</span>
+                              <Button size="sm" variant="outlineGold" onClick={() => onRetry(job.id)}>
+                                Retry
+                              </Button>
+                            </AlertDescription>
+                          </Alert>
+                        ) : null}
+                        {job.analysis_summary ? (
+                          <p className="text-sm text-muted-foreground">{job.analysis_summary}</p>
+                        ) : null}
+                        {job.status === "completed" ? (
+                          <p className="text-xs text-muted-foreground">
+                            Critical {counts.critical} · Warning {counts.warning} · Advisory {counts.advisory}
+                          </p>
+                        ) : null}
+                        {job.status === "completed" && findings.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No supported review observations were returned for this sheet.
+                          </p>
+                        ) : null}
+                        {job.status === "completed" && findings.length > 0 && visibleFindings.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No {severityFilter} observations on this sheet.
+                          </p>
+                        ) : null}
+                        <div className="space-y-2">
+                          {visibleFindings.map((finding) => (
+                            <SupabaseFindingCard
+                              key={finding.id}
+                              finding={finding}
+                              expanded={expandedFindingIds.has(finding.id)}
+                              onToggle={() => onToggleFinding(finding.id)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
