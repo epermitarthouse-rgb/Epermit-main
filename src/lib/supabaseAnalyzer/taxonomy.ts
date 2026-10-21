@@ -144,7 +144,7 @@ export const analyzerCodeYears = [
 
 export const DC_JURISDICTION = "Washington D.C. (12A DCMR)";
 export const DC_CODE_EDITION = "2017";
-export const DC_CODE_CONTEXT = "2017 District of Columbia Construction Codes (2015 IBC base)";
+export const DC_CODE_CONTEXT = "2017 DC Construction Codes (2015 IBC base)";
 
 export function jurisdictionKeyFor(label: string): string {
   if (label === DC_JURISDICTION) return "dc";

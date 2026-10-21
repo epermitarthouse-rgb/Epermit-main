@@ -3,7 +3,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Download,
-  FileText,
   Loader2,
   Play,
   RefreshCw,
@@ -19,7 +18,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useProjects } from "@/hooks/useProjects";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import {
@@ -84,6 +82,22 @@ function findingTone(severity: string) {
 function bytesLabel(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${Math.ceil(bytes / 1024)} KB`;
+}
+
+function sheetErrorMessage(errorCode: string | null) {
+  if (errorCode === "drawing_download_failed") {
+    return "The drawing file could not be opened. Retry this sheet or upload it again.";
+  }
+  if (errorCode === "budget_limit_reached") {
+    return "This analysis reached its processing limit. Contact support before retrying.";
+  }
+  if (errorCode === "run_cancelled") {
+    return "This sheet was not completed because the analysis was cancelled.";
+  }
+  if (errorCode?.startsWith("openai_")) {
+    return "The analysis service was temporarily unavailable. Retry this sheet.";
+  }
+  return "This sheet could not be completed. Retry the sheet or contact support.";
 }
 
 export function SupabaseCodeAnalyzer() {
@@ -310,14 +324,6 @@ export function SupabaseCodeAnalyzer() {
 
   return (
     <div className="space-y-6">
-      <Alert>
-        <FileText className="h-4 w-4" />
-        <AlertDescription>
-          This review organizes drawing-based observations for professional follow-up. Suggested code references
-          require confirmation against adopted source text and project-specific applicability.
-        </AlertDescription>
-      </Alert>
-
       <Card>
         <CardHeader>
           <CardTitle>New analysis</CardTitle>
@@ -383,6 +389,9 @@ export function SupabaseCodeAnalyzer() {
               </select>
             </div>
           </div>
+          <p className="text-sm text-muted-foreground">
+            Code context: {codeContextForAnalyzer(jurisdiction, codeYear)}
+          </p>
 
           <div className="rounded-lg border border-dashed p-6 text-center">
             <Input
@@ -446,7 +455,7 @@ export function SupabaseCodeAnalyzer() {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle>Analysis runs</CardTitle>
+                <CardTitle>Analysis History</CardTitle>
                 <CardDescription>Saved results remain available by project.</CardDescription>
               </div>
               <select
@@ -516,10 +525,6 @@ export function SupabaseCodeAnalyzer() {
                   <Button variant="ghost" onClick={() => void cancelRun()}>Cancel run</Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Analysis details: {activeRun.ai_provider} · {activeRun.ai_model} · estimated API usage $
-                {Number(activeRun.estimated_cost_usd || 0).toFixed(4)}
-              </p>
             </CardContent>
           )}
         </Card>
@@ -568,7 +573,7 @@ export function SupabaseCodeAnalyzer() {
                     {job.status === "failed" && (
                       <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{job.last_error || "This sheet did not complete."}</AlertDescription>
+                        <AlertDescription>{sheetErrorMessage(job.error_code)}</AlertDescription>
                       </Alert>
                     )}
                     {job.status === "completed" && (
@@ -602,9 +607,9 @@ export function SupabaseCodeAnalyzer() {
                             )}
                           </div>
                           <div>
-                            <p className="font-medium">Suggested code reference</p>
+                            <p className="font-medium">Code Reference</p>
                             <p className="mt-1 text-muted-foreground">
-                              {finding.suggested_code_reference || "Reviewer confirmation required"}
+                              {finding.suggested_code_reference || "Not specified"}
                             </p>
                           </div>
                           <div>
@@ -621,10 +626,6 @@ export function SupabaseCodeAnalyzer() {
           </CardContent>
         </Card>
       ))}
-
-      {dataset && dataset.jobs.length > 20 && (
-        <ScrollArea className="h-1" />
-      )}
     </div>
   );
 }

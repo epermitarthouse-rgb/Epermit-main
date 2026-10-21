@@ -52,7 +52,7 @@ export function exportSupabaseAnalyzerReport(
   doc.rect(margin, y, width, 23, "F");
   y += 6;
   text(
-    "Review basis: observations are generated from the submitted drawings to support professional review. Suggested code references require confirmation against the adopted source text and project-specific applicability.",
+    "Review basis: observations are generated from the submitted drawings to support professional review. Code references should be confirmed against the adopted source text and project-specific applicability.",
     9,
     [30, 64, 80],
   );
@@ -78,7 +78,7 @@ export function exportSupabaseAnalyzerReport(
     text(`${job.discipline || "General"} · ${job.status.replace(/_/g, " ")}`, 9, [75, 85, 99]);
     if (job.analysis_summary) text(job.analysis_summary, 9);
     if (job.status === "failed") {
-      text(`Processing note: ${job.last_error || "Analysis did not complete."}`, 9, [153, 27, 27]);
+      text("Processing note: This sheet could not be completed. Retry the sheet or contact support.", 9, [153, 27, 27]);
     } else if (sheetFindings.length === 0 && job.status === "completed") {
       text("No supported review observations were returned for this sheet.", 9);
     }
@@ -93,7 +93,7 @@ export function exportSupabaseAnalyzerReport(
       text(`Drawing evidence: ${finding.drawing_evidence}`, 9);
       if (finding.drawing_location) text(`Location: ${finding.drawing_location}`, 9);
       if (finding.suggested_code_reference) {
-        text(`Suggested reference: ${finding.suggested_code_reference}`, 9);
+        text(`Code reference: ${finding.suggested_code_reference}`, 9);
       }
       text(`Recommended action: ${finding.recommendation}`, 9);
       y += 3;
