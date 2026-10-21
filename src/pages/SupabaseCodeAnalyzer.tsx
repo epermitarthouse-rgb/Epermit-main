@@ -1,10 +1,16 @@
 import { Helmet } from "react-helmet-async";
 import { ShieldCheck } from "lucide-react";
+import { Navigate } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SupabaseCodeAnalyzer as Analyzer } from "@/components/compliance/SupabaseCodeAnalyzer";
 import { PageHeader, ServicePill } from "@/components/design/ProductPrimitives";
+import { isSupabaseAnalyzerEnabled } from "@/lib/supabaseAnalyzer/featureFlag";
 
 export default function SupabaseCodeAnalyzer() {
+  if (!isSupabaseAnalyzerEnabled()) {
+    return <Navigate to="/code-compliance" replace />;
+  }
+
   return (
     <>
       <Helmet>

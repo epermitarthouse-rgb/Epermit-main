@@ -31,6 +31,7 @@ import {
   WalletCards,
   Inbox,
 } from "lucide-react";
+import { isSupabaseAnalyzerEnabled } from "@/lib/supabaseAnalyzer/featureFlag";
 
 export type HybridNavItem = {
   title: string;
@@ -144,13 +145,15 @@ export const hybridNavGroups: HybridNavGroup[] = [
         description: "Pre-submittal readiness overview",
         requiresAuth: true,
       },
-      {
-        title: "Code Analyzer",
-        href: "/code-analyzer",
-        icon: ShieldCheck,
-        description: "Analyze permit drawing sets",
-        requiresAuth: true,
-      },
+      ...(isSupabaseAnalyzerEnabled()
+        ? [{
+            title: "Code Analyzer",
+            href: "/code-analyzer",
+            icon: ShieldCheck,
+            description: "Analyze permit drawing sets",
+            requiresAuth: true,
+          }]
+        : []),
       {
         title: "Code Analyzer V2",
         href: "/code-compliance",

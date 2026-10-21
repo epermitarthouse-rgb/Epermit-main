@@ -106,6 +106,9 @@ Deno.serve(async (req) => {
 
   try {
     if (action === "create") {
+      if (Deno.env.get("SUPABASE_ANALYZER_ENABLED")?.toLowerCase() === "false") {
+        return json({ error: "Code Analyzer is temporarily unavailable" }, 503);
+      }
       const files = Array.isArray(body.files) ? body.files as FileInput[] : [];
       if (files.length < 1 || files.length > MAX_SHEETS) {
         return json({ error: `Select between 1 and ${MAX_SHEETS} PDF sheets` }, 400);
