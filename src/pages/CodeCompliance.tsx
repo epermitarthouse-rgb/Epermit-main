@@ -17,18 +17,18 @@ export default function CodeCompliance() {
   return (
     <>
       <Helmet>
-        <title>AI Code Compliance Check | PermitPulse</title>
+        <title>Code Analyzer V2 | PermitPilot</title>
         <meta
           name="description"
-          content="Analyze architectural drawings for building code violations using AI. Get instant compliance checks with code citations and suggested fixes."
+          content="Evidence-grounded Code Analyzer V2 with structured drawing extraction, Code RAG, independent verification, and reviewer learning."
         />
       </Helmet>
 
       <div className="space-y-6">
         <PageHeader
-          eyebrow="Code Analyzer"
-          title="AI Code Analyzer"
-          body="Upload architectural drawings and analyze them for building code violations. Get feedback with code citations and suggested fixes — powered by live PermitPilot analysis, not mock findings."
+          eyebrow="Evidence-grounded review"
+          title="Code Analyzer V2"
+          body="PermitPilot's six-layer analyzer with structured drawing extraction, hybrid Code RAG, specialized review, independent verification, and reviewer learning."
           action={
             <div className="flex flex-wrap gap-2">
               <ServicePill kind="permit">Permit expediting</ServicePill>

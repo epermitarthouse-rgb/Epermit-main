@@ -146,9 +146,16 @@ export const hybridNavGroups: HybridNavGroup[] = [
       },
       {
         title: "Code Analyzer",
+        href: "/code-analyzer",
+        icon: ShieldCheck,
+        description: "Analyze permit drawing sets",
+        requiresAuth: true,
+      },
+      {
+        title: "Code Analyzer V2",
         href: "/code-compliance",
         icon: ShieldCheck,
-        description: "Check code compliance",
+        description: "Evidence-grounded six-layer review",
         requiresAuth: true,
       },
       {
@@ -326,7 +333,8 @@ export const pageTitles: Record<string, string> = {
   // Legacy path redirects to Response Matrix; title kept for shell flash only
   "/classified-comments": "Response Matrix",
   "/designcheck": "DesignCheck",
-  "/code-compliance": "Code Analyzer",
+  "/code-analyzer": "Code Analyzer",
+  "/code-compliance": "Code Analyzer V2",
   "/uci": "Utility Coordination",
   "/uci/portal-harvest": "UCI Portal Harvest",
   "/uci/application-builder": "UCI Builder",

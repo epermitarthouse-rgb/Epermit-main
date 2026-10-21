@@ -47,6 +47,7 @@ import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
 import CodeCompliance from "./pages/CodeCompliance";
+import SupabaseCodeAnalyzer from "./pages/SupabaseCodeAnalyzer";
 import DesignCheck from "./pages/DesignCheck";
 import {
   UciCiacRefundsPage,
@@ -184,6 +185,7 @@ const App = () => (
                   <Route path="/jurisdictions/:stateCode" element={<StateLandingPage />} />
                   <Route path="/permit-intelligence" element={<PermitIntelligence />} />
                   <Route path="/designcheck" element={<DesignCheck />} />
+                  <Route path="/code-analyzer" element={<SupabaseCodeAnalyzer />} />
                   <Route path="/code-compliance" element={<CodeCompliance />} />
                   <Route path="/code-reference" element={<CodeReferenceLibrary />} />
                   <Route path="/roi-calculator" element={<ROICalculator />} />
