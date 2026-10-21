@@ -82,6 +82,7 @@ describe('module feature flag allowlist', () => {
 describe('getModuleFlagForPath route mapping', () => {
   const cases: Array<[string, keyof typeof FEATURE_FLAG | null]> = [
     ['/designcheck', 'MODULE_DESIGN_CHECK'],
+    ['/code-analyzer', 'MODULE_CODE_ANALYZER'],
     ['/code-compliance', 'MODULE_CODE_ANALYZER'],
     ['/uci', 'MODULE_UTILITY_COORDINATION'],
     ['/uci/inbox', 'MODULE_UTILITY_COORDINATION'],
@@ -197,6 +198,7 @@ describe('isModuleHrefVisible', () => {
 
   it('shows nav href when module flag ON', () => {
     const flags = flagsWith('MODULE_CODE_ANALYZER', true);
+    assert.equal(isModuleHrefVisible('/code-analyzer', flags), true);
     assert.equal(isModuleHrefVisible('/code-compliance', flags), true);
     assert.equal(
       isFeatureEnabled(flags, FEATURE_FLAG.MODULE_CODE_ANALYZER),

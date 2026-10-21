@@ -44,7 +44,7 @@ const DEFAULT_CHECKLIST: Omit<ChecklistItem, 'completed'>[] = [
     title: 'Try AI compliance checking',
     description: 'Upload drawings for automated code review',
     action: 'Check Compliance',
-    route: '/code-compliance',
+    route: '/code-analyzer',
   },
 ];
 

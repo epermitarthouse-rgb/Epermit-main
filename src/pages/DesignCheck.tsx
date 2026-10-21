@@ -161,7 +161,7 @@ export default function DesignCheck() {
         <title>DesignCheck | PermitPulse</title>
         <meta
           name="description"
-          content="Pre-submittal readiness dashboard that summarizes Code Analyzer findings for the selected project."
+          content="Pre-submittal readiness dashboard that summarizes Code Analyzer V2 findings for the selected project."
         />
       </Helmet>
 
@@ -169,14 +169,14 @@ export default function DesignCheck() {
         <PageHeader
           eyebrow="DesignCheck"
           title="Pre-submittal readiness"
-          body="Summarize real Code Analyzer findings for the selected project. Run analysis and export stay on the analyzer — DesignCheck does not re-run drawing review."
+          body="Summarize evidence-grounded Code Analyzer V2 findings for the selected project. Run analysis and export stay on V2 — DesignCheck does not re-run drawing review."
           action={
             <div className="flex flex-wrap items-center gap-2">
               <ServicePill kind="permit">Readiness overview</ServicePill>
               <Button asChild>
                 <Link to={analyzerLink}>
                   <ShieldAlert className="mr-1.5 h-4 w-4" />
-                  Open Code Analyzer
+                  Open Code Analyzer V2
                 </Link>
               </Button>
             </div>
@@ -217,7 +217,7 @@ export default function DesignCheck() {
             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  No compliance analysis for this project yet. Run the Code Analyzer to
+                  No V2 compliance analysis for this project yet. Run Code Analyzer V2 to
                   upload drawings and persist findings — DesignCheck will summarize them here.
                 </p>
                 <AlertBanner
@@ -244,7 +244,7 @@ export default function DesignCheck() {
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <DataSourceBadge
                 kind="live"
-                detail="KPIs and findings are read from document_annotations written by the Code Analyzer."
+                detail="KPIs and findings are read from document_annotations written by Code Analyzer V2."
               />
               {projectName ? <span className="font-medium text-foreground">{projectName}</span> : null}
               {summary.latestUpdatedAt ? (

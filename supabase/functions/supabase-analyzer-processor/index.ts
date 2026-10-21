@@ -284,6 +284,7 @@ Rules:
                   type: "input_file",
                   filename: job.original_file_name,
                   file_data: fileData,
+                  detail: "high",
                 },
                 {
                   type: "input_text",
@@ -292,6 +293,7 @@ Rules:
               ],
             },
           ],
+          store: false,
           text: {
             format: {
               type: "json_schema",

@@ -10,7 +10,10 @@ export const MODULE_FLAG_ROUTES: Readonly<
 > = {
   [FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO]: [],
   [FEATURE_FLAG.MODULE_DESIGN_CHECK]: [{ kind: 'exact', path: '/designcheck' }],
-  [FEATURE_FLAG.MODULE_CODE_ANALYZER]: [{ kind: 'exact', path: '/code-compliance' }],
+  [FEATURE_FLAG.MODULE_CODE_ANALYZER]: [
+    { kind: 'exact', path: '/code-analyzer' },
+    { kind: 'exact', path: '/code-compliance' },
+  ],
   [FEATURE_FLAG.MODULE_UTILITY_COORDINATION]: [{ kind: 'prefix', path: '/uci' }],
   [FEATURE_FLAG.MODULE_JURISDICTION_MAP]: [
     { kind: 'exact', path: '/jurisdictions/map' },
