@@ -1,26 +1,41 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { motion } from "framer-motion";
 import {
-  AlertCircle,
-  CheckCircle2,
+  Building2,
+  Calendar,
   Download,
+  FileText,
+  FolderKanban,
   Loader2,
-  Play,
+  MapPin,
   RefreshCw,
   RotateCcw,
+  Shield,
   Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProjects } from "@/hooks/useProjects";
 import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import {
+  AnalyzerProgressStrip,
+  AnalyzerSideActions,
+  PendingDrawingCards,
+  SheetFindings,
+  SheetNavigator,
+} from "@/components/compliance/supabaseAnalyzerPresentation";
+import { bytesLabel, statusLabel } from "@/components/compliance/supabaseAnalyzerLabels";
+import {
+  SUPABASE_ANALYZER_MAX_SHEETS,
+  SUPABASE_ANALYZER_MAX_TOTAL_BYTES,
   cancelSupabaseAnalyzerRun,
   createSupabaseAnalyzerRun,
   fetchSupabaseAnalyzerDataset,
@@ -28,9 +43,6 @@ import {
   finalizeSupabaseAnalyzerRun,
   isActiveSupabaseAnalyzerRun,
   retrySupabaseAnalyzerJobs,
-  SUPABASE_ANALYZER_MAX_FILE_BYTES,
-  SUPABASE_ANALYZER_MAX_SHEETS,
-  SUPABASE_ANALYZER_MAX_TOTAL_BYTES,
   uploadSupabaseAnalyzerFiles,
   type AnalyzerRunDataset,
   type SupabaseAnalyzerFinding,
@@ -48,57 +60,20 @@ import {
   jurisdictionKeyFor,
 } from "@/lib/supabaseAnalyzer/taxonomy";
 import { exportSupabaseAnalyzerReport } from "@/lib/supabaseAnalyzer/report";
-import { cn } from "@/lib/utils";
+import {
+  analyzerSelectionSignature,
+  analyzerSubmissionAction,
+  clearPendingAnalyzerSheets,
+  describeSelectionNotices,
+  failedUploadDescriptors,
+  mergePendingAnalyzerSheets,
+  removePendingAnalyzerSheet,
+  retainPendingSelectionForProject,
+  selectionNoticeTone,
+  type AnalyzerSubmissionDraft,
+} from "@/lib/supabaseAnalyzer/pendingSelection";
 
 const ACTIVE_STATUSES = new Set(["uploading", "queued", "processing"]);
-
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    upload_pending: "Awaiting upload",
-    uploading: "Uploading drawings",
-    queued: "Queued",
-    processing: "In review",
-    completed: "Complete",
-    completed_with_errors: "Complete with sheet errors",
-    failed: "Needs attention",
-    cancelled: "Cancelled",
-  };
-  return labels[status] || status.replace(/_/g, " ");
-}
-
-function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "completed") return "default";
-  if (status === "failed" || status === "completed_with_errors") return "destructive";
-  if (status === "processing" || status === "queued") return "secondary";
-  return "outline";
-}
-
-function findingTone(severity: string) {
-  if (severity === "critical") return "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20";
-  if (severity === "warning") return "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20";
-  return "border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20";
-}
-
-function bytesLabel(bytes: number) {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.ceil(bytes / 1024)} KB`;
-}
-
-function sheetErrorMessage(errorCode: string | null) {
-  if (errorCode === "drawing_download_failed") {
-    return "The drawing file could not be opened. Retry this sheet or upload it again.";
-  }
-  if (errorCode === "budget_limit_reached") {
-    return "This analysis reached its processing limit. Contact support before retrying.";
-  }
-  if (errorCode === "run_cancelled") {
-    return "This sheet was not completed because the analysis was cancelled.";
-  }
-  if (errorCode?.startsWith("openai_")) {
-    return "The analysis service was temporarily unavailable. Retry this sheet.";
-  }
-  return "This sheet could not be completed. Retry the sheet or contact support.";
-}
 
 export function SupabaseCodeAnalyzer() {
   const { projects } = useProjects();
@@ -112,12 +87,19 @@ export function SupabaseCodeAnalyzer() {
   const [dataset, setDataset] = useState<AnalyzerRunDataset | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [activeDiscipline, setActiveDiscipline] = useState("all");
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{
     completed: number;
     total: number;
     fileName: string;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const filesRef = useRef<File[]>([]);
+  const submittingRef = useRef(false);
+  const draftRef = useRef<AnalyzerSubmissionDraft | null>(null);
+  const selectionProjectRef = useRef(projectId);
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const totalBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
@@ -156,6 +138,7 @@ export function SupabaseCodeAnalyzer() {
   }, [projectId, loadRuns]);
 
   useEffect(() => {
+    setActiveDiscipline("all");
     if (!selectedRunId) {
       setDataset(null);
       return;
@@ -173,6 +156,26 @@ export function SupabaseCodeAnalyzer() {
     }, 5000);
     return () => window.clearInterval(timer);
   }, [selectedRunId, activeRun, loadDataset]);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  useEffect(() => {
+    const previousProjectId = selectionProjectRef.current;
+    if (previousProjectId === projectId) return;
+    selectionProjectRef.current = projectId;
+    const retained = retainPendingSelectionForProject(
+      previousProjectId,
+      projectId,
+      filesRef.current,
+      submittingRef.current,
+    );
+    if (retained === filesRef.current) return;
+    draftRef.current = null;
+    filesRef.current = [];
+    setFiles([]);
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -195,76 +198,146 @@ export function SupabaseCodeAnalyzer() {
     );
   }, [projectId, jurisdiction, projectType, codeYear]);
 
-  const chooseFiles = (incoming: FileList | null) => {
+  const reportSelection = (notices: Parameters<typeof describeSelectionNotices>[0]) => {
+    const message = describeSelectionNotices(notices);
+    if (!message) return;
+    const tone = selectionNoticeTone(notices);
+    if (tone === "info") toast.info(message);
+    else toast.warning(message);
+  };
+
+  const addFiles = (incoming: FileList | File[] | null) => {
     if (!incoming) return;
-    const next = Array.from(incoming);
-    const invalid = next.find((file) =>
-      file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")
-    );
-    if (invalid) {
-      toast.error(`${invalid.name}: only individual PDF sheets are accepted`);
-      return;
-    }
-    const oversized = next.find((file) => file.size > SUPABASE_ANALYZER_MAX_FILE_BYTES);
-    if (oversized) {
-      toast.error(`${oversized.name}: each sheet must be 15 MB or smaller`);
-      return;
-    }
-    if (next.length > SUPABASE_ANALYZER_MAX_SHEETS) {
-      toast.error(`Select no more than ${SUPABASE_ANALYZER_MAX_SHEETS} sheets`);
-      return;
-    }
-    const bytes = next.reduce((sum, file) => sum + file.size, 0);
-    if (bytes > SUPABASE_ANALYZER_MAX_TOTAL_BYTES) {
-      toast.error("The selected drawing set exceeds 250 MB");
-      return;
-    }
-    const keys = new Set<string>();
-    const duplicate = next.find((file) => {
-      const key = `${file.name.toLowerCase()}:${file.size}`;
-      if (keys.has(key)) return true;
-      keys.add(key);
-      return false;
+    const merged = mergePendingAnalyzerSheets(filesRef.current, Array.from(incoming), {
+      locked: submittingRef.current,
     });
-    if (duplicate) {
-      toast.error(`${duplicate.name}: duplicate sheet selected`);
-      return;
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (merged.blocked) return;
+    if (
+      draftRef.current
+      && analyzerSelectionSignature(merged.files) !== draftRef.current.signature
+    ) {
+      draftRef.current = null;
     }
+    filesRef.current = merged.files;
+    setFiles(merged.files);
+    reportSelection(merged.notices);
+  };
+
+  const removeSelectedFile = (index: number) => {
+    if (submittingRef.current) return;
+    const next = removePendingAnalyzerSheet(filesRef.current, index);
+    if (draftRef.current && analyzerSelectionSignature(next) !== draftRef.current.signature) {
+      draftRef.current = null;
+    }
+    filesRef.current = next;
     setFiles(next);
   };
 
+  const clearSelectedFiles = () => {
+    if (submittingRef.current) return;
+    draftRef.current = null;
+    filesRef.current = clearPendingAnalyzerSheets<File>();
+    setFiles(filesRef.current);
+  };
+
+  const handleDrag = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (submittingRef.current) return;
+    setDragActive(event.type === "dragenter" || event.type === "dragover");
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+    addFiles(event.dataTransfer.files);
+  };
+
   const startAnalysis = async () => {
-    if (!projectId) {
-      toast.error("Select a project before starting an analysis");
+    const activeProjectId = projectId;
+    const selected = filesRef.current;
+    const action = analyzerSubmissionAction({
+      inFlight: submittingRef.current,
+      projectId: activeProjectId,
+      files: selected,
+      draft: draftRef.current,
+    });
+    if (action === "ignore") {
+      if (!submittingRef.current && !activeProjectId) {
+        toast.error("Select a project before starting an analysis");
+      } else if (!submittingRef.current && selected.length === 0) {
+        toast.error("Select at least one drawing sheet");
+      }
       return;
     }
-    if (files.length === 0) {
-      toast.error("Select at least one drawing sheet");
-      return;
-    }
+
+    submittingRef.current = true;
     setSubmitting(true);
-    setUploadProgress({ completed: 0, total: files.length, fileName: files[0].name });
+    setUploadProgress({ completed: 0, total: selected.length, fileName: selected[0].name });
     try {
-      const created = await createSupabaseAnalyzerRun({
-        projectId,
-        files,
-        jurisdictionKey: jurisdictionKeyFor(jurisdiction),
-        jurisdictionLabel: jurisdiction,
-        projectType,
-        codeEdition: codeYear,
-        codeContext: codeContextForAnalyzer(jurisdiction, codeYear),
-      });
-      setSelectedRunId(created.runId);
-      const uploaded = await uploadSupabaseAnalyzerFiles(
-        files,
-        created.uploads,
-        (completed, total, fileName) => setUploadProgress({ completed, total, fileName }),
-      );
-      const finalized = await finalizeSupabaseAnalyzerRun(projectId, created.runId);
-      await loadRuns(projectId);
-      await loadDataset(created.runId);
+      let runId: string;
+      let uploads = draftRef.current?.uploads || [];
+      if (action === "create") {
+        const created = await createSupabaseAnalyzerRun({
+          projectId: activeProjectId,
+          files: selected,
+          jurisdictionKey: jurisdictionKeyFor(jurisdiction),
+          jurisdictionLabel: jurisdiction,
+          projectType,
+          codeEdition: codeYear,
+          codeContext: codeContextForAnalyzer(jurisdiction, codeYear),
+        });
+        runId = created.runId;
+        uploads = created.uploads;
+        draftRef.current = {
+          projectId: activeProjectId,
+          signature: analyzerSelectionSignature(selected),
+          runId,
+          uploads,
+        };
+      } else {
+        runId = draftRef.current!.runId;
+      }
+
+      setSelectedRunId(runId);
+      if (uploads.length > 0) {
+        const uploaded = await uploadSupabaseAnalyzerFiles(
+          selected,
+          uploads,
+          (completed, total, fileName) => setUploadProgress({ completed, total, fileName }),
+        );
+        const remaining = failedUploadDescriptors(
+          uploads,
+          uploaded.failures.map((failure) => failure.jobId),
+        );
+        draftRef.current = {
+          projectId: activeProjectId,
+          signature: analyzerSelectionSignature(selected),
+          runId,
+          uploads: remaining,
+        };
+        if (remaining.length > 0) {
+          if (uploaded.completed > 0) {
+            await finalizeSupabaseAnalyzerRun(activeProjectId, runId);
+            await loadRuns(activeProjectId);
+            await loadDataset(runId);
+          }
+          toast.warning(
+            `${remaining.length} sheet${remaining.length === 1 ? "" : "s"} could not be uploaded. They remain selected so you can try again.`,
+          );
+          return;
+        }
+      }
+
+      const finalized = await finalizeSupabaseAnalyzerRun(activeProjectId, runId);
+      await loadRuns(activeProjectId);
+      await loadDataset(runId);
+      draftRef.current = null;
+      filesRef.current = [];
       setFiles([]);
-      if (uploaded.failures.length || finalized.missing.length) {
+      if (finalized.missing.length) {
         toast.warning(
           `${finalized.queued} sheets queued; ${finalized.missing.length} uploads need attention.`,
         );
@@ -274,6 +347,7 @@ export function SupabaseCodeAnalyzer() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not start analysis");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
       setUploadProgress(null);
     }
@@ -322,310 +396,348 @@ export function SupabaseCodeAnalyzer() {
     return grouped;
   }, [dataset?.findings]);
 
+  const jurisdictionOptions = useMemo(
+    () => analyzerJurisdictionGroups.flatMap((group) =>
+      group.items.map((item) => ({ value: item, label: item, group: group.label })),
+    ),
+    [],
+  );
+  const projectTypeOptions = useMemo(
+    () => analyzerProjectTypeGroups.flatMap((group) =>
+      group.items.map((item) => ({ value: item, label: item, group: group.label })),
+    ),
+    [],
+  );
+  const codeContext = codeContextForAnalyzer(jurisdiction, codeYear);
+  const selectedJob = dataset?.jobs.find((job) => job.id === selectedJobId) || dataset?.jobs[0] || null;
+  const selectedFindings = selectedJob ? findingsByJob.get(selectedJob.id) || [] : [];
+  const finishedSheets = activeRun ? activeRun.completed_sheets + activeRun.failed_sheets : 0;
+
+  useEffect(() => {
+    const jobs = dataset?.jobs || [];
+    setSelectedJobId((current) => {
+      if (current && jobs.some((job) => job.id === current)) return current;
+      return jobs[0]?.id || null;
+    });
+  }, [dataset?.jobs]);
+
+  const selectDiscipline = (discipline: string) => {
+    setActiveDiscipline(discipline);
+    const jobs = discipline === "all"
+      ? dataset?.jobs || []
+      : jobsByDiscipline.find(([name]) => name === discipline)?.[1] || [];
+    setSelectedJobId((current) => (current && jobs.some((job) => job.id === current) ? current : jobs[0]?.id || null));
+  };
+
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="pilot-card border-border bg-card">
         <CardHeader>
-          <CardTitle>New analysis</CardTitle>
-          <CardDescription>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <Shield className="h-5 w-5 text-teal" />
+            Code Analyzer
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
             Upload up to 100 individual permit drawing PDFs. Processing continues after you leave this page.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2">
-              <Label>Project</Label>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={projectId || ""}
-                onChange={(event) => setSelectedProjectId(event.target.value || null)}
-              >
-                <option value="">Select project</option>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-foreground">
+              <FolderKanban className="h-4 w-4" />
+              Project
+            </Label>
+            <Select
+              value={projectId || "__none__"}
+              disabled={submitting}
+              onValueChange={(value) => setSelectedProjectId(value === "__none__" ? null : value)}
+            >
+              <SelectTrigger data-testid="select-project">
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Select a project</SelectItem>
                 {projects.map((project) => (
-                  <option key={project.id} value={project.id}>{project.name}</option>
+                  <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
                 ))}
-              </select>
-            </div>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <Label>Jurisdiction</Label>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Label className="flex items-center gap-2 text-foreground">
+                <MapPin className="h-4 w-4" />
+                Jurisdiction
+              </Label>
+              <SearchableCombobox
+                options={jurisdictionOptions}
                 value={jurisdiction}
-                onChange={(event) => {
-                  const value = event.target.value;
+                disabled={submitting}
+                onValueChange={(value) => {
                   setJurisdiction(value);
                   setCodeYear(defaultCodeYearForAnalyzer(value));
                 }}
-              >
-                {analyzerJurisdictionGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.items.map((item) => <option key={item}>{item}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+                placeholder="Select jurisdiction..."
+                searchPlaceholder="Search jurisdictions..."
+                emptyText="No jurisdiction found."
+                data-testid="select-jurisdiction"
+              />
             </div>
             <div className="space-y-2">
-              <Label>Project type</Label>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              <Label className="flex items-center gap-2 text-foreground">
+                <Building2 className="h-4 w-4" />
+                Project Type
+              </Label>
+              <SearchableCombobox
+                options={projectTypeOptions}
                 value={projectType}
-                onChange={(event) => setProjectType(event.target.value)}
-              >
-                {analyzerProjectTypeGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.items.map((item) => <option key={item}>{item}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+                disabled={submitting}
+                onValueChange={setProjectType}
+                placeholder="Select project type..."
+                searchPlaceholder="Search project types..."
+                emptyText="No project type found."
+                data-testid="select-project-type"
+              />
             </div>
             <div className="space-y-2">
-              <Label>Code year</Label>
-              <select
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={codeYear}
-                onChange={(event) => setCodeYear(event.target.value)}
-              >
-                {analyzerCodeYears.map((year) => <option key={year}>{year}</option>)}
-              </select>
+              <Label className="flex items-center gap-2 text-foreground">
+                <Calendar className="h-4 w-4" />
+                Code Year
+              </Label>
+              <Select value={codeYear} disabled={submitting} onValueChange={setCodeYear}>
+                <SelectTrigger data-testid="select-code-year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {analyzerCodeYears.map((year) => (
+                    <SelectItem key={year} value={year}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Code context: {codeContextForAnalyzer(jurisdiction, codeYear)}
-          </p>
+          <Badge variant="outline" className="h-auto whitespace-normal text-left font-normal">
+            {codeContext}
+          </Badge>
 
-          <div className="rounded-lg border border-dashed p-6 text-center">
+          <div
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+              dragActive ? "border-teal bg-teal/[0.06]" : "border-primary/35 hover:border-primary/55 bg-muted/25"
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
             <Input
               ref={fileInputRef}
               type="file"
               accept="application/pdf,.pdf"
               multiple
               className="hidden"
-              onChange={(event) => chooseFiles(event.target.files)}
+              onChange={(event) => addFiles(event.target.files)}
             />
-            <Upload className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-            <p className="font-medium">Select individual PDF drawing sheets</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Up to 100 sheets, 15 MB each, 250 MB total
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4"
-              disabled={submitting}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Choose drawings
-            </Button>
+            {files.length === 0 ? (
+              <div className="space-y-2">
+                <div className="flex justify-center gap-4 pt-4">
+                  <FileText className="h-12 w-12 text-primary-deep/75" />
+                  <Upload className="h-12 w-12 text-teal" />
+                </div>
+                <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
+                <p className="text-sm text-muted-foreground">
+                  Add drawings in more than one selection. Up to 100 sheets, 15 MB each, 250 MB total.
+                </p>
+                <Button
+                  type="button"
+                  variant="outlineGold"
+                  className="mt-4"
+                  disabled={submitting}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose drawings
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4 text-left">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground" data-testid="analyzer-pending-file-capacity">
+                    {files.length} of {SUPABASE_ANALYZER_MAX_SHEETS} sheets · {bytesLabel(totalBytes)} of {bytesLabel(SUPABASE_ANALYZER_MAX_TOTAL_BYTES)}
+                  </p>
+                  <Button type="button" variant="ghost" onClick={clearSelectedFiles} disabled={submitting}>
+                    <X className="mr-2 h-4 w-4" /> Clear
+                  </Button>
+                </div>
+                <PendingDrawingCards
+                  files={files}
+                  submitting={submitting}
+                  onRemove={removeSelectedFile}
+                />
+                {files.length < SUPABASE_ANALYZER_MAX_SHEETS ? (
+                  <div className="flex justify-center border-t pt-2">
+                    <Button
+                      type="button"
+                      variant="outlineGold"
+                      size="sm"
+                      disabled={submitting}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Add More Drawings
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
-          {files.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 p-4">
-              <div>
-                <p className="font-medium">{files.length} sheets selected</p>
-                <p className="text-sm text-muted-foreground">{bytesLabel(totalBytes)}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setFiles([])} disabled={submitting}>
-                  <X className="mr-2 h-4 w-4" /> Clear
-                </Button>
-                <Button onClick={startAnalysis} disabled={submitting || !projectId}>
-                  {submitting
-                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    : <Play className="mr-2 h-4 w-4" />}
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button
+              variant="gold"
+              size="lg"
+              onClick={() => void startAnalysis()}
+              disabled={submitting || !projectId || files.length === 0}
+              className="px-8"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {uploadProgress
+                    ? `Uploading ${uploadProgress.completed} / ${uploadProgress.total}`
+                    : "Starting analysis"}
+                </>
+              ) : (
+                <>
+                  <Shield className="mr-2 h-4 w-4" />
                   Start analysis
-                </Button>
-              </div>
-            </div>
-          )}
+                </>
+              )}
+            </Button>
+            {activeRun && ACTIVE_STATUSES.has(activeRun.status) ? (
+              <Button type="button" variant="outlineGold" size="lg" onClick={() => void cancelRun()}>
+                Cancel
+              </Button>
+            ) : null}
+            {activeRun && activeRun.failed_sheets > 0 && !submitting ? (
+              <Button type="button" variant="outlineGold" size="lg" onClick={() => void retryFailed()}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Retry failed sheets ({activeRun.failed_sheets})
+              </Button>
+            ) : null}
+          </div>
 
-          {uploadProgress && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="truncate">Uploading {uploadProgress.fileName}</span>
-                <span>{uploadProgress.completed} / {uploadProgress.total}</span>
-              </div>
-              <Progress value={(uploadProgress.completed / Math.max(1, uploadProgress.total)) * 100} />
+          {uploadProgress ? (
+            <div className="space-y-2" data-testid="drawing-upload-progress">
+              <Progress
+                value={(uploadProgress.completed / Math.max(1, uploadProgress.total)) * 100}
+                className="h-2"
+              />
+              <p className="text-center text-sm text-muted-foreground">
+                Uploading {uploadProgress.fileName} · {uploadProgress.completed} / {uploadProgress.total}
+              </p>
             </div>
-          )}
+          ) : null}
+
+          {activeRun && activeRun.total_sheets > 0 ? (
+            <div className="space-y-2" data-testid="analyzer-sheet-progress">
+              <Progress value={progress} className="h-2" />
+              <p className="text-center text-sm text-foreground">
+                {finishedSheets} of {activeRun.total_sheets} sheets finished
+              </p>
+              <p className="text-center text-xs text-muted-foreground">
+                Queued {activeRun.queued_sheets} · Processing {activeRun.processing_sheets} · Completed {activeRun.completed_sheets} · Failed {activeRun.failed_sheets} · {progress}%
+              </p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
-      {runs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>Analysis History</CardTitle>
-                <CardDescription>Saved results remain available by project.</CardDescription>
-              </div>
-              <select
-                className="h-10 max-w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={selectedRunId || ""}
-                onChange={(event) => setSelectedRunId(event.target.value)}
-              >
-                {runs.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {new Date(run.created_at).toLocaleString()} · {statusLabel(run.status)} · {run.total_sheets} sheets
-                  </option>
-                ))}
-              </select>
-            </div>
-          </CardHeader>
-          {activeRun && (
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                {[
-                  ["Total", activeRun.total_sheets],
-                  ["Queued", activeRun.queued_sheets],
-                  ["In review", activeRun.processing_sheets],
-                  ["Complete", activeRun.completed_sheets],
-                  ["Needs attention", activeRun.failed_sheets],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg border p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-                    <p className="mt-1 text-2xl font-semibold">{value}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={statusVariant(activeRun.status)}>{statusLabel(activeRun.status)}</Badge>
-                    <span>{progress}%</span>
-                  </div>
-                  <span className="text-muted-foreground">
-                    {activeRun.jurisdiction_label} · {activeRun.code_context}
-                  </span>
-                </div>
-                <Progress value={progress} />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => selectedRunId && void loadDataset(selectedRunId)}
-                  disabled={loading}
-                >
-                  <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
-                  Refresh
-                </Button>
-                {activeRun.failed_sheets > 0 && (
-                  <Button variant="outline" onClick={() => void retryFailed()}>
-                    <RotateCcw className="mr-2 h-4 w-4" /> Retry failed sheets
-                  </Button>
-                )}
-                {dataset && dataset.run.completed_sheets > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={() => exportSupabaseAnalyzerReport(dataset, selectedProject?.name)}
-                  >
-                    <Download className="mr-2 h-4 w-4" /> Download report
-                  </Button>
-                )}
-                {ACTIVE_STATUSES.has(activeRun.status) && (
-                  <Button variant="ghost" onClick={() => void cancelRun()}>Cancel run</Button>
-                )}
-              </div>
-            </CardContent>
-          )}
-        </Card>
-      )}
-
-      {loading && !dataset && (
+      {loading && !dataset ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading analysis
         </div>
-      )}
+      ) : null}
 
-      {dataset && jobsByDiscipline.map(([discipline, jobs]) => (
-        <Card key={discipline}>
-          <CardHeader>
-            <CardTitle>{discipline}</CardTitle>
-            <CardDescription>{jobs.length} drawing sheet{jobs.length === 1 ? "" : "s"}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {jobs.map((job) => {
-              const findings = findingsByJob.get(job.id) || [];
-              return (
-                <div key={job.id} className="rounded-lg border">
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b p-4">
-                    <div>
-                      <p className="font-semibold">
-                        {job.detected_sheet_number || `Sheet ${job.ordinal}`}
-                        {job.detected_sheet_title ? ` — ${job.detected_sheet_title}` : ""}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{job.original_file_name}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
-                      {job.status === "failed" && (
-                        <Button size="sm" variant="outline" onClick={() => void retryFailed([job.id])}>
-                          <RotateCcw className="mr-1 h-3.5 w-3.5" /> Retry
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-3 p-4">
-                    {job.status === "processing" && (
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reviewing drawing content
-                      </div>
-                    )}
-                    {job.status === "failed" && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{sheetErrorMessage(job.error_code)}</AlertDescription>
-                      </Alert>
-                    )}
-                    {job.status === "completed" && (
-                      <div className="flex items-center text-sm text-muted-foreground">
-                        <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" />
-                        {job.analysis_summary || "Drawing review completed."}
-                      </div>
-                    )}
-                    {job.status === "completed" && findings.length === 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        No supported review observations were returned for this sheet.
-                      </p>
-                    )}
-                    {findings.map((finding) => (
-                      <div key={finding.id} className={cn("rounded-lg border p-4", findingTone(finding.severity))}>
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{finding.severity}</Badge>
-                          <Badge variant="secondary">{finding.category}</Badge>
-                          <h4 className="font-semibold">{finding.title}</h4>
-                        </div>
-                        <div className="grid gap-3 text-sm lg:grid-cols-2">
-                          <div>
-                            <p className="font-medium">Observation</p>
-                            <p className="mt-1 text-muted-foreground">{finding.observation}</p>
-                          </div>
-                          <div>
-                            <p className="font-medium">Drawing evidence</p>
-                            <p className="mt-1 text-muted-foreground">{finding.drawing_evidence}</p>
-                            {finding.drawing_location && (
-                              <p className="mt-1 text-muted-foreground">Location: {finding.drawing_location}</p>
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium">Code Reference</p>
-                            <p className="mt-1 text-muted-foreground">
-                              {finding.suggested_code_reference || "Not specified"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="font-medium">Recommended action</p>
-                            <p className="mt-1 text-muted-foreground">{finding.recommendation}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      ))}
+      {activeRun ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+          data-testid="supabase-analyzer-results"
+        >
+          <AnalyzerProgressStrip
+            total={activeRun.total_sheets}
+            queued={activeRun.queued_sheets}
+            processing={activeRun.processing_sheets}
+            completed={activeRun.completed_sheets}
+            failed={activeRun.failed_sheets}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2" data-testid="analysis-history-control">
+              <Label className="text-sm text-muted-foreground">Analysis history</Label>
+              <Select value={selectedRunId || undefined} onValueChange={setSelectedRunId}>
+                <SelectTrigger className="w-[280px] max-w-full">
+                  <SelectValue placeholder="Select an analysis" />
+                </SelectTrigger>
+                <SelectContent>
+                  {runs.map((run) => (
+                    <SelectItem key={run.id} value={run.id}>
+                      {new Date(run.created_at).toLocaleString()} · {statusLabel(run.status)} · {run.total_sheets} sheets
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {activeRun.jurisdiction_label} · {activeRun.code_context}
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-4">
+              {dataset && dataset.jobs.length > 0 && selectedJob ? (
+                <>
+                  <SheetNavigator
+                    groups={jobsByDiscipline}
+                    activeDiscipline={activeDiscipline}
+                    onDiscipline={selectDiscipline}
+                    selectedJobId={selectedJob.id}
+                    onSelectJob={setSelectedJobId}
+                  />
+                  <SheetFindings
+                    job={selectedJob}
+                    findings={selectedFindings}
+                    onRetry={(jobId) => void retryFailed([jobId])}
+                  />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {loading ? "Loading sheets" : "Sheets appear here after the drawings are queued."}
+                </p>
+              )}
+            </div>
+            <AnalyzerSideActions>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => selectedRunId && void loadDataset(selectedRunId)}
+                disabled={loading || !selectedRunId}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <Button
+                variant="outlineGold"
+                className="w-full justify-start"
+                onClick={() => dataset && exportSupabaseAnalyzerReport(dataset, selectedProject?.name)}
+                disabled={!dataset || dataset.run.completed_sheets === 0}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download report
+              </Button>
+            </AnalyzerSideActions>
+          </div>
+        </motion.div>
+      ) : null}
     </div>
   );
 }
