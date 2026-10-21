@@ -134,6 +134,7 @@ describe('featureFlags RPC client', () => {
 
   afterEach(() => {
     __featureFlagsTestHooks.setRpcClientOverride(null);
+    __featureFlagsTestHooks.setFetchTimeoutMs(null);
   });
 
   it('admin can toggle a known flag', async () => {
@@ -183,6 +184,14 @@ describe('featureFlags RPC client', () => {
       () => setFeatureFlag(FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO, true),
       /Unknown feature flag key/,
     );
+  });
+
+  it('fetch rejects when the feature-flag RPC never settles', async () => {
+    __featureFlagsTestHooks.setFetchTimeoutMs(30);
+    __featureFlagsTestHooks.setRpcClientOverride({
+      rpc: () => new Promise(() => undefined),
+    });
+    await assert.rejects(() => fetchFeatureFlags(), /Feature flags request timed out/);
   });
 
   it('fetch failure defaults OFF when merge applied to empty', async () => {

@@ -131,10 +131,15 @@ type RpcClient = {
 };
 
 let rpcClientOverride: RpcClient | null = null;
+const DEFAULT_FEATURE_FLAG_TIMEOUT_MS = 8000;
+let featureFlagTimeoutMs = DEFAULT_FEATURE_FLAG_TIMEOUT_MS;
 
 export const __featureFlagsTestHooks = {
   setRpcClientOverride(client: RpcClient | null) {
     rpcClientOverride = client;
+  },
+  setFetchTimeoutMs(timeoutMs: number | null) {
+    featureFlagTimeoutMs = timeoutMs ?? DEFAULT_FEATURE_FLAG_TIMEOUT_MS;
   },
 };
 
@@ -199,11 +204,26 @@ export function isMissingFeatureFlagsRpcError(error: unknown): boolean {
 }
 
 export async function fetchFeatureFlags(): Promise<FeatureFlagRow[]> {
-  const { data, error } = await getRpcClient().rpc('get_feature_flags');
-  if (error) {
-    throw new Error(error.message ?? 'Failed to fetch feature flags');
+  const request = getRpcClient().rpc('get_feature_flags');
+  // A late rejection must not escape after the timeout has already settled.
+  void Promise.resolve(request).catch(() => undefined);
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error('Feature flags request timed out'));
+    }, featureFlagTimeoutMs);
+  });
+
+  try {
+    const { data, error } = await Promise.race([request, timeout]);
+    if (error) {
+      throw new Error(error.message ?? 'Failed to fetch feature flags');
+    }
+    return (data as FeatureFlagRow[]) ?? [];
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
-  return (data as FeatureFlagRow[]) ?? [];
 }
 
 export async function setFeatureFlag(

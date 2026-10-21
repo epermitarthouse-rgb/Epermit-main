@@ -182,6 +182,13 @@ describe('nav visibility wiring (source assertions)', () => {
     assert.match(moduleFlagGateSource, /getModuleFlagForPath/);
   });
 
+  it('ModuleFlagGate recovers from an unsettled feature-flag request', () => {
+    assert.match(moduleFlagGateSource, /isError/);
+    assert.match(moduleFlagGateSource, /refetch/);
+    assert.match(moduleFlagGateSource, /This module could not be opened/);
+    assert.doesNotMatch(moduleFlagGateSource, /isError \? children/);
+  });
+
   it('ModuleFlagGate does not replace governance permissions', () => {
     assert.match(moduleFlagGateSource, /governance permissions remain/);
     assert.match(governanceSource, /user_feature_permissions/);
