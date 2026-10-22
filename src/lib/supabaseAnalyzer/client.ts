@@ -1,5 +1,13 @@
 import { supabase } from "@/lib/supabase";
 import type { PersistedAnalysisScope, StoredAnalysisMode } from "@/lib/supabaseAnalyzer/analysisMode";
+import {
+  buildReviewDecisionRecord,
+  isReviewDecisionStatus,
+  type FindingReviewDecision,
+  type ReviewDecisionStatus,
+} from "@/lib/supabaseAnalyzer/reviewDecisions";
+
+export type { FindingReviewDecision, ReviewDecisionStatus };
 
 export const SUPABASE_ANALYZER_BUCKET = "supabase-analyzer-drawings";
 export const SUPABASE_ANALYZER_MAX_SHEETS = 100;
@@ -97,6 +105,7 @@ export interface AnalyzerRunDataset {
   run: SupabaseAnalyzerRun;
   jobs: SupabaseAnalyzerSheetJob[];
   findings: SupabaseAnalyzerFinding[];
+  reviews?: FindingReviewDecision[];
 }
 
 async function invokeRunAction<T>(body: Record<string, unknown>): Promise<T> {
@@ -337,8 +346,26 @@ export async function fetchSupabaseAnalyzerRuns(projectId: string) {
   return (data || []) as SupabaseAnalyzerRun[];
 }
 
+const REVIEW_COLUMNS = "id, project_id, run_id, sheet_job_id, finding_id, decision, modified_response, decided_at, decided_by";
+
+function reviewFromRow(row: Record<string, unknown>): FindingReviewDecision | null {
+  if (!isReviewDecisionStatus(row.decision)) return null;
+  if (typeof row.id !== "string" || typeof row.run_id !== "string" || typeof row.finding_id !== "string") return null;
+  return {
+    id: row.id,
+    project_id: String(row.project_id || ""),
+    run_id: row.run_id,
+    sheet_job_id: String(row.sheet_job_id || ""),
+    finding_id: row.finding_id,
+    decision: row.decision,
+    modified_response: typeof row.modified_response === "string" ? row.modified_response : null,
+    decided_at: String(row.decided_at || ""),
+    decided_by: String(row.decided_by || ""),
+  };
+}
+
 export async function fetchSupabaseAnalyzerDataset(runId: string): Promise<AnalyzerRunDataset> {
-  const [runResult, jobsResult, findingsResult] = await Promise.all([
+  const [runResult, jobsResult, findingsResult, reviewsResult] = await Promise.all([
     supabase.from("supabase_analyzer_runs").select("*").eq("id", runId).single(),
     supabase
       .from("supabase_analyzer_sheet_jobs")
@@ -351,15 +378,65 @@ export async function fetchSupabaseAnalyzerDataset(runId: string): Promise<Analy
       .eq("run_id", runId)
       .eq("is_published", true)
       .order("finding_index"),
+    supabase
+      .from("supabase_analyzer_finding_reviews")
+      .select(REVIEW_COLUMNS)
+      .eq("run_id", runId),
   ]);
   if (runResult.error) throw runResult.error;
   if (jobsResult.error) throw jobsResult.error;
   if (findingsResult.error) throw findingsResult.error;
+  if (reviewsResult.error) throw reviewsResult.error;
+  const reviews = ((reviewsResult.data || []) as Array<Record<string, unknown>>)
+    .map(reviewFromRow)
+    .filter((review): review is FindingReviewDecision => review !== null && review.run_id === runId);
   return {
     run: runResult.data as SupabaseAnalyzerRun,
     jobs: (jobsResult.data || []) as SupabaseAnalyzerSheetJob[],
     findings: (findingsResult.data || []) as SupabaseAnalyzerFinding[],
+    reviews,
   };
+}
+
+export async function saveSupabaseAnalyzerReviewDecision(input: {
+  projectId: string;
+  runId: string;
+  sheetJobId: string;
+  findingId: string;
+  decision: ReviewDecisionStatus;
+  modifiedResponse?: string | null;
+  originalRecommendation: string;
+}) {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error("Authentication required");
+  const { record } = buildReviewDecisionRecord({
+    projectId: input.projectId,
+    runId: input.runId,
+    sheetJobId: input.sheetJobId,
+    findingId: input.findingId,
+    decision: input.decision,
+    modifiedResponse: input.modifiedResponse,
+    decidedAt: new Date().toISOString(),
+    decidedBy: userData.user.id,
+    originalRecommendation: input.originalRecommendation,
+  });
+  const { data, error } = await supabase
+    .from("supabase_analyzer_finding_reviews")
+    .upsert(record, { onConflict: "run_id,finding_id" })
+    .select(REVIEW_COLUMNS)
+    .single();
+  if (error) {
+    const message = error.message || "Could not save the review decision";
+    if (/row-level security|permission|not allowed/i.test(message)) {
+      throw new Error("You do not have permission to review findings on this project");
+    }
+    throw new Error(message);
+  }
+  const saved = reviewFromRow(data as Record<string, unknown>);
+  if (!saved || saved.run_id !== input.runId || saved.finding_id !== input.findingId) {
+    throw new Error("Could not save the review decision");
+  }
+  return saved;
 }
 
 export function isActiveSupabaseAnalyzerRun(run: SupabaseAnalyzerRun | null | undefined) {

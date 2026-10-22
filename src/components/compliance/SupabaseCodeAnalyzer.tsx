@@ -30,8 +30,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -57,12 +59,18 @@ import {
   isActiveSupabaseAnalyzerRun,
   reanalyzeSupabaseAnalyzerRun,
   retrySupabaseAnalyzerJobs,
+  saveSupabaseAnalyzerReviewDecision,
   updateSupabaseAnalyzerRun,
   uploadSupabaseAnalyzerFiles,
   type AnalyzerRunDataset,
   type SupabaseAnalyzerFinding,
   type SupabaseAnalyzerRun,
 } from "@/lib/supabaseAnalyzer/client";
+import {
+  mergeReviewDecision,
+  reviewsByFindingForRun,
+  type ReviewDecisionStatus,
+} from "@/lib/supabaseAnalyzer/reviewDecisions";
 import {
   analyzerCodeYears,
   analyzerJurisdictionGroups,
@@ -136,6 +144,10 @@ export function SupabaseCodeAnalyzer() {
   const [dragActive, setDragActive] = useState(false);
   const [activeDiscipline, setActiveDiscipline] = useState("all");
   const [severityFilter, setSeverityFilter] = useState<FindingSeverityFilter>("all");
+  const [sheetSeverity, setSheetSeverity] = useState<Record<string, FindingSeverityFilter>>({});
+  const [savingFindingId, setSavingFindingId] = useState<string | null>(null);
+  const [modifyTarget, setModifyTarget] = useState<SupabaseAnalyzerFinding | null>(null);
+  const [modifiedText, setModifiedText] = useState("");
   const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(() => new Set());
   const [expandedFindingIds, setExpandedFindingIds] = useState<Set<string>>(() => new Set());
   const [existingDrawingsOpen, setExistingDrawingsOpen] = useState(false);
@@ -195,6 +207,9 @@ export function SupabaseCodeAnalyzer() {
   useEffect(() => {
     setActiveDiscipline("all");
     setSeverityFilter("all");
+    setSheetSeverity({});
+    setModifyTarget(null);
+    setModifiedText("");
     setExpandedJobIds(new Set());
     setExpandedFindingIds(new Set());
     setExistingDrawingsOpen(false);
@@ -561,6 +576,61 @@ export function SupabaseCodeAnalyzer() {
     () => countSeverity(dataset?.findings || []),
     [dataset?.findings],
   );
+  const reviewsByFinding = useMemo(
+    () => reviewsByFindingForRun(dataset?.reviews || [], dataset?.run.id || ""),
+    [dataset],
+  );
+  const selectRunSeverity = (filter: FindingSeverityFilter) => {
+    setSeverityFilter(filter);
+    setSheetSeverity({});
+  };
+  const selectSheetSeverity = (jobId: string, filter: FindingSeverityFilter) => {
+    setSheetSeverity((current) => ({ ...current, [jobId]: filter }));
+  };
+  const persistDecision = async (
+    finding: SupabaseAnalyzerFinding,
+    decision: ReviewDecisionStatus,
+    modifiedResponse?: string | null,
+  ) => {
+    if (!dataset || dataset.run.id !== finding.run_id) return false;
+    setSavingFindingId(finding.id);
+    try {
+      const saved = await saveSupabaseAnalyzerReviewDecision({
+        projectId: dataset.run.project_id,
+        runId: finding.run_id,
+        sheetJobId: finding.sheet_job_id,
+        findingId: finding.id,
+        decision,
+        modifiedResponse,
+        originalRecommendation: finding.recommendation,
+      });
+      setDataset((current) => (
+        current && current.run.id === saved.run_id ? mergeReviewDecision(current, saved) : current
+      ));
+      toast.success(
+        decision === "accepted"
+          ? "Marked accepted"
+          : decision === "modified"
+            ? "Reviewer response saved"
+            : "Marked rejected",
+      );
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the review decision");
+      return false;
+    } finally {
+      setSavingFindingId(null);
+    }
+  };
+  const openModify = (finding: SupabaseAnalyzerFinding) => {
+    const existing = reviewsByFinding.get(finding.id);
+    setModifyTarget(finding);
+    setModifiedText(
+      existing?.decision === "modified" && existing.modified_response
+        ? existing.modified_response
+        : finding.recommendation,
+    );
+  };
   const finishedSheets = activeRun ? activeRun.completed_sheets + activeRun.failed_sheets : 0;
   const runInProgress = Boolean(activeRun && ACTIVE_STATUSES.has(activeRun.status));
   const cancelledSheets = dataset?.jobs.filter((job) => job.status === "cancelled").length || 0;
@@ -1154,7 +1224,7 @@ export function SupabaseCodeAnalyzer() {
             counts={findingCounts}
             active={severityFilter}
             processing={runInProgress}
-            onSelect={setSeverityFilter}
+            onSelect={selectRunSeverity}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2" data-testid="analysis-history-control">
@@ -1184,8 +1254,15 @@ export function SupabaseCodeAnalyzer() {
                   jobs={dataset.jobs}
                   findingsByJob={findingsByJob}
                   severityFilter={severityFilter}
+                  sheetSeverity={sheetSeverity}
                   activeDiscipline={activeDiscipline}
                   onDiscipline={setActiveDiscipline}
+                  onSheetSeverity={selectSheetSeverity}
+                  reviewsByFinding={reviewsByFinding}
+                  savingFindingId={savingFindingId}
+                  onAccept={(finding) => void persistDecision(finding, "accepted")}
+                  onModify={openModify}
+                  onReject={(finding) => void persistDecision(finding, "rejected")}
                   expandedJobIds={expandedJobIds}
                   onToggleJob={toggleJob}
                   expandedFindingIds={expandedFindingIds}
@@ -1232,6 +1309,60 @@ export function SupabaseCodeAnalyzer() {
           </div>
         </motion.div>
       ) : null}
+      <Dialog
+        open={Boolean(modifyTarget)}
+        onOpenChange={(open) => {
+          if (!open && !savingFindingId) setModifyTarget(null);
+        }}
+      >
+        <DialogContent data-testid="modify-response-dialog">
+          <DialogHeader>
+            <DialogTitle>Modify Response</DialogTitle>
+            <DialogDescription>
+              Edit the recommended action for this finding. The original recommendation stays unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Original Suggestion</Label>
+              <p className="mt-1 text-sm text-muted-foreground">{modifyTarget?.recommendation}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reviewer-response">Your Response</Label>
+              <Textarea
+                id="reviewer-response"
+                value={modifiedText}
+                onChange={(event) => setModifiedText(event.target.value)}
+                rows={4}
+                placeholder="Enter your modified response..."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outlineGold"
+                onClick={() => setModifyTarget(null)}
+                disabled={Boolean(savingFindingId)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="gold"
+                onClick={() => {
+                  if (!modifyTarget) return;
+                  void persistDecision(modifyTarget, "modified", modifiedText).then((saved) => {
+                    if (saved) setModifyTarget(null);
+                  });
+                }}
+                disabled={Boolean(savingFindingId)}
+              >
+                Save Response
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={Boolean(updateCopy)}
         onOpenChange={(open) => {

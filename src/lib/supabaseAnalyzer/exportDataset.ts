@@ -11,6 +11,7 @@ import {
   displayDisciplineForSheet,
   disciplineSortIndex,
 } from "@/lib/supabaseAnalyzer/disciplineDisplay";
+import { reviewForExport, type ExportedFindingReview } from "@/lib/supabaseAnalyzer/reviewDecisions";
 
 export const SUPABASE_ANALYZER_EXPORT_SCHEMA = "supabase-analyzer-export.v1";
 
@@ -100,6 +101,7 @@ export interface SupabaseAnalyzerJsonExport {
       verificationStatus: string;
       jurisdictionKey: string;
       codeEdition: string;
+      review: ExportedFindingReview | null;
     }>;
   }>;
 }
@@ -145,6 +147,7 @@ export function buildSupabaseAnalyzerJsonExport(
           verificationStatus: finding.verification_status,
           jurisdictionKey: finding.jurisdiction_key,
           codeEdition: finding.code_edition,
+          review: reviewForExport(dataset.reviews, run.id, finding.id),
         })),
       };
     });

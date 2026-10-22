@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import type { AnalyzerRunDataset, SupabaseAnalyzerFinding } from "./client";
 import { displayDisciplineForSheet } from "./disciplineDisplay";
 import { reportSummaryLines, supabaseAnalyzerExportFileName } from "./exportDataset";
+import { reviewForExport, reviewReportLines } from "./reviewDecisions";
 
 const severityColor: Record<string, [number, number, number]> = {
   critical: [185, 28, 28],
@@ -98,6 +99,8 @@ export function exportSupabaseAnalyzerReport(
         text(`Code reference: ${finding.suggested_code_reference}`, 9);
       }
       text(`Recommended action: ${finding.recommendation}`, 9);
+      const review = reviewForExport(dataset.reviews, run.id, finding.id);
+      for (const line of reviewReportLines(review)) text(line, 9);
       y += 3;
     }
     y += 5;
