@@ -281,8 +281,6 @@ import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator"
 import { UciStageHistoryPanel } from "@/components/uci/UciStageHistoryPanel";
 import { getRecordedCompletedStages } from "@/lib/uciStageHistory";
 import { RecordLifecycleProgressRail } from "@/components/uci/RecordLifecycleProgressRail";
-import { NextStepNotice } from "@/components/uci/NextStepNotice";
-import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
 import {
   derivePackageBuildAction,
   derivePackageReviewAction,
@@ -3661,7 +3659,7 @@ export default function UciDashboard() {
     [setSearchParams],
   );
   const openStageTools = useCallback(
-    (tab: UciDrawerTab) => {
+    (tab: UciDrawerTab, anchorId?: string) => {
       setDrawerTab(tab);
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -3669,6 +3667,10 @@ export default function UciDashboard() {
         next.set("tab", tab);
         return next;
       });
+      if (!anchorId) return;
+      window.setTimeout(() => {
+        document.getElementById(anchorId)?.scrollIntoView({ block: "start" });
+      }, 300);
     },
     [setSearchParams],
   );
@@ -4264,18 +4266,14 @@ export default function UciDashboard() {
               <Panel eyebrow="Rollup" title="Current stage distribution">
                 <p className="mb-2 text-[10px] text-muted-foreground">{CURRENT_STAGE_DISTRIBUTION_HELPER}</p>
                 <ul className="space-y-1.5 text-xs">
-                  {STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).length === 0 ? (
-                    <li className={uciMutedClass}>No records positioned at a lifecycle stage yet.</li>
-                  ) : (
-                    STAGE_OPTIONS.filter((s) => (uciStageSummary[String(s)] ?? 0) > 0).map((stage) => (
-                      <li key={stage} className="flex items-center justify-between">
-                        <span className={uciMutedClass}>Stage {stage}</span>
-                        <span className="font-data font-semibold text-foreground">
-                          {uciStageSummary[String(stage)]}
-                        </span>
-                      </li>
-                    ))
-                  )}
+                  {STAGE_OPTIONS.map((stage) => (
+                    <li key={stage} className="flex items-center justify-between">
+                      <span className={uciMutedClass}>Stage {stage}</span>
+                      <span className="font-data font-semibold text-foreground">
+                        {uciStageSummary[String(stage)] ?? 0}
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               </Panel>
             </aside>
@@ -4440,16 +4438,7 @@ export default function UciDashboard() {
                       currentStageState={detailRecord.current_stage_state}
                       recordedCompletedStages={recordedCompletedStages}
                       isPepcoCoordination={isPepcoCoordination}
-                    />
-                    <NextStepNotice
-                      notice={buildNextStepNotice({
-                        stage: Number(detailRecord.current_stage),
-                        state: detailRecord.current_stage_state,
-                        activeTab: drawerTab,
-                        lastError: detailRecord.last_error,
-                      })}
-                      activeTab={drawerTab}
-                      onSelectTab={(tab) => updateDrawerTab(tab)}
+                      showLifecycleStatus={false}
                     />
                   </div>
                 ) : (
