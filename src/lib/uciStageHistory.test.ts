@@ -491,5 +491,8 @@ describe("UCI stage history navigation source", () => {
     assert.match(panel, /listCoordinationCommunications/);
     assert.match(panel, /getCoordinationDocumentRegistry/);
     assert.match(panel, /onSelectStage\(stage\.stage \+ 1\)/);
+    assert.match(panel, /data-testid="uci-stage-lifecycle"/);
+    assert.match(panel, /data-testid="uci-stage-workspace"/);
+    assert.match(panel, /Open \{workspace\.label\}/);
   });
 });

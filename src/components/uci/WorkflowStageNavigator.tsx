@@ -20,6 +20,8 @@ type WorkflowStageNavigatorProps = {
   currentStageState?: string;
   recordedCompletedStages?: ReadonlySet<number>;
   isPepcoCoordination: boolean;
+  /** Stage history owns lifecycle status. Tool navigation stays available without a second progress story. */
+  showLifecycleStatus?: boolean;
   className?: string;
 };
 
@@ -85,6 +87,7 @@ export function WorkflowStageNavigator({
   currentStageState,
   recordedCompletedStages,
   isPepcoCoordination,
+  showLifecycleStatus = true,
   className,
 }: WorkflowStageNavigatorProps) {
   const visibleGroups = UCI_RECORD_WORKSPACE_GROUPS.map((group) => {
@@ -101,18 +104,24 @@ export function WorkflowStageNavigator({
       data-testid="uci-workflow-stage-navigator"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-base tracking-tight text-foreground">Workflow</h3>
-        <p className="text-[11px] text-muted-foreground">Milestones → workspace steps</p>
+        <h3 className="font-display text-base tracking-tight text-foreground">
+          {showLifecycleStatus ? "Workflow" : "Workspace tools"}
+        </h3>
+        <p className="text-[11px] text-muted-foreground">
+          {showLifecycleStatus ? "Milestones → workspace steps" : "Open the saved tools for this record"}
+        </p>
       </div>
 
       <ol className="flex flex-col gap-0">
         {visibleGroups.map(({ group, tabs }, groupIndex) => {
-          const progress = getWorkflowGroupProgress(
+          const progress = showLifecycleStatus
+            ? getWorkflowGroupProgress(
             group.stageRange,
             currentStage,
             currentStageState,
             recordedCompletedStages,
-          );
+          )
+            : "support";
           const groupHasActiveTab = tabs.some((tab) => tab.id === activeTab);
           const styles = progressStyles(progress, groupHasActiveTab);
           const statusBadge =
@@ -164,7 +173,7 @@ export function WorkflowStageNavigator({
                           {formatWorkflowStageRange(group.stageRange)}
                         </span>
                       ) : null}
-                      {progress === "current" ? (
+                      {showLifecycleStatus && progress === "current" ? (
                         <span className="rounded-md bg-teal/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
                           Active
                         </span>
@@ -172,17 +181,17 @@ export function WorkflowStageNavigator({
                       {statusBadge ? (
                         <span className={statusBadge.className}>{statusBadge.label}</span>
                       ) : null}
-                      {progress === "completed" ? (
+                      {showLifecycleStatus && progress === "completed" ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-success">
                           Completed
                         </span>
                       ) : null}
-                      {progress === "upcoming" ? (
+                      {showLifecycleStatus && progress === "upcoming" ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                           Locked
                         </span>
                       ) : null}
-                      {progress === "support" ? (
+                      {showLifecycleStatus && progress === "support" ? (
                         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                           Support
                         </span>

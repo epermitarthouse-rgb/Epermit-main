@@ -50,7 +50,7 @@ export function RecordLifecycleProgressRail({
                   : " · Not reached"
             }`}
             className={cn(
-              "flex h-6 min-w-[1.35rem] items-center justify-center rounded border text-[9px] font-semibold",
+              "flex h-6 min-w-[1.7rem] items-center justify-center rounded border px-1 text-[9px] font-semibold",
               isCompleted && "border-success/30 bg-success/10 text-success",
               isCurrent && !isCompleted && "border-teal/50 bg-teal/15 text-teal ring-1 ring-teal/25",
               isPast && "border-border/70 bg-muted/35 text-muted-foreground",
@@ -59,13 +59,9 @@ export function RecordLifecycleProgressRail({
             data-testid={`lifecycle-stage-${s}`}
             data-progress={progress}
           >
-            {isCompleted ? (
-              <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
-            ) : isLocked ? (
-              <Lock className="h-2.5 w-2.5" aria-hidden />
-            ) : (
-              s
-            )}
+            <span>{s}</span>
+            {isCompleted ? <Check className="ml-0.5 h-2.5 w-2.5" strokeWidth={2.5} aria-hidden /> : null}
+            {isLocked ? <Lock className="ml-0.5 h-2 w-2" aria-hidden /> : null}
           </div>
         );
       })}

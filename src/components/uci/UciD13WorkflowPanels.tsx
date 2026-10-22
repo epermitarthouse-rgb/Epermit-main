@@ -1710,7 +1710,7 @@ export function CostsEquipmentWorkflowPanel({
         </CardContent>
       </Card>
 
-      <Card className="border-border/60">
+      <Card id="uci-equipment-tracking" className="border-border/60">
         <CardHeader className="pb-2">
           <CardTitle className={sectionTitleClass}>Long-lead equipment</CardTitle>
           <CardDescription className="text-xs">
