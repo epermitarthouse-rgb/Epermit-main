@@ -16,10 +16,11 @@ const railSource = readFileSync(
 );
 
 describe("UciDashboard lifecycle visualization split", () => {
-  it("renames the matrix to Current stage distribution with clarifying helper text", () => {
-    assert.match(dashboardSource, /title="Current stage distribution"/);
+  it("shows a single lifecycle panel instead of the legacy stage distribution views", () => {
+    assert.doesNotMatch(dashboardSource, /title="Current stage distribution"/);
     assert.doesNotMatch(dashboardSource, /title="Stage \+ state matrix"/);
-    assert.match(dashboardSource, /CURRENT_STAGE_DISTRIBUTION_HELPER/);
+    assert.doesNotMatch(dashboardSource, /id="uci-stage-rail"/);
+    assert.equal(dashboardSource.match(/title="Lifecycle progress"/g)?.length, 1);
   });
 
   it("shows current position without inferring that every earlier stage completed", () => {

@@ -87,7 +87,7 @@ export function LeadCaptureModal() {
             <div className="p-2 rounded-full bg-accent/10">
               <CheckCircle2 className="h-5 w-5 text-accent" />
             </div>
-            <span className="text-xs text-muted-foreground">All 4 Demos</span>
+            <span className="text-xs text-muted-foreground">All 8 Demos</span>
           </div>
         </div>
 
