@@ -68,6 +68,9 @@ describe("UCI interactive demo scenario", () => {
   it("does not use live UCI APIs, storage, or Supabase", () => {
     for (const file of [
       join(__dirname, "uciDemoScenario.ts"),
+      join(__dirname, "uciDemoGuidance.ts"),
+      join(__dirname, "uciDemoNarration.ts"),
+      join(__dirname, "UciDemoGuidedTour.tsx"),
       join(__dirname, "UciDemoStageWorkspaces.tsx"),
       join(__dirname, "..", "UciLifecycleDemo.tsx"),
     ]) {
