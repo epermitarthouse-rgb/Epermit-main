@@ -65,7 +65,7 @@ const CLASSIFICATION_STAGE: Record<string, number> = {
   energization_confirmation: 10,
 };
 
-export type UciStagePosition = "completed" | "current" | "not_reached";
+export type UciStagePosition = "completed" | "current" | "historical_gap" | "not_reached";
 
 export type UciStageHistoryDocument = {
   name: string;
@@ -73,6 +73,7 @@ export type UciStageHistoryDocument = {
   date: string | null;
   sourceLabel: string;
   reviewLabel: string;
+  relationshipWarning: string | null;
   downloadPath: string | null;
   testRecord: boolean;
 };
@@ -151,6 +152,46 @@ export function stageHistoryName(stage: number): string {
   return UCI_STAGE_HISTORY_CATALOG.find((entry) => entry.stage === stage)?.name ?? `Stage ${stage}`;
 }
 
+export function getRecordedCompletedStages(
+  record: Pick<CoordinationRecord, "current_stage" | "current_stage_state">,
+  transitions: CoordinationTransition[],
+): Set<number> {
+  const completed = new Set<number>();
+  const savedStage = normalizeLifecycleStage(record.current_stage);
+  if (
+    savedStage &&
+    String(record.current_stage_state || "").toUpperCase() === "COMPLETED"
+  ) {
+    completed.add(savedStage);
+  }
+
+  for (const stage of UCI_STAGE_HISTORY_CATALOG.map((entry) => entry.stage)) {
+    const latestStatusSignal = transitions
+      .flatMap((row) => {
+        if (Number(row.to_stage) === stage) {
+          return [{
+            createdAt: row.created_at,
+            completed: String(row.to_state || "").toUpperCase() === "COMPLETED",
+          }];
+        }
+        if (Number(row.from_stage) === stage && Number(row.to_stage) > stage) {
+          return [{
+            createdAt: row.created_at,
+            completed:
+              String(row.from_state || "").toUpperCase() === "COMPLETED" ||
+              asRecord(row.metadata)?.[`stage_${stage}_completed`] === true,
+          }];
+        }
+        return [];
+      })
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+    if (latestStatusSignal?.completed) {
+      completed.add(stage);
+    }
+  }
+  return completed;
+}
+
 export function buildUciStageHistory(input: UciStageHistoryInput): UciStageHistoryModel {
   const record = input.detail.record;
   const savedStage = normalizeLifecycleStage(record.current_stage);
@@ -206,23 +247,29 @@ function buildStage(args: {
   documents: UciDocumentRegistryEntry[];
   cosRecords: CoordinationCosDesignRecord[];
 }): UciStageHistoryStage {
-  const position = stagePosition(args.stage, args.savedStage, args.savedState);
+  const position = stagePosition(
+    args.stage,
+    args.savedStage,
+    args.savedState,
+    args.transitions,
+  );
   const entered = earliest(
     args.transitions.filter((row) => Number(row.to_stage) === args.stage),
   );
-  const forward = args.transitions
+  const forwardTransitions = args.transitions
     .filter((row) => Number(row.from_stage) === args.stage && Number(row.to_stage) > args.stage)
-    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
-    .at(-1) ?? null;
-  const completedInPlace = args.transitions
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const forward = forwardTransitions[forwardTransitions.length - 1] ?? null;
+  const completedInPlaceTransitions = args.transitions
     .filter(
       (row) =>
         Number(row.from_stage) === args.stage &&
         Number(row.to_stage) === args.stage &&
         String(row.to_state).toUpperCase() === "COMPLETED",
     )
-    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
-    .at(-1) ?? null;
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  const completedInPlace =
+    completedInPlaceTransitions[completedInPlaceTransitions.length - 1] ?? null;
   const advanced = forward ?? completedInPlace;
   const related = args.transitions
     .filter((row) => Number(row.from_stage) === args.stage || Number(row.to_stage) === args.stage)
@@ -234,12 +281,14 @@ function buildStage(args: {
     args.documents,
     args.applications,
     Boolean(args.record.application_submitted_at),
+    args.record.id,
+    args.record.utility_type,
   );
   const communications = communicationsForStage(args.stage, args.communications);
   const milestones = args.milestones
     .filter((row) => Number(row.parent_stage) === args.stage)
     .map(presentMilestone);
-  const completionEvidence = work;
+  const completionEvidence = completionEvidenceForStage(args);
 
   return {
     stage: args.stage,
@@ -279,11 +328,19 @@ function stagePosition(
   stage: number,
   savedStage: number | null,
   savedState: string,
+  transitions: CoordinationTransition[],
 ): UciStagePosition {
   if (savedStage == null) return "not_reached";
-  if (stage < savedStage) return "completed";
   if (stage === savedStage) {
     return String(savedState).toUpperCase() === "COMPLETED" ? "completed" : "current";
+  }
+  if (stage < savedStage) {
+    return getRecordedCompletedStages(
+      { current_stage: savedStage, current_stage_state: savedState as CoordinationRecord["current_stage_state"] },
+      transitions,
+    ).has(stage)
+      ? "completed"
+      : "historical_gap";
   }
   return "not_reached";
 }
@@ -296,12 +353,18 @@ function statusLabel(
 ): string {
   if (position === "not_reached") return "Not reached";
   if (position === "completed") return "Completed";
+  if (position === "historical_gap") return "Completion not recorded";
   if (stage === savedStage) return formatUciLifecycleStateLabel(savedState);
   return "In progress";
 }
 
 function completionMessage(position: UciStagePosition, evidence: string[]): string {
   if (position === "not_reached") return "This stage has not been reached.";
+  if (position === "historical_gap") {
+    return evidence.length
+      ? "Supporting activity is recorded, but a completed stage status was not recorded before the workflow advanced."
+      : "The workflow advanced beyond this stage, but neither completion evidence nor a completed stage status was recorded.";
+  }
   if (position === "current") {
     return evidence.length
       ? "This stage is still open. The records below are what has been saved so far."
@@ -320,6 +383,149 @@ function responsibleParty(
   if (contact) return contact;
   if (providerName) return providerName;
   return "Not recorded";
+}
+
+function completionEvidenceForStage(
+  args: Parameters<typeof buildStage>[0],
+): string[] {
+  switch (args.stage) {
+    case 1: {
+      const mapping = getProviderMappingFromMetadata(args.record.metadata);
+      const resolution = readResolution(args.record.metadata, args.record.utility_type);
+      const confirmedAt = mapping?.confirmed_at || cleanText(resolution?.confirmed_at);
+      return confirmedAt
+        ? [`Provider selection confirmation recorded on ${shortDate(confirmedAt)}.`]
+        : [];
+    }
+    case 2: {
+      const summary = parseLoadProfileSummary(
+        getLoadProfileDraftApplication(args.applications)?.load_summary,
+      );
+      const verifiedCount = Object.keys(summary?.verified_values ?? {}).length;
+      return verifiedCount > 0
+        ? [`${verifiedCount} reviewed load value${verifiedCount === 1 ? "" : "s"} recorded.`]
+        : [];
+    }
+    case 3: {
+      const application = getApplicationPackageDraftApplication(args.applications);
+      const metadata = parseApplicationPackageMetadata(application);
+      if (!application?.reviewed_at) return [];
+      return [
+        `Application package review recorded on ${shortDate(application.reviewed_at)}${
+          metadata?.package_status ? ` with ${humanize(metadata.package_status)} status` : ""
+        }.`,
+      ];
+    }
+    case 4:
+      return args.applications
+        .filter((application) => application.submitted_at || application.portal_submitted_at)
+        .map((application) => {
+          const when = application.submitted_at || application.portal_submitted_at;
+          const method = cleanText(application.submission_method);
+          const reference =
+            cleanText(application.utility_ticket_number) ||
+            cleanText(application.external_application_id);
+          return `Submission recorded on ${shortDate(when)}${
+            method ? ` by ${humanize(method)}` : ""
+          }${reference ? ` with reference ${reference}` : ""}.`;
+        });
+    case 5: {
+      const evidence: string[] = [];
+      if (args.record.acknowledgment_received_at) {
+        evidence.push(
+          `Acknowledgment date recorded on ${shortDate(args.record.acknowledgment_received_at)}.`,
+        );
+      }
+      const acknowledgments = args.communications.filter(
+        (communication) => communicationStage(communication) === 5,
+      );
+      if (acknowledgments.length > 0) {
+        evidence.push(
+          `${acknowledgments.length} acknowledgment communication${
+            acknowledgments.length === 1 ? "" : "s"
+          } recorded.`,
+        );
+      }
+      return evidence;
+    }
+    case 6: {
+      const current = args.cosRecords.find((record) => record.is_current);
+      if (current?.review_status !== "approved" || !current.approved_at) return [];
+      return [
+        `Current design review version ${current.version} approved on ${shortDate(
+          current.approved_at,
+        )}.`,
+      ];
+    }
+    case 7:
+      return args.costs
+        .filter(
+          (cost) =>
+            cost.actual_amount != null &&
+            cost.client_approval_status === "approved" &&
+            Boolean(cost.paid_at) &&
+            Boolean(cost.client_billed_at),
+        )
+        .map(
+          (cost) =>
+            `${humanize(cost.cost_type || "cost")} reconciled at ${formatMoney(
+              cost.actual_amount,
+            )} with approval, payment, and client billing recorded.`,
+        );
+    case 8: {
+      const inScope = args.equipment.filter(
+        (item) => !["cancelled", "not_required"].includes(String(item.status || "")),
+      );
+      const tracked = inScope.filter((item) => {
+        const status = String(item.status || "");
+        return (
+          status === "installed" ||
+          status === "received" ||
+          (Boolean(item.current_eta) &&
+            (["on_order", "shipped", "delivered"].includes(status) ||
+              (status === "pending" && Boolean(item.last_check_in_at))))
+        );
+      });
+      return inScope.length > 0 && tracked.length === inScope.length
+        ? [`All ${tracked.length} in-scope equipment item${tracked.length === 1 ? "" : "s"} have a current status and delivery record.`]
+        : [];
+    }
+    case 9: {
+      const meterSet = args.milestones.find(
+        (milestone) =>
+          milestone.milestone_type === "meter_set" &&
+          ["scheduled", "completed"].includes(String(milestone.status || "")),
+      );
+      if (
+        !args.record.inspection_release_received_at ||
+        !args.record.site_readiness_confirmed_at ||
+        !(args.record.meter_set_scheduled_at || meterSet)
+      ) {
+        return [];
+      }
+      return [
+        "Inspection release, site readiness, and a scheduled or completed meter-set milestone are recorded.",
+      ];
+    }
+    case 10: {
+      const metadata = asRecord(args.record.metadata);
+      const artifacts = asRecord(metadata?.closeout_artifacts);
+      const hasThreeArtifacts = Boolean(
+        (artifacts?.utility_confirmation || artifacts?.utility_confirmation_doc_id) &&
+          (artifacts?.final_meter_reading || artifacts?.final_meter_reading_doc_id) &&
+          (artifacts?.commissioning_signoff || artifacts?.commissioning_signoff_doc_id),
+      );
+      return args.record.energization_actual_date &&
+        args.record.closeout_package_doc_id &&
+        hasThreeArtifacts
+        ? [
+            `Energization, utility confirmation, final meter reading, commissioning sign-off, and closeout package are recorded.`,
+          ]
+        : [];
+    }
+    default:
+      return [];
+  }
 }
 
 function workForStage(args: Parameters<typeof buildStage>[0]): string[] {
@@ -558,6 +764,8 @@ function documentsForStage(
   documents: UciDocumentRegistryEntry[],
   applications: CoordinationApplication[],
   submissionRecorded: boolean,
+  coordinationRecordId: string,
+  utilityType: string | null,
 ): UciStageHistoryDocument[] {
   const fromRegistry = documents
     .filter(
@@ -565,7 +773,7 @@ function documentsForStage(
         (doc.stage_consumers ?? []).includes(stage) ||
         (stage === 10 && (doc.effective_role === "closeout" || doc.effective_role === "uci_closeout_package")),
     )
-    .map(presentRegistryDocument);
+    .map((entry) => presentRegistryDocument(entry, coordinationRecordId, utilityType));
   const packageDocs =
     stage === 3 || stage === 4
       ? parsePackageDocuments(getApplicationPackageDraftApplication(applications)?.package_documents)
@@ -589,15 +797,28 @@ function documentsForStage(
   return merged;
 }
 
-function presentRegistryDocument(entry: UciDocumentRegistryEntry): UciStageHistoryDocument {
+function presentRegistryDocument(
+  entry: UciDocumentRegistryEntry,
+  coordinationRecordId: string,
+  utilityType: string | null,
+): UciStageHistoryDocument {
   const file = entry.project_document;
   const name = cleanText(file?.file_name) || "Untitled document";
+  const generatedRecordPrefix = name.match(/uci-load-worksheet-([a-f0-9]{8})/i)?.[1];
+  const relationshipWarning =
+    String(utilityType || "").toLowerCase() === "electric" && /\bgas\b/i.test(name)
+      ? "Potential utility mismatch: the file name indicates gas."
+      : generatedRecordPrefix &&
+          !coordinationRecordId.toLowerCase().startsWith(generatedRecordPrefix.toLowerCase())
+        ? "Potential record mismatch: the generated worksheet name references another coordination record."
+        : null;
   return {
     name,
     typeLabel: humanize(entry.effective_role || file?.document_type || "document"),
     date: file?.created_at ?? entry.classified_at ?? null,
     sourceLabel: provenanceLabel(entry.provenance),
     reviewLabel: reviewLabel(entry.classification_review, entry.signature_status),
+    relationshipWarning,
     downloadPath: file?.file_path?.trim() || null,
     testRecord: /synthetic|\[test\]/i.test(name),
   };
@@ -616,6 +837,7 @@ function presentPackageDocument(doc: ReturnType<typeof parsePackageDocuments>[nu
         : doc.user_confirmed
           ? "Confirmed"
           : "Attached",
+    relationshipWarning: null,
     downloadPath: looksLikeStoragePath(doc.storage_path) ? doc.storage_path ?? null : null,
     testRecord: /synthetic|\[test\]/i.test(name),
   };

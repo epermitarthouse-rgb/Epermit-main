@@ -438,6 +438,14 @@ async function maybeCompleteStage7(supabase, params) {
     err.code = "NOT_FOUND";
     throw err;
   }
+  if (Number(record.current_stage) > 7) {
+    return {
+      completed: false,
+      reason: "already_past_stage_7",
+      record,
+      stage_8: null,
+    };
+  }
   const costs = await listCosts(supabase, coordinationRecordId, String(record.project_id));
   if (!canCompleteStage7(record, costs)) {
     const err = new Error(

@@ -19,7 +19,7 @@ describe("WorkflowStageNavigator downstream navigation", () => {
   });
 
   it("passes current_stage_state into grouped progress and suppresses Active styling when completed", () => {
-    assert.match(navigatorSource, /getWorkflowGroupProgress\(\s*group\.stageRange,\s*currentStage,\s*currentStageState,/);
+    assert.match(navigatorSource, /getWorkflowGroupProgress\(\s*group\.stageRange,\s*currentStage,\s*currentStageState,\s*recordedCompletedStages,/);
     assert.match(navigatorSource, /progress === "current" \? \(/);
     assert.doesNotMatch(navigatorSource, /progress === "current" \|\| groupHasActiveTab \? \(/);
     assert.match(navigatorSource, /if \(progress === "completed"\)/);

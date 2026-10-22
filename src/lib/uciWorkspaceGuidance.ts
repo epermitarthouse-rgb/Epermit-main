@@ -118,10 +118,22 @@ export function getWorkflowGroupProgress(
   stageRange: [number, number] | null | undefined,
   currentStage: number,
   currentStageState?: string,
+  recordedCompletedStages?: ReadonlySet<number>,
 ): WorkflowGroupProgress {
   if (!stageRange) return "support";
   const [min, max] = stageRange;
   const state = String(currentStageState || "").toUpperCase();
+  if (recordedCompletedStages) {
+    const stages = Array.from(
+      { length: Math.max(0, max - Math.max(1, min) + 1) },
+      (_, index) => Math.max(1, min) + index,
+    );
+    if (stages.length > 0 && stages.every((stage) => recordedCompletedStages.has(stage))) {
+      return "completed";
+    }
+    if (currentStage >= min && currentStage <= max) return "current";
+    return "upcoming";
+  }
   if (currentStage > max) return "completed";
   // Terminal (or range-max) stage stays at current_stage when COMPLETED — treat group as done.
   if (currentStage === max && state === "COMPLETED") return "completed";

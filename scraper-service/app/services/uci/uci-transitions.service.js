@@ -1,6 +1,7 @@
 "use strict";
 
 const {
+  assertSequentialStageTransition,
   assertStage7to10Transition,
   resolveEntryState,
 } = require("./uci-lifecycle-guards.service.js");
@@ -131,6 +132,7 @@ async function recordUserTransition(supabase, p) {
       ? String(current.current_stage_state)
       : null;
 
+  assertSequentialStageTransition(current, toStage, metadata);
   const ctx = await loadStage7to10Context(supabase, current, toStage);
   assertStage7to10Transition(current, toStage, stateStr, ctx);
   const resolvedState = resolveEntryState(current, toStage, stateStr, metadata);
@@ -504,6 +506,7 @@ async function recordSystemTransition(supabase, p) {
       ? String(current.current_stage_state)
       : null;
 
+  assertSequentialStageTransition(current, toStage, metadata);
   const ctx = await loadStage7to10Context(supabase, current, toStage);
   assertStage7to10Transition(current, toStage, stateStr, ctx);
   const resolvedState = resolveEntryState(current, toStage, stateStr, metadata);

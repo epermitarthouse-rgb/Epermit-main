@@ -22,10 +22,13 @@ describe("UciDashboard lifecycle visualization split", () => {
     assert.match(dashboardSource, /CURRENT_STAGE_DISTRIBUTION_HELPER/);
   });
 
-  it("adds a separate Lifecycle progress panel reusing getWorkflowGroupProgress", () => {
+  it("shows current position without inferring that every earlier stage completed", () => {
     assert.match(dashboardSource, /title="Lifecycle progress"/);
     assert.match(dashboardSource, /RecordLifecycleProgressRail/);
-    assert.match(railSource, /getWorkflowGroupProgress\(\[s, s\], stage, currentStageState\)/);
+    assert.match(railSource, /const isPast = s < stage/);
+    assert.match(railSource, /"past"/);
+    assert.doesNotMatch(railSource, /getWorkflowGroupProgress/);
+    assert.match(dashboardSource, /Earlier stages are not assumed complete/);
     assert.match(dashboardSource, /id="uci-lifecycle-progress"/);
   });
 

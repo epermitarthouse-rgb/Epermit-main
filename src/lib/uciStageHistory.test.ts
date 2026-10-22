@@ -38,10 +38,105 @@ describe("UCI stage history", () => {
     const model = buildUciStageHistory({ detail: source, providerName: "Dominion Energy Virginia" });
     assert.equal(source.record.current_stage, before);
     assert.equal(model.savedStage, 9);
-    assert.equal(model.stages[0]?.position, "completed");
+    assert.equal(model.stages[0]?.position, "historical_gap");
     assert.equal(model.stages[8]?.position, "completed");
     assert.equal(model.stages[9]?.position, "not_reached");
     assert.equal(model.stages[8]?.completionMessage, "Completion recorded. Supporting details are not available.");
+  });
+
+  it("marks earlier stages complete only when their saved transition status supports it", () => {
+    const model = buildUciStageHistory({
+      detail: detail({
+        transitions: [
+          {
+            id: "stage-1-open",
+            coordination_record_id: recordId,
+            project_id: "project-1",
+            from_stage: null,
+            to_stage: 1,
+            from_state: null,
+            to_state: "NOT_STARTED",
+            triggered_by_type: "system",
+            triggered_by_id: null,
+            reason: "Initialization",
+            metadata: {},
+            created_at: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "stage-2-complete",
+            coordination_record_id: recordId,
+            project_id: "project-1",
+            from_stage: 2,
+            to_stage: 2,
+            from_state: "IN_PROGRESS",
+            to_state: "COMPLETED",
+            triggered_by_type: "system",
+            triggered_by_id: null,
+            reason: "Load sizing completed",
+            metadata: {},
+            created_at: "2026-01-02T00:00:00.000Z",
+          },
+          {
+            id: "stage-3-explicit",
+            coordination_record_id: recordId,
+            project_id: "project-1",
+            from_stage: 2,
+            to_stage: 3,
+            from_state: "COMPLETED",
+            to_state: "IN_PROGRESS",
+            triggered_by_type: "user",
+            triggered_by_id: null,
+            reason: "Engineering review complete",
+            metadata: { stage_2_completed: true },
+            created_at: "2026-01-03T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    assert.equal(model.stages[0]?.position, "historical_gap");
+    assert.equal(model.stages[0]?.statusLabel, "Completion not recorded");
+    assert.equal(model.stages[1]?.position, "completed");
+    assert.equal(model.stages[2]?.position, "historical_gap");
+  });
+
+  it("uses the latest recorded stage status when a historical stage was reopened", () => {
+    const model = buildUciStageHistory({
+      detail: detail({
+        transitions: [
+          {
+            id: "stage-2-forward",
+            coordination_record_id: recordId,
+            project_id: "project-1",
+            from_stage: 2,
+            to_stage: 3,
+            from_state: "COMPLETED",
+            to_state: "IN_PROGRESS",
+            triggered_by_type: "user",
+            triggered_by_id: null,
+            reason: "Load review complete",
+            metadata: {},
+            created_at: "2026-01-02T00:00:00.000Z",
+          },
+          {
+            id: "stage-2-reopened",
+            coordination_record_id: recordId,
+            project_id: "project-1",
+            from_stage: 3,
+            to_stage: 2,
+            from_state: "IN_PROGRESS",
+            to_state: "IN_PROGRESS",
+            triggered_by_type: "user",
+            triggered_by_id: null,
+            reason: "Historical UAT reopen",
+            metadata: {},
+            created_at: "2026-01-03T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    assert.equal(model.stages[1]?.position, "historical_gap");
   });
 
   it("shows submission evidence only from saved submission fields", () => {
@@ -305,6 +400,69 @@ describe("UCI stage history", () => {
     assert.match(model.stages[9]?.workPerformed.join(" ") || "", /closeout package/i);
     assert.equal(model.stages[7]?.communications.length, 1);
     assert.equal(model.stages[4]?.communications.length, 0);
+  });
+
+  it("flags explicitly linked documents whose names contradict the utility record", () => {
+    const model = buildUciStageHistory({
+      detail: detail(),
+      documents: [
+        {
+          id: "gas-doc",
+          project_document_id: "pd-gas",
+          coordination_record_id: recordId,
+          detected_role: "load_letter",
+          manual_role: null,
+          effective_role: "load_letter",
+          role_confidence: "high",
+          classification_review: "auto_accepted",
+          provenance: "manual_upload",
+          signature_status: null,
+          stage_consumers: [2],
+          provider_slot_keys: [],
+          project_document: {
+            id: "pd-gas",
+            project_id: "project-1",
+            document_type: "load_letter",
+            file_name: "Synthetic Gas Load Profile.pdf",
+            file_path: "projects/project-1/gas.pdf",
+            file_type: "application/pdf",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        },
+        {
+          id: "foreign-worksheet",
+          project_document_id: "pd-foreign",
+          coordination_record_id: recordId,
+          detected_role: "load_letter",
+          manual_role: null,
+          effective_role: "load_letter",
+          role_confidence: "high",
+          classification_review: "auto_accepted",
+          provenance: "uci_generated",
+          signature_status: null,
+          stage_consumers: [2],
+          provider_slot_keys: [],
+          project_document: {
+            id: "pd-foreign",
+            project_id: "project-1",
+            document_type: "load_letter",
+            file_name: "uci-load-worksheet-f656209f.pdf",
+            file_path: "projects/project-1/worksheet.pdf",
+            file_type: "application/pdf",
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+        },
+      ],
+    });
+
+    assert.match(
+      model.stages[1]?.documents[0]?.relationshipWarning || "",
+      /utility mismatch/i,
+    );
+    assert.match(
+      model.stages[1]?.documents[1]?.relationshipWarning || "",
+      /record mismatch/i,
+    );
   });
 });
 

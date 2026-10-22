@@ -3,7 +3,6 @@ import { UCI_LIFECYCLE_STAGES } from "@/lib/uciLifecycleMatrix";
 import {
   formatUciLifecycleStateLabel,
   getLifecycleStageTitle,
-  getWorkflowGroupProgress,
 } from "@/lib/uciWorkspaceGuidance";
 import { cn } from "@/lib/utils";
 
@@ -14,8 +13,9 @@ type RecordLifecycleProgressRailProps = {
 };
 
 /**
- * Compact per-record lifecycle rail derived from current_stage only.
- * Reuses getWorkflowGroupProgress — same rules as WorkflowStageNavigator.
+ * Compact current-position rail.
+ * The project list does not include transition history, so earlier stages are
+ * deliberately shown as "past" rather than inferred as completed.
  */
 export function RecordLifecycleProgressRail({
   currentStage,
@@ -31,22 +31,29 @@ export function RecordLifecycleProgressRail({
       aria-label={`Lifecycle progress: currently at stage ${stage}`}
     >
       {UCI_LIFECYCLE_STAGES.map((s) => {
-        const progress = getWorkflowGroupProgress([s, s], stage, currentStageState);
-        const isCurrent = progress === "current";
-        const isCompleted = progress === "completed";
-        const isLocked = progress === "upcoming";
+        const isCurrent = s === stage;
+        const isPast = s < stage;
+        const isCompleted =
+          isCurrent && String(currentStageState || "").toUpperCase() === "COMPLETED";
+        const isLocked = s > stage;
+        const progress = isCurrent ? (isCompleted ? "completed" : "current") : isPast ? "past" : "upcoming";
         const stateLabel = isCurrent ? formatUciLifecycleStateLabel(currentStageState) : null;
 
         return (
           <div
             key={s}
             title={`Stage ${s}: ${getLifecycleStageTitle(s)}${
-              isCurrent && stateLabel ? ` · ${stateLabel}` : isCompleted ? " · Completed" : " · Locked"
+              isCurrent && stateLabel
+                ? ` · ${stateLabel}`
+                : isPast
+                  ? " · Earlier stage; open the record for saved status"
+                  : " · Not reached"
             }`}
             className={cn(
               "flex h-6 min-w-[1.35rem] items-center justify-center rounded border text-[9px] font-semibold",
               isCompleted && "border-success/30 bg-success/10 text-success",
-              isCurrent && "border-teal/50 bg-teal/15 text-teal ring-1 ring-teal/25",
+              isCurrent && !isCompleted && "border-teal/50 bg-teal/15 text-teal ring-1 ring-teal/25",
+              isPast && "border-border/70 bg-muted/35 text-muted-foreground",
               isLocked && "border-border/50 bg-muted/20 text-muted-foreground opacity-70",
             )}
             data-testid={`lifecycle-stage-${s}`}

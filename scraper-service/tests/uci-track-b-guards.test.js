@@ -12,6 +12,7 @@ const {
   canCompleteStage9,
   canCompleteStage10,
   isProjectUtilityCoordinationComplete,
+  assertSequentialStageTransition,
   assertStage7to10Transition,
   stage9CompletedForCloseout,
   canGenerateCloseoutPdf,
@@ -217,6 +218,48 @@ describe("Track B guards", () => {
           { costs: [settledCost] },
         ),
       /Cannot skip/,
+    );
+  });
+
+  it("blocks skipped and backward transitions across all 10 stages", () => {
+    assert.doesNotThrow(() =>
+      assertSequentialStageTransition({ current_stage: 2 }, 2),
+    );
+    assert.doesNotThrow(() =>
+      assertSequentialStageTransition({ current_stage: 2 }, 3),
+    );
+    assert.throws(
+      () => assertSequentialStageTransition({ current_stage: 2 }, 4),
+      (error) => error.code === "STAGE_SKIP_BLOCKED",
+    );
+    assert.throws(
+      () => assertSequentialStageTransition({ current_stage: 6 }, 5),
+      (error) => error.code === "STAGE_REGRESSION_BLOCKED",
+    );
+  });
+
+  it("allows only a documented administrative repair exception", () => {
+    assert.throws(
+      () =>
+        assertSequentialStageTransition(
+          { current_stage: 2 },
+          4,
+          { lifecycle_exception: { kind: "administrative_repair" } },
+        ),
+      /Cannot skip/,
+    );
+    assert.doesNotThrow(() =>
+      assertSequentialStageTransition(
+        { current_stage: 2 },
+        4,
+        {
+          lifecycle_exception: {
+            kind: "administrative_repair",
+            reason: "Restore an audited historical stage",
+            approved_by: "admin-user",
+          },
+        },
+      ),
     );
   });
 

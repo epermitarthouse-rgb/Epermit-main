@@ -91,8 +91,10 @@ describe("Track B full lifecycle 6→10", () => {
       paid.client_billed_at = "2026-08-11T00:00:00.000Z";
     }
     const stage7 = await maybeCompleteStage7(supabase, { coordinationRecordId: "coord-1", userId: "user-1" });
-    assert.equal(stage7.record.current_stage, 7);
-    assert.equal(stage7.record.current_stage_state, "COMPLETED");
+    // Payment processing may already have completed Stage 7 and entered Stage 8.
+    // A repeated completion request must remain idempotent and never move backward.
+    assert.equal(stage7.record.current_stage, 8);
+    assert.equal(stage7.record.current_stage_state, "IN_PROGRESS");
 
     await createEquipmentRecord(supabase, {
       coordinationRecordId: "coord-1",

@@ -58,6 +58,10 @@ function evaluateProposalGuards(currentStage, proposal) {
     return "Proposed stage matches current stage; no forward transition needed.";
   }
 
+  if (proposal.proposed_stage > currentStage + 1) {
+    return `Proposed transition would skip Stage ${currentStage + 1}.`;
+  }
+
   return null;
 }
 
