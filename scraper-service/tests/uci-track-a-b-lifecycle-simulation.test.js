@@ -143,6 +143,6 @@ describe("UCI Track A+B integrated lifecycle simulation", () => {
     const guards = evaluateLifecycleGuards(tables.coordination_records[0], {
       equipment: tables.coordination_equipment,
     });
-    assert.equal(guards.can_complete_stage_8, true);
+    assert.equal(guards.can_complete_stage_8, false);
   });
 });

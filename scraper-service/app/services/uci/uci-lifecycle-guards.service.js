@@ -241,6 +241,39 @@ function isProjectUtilityCoordinationComplete(records) {
 }
 
 /**
+ * Every lifecycle transition must stay on the active stage or move forward
+ * exactly one stage. Historical repair is the only supported exception and
+ * must carry an approver and reason in the transition metadata.
+ *
+ * @param {Record<string, unknown>} current
+ * @param {number} toStage
+ * @param {Record<string, unknown>} [metadata]
+ */
+function assertSequentialStageTransition(current, toStage, metadata = {}) {
+  const fromStage = stageOf(current);
+  const target = Number(toStage);
+  if (!Number.isInteger(fromStage) || !Number.isInteger(target)) return;
+  if (target === fromStage || target === fromStage + 1) return;
+
+  const exception = asRecord(asRecord(metadata).lifecycle_exception);
+  const documentedRepair =
+    exception.kind === "administrative_repair" &&
+    String(exception.reason || "").trim().length > 0 &&
+    String(exception.approved_by || "").trim().length > 0;
+  if (documentedRepair) return;
+
+  const backward = target < fromStage;
+  const err = new Error(
+    backward
+      ? `Cannot move backward from Stage ${fromStage} to Stage ${target}`
+      : `Cannot skip from Stage ${fromStage} to Stage ${target}`,
+  );
+  err.statusCode = 409;
+  err.code = backward ? "STAGE_REGRESSION_BLOCKED" : "STAGE_SKIP_BLOCKED";
+  throw err;
+}
+
+/**
  * Stage 7–10 skip / complete guards. Do not apply to Stages 1–6.
  *
  * @param {Record<string, unknown>} current
@@ -473,6 +506,7 @@ function evaluateLifecycleGuards(record, ctx = {}) {
 }
 
 module.exports = {
+  assertSequentialStageTransition,
   canEnterStage7,
   canEnterStage8,
   canEnterStage9,

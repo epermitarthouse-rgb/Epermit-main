@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { listCoordinationCommunications } from "@/lib/uciApi";
@@ -127,12 +127,17 @@ export function UciStageHistoryPanel({
                   "flex h-full w-full flex-col items-start gap-1 rounded-lg border px-3 py-2 text-left transition-colors",
                   selected
                     ? "border-teal bg-teal text-white"
-                    : "border-border/70 bg-background hover:border-teal/40 hover:bg-teal/5",
+                    : entry.position === "historical_gap"
+                      ? "border-amber-500/50 bg-amber-500/5 hover:bg-amber-500/10"
+                      : "border-border/70 bg-background hover:border-teal/40 hover:bg-teal/5",
                 )}
               >
                 <span className="flex w-full items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wide">
                   Stage {entry.stage}
                   {entry.position === "completed" ? <Check className="h-3.5 w-3.5" /> : null}
+                  {entry.position === "historical_gap" ? (
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                  ) : null}
                 </span>
                 <span className="text-xs font-medium leading-snug">{entry.name}</span>
                 <span className={cn("text-[10px]", selected ? "text-white/80" : "text-muted-foreground")}>
@@ -221,11 +226,18 @@ function StageDetail({
       <section className="space-y-2">
         <h4 className="text-sm font-semibold text-foreground">Completion evidence</h4>
         {stage.completionEvidence.length ? (
-          <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
-            {stage.completionEvidence.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          <>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
+              {stage.completionEvidence.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            {stage.position === "historical_gap" ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                {stage.completionMessage}
+              </p>
+            ) : null}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">{stage.completionMessage}</p>
         )}
@@ -318,6 +330,11 @@ function DocumentSection({
                     {` · ${document.sourceLabel}`}
                     {` · ${document.reviewLabel}`}
                   </p>
+                  {document.relationshipWarning ? (
+                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                      {document.relationshipWarning}
+                    </p>
+                  ) : null}
                 </div>
                 {document.downloadPath ? (
                   <Button

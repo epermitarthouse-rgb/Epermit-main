@@ -18,6 +18,7 @@ type WorkflowStageNavigatorProps = {
   activeTab: UciDrawerTab;
   currentStage: number;
   currentStageState?: string;
+  recordedCompletedStages?: ReadonlySet<number>;
   isPepcoCoordination: boolean;
   className?: string;
 };
@@ -82,6 +83,7 @@ export function WorkflowStageNavigator({
   activeTab,
   currentStage,
   currentStageState,
+  recordedCompletedStages,
   isPepcoCoordination,
   className,
 }: WorkflowStageNavigatorProps) {
@@ -109,6 +111,7 @@ export function WorkflowStageNavigator({
             group.stageRange,
             currentStage,
             currentStageState,
+            recordedCompletedStages,
           );
           const groupHasActiveTab = tabs.some((tab) => tab.id === activeTab);
           const styles = progressStyles(progress, groupHasActiveTab);

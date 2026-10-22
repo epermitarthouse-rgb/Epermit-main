@@ -200,6 +200,18 @@ describe("UCI D1C lifecycle guard rules", () => {
     assert.equal(blocked, "Stage 4 requires confirmed portal submission.");
   });
 
+  it("blocks a portal proposal that skips an intermediate stage", () => {
+    const blocked = evaluateProposalGuards(3, {
+      proposed_stage: 6,
+      proposed_state: "AWAITING_UTILITY",
+      confidence: "high",
+      reason: "portal jumped to design",
+      source_status: "In Design",
+      automatic_transition_allowed: true,
+    });
+    assert.equal(blocked, "Proposed transition would skip Stage 4.");
+  });
+
   it("selects highest forward eligible proposal", () => {
     const primary = selectPrimaryProposal([
       {
@@ -279,7 +291,10 @@ describe("UCI D1C lifecycle mapping after sync", () => {
     assert.equal(result.applied_count, 0);
     assert.equal(result.auto_apply_enabled, false);
     assert.equal(result.proposals[0].proposed_stage, 7);
-    assert.equal(result.proposals[0].blocked_reason, null);
+    assert.equal(
+      result.proposals[0].blocked_reason,
+      "Proposed transition would skip Stage 6.",
+    );
 
     const meta = /** @type {{ metadata?: Record<string, unknown> }} */ (
       tables.coordination_records[0]

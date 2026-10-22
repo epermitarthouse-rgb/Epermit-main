@@ -279,6 +279,7 @@ import { ProjectSummaryHeader } from "@/components/uci/ProjectSummaryHeader";
 import { CoordinationStatusSummary } from "@/components/uci/CoordinationStatusSummary";
 import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator";
 import { UciStageHistoryPanel } from "@/components/uci/UciStageHistoryPanel";
+import { getRecordedCompletedStages } from "@/lib/uciStageHistory";
 import { RecordLifecycleProgressRail } from "@/components/uci/RecordLifecycleProgressRail";
 import { NextStepNotice } from "@/components/uci/NextStepNotice";
 import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
@@ -2705,6 +2706,13 @@ export default function UciDashboard() {
   const costsHydrationError =
     detailHydrationErrors.costs?.message ?? detailHydrationErrors.equipment?.message ?? null;
   const detailProvider = detailRecord ? getEmbeddedProvider(detailRecord) : null;
+  const recordedCompletedStages = useMemo(
+    () =>
+      detailRecord
+        ? getRecordedCompletedStages(detailRecord, detail?.transitions ?? [])
+        : new Set<number>(),
+    [detail?.transitions, detailRecord],
+  );
   const isPepcoCoordination =
     String(detailProvider?.slug ?? "").toLowerCase() === "pepco";
 
@@ -4022,8 +4030,8 @@ export default function UciDashboard() {
 
           <Panel eyebrow="Lifecycle" title="Lifecycle progress" id="uci-lifecycle-progress">
             <p className="mb-3 text-[11px] text-muted-foreground">
-              Per-utility progress inferred from each record&apos;s current stage. Stages before the
-              current one are shown as completed; later stages remain locked.
+              Shows each utility&apos;s saved current position. Earlier stages are not assumed complete;
+              open the record to review their recorded status and evidence.
             </p>
             {!projectId ? (
               <p className={cn("py-4 text-center text-sm", uciMutedClass)}>Select a project to view lifecycle progress.</p>
@@ -4430,6 +4438,7 @@ export default function UciDashboard() {
                       activeTab={drawerTab}
                       currentStage={Number(detailRecord.current_stage)}
                       currentStageState={detailRecord.current_stage_state}
+                      recordedCompletedStages={recordedCompletedStages}
                       isPepcoCoordination={isPepcoCoordination}
                     />
                     <NextStepNotice

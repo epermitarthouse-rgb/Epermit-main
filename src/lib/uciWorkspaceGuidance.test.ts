@@ -45,6 +45,19 @@ describe("uciWorkspaceGuidance", () => {
     assert.equal(getWorkflowGroupProgress([9, 10], 10, "IN_PROGRESS"), "current");
   });
 
+  it("uses recorded stage completion when transition history is available", () => {
+    const completed = new Set([2, 3]);
+    assert.equal(
+      getWorkflowGroupProgress([2, 4], 5, "IN_PROGRESS", completed),
+      "upcoming",
+    );
+    completed.add(4);
+    assert.equal(
+      getWorkflowGroupProgress([2, 4], 5, "IN_PROGRESS", completed),
+      "completed",
+    );
+  });
+
   it("recommends Communications when awaiting utility", () => {
     const notice = buildNextStepNotice({
       stage: 5,
