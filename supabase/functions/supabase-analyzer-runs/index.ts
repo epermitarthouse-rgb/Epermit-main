@@ -3,6 +3,19 @@ import {
   normalizeNewRunAnalysisMode,
   resolveAnalyzerReviewScope,
 } from "../_shared/analyzerReviewScope.ts";
+import {
+  analyzerFileIdentity,
+  applyCancellation,
+  cleanAnalyzerFileName,
+  retryWouldRestart,
+  nextSheetOrdinal,
+  planSheetUpdate,
+  runAllowsSheetUpdate,
+  runIsWorkerActive,
+  sheetMutations,
+  type ExistingAnalyzerSheet,
+  type IncomingAnalyzerSheet,
+} from "../_shared/analyzerSheetUpdate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,10 +41,13 @@ function json(body: unknown, status = 200) {
 }
 
 function cleanFileName(value: unknown): string {
-  return String(value || "drawing.pdf")
-    .replace(/[\u0000-\u001f\u007f]/g, "")
-    .replace(/[\\/]/g, "_")
-    .slice(0, 240);
+  let cleaned = "";
+  for (const char of String(value || "drawing.pdf")) {
+    const code = char.charCodeAt(0);
+    if (code <= 31 || code === 127) continue;
+    cleaned += char === "\\" || char === "/" ? "_" : char;
+  }
+  return cleaned.slice(0, 240);
 }
 
 async function authorizeEditor(req: Request, projectId: string) {
@@ -72,6 +88,233 @@ async function authorizeEditor(req: Request, projectId: string) {
     supabaseUrl,
     serviceRoleKey,
   };
+}
+
+async function supersedeAnalyzerSheet(
+  admin: ReturnType<typeof createClient>,
+  runId: string,
+  job: { id: string; object_path?: string | null },
+) {
+  await admin.from("supabase_analyzer_findings").delete().eq("sheet_job_id", job.id).eq("run_id", runId);
+  if (job.object_path) {
+    await admin.storage.from(BUCKET).remove([job.object_path]);
+  }
+  const { error } = await admin
+    .from("supabase_analyzer_sheet_jobs")
+    .delete()
+    .eq("id", job.id)
+    .eq("run_id", runId);
+  if (error) throw error;
+}
+
+async function handleSheetUpdate(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  projectId: string,
+  run: { id: string; status: string },
+  body: Record<string, unknown>,
+) {
+  if (runIsWorkerActive(run.status)) {
+    return json({ error: "This analysis is still processing" }, 409);
+  }
+  if (!runAllowsSheetUpdate(run.status)) {
+    return json({ error: "This analysis cannot be updated" }, 409);
+  }
+
+  const requested = Array.isArray(body.files) ? body.files as Array<Record<string, unknown>> : [];
+  const incoming: IncomingAnalyzerSheet[] = requested.map((input) => ({
+    name: String(input?.name || ""),
+    size: Number(input?.size),
+    type: String(input?.type || "application/pdf"),
+    replaceJobId: input?.replaceJobId ? String(input.replaceJobId) : null,
+  }));
+  const rawNameByIdentity = new Map<string, string>();
+  for (const file of incoming) {
+    rawNameByIdentity.set(analyzerFileIdentity(file.name, Number(file.size)), file.name);
+  }
+
+  const { data: jobRows, error: jobsError } = await admin
+    .from("supabase_analyzer_sheet_jobs")
+    .select("id, ordinal, original_file_name, file_size, detected_sheet_number, status, object_path")
+    .eq("run_id", run.id)
+    .eq("project_id", projectId);
+  if (jobsError) throw jobsError;
+
+  const jobs = (jobRows || []).map((row) => ({
+    id: String(row.id),
+    ordinal: Number(row.ordinal),
+    original_file_name: String(row.original_file_name),
+    file_size: Number(row.file_size),
+    detected_sheet_number: row.detected_sheet_number ? String(row.detected_sheet_number) : null,
+    status: String(row.status),
+    object_path: String(row.object_path || ""),
+  }));
+  const sheets: ExistingAnalyzerSheet[] = jobs.map((row) => ({
+    id: row.id,
+    ordinal: row.ordinal,
+    original_file_name: row.original_file_name,
+    file_size: row.file_size,
+    detected_sheet_number: row.detected_sheet_number,
+    status: row.status,
+  }));
+  const plan = planSheetUpdate(sheets, incoming, { confirmed: body.confirmed === true });
+  if (plan.error) return json({ error: plan.error }, 400);
+  if (!plan.accepted) {
+    return json({
+      error: "Confirm the drawing update before adding or replacing sheets",
+      adds: plan.items.filter((item) => item.action === "add").map((item) => item.fileName),
+      replacements: plan.items.flatMap((item) => (
+        item.action === "confirm" && item.jobId
+          ? [{
+            fileName: item.fileName,
+            jobId: item.jobId,
+            existingLabel: item.existingLabel || item.fileName,
+            matchedBy: item.matchedBy || "file_name",
+          }]
+          : []
+      )),
+    }, 409);
+  }
+
+  const mutations = sheetMutations(plan);
+  if (mutations.inserts.length === 0 && mutations.resumes.length === 0) {
+    return json({
+      runId: run.id,
+      uploads: [],
+      added: 0,
+      replaced: 0,
+      resumed: 0,
+      skipped: mutations.skipped,
+    });
+  }
+
+  const jobsById = new Map(jobs.map((row) => [row.id, row]));
+  const usedOrdinals = new Set(jobs.map((row) => row.ordinal));
+  const uploads: Array<{
+    jobId: string;
+    ordinal: number;
+    fileName: string;
+    fileSize: number;
+    path: string;
+    token: string;
+  }> = [];
+
+  const signedUpload = async (
+    jobId: string,
+    ordinal: number,
+    objectPath: string,
+    fileName: string,
+    fileSize: number,
+  ) => {
+    const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(objectPath);
+    if (error || !data?.token) throw error || new Error("Could not create upload authorization");
+    const rawName = rawNameByIdentity.get(analyzerFileIdentity(fileName, fileSize)) || fileName;
+    uploads.push({
+      jobId,
+      ordinal,
+      fileName: rawName,
+      fileSize,
+      path: objectPath,
+      token: data.token,
+    });
+  };
+
+  for (const resume of mutations.resumes) {
+    const pending = jobsById.get(resume.jobId);
+    if (!pending?.object_path) throw new Error("The drawing upload could not be resumed");
+    await signedUpload(pending.id, pending.ordinal, pending.object_path, resume.fileName, resume.fileSize);
+    if (resume.supersedeJobId) {
+      const target = jobsById.get(resume.supersedeJobId);
+      if (target) {
+        await supersedeAnalyzerSheet(admin, run.id, target);
+        usedOrdinals.delete(target.ordinal);
+        jobsById.delete(target.id);
+      }
+    }
+  }
+
+  let replaced = 0;
+  for (const insert of mutations.inserts) {
+    let ordinal = nextSheetOrdinal(usedOrdinals);
+    if (ordinal == null && insert.supersedeJobId) {
+      const target = jobsById.get(insert.supersedeJobId);
+      if (!target) throw new Error("The drawing being replaced is no longer in this analysis");
+      await supersedeAnalyzerSheet(admin, run.id, target);
+      usedOrdinals.delete(target.ordinal);
+      jobsById.delete(target.id);
+      ordinal = target.ordinal;
+      replaced += 1;
+    }
+    if (ordinal == null) throw new Error("This analysis cannot exceed 100 drawings");
+    const id = crypto.randomUUID();
+    const objectPath = `${projectId}/${run.id}/${id}.pdf`;
+    const storedName = cleanAnalyzerFileName(insert.fileName).trim() || "drawing.pdf";
+    const { error: insertError } = await admin.from("supabase_analyzer_sheet_jobs").insert({
+      id,
+      run_id: run.id,
+      project_id: projectId,
+      ordinal,
+      original_file_name: storedName,
+      object_path: objectPath,
+      file_size: insert.fileSize,
+      mime_type: "application/pdf",
+    });
+    if (insertError) throw insertError;
+    usedOrdinals.add(ordinal);
+    await signedUpload(id, ordinal, objectPath, storedName, insert.fileSize);
+    if (insert.supersedeJobId && jobsById.has(insert.supersedeJobId)) {
+      const target = jobsById.get(insert.supersedeJobId)!;
+      await supersedeAnalyzerSheet(admin, run.id, target);
+      usedOrdinals.delete(target.ordinal);
+      jobsById.delete(target.id);
+      replaced += 1;
+    }
+  }
+
+  const { data: latestRows, error: latestError } = await admin
+    .from("supabase_analyzer_sheet_jobs")
+    .select("status")
+    .eq("run_id", run.id);
+  if (latestError) throw latestError;
+  const latest = latestRows || [];
+  const totalSheets = latest.filter((row) => row.status !== "cancelled").length;
+  const hasPending = latest.some((row) => row.status === "upload_pending");
+  if (hasPending) {
+    const { error: runUpdateError } = await admin
+      .from("supabase_analyzer_runs")
+      .update({
+        total_sheets: Math.max(1, Math.min(100, totalSheets)),
+        status: "uploading",
+        completed_at: null,
+        cancelled_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", run.id)
+      .eq("project_id", projectId);
+    if (runUpdateError) throw runUpdateError;
+  }
+
+  await admin.from("supabase_analyzer_audit_events").insert({
+    run_id: run.id,
+    project_id: projectId,
+    actor_id: userId,
+    event_type: "run_drawings_updated",
+    metadata: {
+      added: mutations.inserts.filter((item) => !item.supersedeJobId).length,
+      replaced,
+      resumed: mutations.resumes.length,
+      skipped: mutations.skipped.length,
+    },
+  });
+
+  return json({
+    runId: run.id,
+    uploads,
+    added: mutations.inserts.filter((item) => !item.supersedeJobId).length,
+    replaced,
+    resumed: mutations.resumes.length,
+    skipped: mutations.skipped,
+  });
 }
 
 async function triggerProcessor(supabaseUrl: string, serviceRoleKey: string) {
@@ -307,12 +550,32 @@ Deno.serve(async (req) => {
       return json({ runId, queued: uploadedIds.length, missing });
     }
 
+    if (action === "update") {
+      return await handleSheetUpdate(admin, user.id, projectId, run, body);
+    }
+
     if (action === "retry") {
       if (run.status === "cancelled") return json({ error: "Run is cancelled" }, 409);
       const requestedIds = Array.isArray(body.jobIds)
         ? body.jobIds.map(String).filter(Boolean).slice(0, MAX_SHEETS)
         : [];
-      let query = admin
+      const { data: failedJobs, error: failedError } = await admin
+        .from("supabase_analyzer_sheet_jobs")
+        .select("id, status, error_code")
+        .eq("run_id", runId)
+        .eq("project_id", projectId)
+        .eq("status", "failed");
+      if (failedError) throw failedError;
+      const retryIds = (failedJobs || [])
+        .filter((job) => retryWouldRestart({
+          status: String(job.status),
+          error_code: job.error_code ? String(job.error_code) : null,
+        }))
+        .map((job) => String(job.id))
+        .filter((id) => requestedIds.length === 0 || requestedIds.includes(id));
+      if (retryIds.length === 0) return json({ retried: 0 });
+
+      const { data: retried, error: retryError } = await admin
         .from("supabase_analyzer_sheet_jobs")
         .update({
           status: "queued",
@@ -327,16 +590,19 @@ Deno.serve(async (req) => {
         })
         .eq("run_id", runId)
         .eq("project_id", projectId)
-        .eq("status", "failed");
-      if (requestedIds.length) query = query.in("id", requestedIds);
-      const { data: retried, error: retryError } = await query.select("id");
+        .eq("status", "failed")
+        .in("id", retryIds)
+        .select("id");
       if (retryError) throw retryError;
 
-      await admin
-        .from("supabase_analyzer_findings")
-        .update({ is_published: false, updated_at: new Date().toISOString() })
-        .eq("run_id", runId)
-        .in("sheet_job_id", (retried || []).map((row) => row.id));
+      const retriedIds = (retried || []).map((row) => row.id);
+      if (retriedIds.length > 0) {
+        await admin
+          .from("supabase_analyzer_findings")
+          .update({ is_published: false, updated_at: new Date().toISOString() })
+          .eq("run_id", runId)
+          .in("sheet_job_id", retriedIds);
+      }
       await admin
         .from("supabase_analyzer_runs")
         .update({ status: "queued", completed_at: null, updated_at: new Date().toISOString() })
@@ -347,40 +613,75 @@ Deno.serve(async (req) => {
         project_id: projectId,
         actor_id: user.id,
         event_type: "failed_jobs_retried",
-        metadata: { count: retried?.length || 0 },
+        metadata: { count: retriedIds.length },
       });
-      if (retried?.length) await triggerProcessor(supabaseUrl, serviceRoleKey);
-      return json({ retried: retried?.length || 0 });
+      if (retriedIds.length) await triggerProcessor(supabaseUrl, serviceRoleKey);
+      return json({ retried: retriedIds.length });
     }
 
     if (action === "cancel") {
-      const now = new Date().toISOString();
-      await admin
-        .from("supabase_analyzer_runs")
-        .update({ status: "cancelled", cancelled_at: now, updated_at: now })
-        .eq("id", runId);
-      await admin
+      if (run.status === "cancelled") return json({ cancelled: true, alreadyCancelled: true });
+      if (!["uploading", "queued", "processing"].includes(run.status)) {
+        return json({ error: "Analysis is not running" }, 409);
+      }
+      const { data: cancelJobs, error: cancelJobsError } = await admin
         .from("supabase_analyzer_sheet_jobs")
+        .select("id, status")
+        .eq("run_id", runId)
+        .eq("project_id", projectId);
+      if (cancelJobsError) throw cancelJobsError;
+      const effect = applyCancellation(
+        (cancelJobs || []).map((row) => ({ id: String(row.id), status: String(row.status) })),
+        [],
+      );
+      const now = new Date().toISOString();
+      const { error: cancelRunError } = await admin
+        .from("supabase_analyzer_runs")
         .update({
           status: "cancelled",
-          lease_owner: null,
-          lease_expires_at: null,
-          completed_at: now,
+          cancelled_at: run.cancelled_at || now,
           updated_at: now,
         })
-        .eq("run_id", runId)
-        .in("status", ["upload_pending", "queued", "processing"]);
-      await admin
-        .from("supabase_analyzer_findings")
-        .update({ is_published: false, updated_at: now })
-        .eq("run_id", runId);
+        .eq("id", runId)
+        .eq("project_id", projectId);
+      if (cancelRunError) throw cancelRunError;
+
+      let cancelledJobIds: string[] = [];
+      if (effect.cancelledJobIds.length > 0) {
+        const { data: cancelledRows, error: cancelJobError } = await admin
+          .from("supabase_analyzer_sheet_jobs")
+          .update({
+            status: "cancelled",
+            error_code: "run_cancelled",
+            last_error: "Analysis cancelled",
+            lease_owner: null,
+            lease_expires_at: null,
+            completed_at: now,
+            updated_at: now,
+          })
+          .eq("run_id", runId)
+          .in("id", effect.cancelledJobIds)
+          .in("status", ["upload_pending", "queued", "processing"])
+          .select("id");
+        if (cancelJobError) throw cancelJobError;
+        cancelledJobIds = (cancelledRows || []).map((row) => String(row.id));
+        if (cancelledJobIds.length > 0) {
+          await admin
+            .from("supabase_analyzer_findings")
+            .update({ is_published: false, updated_at: now })
+            .eq("run_id", runId)
+            .in("sheet_job_id", cancelledJobIds);
+        }
+      }
+      await admin.rpc("refresh_supabase_analyzer_run", { p_run_id: runId });
       await admin.from("supabase_analyzer_audit_events").insert({
         run_id: runId,
         project_id: projectId,
         actor_id: user.id,
         event_type: "run_cancelled",
+        metadata: { cancelled_jobs: cancelledJobIds.length },
       });
-      return json({ cancelled: true });
+      return json({ cancelled: true, cancelledJobs: cancelledJobIds.length });
     }
 
     return json({ error: "Unsupported action" }, 400);

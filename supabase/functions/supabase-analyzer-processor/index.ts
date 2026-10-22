@@ -163,6 +163,35 @@ async function completeJob(
   }
 }
 
+async function stopCancelledJob(
+  admin: SupabaseClient,
+  job: ClaimedJob,
+  workerId: string,
+) {
+  const now = new Date().toISOString();
+  await admin
+    .from("supabase_analyzer_sheet_jobs")
+    .update({
+      status: "cancelled",
+      error_code: "run_cancelled",
+      last_error: "Analysis cancelled",
+      lease_owner: null,
+      lease_expires_at: null,
+      completed_at: now,
+      updated_at: now,
+    })
+    .eq("id", job.id)
+    .eq("status", "processing")
+    .eq("lease_owner", workerId);
+  await admin.from("supabase_analyzer_audit_events").insert({
+    run_id: job.run_id,
+    sheet_job_id: job.id,
+    project_id: job.project_id,
+    event_type: "sheet_analysis_cancelled",
+    metadata: { error_code: "run_cancelled" },
+  });
+}
+
 async function processJob(
   admin: SupabaseClient,
   job: ClaimedJob,
@@ -377,6 +406,26 @@ async function processJob(
       throw new ProcessorError(usageError.message, "usage_accounting_failed", true);
     }
 
+    const { data: currentState, error: currentStateError } = await admin
+      .from("supabase_analyzer_runs")
+      .select("status")
+      .eq("id", job.run_id)
+      .single<{ status: string }>();
+    if (currentStateError || !currentState) {
+      throw new ProcessorError("Analyzer run not found", "run_not_found", false);
+    }
+    const { data: currentJob, error: currentJobError } = await admin
+      .from("supabase_analyzer_sheet_jobs")
+      .select("status")
+      .eq("id", job.id)
+      .single<{ status: string }>();
+    if (currentJobError || !currentJob) {
+      throw new ProcessorError("Analyzer sheet is no longer available", "sheet_not_found", false);
+    }
+    if (currentState.status === "cancelled" || currentJob.status === "cancelled") {
+      throw new ProcessorError("Analyzer run was cancelled", "run_cancelled", false);
+    }
+
     const { error: hideError } = await admin
       .from("supabase_analyzer_findings")
       .update({ is_published: false, updated_at: new Date().toISOString() })
@@ -488,6 +537,10 @@ async function processJob(
       processorError.code,
       processorError.message,
     );
+    if (processorError.code === "run_cancelled") {
+      await stopCancelledJob(admin, job, workerId);
+      return;
+    }
     await admin.from("supabase_analyzer_audit_events").insert({
       run_id: job.run_id,
       sheet_job_id: job.id,

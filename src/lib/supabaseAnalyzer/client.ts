@@ -233,10 +233,44 @@ export function retrySupabaseAnalyzerJobs(projectId: string, runId: string, jobI
 }
 
 export function cancelSupabaseAnalyzerRun(projectId: string, runId: string) {
-  return invokeRunAction<{ cancelled: boolean }>({
+  return invokeRunAction<{ cancelled: boolean; alreadyCancelled?: boolean }>({
     action: "cancel",
     projectId,
     runId,
+  });
+}
+
+export function updateSupabaseAnalyzerRun(input: {
+  projectId: string;
+  runId: string;
+  files: Array<{ name: string; size: number; type?: string; replaceJobId?: string | null }>;
+  confirmed: boolean;
+}) {
+  return invokeRunAction<{
+    runId: string;
+    uploads: Array<{
+      jobId: string;
+      ordinal: number;
+      fileName: string;
+      fileSize: number;
+      path: string;
+      token: string;
+    }>;
+    added: number;
+    replaced: number;
+    resumed: number;
+    skipped: Array<{ fileName: string; reason: string }>;
+  }>({
+    action: "update",
+    projectId: input.projectId,
+    runId: input.runId,
+    confirmed: input.confirmed,
+    files: input.files.map((file) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/pdf",
+      replaceJobId: file.replaceJobId || null,
+    })),
   });
 }
 

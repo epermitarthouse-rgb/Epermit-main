@@ -269,6 +269,7 @@ export function DrawingReviewList({
   expandedFindingIds,
   onToggleFinding,
   onRetry,
+  retryDisabled = false,
 }: {
   jobs: SupabaseAnalyzerSheetJob[];
   findingsByJob: Map<string, SupabaseAnalyzerFinding[]>;
@@ -280,6 +281,7 @@ export function DrawingReviewList({
   expandedFindingIds: ReadonlySet<string>;
   onToggleFinding: (findingId: string) => void;
   onRetry: (jobId: string) => void;
+  retryDisabled?: boolean;
 }) {
   const grouped = new Map<string, SupabaseAnalyzerSheetJob[]>();
   for (const job of jobs) {
@@ -380,16 +382,19 @@ export function DrawingReviewList({
                             {job.status === "processing" ? "Reviewing drawing content" : statusLabel(job.status)}
                           </div>
                         ) : null}
-                        {job.status === "failed" ? (
+                        {job.status === "failed" && job.error_code !== "run_cancelled" ? (
                           <Alert variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
                               <span>{sheetErrorMessage(job.error_code)}</span>
-                              <Button size="sm" variant="outlineGold" onClick={() => onRetry(job.id)}>
+                              <Button size="sm" variant="outlineGold" onClick={() => onRetry(job.id)} disabled={retryDisabled}>
                                 Retry
                               </Button>
                             </AlertDescription>
                           </Alert>
+                        ) : null}
+                        {job.status === "cancelled" || job.error_code === "run_cancelled" ? (
+                          <p className="text-sm text-muted-foreground">{sheetErrorMessage(job.error_code || "run_cancelled")}</p>
                         ) : null}
                         {job.analysis_summary ? (
                           <p className="text-sm text-muted-foreground">{job.analysis_summary}</p>

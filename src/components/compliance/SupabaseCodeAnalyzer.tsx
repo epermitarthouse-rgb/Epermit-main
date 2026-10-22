@@ -18,6 +18,16 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -43,6 +53,7 @@ import {
   finalizeSupabaseAnalyzerRun,
   isActiveSupabaseAnalyzerRun,
   retrySupabaseAnalyzerJobs,
+  updateSupabaseAnalyzerRun,
   uploadSupabaseAnalyzerFiles,
   type AnalyzerRunDataset,
   type SupabaseAnalyzerFinding,
@@ -78,6 +89,13 @@ import {
   selectionNoticeTone,
   type AnalyzerSubmissionDraft,
 } from "@/lib/supabaseAnalyzer/pendingSelection";
+import {
+  analyzerActionPresentation,
+  analyzerFileIdentity,
+  planSheetUpdate,
+  updateConfirmationCopy,
+  type SheetUpdatePlan,
+} from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
 
 const ACTIVE_STATUSES = new Set(["uploading", "queued", "processing"]);
 
@@ -94,6 +112,8 @@ export function SupabaseCodeAnalyzer() {
   const [dataset, setDataset] = useState<AnalyzerRunDataset | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [updatePlan, setUpdatePlan] = useState<SheetUpdatePlan | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [activeDiscipline, setActiveDiscipline] = useState("all");
   const [severityFilter, setSeverityFilter] = useState<FindingSeverityFilter>("all");
@@ -107,6 +127,9 @@ export function SupabaseCodeAnalyzer() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const filesRef = useRef<File[]>([]);
   const submittingRef = useRef(false);
+  const cancellingRef = useRef(false);
+  const selectionLockedRef = useRef(false);
+  const updateFilesRef = useRef<File[]>([]);
   const draftRef = useRef<AnalyzerSubmissionDraft | null>(null);
   const selectionProjectRef = useRef(projectId);
 
@@ -224,7 +247,7 @@ export function SupabaseCodeAnalyzer() {
   const addFiles = (incoming: FileList | File[] | null) => {
     if (!incoming) return;
     const merged = mergePendingAnalyzerSheets(filesRef.current, Array.from(incoming), {
-      locked: submittingRef.current,
+      locked: submittingRef.current || selectionLockedRef.current,
     });
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (merged.blocked) return;
@@ -270,33 +293,59 @@ export function SupabaseCodeAnalyzer() {
     addFiles(event.dataTransfer.files);
   };
 
-  const startAnalysis = async () => {
+  const startAnalysis = async (confirmedPlan?: SheetUpdatePlan) => {
     const activeProjectId = projectId;
-    const selected = filesRef.current;
+    const selected = confirmedPlan ? updateFilesRef.current : filesRef.current;
     const action = analyzerSubmissionAction({
-      inFlight: submittingRef.current,
+      inFlight: submittingRef.current || cancellingRef.current,
       projectId: activeProjectId,
       files: selected,
       draft: draftRef.current,
+      runStatus: activeRun?.status ?? null,
     });
     if (action === "ignore") {
-      if (!submittingRef.current && !activeProjectId) {
+      if (!submittingRef.current && !cancellingRef.current && !activeProjectId) {
         toast.error("Select a project before starting an analysis");
-      } else if (!submittingRef.current && selected.length === 0) {
+      } else if (!submittingRef.current && !cancellingRef.current && selected.length === 0) {
         toast.error("Select at least one drawing sheet");
       }
       return;
     }
+    if (action === "blocked") {
+      toast.error("This analysis is still processing. Cancel it before updating drawings.");
+      return;
+    }
+    if (action === "update" && !confirmedPlan) {
+      if (!dataset || dataset.run.id !== activeRun?.id) {
+        toast.error("Analysis is still loading");
+        return;
+      }
+      const plan = planSheetUpdate(dataset.jobs, selected);
+      if (plan.error) {
+        toast.error(plan.error);
+        return;
+      }
+      if (!plan.needsConfirmation && plan.resumed === 0) {
+        toast.info("Those drawings are already in this analysis and were not changed.");
+        return;
+      }
+      if (plan.needsConfirmation) {
+        updateFilesRef.current = selected;
+        setUpdatePlan(plan);
+        return;
+      }
+    }
 
+    const submission = confirmedPlan ? "update" as const : action;
     submittingRef.current = true;
     setSubmitting(true);
-    setUploadProgress({ completed: 0, total: selected.length, fileName: selected[0].name });
+    setUploadProgress({ completed: 0, total: selected.length, fileName: selected[0]?.name || "drawing.pdf" });
     try {
       let runId: string;
       let uploads = draftRef.current?.uploads || [];
-      if (action === "create") {
+      if (submission === "create") {
         const created = await createSupabaseAnalyzerRun({
-          projectId: activeProjectId,
+          projectId: activeProjectId!,
           files: selected,
           jurisdictionKey: jurisdictionKeyFor(jurisdiction),
           jurisdictionLabel: jurisdiction,
@@ -308,7 +357,42 @@ export function SupabaseCodeAnalyzer() {
         runId = created.runId;
         uploads = created.uploads;
         draftRef.current = {
-          projectId: activeProjectId,
+          projectId: activeProjectId!,
+          signature: analyzerSelectionSignature(selected),
+          runId,
+          uploads,
+        };
+      } else if (submission === "update") {
+        const plan = confirmedPlan || planSheetUpdate(dataset?.jobs || [], selected, { confirmed: true });
+        const replaceIds = new Map(
+          plan.items.flatMap((item) => (
+            (item.action === "confirm" || item.action === "replace") && item.jobId
+              ? [[analyzerFileIdentity(item.fileName, item.fileSize), item.jobId] as const]
+              : []
+          )),
+        );
+        const updated = await updateSupabaseAnalyzerRun({
+          projectId: activeProjectId!,
+          runId: activeRun?.id || draftRef.current?.runId || "",
+          confirmed: true,
+          files: selected.map((file) => ({
+            name: file.name,
+            size: file.size,
+            type: file.type || "application/pdf",
+            replaceJobId: replaceIds.get(analyzerFileIdentity(file.name, file.size)) || null,
+          })),
+        });
+        runId = updated.runId;
+        uploads = updated.uploads;
+        if (uploads.length === 0) {
+          toast.info("Those drawings are already in this analysis and were not changed.");
+          draftRef.current = null;
+          filesRef.current = [];
+          setFiles([]);
+          return;
+        }
+        draftRef.current = {
+          projectId: activeProjectId!,
           signature: analyzerSelectionSignature(selected),
           runId,
           uploads,
@@ -329,15 +413,15 @@ export function SupabaseCodeAnalyzer() {
           uploaded.failures.map((failure) => failure.jobId),
         );
         draftRef.current = {
-          projectId: activeProjectId,
+          projectId: activeProjectId!,
           signature: analyzerSelectionSignature(selected),
           runId,
           uploads: remaining,
         };
         if (remaining.length > 0) {
           if (uploaded.completed > 0) {
-            await finalizeSupabaseAnalyzerRun(activeProjectId, runId);
-            await loadRuns(activeProjectId);
+            await finalizeSupabaseAnalyzerRun(activeProjectId!, runId);
+            await loadRuns(activeProjectId!);
             await loadDataset(runId);
           }
           toast.warning(
@@ -347,8 +431,8 @@ export function SupabaseCodeAnalyzer() {
         }
       }
 
-      const finalized = await finalizeSupabaseAnalyzerRun(activeProjectId, runId);
-      await loadRuns(activeProjectId);
+      const finalized = await finalizeSupabaseAnalyzerRun(activeProjectId!, runId);
+      await loadRuns(activeProjectId!);
       await loadDataset(runId);
       draftRef.current = null;
       filesRef.current = [];
@@ -356,6 +440,12 @@ export function SupabaseCodeAnalyzer() {
       if (finalized.missing.length) {
         toast.warning(
           `${finalized.queued} sheets queued; ${finalized.missing.length} uploads need attention.`,
+        );
+      } else if (submission === "update") {
+        toast.success(
+          finalized.queued === 1
+            ? "Updated analysis. 1 drawing queued. Completed sheets were kept."
+            : `Updated analysis. ${finalized.queued} drawings queued. Completed sheets were kept.`,
         );
       } else {
         toast.success(`${finalized.queued} drawing sheets queued for analysis`);
@@ -369,8 +459,16 @@ export function SupabaseCodeAnalyzer() {
     }
   };
 
+  const confirmUpdate = () => {
+    if (!updatePlan || submittingRef.current || cancellingRef.current) return;
+    const plan = updatePlan;
+    setUpdatePlan(null);
+    void startAnalysis(plan);
+  };
+
   const retryFailed = async (jobIds?: string[]) => {
-    if (!projectId || !activeRun) return;
+    if (!projectId || !activeRun || submittingRef.current || cancellingRef.current) return;
+    if (activeRun.status === "cancelled" || ["uploading", "queued", "processing"].includes(activeRun.status)) return;
     try {
       const result = await retrySupabaseAnalyzerJobs(projectId, activeRun.id, jobIds);
       toast.success(result.retried ? `Retrying ${result.retried} sheet(s)` : "No failed sheets to retry");
@@ -381,13 +479,19 @@ export function SupabaseCodeAnalyzer() {
   };
 
   const cancelRun = async () => {
-    if (!projectId || !activeRun) return;
+    if (!projectId || !activeRun || cancellingRef.current || submittingRef.current) return;
+    if (!["uploading", "queued", "processing"].includes(activeRun.status)) return;
+    cancellingRef.current = true;
+    setCancelling(true);
     try {
       await cancelSupabaseAnalyzerRun(projectId, activeRun.id);
       toast.success("Analysis cancelled");
       await loadDataset(activeRun.id);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not cancel analysis");
+    } finally {
+      cancellingRef.current = false;
+      setCancelling(false);
     }
   };
 
@@ -430,6 +534,18 @@ export function SupabaseCodeAnalyzer() {
   );
   const finishedSheets = activeRun ? activeRun.completed_sheets + activeRun.failed_sheets : 0;
   const runInProgress = Boolean(activeRun && ACTIVE_STATUSES.has(activeRun.status));
+  const cancelledSheets = dataset?.jobs.filter((job) => job.status === "cancelled").length || 0;
+  const actionPresentation = analyzerActionPresentation({
+    hasProject: Boolean(projectId),
+    hasRun: Boolean(activeRun),
+    runStatus: activeRun?.status ?? null,
+    fileCount: files.length,
+    failedSheets: activeRun?.failed_sheets || 0,
+    submitting,
+    cancelling,
+  });
+  selectionLockedRef.current = actionPresentation.lockSelection;
+  const updateCopy = updatePlan ? updateConfirmationCopy(updatePlan) : null;
 
   const toggleJob = (jobId: string) => {
     setExpandedJobIds((current) => {
@@ -589,7 +705,7 @@ export function SupabaseCodeAnalyzer() {
                   type="button"
                   variant="outlineGold"
                   className="mt-4"
-                  disabled={submitting}
+                  disabled={actionPresentation.lockSelection}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Choose drawings
@@ -601,13 +717,13 @@ export function SupabaseCodeAnalyzer() {
                   <p className="text-sm text-muted-foreground" data-testid="analyzer-pending-file-capacity">
                     {files.length} of {SUPABASE_ANALYZER_MAX_SHEETS} sheets · {bytesLabel(totalBytes)} of {bytesLabel(SUPABASE_ANALYZER_MAX_TOTAL_BYTES)}
                   </p>
-                  <Button type="button" variant="ghost" onClick={clearSelectedFiles} disabled={submitting}>
+                  <Button type="button" variant="ghost" onClick={clearSelectedFiles} disabled={actionPresentation.lockSelection}>
                     <X className="mr-2 h-4 w-4" /> Clear
                   </Button>
                 </div>
                 <PendingDrawingCards
                   files={files}
-                  submitting={submitting}
+                  submitting={actionPresentation.lockSelection}
                   onRemove={removeSelectedFile}
                 />
                 {files.length < SUPABASE_ANALYZER_MAX_SHEETS ? (
@@ -616,7 +732,7 @@ export function SupabaseCodeAnalyzer() {
                       type="button"
                       variant="outlineGold"
                       size="sm"
-                      disabled={submitting}
+                      disabled={actionPresentation.lockSelection}
                       onClick={() => fileInputRef.current?.click()}
                     >
                       Add More Drawings
@@ -632,35 +748,74 @@ export function SupabaseCodeAnalyzer() {
               variant="gold"
               size="lg"
               onClick={() => void startAnalysis()}
-              disabled={submitting || !projectId || files.length === 0}
+              disabled={actionPresentation.primaryDisabled}
               className="px-8"
+              data-testid="button-analyze-compliance"
             >
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {uploadProgress
                     ? `Uploading ${uploadProgress.completed} / ${uploadProgress.total}`
-                    : "Starting analysis"}
+                    : "Uploading"}
+                </>
+              ) : actionPresentation.primaryLabel === "Processing" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing
                 </>
               ) : (
                 <>
                   <Shield className="mr-2 h-4 w-4" />
-                  Start analysis
+                  {actionPresentation.primaryLabel}
                 </>
               )}
             </Button>
-            {activeRun && ACTIVE_STATUSES.has(activeRun.status) ? (
-              <Button type="button" variant="outlineGold" size="lg" onClick={() => void cancelRun()}>
-                Cancel
+            {actionPresentation.showCancel ? (
+              <Button
+                type="button"
+                variant="outlineGold"
+                size="lg"
+                onClick={() => void cancelRun()}
+                disabled={actionPresentation.cancelDisabled}
+                data-testid="button-cancel-analyzer-run"
+                aria-label="Cancel analysis"
+              >
+                {cancelling ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Cancelling…
+                  </>
+                ) : (
+                  "Cancel Analysis"
+                )}
               </Button>
             ) : null}
-            {activeRun && activeRun.failed_sheets > 0 && !submitting ? (
-              <Button type="button" variant="outlineGold" size="lg" onClick={() => void retryFailed()}>
+            {actionPresentation.showRetry ? (
+              <Button
+                type="button"
+                variant="outlineGold"
+                size="lg"
+                onClick={() => void retryFailed()}
+                disabled={actionPresentation.retryDisabled}
+              >
                 <RotateCcw className="mr-2 h-4 w-4" />
-                Retry failed sheets ({activeRun.failed_sheets})
+                Retry failed sheets ({activeRun?.failed_sheets || 0})
               </Button>
             ) : null}
           </div>
+          {actionPresentation.statusText ? (
+            <div className="flex justify-center">
+              <Badge variant="outline" data-testid="analyzer-run-status">
+                {actionPresentation.statusText}
+              </Badge>
+            </div>
+          ) : null}
+          {activeRun && !runInProgress ? (
+            <p className="text-center text-xs text-muted-foreground">
+              Add a new or revised drawing, then choose Update Analysis. Completed sheets stay unless you replace that drawing.
+            </p>
+          ) : null}
 
           {uploadProgress ? (
             <div className="space-y-2" data-testid="drawing-upload-progress">
@@ -681,7 +836,7 @@ export function SupabaseCodeAnalyzer() {
                 {finishedSheets} of {activeRun.total_sheets} sheets finished
               </p>
               <p className="text-center text-xs text-muted-foreground">
-                Queued {activeRun.queued_sheets} · Processing {activeRun.processing_sheets} · Completed {activeRun.completed_sheets} · Failed {activeRun.failed_sheets} · {progress}%
+                Queued {activeRun.queued_sheets} · Processing {activeRun.processing_sheets} · Completed {activeRun.completed_sheets} · Failed {activeRun.failed_sheets}{cancelledSheets > 0 ? ` · Cancelled ${cancelledSheets}` : ""} · {progress}%
               </p>
             </div>
           ) : null}
@@ -742,6 +897,7 @@ export function SupabaseCodeAnalyzer() {
                   expandedFindingIds={expandedFindingIds}
                   onToggleFinding={toggleFinding}
                   onRetry={(jobId) => void retryFailed([jobId])}
+                  retryDisabled={actionPresentation.retryDisabled || runInProgress || cancelling}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -782,6 +938,59 @@ export function SupabaseCodeAnalyzer() {
           </div>
         </motion.div>
       ) : null}
+      <AlertDialog
+        open={Boolean(updateCopy)}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setUpdatePlan(null);
+        }}
+      >
+        <AlertDialogContent data-testid="update-analysis-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{updateCopy?.title || "Update Analysis"}</AlertDialogTitle>
+            <AlertDialogDescription>{updateCopy?.intro}</AlertDialogDescription>
+          </AlertDialogHeader>
+          {updateCopy ? (
+            <div className="space-y-3 text-sm text-muted-foreground">
+              {updateCopy.replacements.length > 0 ? (
+                <ul className="list-disc space-y-1 pl-5">
+                  {updateCopy.replacements.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {updateCopy.adds.length > 0 ? (
+                <div>
+                  <p className="text-foreground">
+                    Add {updateCopy.adds.length} new drawing{updateCopy.adds.length === 1 ? "" : "s"}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {updateCopy.adds.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {updateCopy.skipped.length > 0 ? (
+                <ul className="list-disc space-y-1 pl-5">
+                  {updateCopy.skipped.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>{updateCopy?.cancelLabel || "Cancel"}</AlertDialogCancel>
+            <AlertDialogAction disabled={submitting} onClick={(event) => {
+              event.preventDefault();
+              confirmUpdate();
+            }}
+            >
+              {updateCopy?.confirmLabel || "Update Analysis"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

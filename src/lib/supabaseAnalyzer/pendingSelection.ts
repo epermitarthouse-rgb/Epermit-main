@@ -167,7 +167,8 @@ export function analyzerSubmissionAction(input: {
   projectId: string | null;
   files: readonly AnalyzerSheetFile[];
   draft: Pick<AnalyzerSubmissionDraft, "projectId" | "signature"> | null;
-}): "ignore" | "resume" | "create" {
+  runStatus?: string | null;
+}): "ignore" | "resume" | "create" | "update" | "blocked" {
   if (input.inFlight || !input.projectId || input.files.length === 0) return "ignore";
   const signature = analyzerSelectionSignature(input.files);
   if (
@@ -176,6 +177,16 @@ export function analyzerSubmissionAction(input: {
     && input.draft.signature === signature
   ) {
     return "resume";
+  }
+  if (input.runStatus === "queued" || input.runStatus === "processing") return "blocked";
+  if (
+    input.runStatus === "uploading"
+    || input.runStatus === "completed"
+    || input.runStatus === "completed_with_errors"
+    || input.runStatus === "cancelled"
+    || input.runStatus === "failed"
+  ) {
+    return "update";
   }
   return "create";
 }

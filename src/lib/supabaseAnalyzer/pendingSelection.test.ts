@@ -172,6 +172,40 @@ describe("Supabase analyzer pending selection", () => {
     }), "create");
   });
 
+  it("updates a settled run instead of creating another one", () => {
+    assert.equal(analyzerSubmissionAction({
+      inFlight: false,
+      projectId: "project-1",
+      files: batch(1, 1),
+      draft: null,
+      runStatus: "completed",
+    }), "update");
+    assert.equal(analyzerSubmissionAction({
+      inFlight: false,
+      projectId: "project-1",
+      files: batch(1, 1),
+      draft: null,
+      runStatus: "cancelled",
+    }), "update");
+  });
+
+  it("does not start a second run while analysis is processing", () => {
+    assert.equal(analyzerSubmissionAction({
+      inFlight: false,
+      projectId: "project-1",
+      files: batch(1, 1),
+      draft: null,
+      runStatus: "processing",
+    }), "blocked");
+    assert.equal(analyzerSubmissionAction({
+      inFlight: false,
+      projectId: "project-1",
+      files: batch(1, 1),
+      draft: null,
+      runStatus: "queued",
+    }), "blocked");
+  });
+
   it("retries only failed upload descriptors for the saved run", () => {
     const uploads: AnalyzerUploadDescriptor[] = [
       { path: "a", token: "a", fileName: "a.pdf", fileSize: 1, jobId: "job-a" },
