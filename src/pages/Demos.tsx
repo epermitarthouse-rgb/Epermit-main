@@ -20,7 +20,7 @@ const demos = [
   {
     id: "utility-coordination",
     title: "Utility Coordination",
-    description: "Walk a simulated new electric service through all 10 utility coordination stages",
+    description: "Guided walkthrough of a simulated electric service, from the utility match through closeout",
     icon: <Zap className="h-6 w-6" />,
   },
   {
@@ -181,7 +181,7 @@ const Demos = () => {
                       Utility Coordination — 10-Stage Lifecycle
                     </CardTitle>
                     <CardDescription>
-                      Play a simulated Highland Springs electric service from provider mapping to energization, and open each stage&apos;s workspace
+                      A guided tour of a simulated Highland Springs electric service: what each stage does, what moves it forward, and optional spoken narration
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

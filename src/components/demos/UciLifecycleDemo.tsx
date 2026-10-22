@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { RecordLifecycleProgressRail } from "@/components/uci/RecordLifecycleProgressRail";
 import { UciStageHistoryPanel } from "@/components/uci/UciStageHistoryPanel";
 import { formatUciLifecycleStateLabel, getLifecycleStageTitle } from "@/lib/uciWorkspaceGuidance";
+import { UciDemoGuidedTour } from "./uci/UciDemoGuidedTour";
 import { UciDemoStageWorkspace } from "./uci/UciDemoStageWorkspaces";
+import { describeUciDemoTimelinePosition } from "./uci/uciDemoGuidance";
 import {
   buildUciDemoSnapshot,
   clampUciDemoStep,
@@ -18,11 +20,12 @@ import {
 
 const LAST_STEP = UCI_DEMO_STEP_COUNT - 1;
 const PLAY_INTERVAL_MS = 1600;
+const OPENING_STEP = uciDemoStepForStage(1);
 
 export function UciLifecycleDemo() {
-  const [step, setStep] = useState(LAST_STEP);
+  const [step, setStep] = useState(OPENING_STEP);
   const [playing, setPlaying] = useState(false);
-  const [selectedStage, setSelectedStage] = useState(1);
+  const [selectedStage, setSelectedStage] = useState(UCI_DEMO_TRANSITIONS[OPENING_STEP].to_stage);
   const snapshot = useMemo(() => buildUciDemoSnapshot(step), [step]);
   const record = snapshot.detail.record;
   const latest = UCI_DEMO_TRANSITIONS[snapshot.step];
@@ -56,6 +59,10 @@ export function UciLifecycleDemo() {
     setPlaying(true);
   };
 
+  const showGuideStage = (stage: number) => {
+    goToStep(uciDemoStepForStage(stage));
+  };
+
   const scrollToWorkspace = () => {
     window.setTimeout(() => {
       document.getElementById("uci-demo-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -73,6 +80,17 @@ export function UciLifecycleDemo() {
           <strong>{UCI_DEMO_LABEL}.</strong> Names, references, dates, and amounts are illustrative.
         </span>
       </div>
+
+      <UciDemoGuidedTour
+        stage={selectedStage}
+        timelineNote={describeUciDemoTimelinePosition({
+          selectedStage,
+          currentStage: record.current_stage,
+          currentState: record.current_stage_state,
+        })}
+        onGoToStage={showGuideStage}
+        onNarrationStart={() => setPlaying(false)}
+      />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <div className="rounded-xl border border-border/70 bg-card p-4">
@@ -121,10 +139,11 @@ export function UciLifecycleDemo() {
               type="button"
               size="sm"
               onClick={() => (playing ? setPlaying(false) : startPlayback())}
+              aria-label={playing ? "Pause simulated timeline" : "Play simulated timeline"}
               data-testid="uci-demo-play"
             >
               {playing ? <Pause className="mr-1 h-4 w-4" /> : <Play className="mr-1 h-4 w-4" />}
-              {playing ? "Pause" : snapshot.step >= LAST_STEP ? "Replay lifecycle" : "Play"}
+              {playing ? "Pause timeline" : snapshot.step >= LAST_STEP ? "Replay timeline" : "Play timeline"}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => goToStep(snapshot.step + 1)} disabled={snapshot.step >= LAST_STEP} aria-label="Next event">
               <SkipForward className="h-4 w-4" />
@@ -137,7 +156,7 @@ export function UciLifecycleDemo() {
         detail={snapshot.detail}
         providerName={UCI_DEMO_PROVIDER}
         selectedStage={selectedStage}
-        onSelectStage={(stage) => setSelectedStage(Math.max(1, Math.min(10, stage)))}
+        onSelectStage={showGuideStage}
         onOpenTools={scrollToWorkspace}
         preloaded={{ documents: snapshot.documents, communications: snapshot.communications }}
       />
