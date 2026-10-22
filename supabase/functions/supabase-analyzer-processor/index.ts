@@ -5,6 +5,11 @@ import {
   verifyProcessorRequest,
 } from "../_shared/processorAuth.ts";
 import { processorReviewPrompt } from "../_shared/analyzerReviewScope.ts";
+import {
+  buildAnalyzerUserPrompt,
+  validateAnalyzerFindings,
+  type SubmittedSheetRef,
+} from "../_shared/analyzerFindingQuality.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,7 +56,7 @@ type AnalyzerRun = {
 
 type Finding = {
   category: string;
-  severity: "critical" | "warning" | "advisory";
+  severity: string;
   title: string;
   observation: string;
   drawing_evidence: string;
@@ -89,11 +94,6 @@ function clip(value: unknown, length: number): string {
   return String(value || "").trim().slice(0, length);
 }
 
-function normalizeSeverity(value: unknown): Finding["severity"] {
-  if (value === "critical" || value === "warning" || value === "advisory") return value;
-  return "advisory";
-}
-
 function parseAnalysis(value: unknown): AnalysisPayload {
   if (!value || typeof value !== "object") {
     throw new ProcessorError("Model returned an invalid analysis object", "invalid_model_output", true);
@@ -103,16 +103,16 @@ function parseAnalysis(value: unknown): AnalysisPayload {
   const findings = rawFindings.map((item) => {
     const finding = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
     return {
-      category: clip(finding.category, 120) || "General",
-      severity: normalizeSeverity(finding.severity),
-      title: clip(finding.title, 240) || "Review observation",
+      category: clip(finding.category, 120),
+      severity: clip(finding.severity, 40).toLowerCase(),
+      title: clip(finding.title, 240),
       observation: clip(finding.observation, 2000),
       drawing_evidence: clip(finding.drawing_evidence, 1500),
       drawing_location: clip(finding.drawing_location, 500),
       suggested_code_reference: clip(finding.suggested_code_reference, 500),
       recommendation: clip(finding.recommendation, 1500),
     };
-  }).filter((finding) => finding.observation && finding.drawing_evidence && finding.recommendation);
+  });
 
   return {
     detected_sheet_number: clip(raw.detected_sheet_number, 120),
@@ -199,6 +199,23 @@ async function processJob(
     const bytes = new Uint8Array(await fileBlob.arrayBuffer());
     const fileData = `data:application/pdf;base64,${encodeBase64(bytes)}`;
     const systemPrompt = processorReviewPrompt(run);
+    let sheetIndex: SubmittedSheetRef[] = [];
+    const { data: sheetRows, error: sheetIndexError } = await admin
+      .from("supabase_analyzer_sheet_jobs")
+      .select("original_file_name, detected_sheet_number, detected_sheet_title, discipline")
+      .eq("run_id", job.run_id)
+      .limit(100);
+    if (sheetIndexError) {
+      console.error("[supabase-analyzer] sheet index unavailable", job.run_id, sheetIndexError.message);
+    } else {
+      sheetIndex = (sheetRows || []).map((row) => ({
+        fileName: String(row.original_file_name || ""),
+        detectedSheetNumber: row.detected_sheet_number,
+        detectedSheetTitle: row.detected_sheet_title,
+        discipline: row.discipline,
+      }));
+    }
+    const userPrompt = buildAnalyzerUserPrompt(job.original_file_name, sheetIndex);
 
     const schema = {
       type: "object",
@@ -275,7 +292,7 @@ async function processJob(
                 },
                 {
                   type: "input_text",
-                  text: "Review this permit drawing sheet and return the structured preliminary observations.",
+                  text: userPrompt,
                 },
               ],
             },
@@ -330,6 +347,17 @@ async function processJob(
       throw new ProcessorError("OpenAI returned invalid JSON", "invalid_model_json", true);
     }
     const analysis = parseAnalysis(parsedJson);
+    const reviewed = validateAnalyzerFindings(analysis.findings, {
+      analysisMode: run.analysis_mode === "both" || run.analysis_mode === "ibc_only" || run.analysis_mode === "local_only"
+        ? run.analysis_mode
+        : null,
+      jurisdictionKey: run.jurisdiction_key,
+      jurisdictionLabel: run.jurisdiction_label,
+      codeEdition: run.code_edition,
+      codeContext: run.code_context,
+      sheetIndex,
+      sheetDiscipline: analysis.discipline,
+    });
     const usage = (responsePayload.usage || {}) as Record<string, unknown>;
     const inputTokens = Math.max(0, Number(usage.input_tokens) || 0);
     const outputTokens = Math.max(0, Number(usage.output_tokens) || 0);
@@ -361,8 +389,8 @@ async function processJob(
       .eq("sheet_job_id", job.id);
     if (deleteError) throw new ProcessorError(deleteError.message, "finding_replace_failed", true);
 
-    if (analysis.findings.length > 0) {
-      const findingRows = analysis.findings.map((finding, index) => ({
+    if (reviewed.published.length > 0) {
+      const findingRows = reviewed.published.map((finding, index) => ({
         run_id: job.run_id,
         sheet_job_id: job.id,
         project_id: job.project_id,
@@ -373,14 +401,14 @@ async function processJob(
         observation: finding.observation,
         drawing_evidence: finding.drawing_evidence,
         drawing_location: finding.drawing_location || null,
-        suggested_code_reference: finding.suggested_code_reference || null,
+        suggested_code_reference: finding.suggested_code_reference,
         recommendation: finding.recommendation,
         ai_provider: "openai",
         ai_model: responseModel,
         jurisdiction_key: run.jurisdiction_key,
         code_edition: run.code_edition,
         provenance_status: "model_generated_from_uploaded_pdf",
-        verification_status: "proposed_reference",
+        verification_status: finding.verification_status,
         is_published: false,
         raw_metadata: {
           source_object_path: job.object_path,
@@ -390,6 +418,7 @@ async function processJob(
           discipline: analysis.discipline,
           openai_response_id: responsePayload.id || null,
           openai_request_id: requestId,
+          validation: finding.validation,
         },
       }));
       const { error: findingsError } = await admin
@@ -427,7 +456,14 @@ async function processJob(
       project_id: job.project_id,
       event_type: "sheet_analysis_completed",
       metadata: {
-        finding_count: analysis.findings.length,
+        finding_count: reviewed.published.length,
+        withheld_count: reviewed.withheld.length,
+        withheld: reviewed.withheld.map((item) => ({
+          title: item.title,
+          original_severity: item.originalSeverity,
+          original_code_reference: item.originalCodeReference,
+          rules: item.rules,
+        })),
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         estimated_cost_usd: estimatedCost,

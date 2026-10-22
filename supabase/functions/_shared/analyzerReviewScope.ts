@@ -33,6 +33,12 @@ export const DC_2017_REGISTRY_SNAPSHOT = {
     { family: "ASHRAE 90.1", edition: "2013", discipline: "commercial_energy" },
     { family: "IgCC", edition: "2012", discipline: "green_construction" },
   ] satisfies RegistryBaseCode[],
+  referencedStandards: [
+    { family: "NFPA 70", edition: "2014", status: "adopted_base_code" },
+    { family: "ANSI/ASHRAE/IES 90.1", edition: "2013", status: "adopted_base_code" },
+  ],
+  /** Section ids copied from this record's transitionProvisions. They are not amendment body text. */
+  recordedLocalSections: ["123", "123.1.1", "123.1.2", "123.1.3", "123.1.4", "123.1.5"],
   localAmendmentRecord: "DCMR Title 12, subtitles A–M",
   enforceableProvisionText: "unavailable",
 } as const;
@@ -88,6 +94,54 @@ function mepFamilies(codes: readonly RegistryBaseCode[]): string[] {
 function isDcJurisdiction(jurisdictionKey: string, jurisdictionLabel: string): boolean {
   if (jurisdictionKey === "dc") return true;
   return /washington\s+d\.?\s*c|12a\s+dcmr|district of columbia/i.test(jurisdictionLabel);
+}
+
+export function isDc2017AnalyzerContext(input: {
+  jurisdictionKey?: string;
+  jurisdictionLabel?: string;
+  codeEdition?: string;
+  codeContext?: string;
+}): boolean {
+  return usesDc2017Record({
+    jurisdictionKey: input.jurisdictionKey || "",
+    jurisdictionLabel: input.jurisdictionLabel || "",
+    codeEdition: input.codeEdition || "",
+    codeContext: input.codeContext || "",
+  });
+}
+
+function registryCode(discipline: string): RegistryBaseCode | undefined {
+  return DC_2017_REGISTRY_SNAPSHOT.baseCodes.find((code) => code.discipline === discipline);
+}
+
+/** Adoption metadata for prompts. Provision text is not included and is not verified. */
+export function dc2017EditionGuidance(): string {
+  const building = registryCode("building");
+  const electrical = registryCode("electrical");
+  const plumbing = registryCode("plumbing");
+  const mechanical = registryCode("mechanical");
+  const fire = registryCode("fire");
+  const fuel = registryCode("fuel_gas");
+  const nfpa = DC_2017_REGISTRY_SNAPSHOT.referencedStandards.find((item) => item.family === "NFPA 70");
+  const lines = [
+    "Recorded adopted editions for the 2017 DC Construction Codes. This is registry adoption metadata only. Enforceable provision text is not available, and naming an edition does not verify a citation.",
+  ];
+  if (building) lines.push(`Building base code: ${building.edition} ${building.family}.`);
+  if (electrical) {
+    const nfpaNote = nfpa ? ` The registry records ${nfpa.family} ${nfpa.edition} as that electrical standard.` : "";
+    lines.push(`Electrical: ${electrical.edition} ${electrical.family}.${nfpaNote} Do not cite IBC Chapter 27 or a different NEC edition.`);
+  }
+  if (plumbing) lines.push(`Plumbing: ${plumbing.edition} ${plumbing.family}. Do not cite an unrelated IBC chapter for plumbing provisions.`);
+  if (mechanical) lines.push(`Mechanical: ${mechanical.edition} ${mechanical.family}. Do not cite an unrelated IBC chapter for mechanical provisions.`);
+  if (fire) lines.push(`Fire: ${fire.edition} ${fire.family}.`);
+  if (fuel) lines.push(`Fuel gas: ${fuel.edition} ${fuel.family}.`);
+  lines.push(
+    "A code reference must name the family and the applicable edition, and a section only when the drawing or the recorded adoption supports that section. State whether it is a base code or a local amendment when that is known.",
+    "If a precise citation is not supported, leave suggested_code_reference empty. Do not write General Compliance, Could reference, Suggest referencing, or a guessed section.",
+    `Local amendment record: ${DC_2017_REGISTRY_SNAPSHOT.localAmendmentRecord}. Do not invent a DCMR section number.`,
+    "The selected analysis mode still controls which of these families may be discussed.",
+  );
+  return lines.join(" ");
 }
 
 function usesDc2017Record(input: {
@@ -195,6 +249,8 @@ function scopePrompt(
     lines.push(
       `Review the building code as ${DC_2017_REGISTRY_SNAPSHOT.baseIbcEdition} IBC together with recorded ${DC_2017_REGISTRY_SNAPSHOT.label} local amendments (${DC_2017_REGISTRY_SNAPSHOT.localAmendmentRecord}).`,
       mepExclusionSentence(facts.mep || []),
+      "Electrical citations use the recorded NEC edition, not IBC Chapter 27 and not a different NEC year. Plumbing, mechanical, and fire citations use the recorded IPC, IMC, and IFC editions, not an unrelated IBC chapter.",
+      "Leave suggested_code_reference empty when the family, edition, and a supported section cannot all be stated. Do not write General Compliance or Could reference.",
       "Do not invent local amendment text, numeric thresholds, or code sections that are not visible on the drawing.",
     );
   } else if (facts.knownDc2017 && mode === "ibc_only") {
@@ -202,12 +258,14 @@ function scopePrompt(
       `Review building-code topics under the ${DC_2017_REGISTRY_SNAPSHOT.baseIbcEdition} IBC only.`,
       "Do not apply District of Columbia local amendments.",
       "Do not apply the IBC to electrical, plumbing, mechanical, or fire-protection provisions, and do not perform a comprehensive MEP review.",
+      "Do not cite NEC, IPC, IMC, or IFC sections in this mode.",
       "If this sheet is primarily electrical, plumbing, mechanical, or fire protection, return no findings.",
     );
   } else if (facts.knownDc2017 && mode === "local_only") {
     lines.push(
       `Discuss only the recorded local amendment adoption (${DC_2017_REGISTRY_SNAPSHOT.localAmendmentRecord}).`,
       "Do not review the base IBC as a local amendment.",
+      "Do not cite a base IBC, NEC, IPC, IMC, or IFC section as a local amendment.",
       "Do not invent missing amendment text. If a local amendment cannot be stated from the drawing without inventing text, return no finding.",
     );
   } else if (mode === "ibc_only") {
@@ -235,7 +293,17 @@ export function legacySupabaseAnalyzerPrompt(run: {
   jurisdiction_label: string;
   code_context: string;
   project_type: string;
+  jurisdiction_key?: string;
+  code_edition?: string;
 }): string {
+  const editionGuidance = isDc2017AnalyzerContext({
+    jurisdictionKey: run.jurisdiction_key,
+    jurisdictionLabel: run.jurisdiction_label,
+    codeEdition: run.code_edition,
+    codeContext: run.code_context,
+  })
+    ? dc2017EditionGuidance()
+    : "No verified adopted-edition record is available for this selection. Do not invent an IBC, NEC, IPC, IMC, IFC, or local-amendment edition.";
   return `You are performing a preliminary professional review of one commercial permit drawing sheet.
 
 Review context:
@@ -243,16 +311,24 @@ Review context:
 - Selected adopted-code context: ${run.code_context}
 - Project type: ${run.project_type}
 - Source coverage: adoption metadata is recorded, but complete authoritative technical code text is not supplied.
+- ${editionGuidance}
 
 Rules:
 1. Analyze only content actually visible in the attached drawing. Never infer a condition from the filename.
 2. Every observation must quote or precisely describe its visible drawing evidence and location.
 3. Do not call an observation a confirmed violation. Use conservative professional review language.
-4. A code section is a proposed reference unless its authoritative text is present in the drawing itself.
+4. A code section is a proposed reference unless its authoritative text is present in the drawing itself. Syntax is not verification.
 5. Do not invent numeric thresholds, local amendments, dimensions, labels, or code sections.
 6. If the drawing is illegible or lacks enough evidence, return no finding for that topic.
 7. Identify the printed sheet number, printed sheet title, and discipline from the drawing title block when visible.
-8. Return no more than 12 high-value observations.`;
+8. Return no more than 12 high-value observations. Do not invent observations to reach a target count. An empty findings array is correct when the sheet does not show a review issue.
+9. Before publishing a finding, classify it as one of: actual discrepancy; missing required information; conflicting information; explicit drawing requirement; general coordination note; further professional review. Publish a deficiency only for an actual discrepancy, a demonstrated omission, or a visible conflict.
+10. An explicit drawing requirement or coordination note is not a violation. A note that correctly requires GFCI protection, exit-door operation, valve access, sealed penetrations, manufacturer compliance, or trade coordination is not evidence of noncompliance. Do not classify that note as critical or warning because the topic is life safety.
+11. Severity must reflect evidence of a problem, not the importance of the subject. Critical requires a specific, supported, potentially serious discrepancy. Warning requires a credible deficiency, inconsistency, or unresolved technical concern. Advisory is for coordination, clarification, or follow-up. If the evidence does not show a discrepancy, omit the finding.
+12. Do not treat a detail that is absent from this sheet as absent from the project. The user message may include a submitted sheet index built from filenames and detected sheet numbers. If that index contains the referenced sheet, do not report the sheet as missing, and do not claim the other sheet proves compliance. Its content was not reviewed in this request. If the index does not resolve the reference, say the reference is unresolved.
+13. For a calculation, identify the observed inputs, units, and the governing formula or selection method printed on the sheet. State a computed result only when it follows from those inputs. Do not assume the larger of two intermediate values governs. If the sheet states a lesser-of, smaller-of, or minimum method, apply that method. Two different intermediate results are not a violation without the governing rule. If the rule is missing or ambiguous, do not assert a numerical code violation.
+14. The observation for a deficiency must be able to answer: what the drawing shows; what inconsistency, omission, or potentially noncompliant condition is visible; why it is materially relevant; which supported code or technical rule applies, if one is actually known; and what additional evidence would resolve uncertainty.
+15. Do not recommend "Ensure compliance with all applicable codes." Make the recommendation specific to the observed condition, or omit the finding. Do not publish a finding that only restates normal drawing content.`;
 }
 
 export function processorReviewPrompt(run: {
