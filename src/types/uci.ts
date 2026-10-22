@@ -724,6 +724,8 @@ export interface UciRecordDetailResponse {
   equipment: CoordinationEquipment[];
   milestones: CoordinationMilestone[];
   communications_recent: CoordinationCommunication[];
+  /** Returned by the coordination detail service; optional for older payloads. */
+  cos_design_records?: CoordinationCosDesignRecord[];
   hydration?: {
     request_id: string | null;
     steps: Array<{

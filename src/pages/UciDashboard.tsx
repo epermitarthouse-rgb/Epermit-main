@@ -278,6 +278,7 @@ import { UciProjectContextBar } from "@/components/uci/UciProjectContextBar";
 import { ProjectSummaryHeader } from "@/components/uci/ProjectSummaryHeader";
 import { CoordinationStatusSummary } from "@/components/uci/CoordinationStatusSummary";
 import { WorkflowStageNavigator } from "@/components/uci/WorkflowStageNavigator";
+import { UciStageHistoryPanel } from "@/components/uci/UciStageHistoryPanel";
 import { RecordLifecycleProgressRail } from "@/components/uci/RecordLifecycleProgressRail";
 import { NextStepNotice } from "@/components/uci/NextStepNotice";
 import { buildNextStepNotice } from "@/lib/uciWorkspaceGuidance";
@@ -292,6 +293,7 @@ import {
   CURRENT_STAGE_DISTRIBUTION_HELPER,
   isUnassignedRequiredProvider,
   needsStage1ProviderSetup,
+  normalizeLifecycleStage,
   providerNeedsConfirmationReason,
   stageStateEntries,
 } from "@/lib/uciLifecycleMatrix";
@@ -1432,8 +1434,9 @@ export default function UciDashboard() {
           changed = true;
         }
         // Preserve an explicit ?tab= deep link; otherwise mirror the preferred tab
-        // (e.g. Submissions → application-prep set by section navigation).
-        if (!prev.get("tab") && drawerTab) {
+        // on the project preview. The full record workspace uses ?stage= and must
+        // not open detailed tools unless the user asked for a tab.
+        if (!isRecordWorkspace && !prev.get("tab") && drawerTab) {
           next.set("tab", drawerTab);
           changed = true;
         }
@@ -3559,13 +3562,9 @@ export default function UciDashboard() {
         openStage1ProviderSetup();
         return;
       }
-      if (isRecordWorkspace) {
-        navigate(`/uci/records/${encodeURIComponent(record.id)}`);
-        return;
-      }
-      void openDetail(record.id);
+      navigate(`/uci/records/${encodeURIComponent(record.id)}?stage=1`);
     },
-    [isRecordWorkspace, navigate, openDetail, openStage1ProviderSetup],
+    [navigate, openStage1ProviderSetup],
   );
   const uciCompletedRecordCount = useMemo(
     () => records.filter((record) => record.current_stage_state === "COMPLETED").length,
@@ -3638,6 +3637,34 @@ export default function UciDashboard() {
     [isRecordWorkspace, navigate, setSearchParams],
   );
 
+  const selectedHistoryStage = normalizeLifecycleStage(searchParams.get("stage")) ?? 1;
+  const recordToolsOpen = searchParams.get("tools") === "1" || Boolean(searchParams.get("tab"));
+  const selectHistoryStage = useCallback(
+    (stage: number) => {
+      const nextStage = normalizeLifecycleStage(stage);
+      if (!nextStage) return;
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (next.get("stage") === String(nextStage)) return prev;
+        next.set("stage", String(nextStage));
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+  const openStageTools = useCallback(
+    (tab: UciDrawerTab) => {
+      setDrawerTab(tab);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tools", "1");
+        next.set("tab", tab);
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const updateDrawerTab = useCallback(
     (tab: UciDrawerTab) => {
       setDrawerTab(tab);
@@ -3666,6 +3693,20 @@ export default function UciDashboard() {
     // openDetail is intentionally stable enough for deep-link hydration
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deep-link on coordination query only
   }, [coordinationParam, detailId]);
+
+  useEffect(() => {
+    if (!isRecordWorkspace) return;
+    if (normalizeLifecycleStage(searchParams.get("stage"))) return;
+    setSearchParams(
+      (prev) => {
+        if (normalizeLifecycleStage(prev.get("stage"))) return prev;
+        const next = new URLSearchParams(prev);
+        next.set("stage", "1");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [isRecordWorkspace, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!detailId || !detail?.record || detail.record.id !== detailId) return;
@@ -3905,8 +3946,10 @@ export default function UciDashboard() {
                 type="button"
                 disabled={records.length === 0}
                 onClick={() => {
-                  const target = uciAttentionRecords[0]?.id ?? records[0]?.id;
-                  if (target) void openDetail(target);
+                  const targetId = uciAttentionRecords[0]?.id ?? records[0]?.id;
+                  const target = records.find((record) => record.id === targetId);
+                  if (!target) return;
+                  openRecordOrStage1Setup(target);
                 }}
                 className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -4078,7 +4121,11 @@ export default function UciDashboard() {
                       return (
                         <TableRow
                           key={r.id}
-                          className="border-border/35 bg-background/30 transition-colors hover:bg-primary/10 dark:border-teal/12 dark:bg-card/45 dark:hover:bg-teal/6"
+                          className="cursor-pointer border-border/35 bg-background/30 transition-colors hover:bg-primary/10 dark:border-teal/12 dark:bg-card/45 dark:hover:bg-teal/6"
+                          onClick={(event) => {
+                            if ((event.target as HTMLElement).closest("button, a")) return;
+                            openRecordOrStage1Setup(r);
+                          }}
                         >
                           <TableCell className={cn(uciTableCellClass, "!font-semibold")}>
                             <div className="space-y-1">
@@ -4127,20 +4174,12 @@ export default function UciDashboard() {
                                 </Button>
                               ) : null}
                               <Button
-                                variant="outline"
-                                size="sm"
-                                className={uciViewRowButtonClass}
-                                onClick={() => openRecordOrStage1Setup(r)}
-                              >
-                                <Eye className="mr-1 h-4 w-4" />
-                                Preview
-                              </Button>
-                              <Button
                                 variant="default"
                                 size="sm"
+                                data-testid="uci-open-workspace"
                                 onClick={() => openRecordOrStage1Setup(r)}
                               >
-                                {needsStage1ProviderSetup(r) ? "Setup" : "Workspace"}
+                                {needsStage1ProviderSetup(r) ? "Setup" : "Open workspace"}
                               </Button>
                             </div>
                           </TableCell>
@@ -4196,7 +4235,7 @@ export default function UciDashboard() {
                               openRecordOrStage1Setup(fullRecord);
                               return;
                             }
-                            void openDetail(r.id);
+                            navigate(`/uci/records/${encodeURIComponent(r.id)}?stage=1`);
                           }}
                         >
                           {"unassigned" in r && r.unassigned ? (
@@ -4304,10 +4343,10 @@ export default function UciDashboard() {
         >
           <SheetHeader className="text-left sm:text-left">
             <SheetTitle className="text-foreground">
-              {isRecordWorkspace ? "Coordination record workspace" : "Coordination preview"}
+              {isRecordWorkspace ? "Utility coordination workspace" : "Coordination preview"}
             </SheetTitle>
             <SheetDescription className="text-muted-foreground">
-              {detailProvider?.name ?? "Record"} · lifecycle workspaces use existing UCI services and verified data.
+              {detailProvider?.name ?? "Record"} · review the saved work for each coordination stage.
             </SheetDescription>
             {!isRecordWorkspace && detailId ? (
               <Button
@@ -4367,6 +4406,17 @@ export default function UciDashboard() {
                 formatDateOnly={formatDateOnly}
               />
 
+              {isRecordWorkspace ? (
+                <UciStageHistoryPanel
+                  detail={detail}
+                  providerName={detailProvider?.name ?? null}
+                  selectedStage={selectedHistoryStage}
+                  onSelectStage={selectHistoryStage}
+                  onOpenTools={openStageTools}
+                />
+              ) : null}
+
+              {!isRecordWorkspace || recordToolsOpen ? (
               <Tabs
                 value={isRecordWorkspace ? drawerTab : "overview"}
                 onValueChange={(v) => {
@@ -4375,7 +4425,7 @@ export default function UciDashboard() {
                 className="mt-2"
               >
                 {isRecordWorkspace ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3" id="uci-working-tools">
                     <WorkflowStageNavigator
                       activeTab={drawerTab}
                       currentStage={Number(detailRecord.current_stage)}
@@ -5315,6 +5365,7 @@ export default function UciDashboard() {
                   />
                 </TabsContent>
               </Tabs>
+              ) : null}
             </div>
           ) : detailLoading ? (
             <div className="flex justify-center py-12">

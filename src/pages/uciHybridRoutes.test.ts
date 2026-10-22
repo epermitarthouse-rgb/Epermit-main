@@ -15,7 +15,7 @@ const sidebarSource = readFileSync(join(__dirname, "../components/layout/UciSide
 describe("UCI hybrid architecture routes", () => {
   it("registers a deep-linkable full record workspace while retaining preview", () => {
     assert.match(appSource, /path="\/uci\/records\/:coordinationId"/);
-    assert.match(dashboardSource, /Coordination record workspace/);
+    assert.match(dashboardSource, /Utility coordination workspace/);
     assert.match(dashboardSource, /Coordination preview/);
     assert.match(dashboardSource, /Open full workspace/);
     assert.match(dashboardSource, /Preview only/);
