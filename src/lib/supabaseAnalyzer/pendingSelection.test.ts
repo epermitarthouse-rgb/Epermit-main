@@ -6,13 +6,18 @@ import {
   analyzerSubmissionPlan,
   clearPendingAnalyzerSheets,
   describeSelectionNotices,
+  existingDrawingsLabel,
   failedUploadDescriptors,
   mergePendingAnalyzerSheets,
+  remainingDrawingCapacity,
   removePendingAnalyzerSheet,
   retainPendingSelectionForProject,
+  savedSheetCount,
+  selectionCapacity,
   type AnalyzerSheetFile,
   type AnalyzerUploadDescriptor,
 } from "./pendingSelection.ts";
+import type { ExistingAnalyzerSheet } from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
 
 const MB = 1024 * 1024;
 
@@ -222,5 +227,72 @@ describe("Supabase analyzer pending selection", () => {
     assert.equal(retainPendingSelectionForProject("project-1", "project-2", files, false).length, 0);
     assert.equal(retainPendingSelectionForProject("project-1", "project-2", files, true).length, 8);
     assert.equal(retainPendingSelectionForProject("project-1", "project-1", files, false).length, 8);
+  });
+});
+
+function savedJob(index: number, status: ExistingAnalyzerSheet["status"] = "completed"): ExistingAnalyzerSheet {
+  const number = `A-${String(index).padStart(3, "0")}`;
+  return {
+    id: `saved-${index}`,
+    ordinal: index,
+    original_file_name: `${number}.pdf`,
+    file_size: 1024,
+    detected_sheet_number: number,
+    status,
+  };
+}
+
+describe("Supabase analyzer existing drawing capacity", () => {
+  it("labels the saved sheet count and leaves 100 minus that count", () => {
+    const saved = Array.from({ length: 82 }, (_, index) => savedJob(index + 1));
+    assert.equal(savedSheetCount(saved), 82);
+    assert.equal(existingDrawingsLabel(savedSheetCount(saved)), "82 drawings already uploaded");
+    assert.equal(remainingDrawingCapacity(82), 18);
+    const open = selectionCapacity({ saved, pending: [] });
+    assert.equal(open.existingCount, 82);
+    assert.equal(open.remaining, 18);
+    assert.equal(open.newSheetCount, 0);
+  });
+
+  it("does not spend a remaining slot when the selection replaces a saved sheet", () => {
+    const saved = Array.from({ length: 82 }, (_, index) => savedJob(index + 1));
+    const before = saved.map((job) => ({ ...job }));
+    const merged = mergePendingAnalyzerSheets([], [sheet("A-001-rev.pdf", 4096)], { savedSheets: saved });
+    assert.equal(merged.files.length, 1);
+    assert.deepEqual(saved, before);
+    const capacity = selectionCapacity({ saved, pending: merged.files });
+    assert.equal(capacity.replacementCount, 1);
+    assert.equal(capacity.newSheetCount, 0);
+    assert.equal(capacity.remaining, 18);
+    assert.equal(capacity.existingCount, 82);
+  });
+
+  it("keeps every saved drawing when new files are selected and only fills free slots", () => {
+    const saved = Array.from({ length: 82 }, (_, index) => savedJob(index + 1));
+    const ids = saved.map((job) => job.id);
+    const names = saved.map((job) => job.original_file_name);
+    const merged = mergePendingAnalyzerSheets([], [
+      sheet("A-001-rev.pdf", 4096),
+      ...batch(500, 20),
+    ], { savedSheets: saved });
+    assert.deepEqual(saved.map((job) => job.id), ids);
+    assert.deepEqual(saved.map((job) => job.original_file_name), names);
+    assert.equal(saved.length, 82);
+    assert.equal(merged.files.length, 19);
+    assert.equal(merged.files[0].name, "A-001-rev.pdf");
+    assert.equal(merged.files.some((file) => names.includes(file.name)), false);
+    assert.equal(merged.notices.filter((notice) => notice.code === "sheet_limit").length, 2);
+    const capacity = selectionCapacity({ saved, pending: merged.files });
+    assert.equal(capacity.replacementCount, 1);
+    assert.equal(capacity.newSheetCount, 18);
+    assert.equal(capacity.remaining, 0);
+    assert.equal(savedSheetCount(saved), 82);
+  });
+
+  it("still caps a new analysis at 100 sheets when nothing is saved yet", () => {
+    const merged = mergePendingAnalyzerSheets(batch(1, 98), batch(200, 5), { savedSheets: [] });
+    assert.equal(merged.files.length, 100);
+    assert.equal(merged.added.length, 2);
+    assert.equal(merged.notices.filter((notice) => notice.code === "sheet_limit").length, 3);
   });
 });

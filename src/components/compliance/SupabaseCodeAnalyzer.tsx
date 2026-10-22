@@ -10,7 +10,9 @@ import {
   MapPin,
   RefreshCw,
   RotateCcw,
+  Scale,
   Shield,
+  ToggleLeft,
   Upload,
   X,
 } from "lucide-react";
@@ -38,6 +40,7 @@ import { useResolvedProjectId } from "@/hooks/useResolvedProjectId";
 import {
   AnalyzerSideActions,
   DrawingReviewList,
+  ExistingDrawingsPanel,
   FindingsMatrix,
   PendingDrawingCards,
   type FindingSeverityFilter,
@@ -70,6 +73,7 @@ import {
   jurisdictionKeyFor,
 } from "@/lib/supabaseAnalyzer/taxonomy";
 import {
+  analysisModeControlOptions,
   analysisModeShortLabel,
   displayAnalysisMode,
   resolveAnalyzerReviewScope,
@@ -86,6 +90,7 @@ import {
   mergePendingAnalyzerSheets,
   removePendingAnalyzerSheet,
   retainPendingSelectionForProject,
+  selectionCapacity,
   selectionNoticeTone,
   type AnalyzerSubmissionDraft,
 } from "@/lib/supabaseAnalyzer/pendingSelection";
@@ -98,6 +103,7 @@ import {
 } from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
 
 const ACTIVE_STATUSES = new Set(["uploading", "queued", "processing"]);
+const EMPTY_SHEETS: AnalyzerRunDataset["jobs"] = [];
 
 export function SupabaseCodeAnalyzer() {
   const { projects } = useProjects();
@@ -119,6 +125,7 @@ export function SupabaseCodeAnalyzer() {
   const [severityFilter, setSeverityFilter] = useState<FindingSeverityFilter>("all");
   const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(() => new Set());
   const [expandedFindingIds, setExpandedFindingIds] = useState<Set<string>>(() => new Set());
+  const [existingDrawingsOpen, setExistingDrawingsOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
     completed: number;
     total: number;
@@ -174,6 +181,7 @@ export function SupabaseCodeAnalyzer() {
     setSeverityFilter("all");
     setExpandedJobIds(new Set());
     setExpandedFindingIds(new Set());
+    setExistingDrawingsOpen(false);
     if (!selectedRunId) {
       setDataset(null);
       return;
@@ -246,8 +254,10 @@ export function SupabaseCodeAnalyzer() {
 
   const addFiles = (incoming: FileList | File[] | null) => {
     if (!incoming) return;
+    const savedSheets = dataset?.run.id === selectedRunId ? dataset.jobs : EMPTY_SHEETS;
     const merged = mergePendingAnalyzerSheets(filesRef.current, Array.from(incoming), {
       locked: submittingRef.current || selectionLockedRef.current,
+      savedSheets,
     });
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (merged.blocked) return;
@@ -546,6 +556,17 @@ export function SupabaseCodeAnalyzer() {
   });
   selectionLockedRef.current = actionPresentation.lockSelection;
   const updateCopy = updatePlan ? updateConfirmationCopy(updatePlan) : null;
+  const savedJobs = dataset?.run.id === selectedRunId ? dataset.jobs : EMPTY_SHEETS;
+  const capacity = useMemo(
+    () => selectionCapacity({ saved: savedJobs, pending: files }),
+    [savedJobs, files],
+  );
+  const existingDrawings = useMemo(
+    () => savedJobs
+      .filter((job) => job.status !== "cancelled")
+      .sort((left, right) => left.ordinal - right.ordinal),
+    [savedJobs],
+  );
 
   const toggleJob = (jobId: string) => {
     setExpandedJobIds((current) => {
@@ -652,95 +673,139 @@ export function SupabaseCodeAnalyzer() {
               </Select>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label className="text-foreground">Analysis mode</Label>
-            <Select
-              value={analysisMode}
-              disabled={submitting}
-              onValueChange={(value) => setAnalysisMode(value as StoredAnalysisMode)}
-            >
-              <SelectTrigger data-testid="select-analysis-mode">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="both">Both — Base Code + Local Amendments</SelectItem>
-                <SelectItem value="ibc_only">IBC Only</SelectItem>
-                <SelectItem value="local_only">Local Only</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{reviewScope.limitation}</p>
-          </div>
+          <Card className="pilot-card border-border bg-card border-teal/20 shadow-sm" data-testid="analysis-mode-control">
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Scale className="h-5 w-5 shrink-0 text-teal" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">Dual Code Analysis</p>
+                    <p className="text-sm text-muted-foreground">
+                      This jurisdiction has local amendments. Choose analysis mode:
+                    </p>
+                  </div>
+                </div>
+                <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+                  <Select
+                    value={analysisMode}
+                    disabled={submitting}
+                    onValueChange={(value) => {
+                      if (value === "both" || value === "ibc_only" || value === "local_only") {
+                        setAnalysisMode(value);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full max-w-full sm:w-[180px]" data-testid="select-analysis-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {analysisModeControlOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.value === "both" ? (
+                            <div className="flex items-center gap-2">
+                              <ToggleLeft className="h-4 w-4" />
+                              {option.label}
+                            </div>
+                          ) : option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <p className="text-xs text-muted-foreground">{reviewScope.limitation}</p>
           <Badge variant="outline" className="h-auto whitespace-normal text-left font-normal">
             {codeContext}
           </Badge>
 
-          <div
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-              dragActive ? "border-teal bg-teal/[0.06]" : "border-primary/35 hover:border-primary/55 bg-muted/25"
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <Input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              multiple
-              className="hidden"
-              onChange={(event) => addFiles(event.target.files)}
+          {capacity.existingCount > 0 ? (
+            <ExistingDrawingsPanel
+              jobs={existingDrawings}
+              count={capacity.existingCount}
+              remaining={capacity.remaining}
+              expanded={existingDrawingsOpen}
+              onToggle={() => setExistingDrawingsOpen((open) => !open)}
             />
-            {files.length === 0 ? (
-              <div className="space-y-2">
-                <div className="flex justify-center gap-4 pt-4">
-                  <FileText className="h-12 w-12 text-primary-deep/75" />
-                  <Upload className="h-12 w-12 text-teal" />
-                </div>
-                <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
-                <p className="text-sm text-muted-foreground">
-                  Add drawings in more than one selection. Up to 100 sheets, 15 MB each, 250 MB total.
-                </p>
-                <Button
-                  type="button"
-                  variant="outlineGold"
-                  className="mt-4"
-                  disabled={actionPresentation.lockSelection}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Choose drawings
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4 text-left">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground" data-testid="analyzer-pending-file-capacity">
-                    {files.length} of {SUPABASE_ANALYZER_MAX_SHEETS} sheets · {bytesLabel(totalBytes)} of {bytesLabel(SUPABASE_ANALYZER_MAX_TOTAL_BYTES)}
+          ) : null}
+
+          <div className="space-y-2">
+            {capacity.existingCount > 0 ? (
+              <h3 className="text-sm font-semibold text-foreground">Add New / Revised Drawings</h3>
+            ) : null}
+            <div
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                dragActive ? "border-teal bg-teal/[0.06]" : "border-primary/35 hover:border-primary/55 bg-muted/25"
+              }`}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                multiple
+                className="hidden"
+                onChange={(event) => addFiles(event.target.files)}
+              />
+              {files.length === 0 ? (
+                <div className="space-y-2">
+                  <div className="flex justify-center gap-4 pt-4">
+                    <FileText className="h-12 w-12 text-primary-deep/75" />
+                    <Upload className="h-12 w-12 text-teal" />
+                  </div>
+                  <p className="text-lg font-medium text-foreground">Drop drawings here or click to browse</p>
+                  <p className="text-sm text-muted-foreground">
+                    {capacity.existingCount > 0
+                      ? `Add a new drawing or a revised sheet. ${capacity.remaining} sheets available. Replacing a drawing does not use an extra sheet. 15 MB each, 250 MB total.`
+                      : "Add drawings in more than one selection. Up to 100 sheets, 15 MB each, 250 MB total."}
                   </p>
-                  <Button type="button" variant="ghost" onClick={clearSelectedFiles} disabled={actionPresentation.lockSelection}>
-                    <X className="mr-2 h-4 w-4" /> Clear
+                  <Button
+                    type="button"
+                    variant="outlineGold"
+                    className="mt-4"
+                    disabled={actionPresentation.lockSelection}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Choose drawings
                   </Button>
                 </div>
-                <PendingDrawingCards
-                  files={files}
-                  submitting={actionPresentation.lockSelection}
-                  onRemove={removeSelectedFile}
-                />
-                {files.length < SUPABASE_ANALYZER_MAX_SHEETS ? (
-                  <div className="flex justify-center border-t pt-2">
-                    <Button
-                      type="button"
-                      variant="outlineGold"
-                      size="sm"
-                      disabled={actionPresentation.lockSelection}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Add More Drawings
+              ) : (
+                <div className="space-y-4 text-left">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground" data-testid="analyzer-pending-file-capacity">
+                      {capacity.existingCount > 0
+                        ? `${files.length} selected · Remaining capacity: ${capacity.remaining} sheets · ${bytesLabel(totalBytes)} of ${bytesLabel(SUPABASE_ANALYZER_MAX_TOTAL_BYTES)}`
+                        : `${files.length} of ${SUPABASE_ANALYZER_MAX_SHEETS} sheets · ${bytesLabel(totalBytes)} of ${bytesLabel(SUPABASE_ANALYZER_MAX_TOTAL_BYTES)}`}
+                    </p>
+                    <Button type="button" variant="ghost" onClick={clearSelectedFiles} disabled={actionPresentation.lockSelection}>
+                      <X className="mr-2 h-4 w-4" /> Clear
                     </Button>
                   </div>
-                ) : null}
-              </div>
-            )}
+                  <PendingDrawingCards
+                    files={files}
+                    submitting={actionPresentation.lockSelection}
+                    onRemove={removeSelectedFile}
+                  />
+                  {files.length < SUPABASE_ANALYZER_MAX_SHEETS && (capacity.remaining > 0 || capacity.existingCount > 0) ? (
+                    <div className="flex justify-center border-t pt-2">
+                      <Button
+                        type="button"
+                        variant="outlineGold"
+                        size="sm"
+                        disabled={actionPresentation.lockSelection}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        Add More Drawings
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap justify-center gap-4">

@@ -1,5 +1,10 @@
 import { mergeComplianceFiles } from "../complianceUploadLimits";
 import {
+  countPersistedSheets,
+  planSheetUpdate,
+  type ExistingAnalyzerSheet,
+} from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
+import {
   SUPABASE_ANALYZER_MAX_FILE_BYTES,
   SUPABASE_ANALYZER_MAX_SHEETS,
   SUPABASE_ANALYZER_MAX_TOTAL_BYTES,
@@ -30,6 +35,13 @@ export interface MergePendingSelectionResult<T extends AnalyzerSheetFile> {
   blocked: boolean;
 }
 
+export interface SelectionCapacity {
+  existingCount: number;
+  remaining: number;
+  newSheetCount: number;
+  replacementCount: number;
+}
+
 export interface AnalyzerUploadDescriptor {
   path: string;
   token: string;
@@ -53,15 +65,103 @@ export function isAnalyzerPdf(file: AnalyzerSheetFile): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
+/** Saved jobs that still occupy a sheet slot. Cancelled jobs do not. */
+export function savedSheetCount(jobs: readonly { status: string }[]): number {
+  return countPersistedSheets(jobs).total;
+}
+
+export function existingDrawingsLabel(count: number): string {
+  return `${count} drawing${count === 1 ? "" : "s"} already uploaded`;
+}
+
+/** Slots left for drawings that are not replacements of a saved sheet. */
+export function remainingDrawingCapacity(existingCount: number): number {
+  return Math.max(0, SUPABASE_ANALYZER_MAX_SHEETS - existingCount);
+}
+
+/**
+ * Remaining capacity after the current selection.
+ * Uses the sheet-update plan: a replacement keeps the saved sheet count,
+ * and only a new drawing reduces the slots left under the 100-sheet cap.
+ */
+export function selectionCapacity(input: {
+  saved: readonly ExistingAnalyzerSheet[];
+  pending: readonly AnalyzerSheetFile[];
+}): SelectionCapacity {
+  const existingCount = savedSheetCount(input.saved);
+  if (input.pending.length === 0) {
+    return {
+      existingCount,
+      remaining: remainingDrawingCapacity(existingCount),
+      newSheetCount: 0,
+      replacementCount: 0,
+    };
+  }
+  const plan = planSheetUpdate(input.saved, input.pending.map(toIncomingSheet));
+  const newSheetCount = plan.items.filter((item) => item.action === "add").length;
+  const replacementCount = plan.items.filter((item) => (
+    item.action === "confirm" || item.action === "replace"
+  )).length;
+  const occupied = plan.error ? SUPABASE_ANALYZER_MAX_SHEETS : plan.totalSheetsAfter;
+  return {
+    existingCount,
+    remaining: remainingDrawingCapacity(occupied),
+    newSheetCount,
+    replacementCount,
+  };
+}
+
+function toIncomingSheet(file: AnalyzerSheetFile) {
+  return { name: file.name, size: file.size, type: file.type };
+}
+
+/**
+ * Accepts new drawings only while the update plan stays within 100 sheets.
+ * A replacement is kept and does not use an extra slot. Saved jobs are not modified.
+ */
+function acceptWithinSavedCapacity<T extends AnalyzerSheetFile>(
+  existing: readonly T[],
+  eligible: readonly T[],
+  savedSheets: readonly ExistingAnalyzerSheet[],
+  notices: SelectionNotice[],
+): T[] {
+  const accepted: T[] = [];
+  for (const file of eligible) {
+    if (existing.length + accepted.length >= SUPABASE_ANALYZER_MAX_SHEETS) {
+      notices.push({ code: "sheet_limit", fileName: file.name });
+      continue;
+    }
+    const probe = planSheetUpdate(
+      savedSheets,
+      [...existing, ...accepted, file].map(toIncomingSheet),
+    );
+    const item = probe.items[probe.items.length - 1];
+    if (!item || item.action === "reject") {
+      notices.push({ code: "duplicate", fileName: file.name });
+      continue;
+    }
+    if (probe.error) {
+      notices.push({
+        code: probe.error.includes("250 MB") ? "total_limit" : "sheet_limit",
+        fileName: file.name,
+      });
+      continue;
+    }
+    accepted.push(file);
+  }
+  return accepted;
+}
+
 /**
  * Appends valid PDFs to an existing selection.
  * Sheet capacity uses the shared V2 count helper with the Supabase limit.
  * Previously accepted files are never removed to make room for a new batch.
+ * When saved sheets are supplied, only new drawings consume remaining capacity.
  */
 export function mergePendingAnalyzerSheets<T extends AnalyzerSheetFile>(
   existing: readonly T[],
   incoming: readonly T[],
-  options?: { locked?: boolean },
+  options?: { locked?: boolean; savedSheets?: readonly ExistingAnalyzerSheet[] },
 ): MergePendingSelectionResult<T> {
   if (options?.locked) {
     return { files: [...existing], added: [], notices: [], blocked: true };
@@ -95,14 +195,19 @@ export function mergePendingAnalyzerSheets<T extends AnalyzerSheetFile>(
     eligible.push(file);
   }
 
-  const { accepted } = mergeComplianceFiles(
-    existing.length,
-    eligible as unknown as File[],
-    SUPABASE_ANALYZER_MAX_SHEETS,
-  );
-  const acceptedFiles = accepted as unknown as T[];
-  for (const file of eligible.slice(acceptedFiles.length)) {
-    notices.push({ code: "sheet_limit", fileName: file.name });
+  let acceptedFiles: T[];
+  if (options?.savedSheets) {
+    acceptedFiles = acceptWithinSavedCapacity(existing, eligible, options.savedSheets, notices);
+  } else {
+    const { accepted } = mergeComplianceFiles(
+      existing.length,
+      eligible as unknown as File[],
+      SUPABASE_ANALYZER_MAX_SHEETS,
+    );
+    acceptedFiles = accepted as unknown as T[];
+    for (const file of eligible.slice(acceptedFiles.length)) {
+      notices.push({ code: "sheet_limit", fileName: file.name });
+    }
   }
 
   return {

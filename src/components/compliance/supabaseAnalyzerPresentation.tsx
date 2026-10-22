@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/design/ProductPrimitives";
 import type { SupabaseAnalyzerFinding, SupabaseAnalyzerSheetJob } from "@/lib/supabaseAnalyzer/client";
+import { existingDrawingsLabel } from "@/lib/supabaseAnalyzer/pendingSelection";
 import { countSeverity, type SeverityTotals } from "@/lib/supabaseAnalyzer/exportDataset";
 import {
   PENDING_DISCIPLINE,
@@ -77,6 +78,87 @@ function sheetNumber(job: SupabaseAnalyzerSheetJob) {
 function findingCountLabel(job: SupabaseAnalyzerSheetJob, count: number) {
   if (job.status !== "completed") return "—";
   return String(count);
+}
+
+export function ExistingDrawingsPanel({
+  jobs,
+  count,
+  remaining,
+  expanded,
+  onToggle,
+}: {
+  jobs: SupabaseAnalyzerSheetJob[];
+  count: number;
+  remaining: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const panelId = useId();
+  return (
+    <section
+      className="space-y-3 rounded-xl border border-border/60 bg-card p-4 text-left"
+      data-testid="existing-drawings"
+    >
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-foreground">Existing Drawings</h3>
+        <p className="text-sm text-foreground" data-testid="existing-drawings-count">
+          {existingDrawingsLabel(count)}
+        </p>
+        <p className="text-sm text-muted-foreground" data-testid="analyzer-remaining-capacity">
+          Remaining capacity: {remaining} sheets
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={onToggle}
+        data-testid="view-existing-drawings"
+      >
+        <ChevronDown
+          className={cn("mr-2 h-4 w-4 transition-transform", expanded && "rotate-180")}
+          aria-hidden
+        />
+        View existing drawings
+      </Button>
+      {expanded ? (
+        <div id={panelId} className="max-h-80 overflow-auto rounded-lg border border-border/60">
+          <table className="w-full min-w-[36rem] text-left text-sm" data-testid="existing-drawings-list">
+            <thead className="sticky top-0 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">Sheet</th>
+                <th className="px-3 py-2 font-medium">Title</th>
+                <th className="px-3 py-2 font-medium">File</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <tr key={job.id} className="border-t border-border/60" data-testid="existing-drawing-row">
+                  <td className="px-3 py-2 font-medium text-foreground">
+                    {job.detected_sheet_number || `Sheet ${job.ordinal}`}
+                  </td>
+                  <td className="px-3 py-2 text-foreground">{job.detected_sheet_title || "—"}</td>
+                  <td className="max-w-[16rem] truncate px-3 py-2 text-muted-foreground" title={job.original_file_name}>
+                    {job.original_file_name}
+                  </td>
+                  <td className="px-3 py-2">
+                    <Badge variant={statusVariant(job.status)} className="text-[10px]">
+                      {statusLabel(job.status)}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div id={panelId} hidden />
+      )}
+    </section>
+  );
 }
 
 export function PendingDrawingCards({
