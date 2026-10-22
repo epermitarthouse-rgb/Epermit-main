@@ -288,13 +288,10 @@ import {
   deriveStage3ReviewAction,
 } from "@/lib/uciActionPresentation";
 import {
-  buildStageStateMatrix,
-  CURRENT_STAGE_DISTRIBUTION_HELPER,
   isUnassignedRequiredProvider,
   needsStage1ProviderSetup,
   normalizeLifecycleStage,
   providerNeedsConfirmationReason,
-  stageStateEntries,
 } from "@/lib/uciLifecycleMatrix";
 import {
   buildInitializedSlugSet,
@@ -3531,14 +3528,6 @@ export default function UciDashboard() {
     }
     return names.size;
   }, [records, providerDisplayLabel]);
-  const uciStageStateMatrix = useMemo(() => buildStageStateMatrix(records), [records]);
-  const uciStageSummary = useMemo(() => {
-    const summary: Record<string, number> = {};
-    for (const [stage, bucket] of uciStageStateMatrix.stages) {
-      if (bucket.recordCount > 0) summary[String(stage)] = bucket.recordCount;
-    }
-    return summary;
-  }, [uciStageStateMatrix]);
   const openStage1ProviderSetup = useCallback(() => {
     setSetupSectionExpanded(true);
     if (detailOpen) {
@@ -3909,14 +3898,14 @@ export default function UciDashboard() {
               <button
                 type="button"
                 onClick={() =>
-                  document.getElementById("uci-stage-rail")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  document.getElementById("uci-lifecycle-progress")?.scrollIntoView({ behavior: "smooth", block: "start" })
                 }
                 className="group flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5"
               >
                 <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Current stage distribution</div>
-                  <div className="text-[11px] text-muted-foreground">Where records sit today — not completion history</div>
+                  <div className="text-sm font-semibold text-foreground group-hover:text-primary">Lifecycle progress</div>
+                  <div className="text-[11px] text-muted-foreground">Each utility&apos;s saved position across 10 stages</div>
                 </div>
               </button>
               <button
@@ -3989,93 +3978,6 @@ export default function UciDashboard() {
                 </div>
               </button>
             </div>
-          </Panel>
-
-          {/* Current-stage distribution — presentational, driven only by current records. */}
-          <Panel eyebrow="Lifecycle" title="Current stage distribution" id="uci-stage-rail">
-            <p className="mb-3 text-[11px] text-muted-foreground">{CURRENT_STAGE_DISTRIBUTION_HELPER}</p>
-            {portfolioLoading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-teal" />
-              </div>
-            ) : (
-              <div className="flex items-start gap-1 overflow-x-auto pb-1">
-                {STAGE_OPTIONS.map((stage) => {
-                  const count = uciStageStateMatrix.stages.get(stage)?.recordCount ?? 0;
-                  const states = stageStateEntries(uciStageStateMatrix.stages.get(stage));
-                  return (
-                    <div key={stage} className="flex min-w-[92px] flex-1 flex-col items-center gap-1.5">
-                      <div
-                        className={cn(
-                          "flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-data font-bold",
-                          count > 0
-                            ? "border-teal bg-teal/15 text-teal"
-                            : "border-border bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {stage}
-                      </div>
-                      <span className={cn("text-[10px] font-medium", count > 0 ? "text-foreground" : "text-muted-foreground")}>
-                        {count > 0 ? `${count} rec.` : "—"}
-                      </span>
-                      {states.map(([state, stateCount]) => (
-                        <span key={state} className="whitespace-nowrap text-[9px] text-muted-foreground">
-                          {formatLifecycleState(state as LifecycleState)} {stateCount}
-                        </span>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Panel>
-
-          <Panel eyebrow="Lifecycle" title="Lifecycle progress" id="uci-lifecycle-progress">
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              Shows each utility&apos;s saved current position. Earlier stages are not assumed complete;
-              open the record to review their recorded status and evidence.
-            </p>
-            {!projectId ? (
-              <p className={cn("py-4 text-center text-sm", uciMutedClass)}>Select a project to view lifecycle progress.</p>
-            ) : recordsLoading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-teal" />
-              </div>
-            ) : records.length === 0 ? (
-              <p className={cn("py-4 text-center text-sm", uciMutedClass)}>No coordination records yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {records.map((r) => {
-                  const prov = getEmbeddedProvider(r);
-                  const label = isUnassignedRequiredProvider(r)
-                    ? "Not assigned"
-                    : prov
-                      ? providerDisplayLabel(prov)
-                      : r.utility_type ?? "Utility";
-                  return (
-                    <li
-                      key={r.id}
-                      className="space-y-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2.5"
-                      data-testid={`uci-lifecycle-progress-${r.id}`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span className="font-semibold text-foreground">
-                          {label}
-                          {r.utility_type ? ` · ${r.utility_type}` : ""}
-                        </span>
-                        <span className={cn("font-medium", uciMutedClass)}>
-                          Stage {r.current_stage} · {formatLifecycleState(r.current_stage_state)}
-                        </span>
-                      </div>
-                      <RecordLifecycleProgressRail
-                        currentStage={Number(r.current_stage)}
-                        currentStageState={r.current_stage_state}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
           </Panel>
 
           {/* Records table (main) + attention queue (secondary) */}
@@ -4263,18 +4165,54 @@ export default function UciDashboard() {
                 )}
               </Panel>
 
-              <Panel eyebrow="Rollup" title="Current stage distribution">
-                <p className="mb-2 text-[10px] text-muted-foreground">{CURRENT_STAGE_DISTRIBUTION_HELPER}</p>
-                <ul className="space-y-1.5 text-xs">
-                  {STAGE_OPTIONS.map((stage) => (
-                    <li key={stage} className="flex items-center justify-between">
-                      <span className={uciMutedClass}>Stage {stage}</span>
-                      <span className="font-data font-semibold text-foreground">
-                        {uciStageSummary[String(stage)] ?? 0}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+              <Panel eyebrow="Lifecycle" title="Lifecycle progress" id="uci-lifecycle-progress">
+                <p className="mb-3 text-[11px] text-muted-foreground">
+                  Each utility&apos;s saved position across all 10 stages.
+                  Earlier stages are not assumed complete; open the record to review their recorded status.
+                </p>
+                {!projectId ? (
+                  <p className={cn("text-xs", uciMutedClass)}>Select a project to view lifecycle progress.</p>
+                ) : recordsLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-teal" />
+                  </div>
+                ) : records.length === 0 ? (
+                  <p className={cn("text-xs", uciMutedClass)}>No coordination records yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {records.map((r) => {
+                      const prov = getEmbeddedProvider(r);
+                      const label = isUnassignedRequiredProvider(r)
+                        ? "Not assigned"
+                        : prov
+                          ? providerDisplayLabel(prov)
+                          : r.utility_type ?? "Utility";
+                      return (
+                        <li key={r.id} data-testid={`uci-lifecycle-progress-${r.id}`}>
+                          <button
+                            type="button"
+                            onClick={() => openRecordOrStage1Setup(r)}
+                            className="w-full space-y-2 rounded-lg border border-border/60 bg-muted/15 px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                          >
+                            <div className="space-y-0.5 text-xs">
+                              <p className="truncate font-semibold text-foreground">
+                                {label}
+                                {r.utility_type ? ` · ${r.utility_type}` : ""}
+                              </p>
+                              <p className={cn("font-medium", uciMutedClass)}>
+                                Stage {r.current_stage} · {formatLifecycleState(r.current_stage_state)}
+                              </p>
+                            </div>
+                            <RecordLifecycleProgressRail
+                              currentStage={Number(r.current_stage)}
+                              currentStageState={r.current_stage_state}
+                            />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </Panel>
             </aside>
           </div>

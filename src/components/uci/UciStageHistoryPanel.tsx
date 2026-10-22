@@ -35,6 +35,11 @@ type UciStageHistoryPanelProps = {
   selectedStage: number;
   onSelectStage: (stage: number) => void;
   onOpenTools?: (tab: UciDrawerTab, anchorId?: string) => void;
+  /** Supplies documents and communications directly instead of loading them for the record. */
+  preloaded?: {
+    documents: UciDocumentRegistryEntry[];
+    communications: CoordinationCommunication[];
+  };
 };
 
 export function UciStageHistoryPanel({
@@ -43,14 +48,19 @@ export function UciStageHistoryPanel({
   selectedStage,
   onSelectStage,
   onOpenTools,
+  preloaded,
 }: UciStageHistoryPanelProps) {
   const recordId = detail.record.id;
-  const [documents, setDocuments] = useState<UciDocumentRegistryEntry[] | null>(null);
-  const [communications, setCommunications] = useState<CoordinationCommunication[] | null>(null);
+  const usesPreloaded = Boolean(preloaded);
+  const [loadedDocuments, setDocuments] = useState<UciDocumentRegistryEntry[] | null>(null);
+  const [loadedCommunications, setCommunications] = useState<CoordinationCommunication[] | null>(null);
   const [documentsUnavailable, setDocumentsUnavailable] = useState(false);
   const [communicationsUnavailable, setCommunicationsUnavailable] = useState(false);
+  const documents = preloaded?.documents ?? loadedDocuments;
+  const communications = preloaded?.communications ?? loadedCommunications;
 
   useEffect(() => {
+    if (usesPreloaded) return;
     let cancelled = false;
     setDocuments(null);
     setCommunications(null);
@@ -77,7 +87,7 @@ export function UciStageHistoryPanel({
     return () => {
       cancelled = true;
     };
-  }, [recordId]);
+  }, [recordId, usesPreloaded]);
 
   const model = buildUciStageHistory({
     detail,

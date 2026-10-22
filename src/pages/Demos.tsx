@@ -12,10 +12,17 @@ import { JurisdictionLookupDemo } from "@/components/demos/JurisdictionLookupDem
 import { PortalIntakeDemo } from "@/components/demos/PortalIntakeDemo";
 import { MultiMunicipalityFilingDemo } from "@/components/demos/MultiMunicipalityFilingDemo";
 import { ResponseMatrixDemo } from "@/components/demos/ResponseMatrixDemo";
+import { UciLifecycleDemo } from "@/components/demos/UciLifecycleDemo";
 import { PageTransition } from "@/components/animations/PageTransition";
-import { Bot, Search, FileText, MapPin, Lock, Play, Globe, Rocket, Table2 } from "lucide-react";
+import { Bot, Search, FileText, MapPin, Lock, Play, Globe, Rocket, Table2, Zap } from "lucide-react";
 
 const demos = [
+  {
+    id: "utility-coordination",
+    title: "Utility Coordination",
+    description: "Walk a simulated new electric service through all 10 utility coordination stages",
+    icon: <Zap className="h-6 w-6" />,
+  },
   {
     id: "portal-intake",
     title: "Portal Harvest",
@@ -111,7 +118,7 @@ const Demos = () => {
               <Lock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-2xl font-bold mb-2">Unlock All Interactive Demos</h2>
               <p className="text-muted-foreground mb-6">
-                Enter your email to get instant access to all seven demos
+                Enter your email to get instant access to all eight demos
               </p>
               <Button
                 size="lg"
@@ -157,7 +164,7 @@ const Demos = () => {
         ) : (
           <div>
             <Tabs value={activeDemo} onValueChange={setActiveDemo}>
-              <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 mb-8 h-auto">
+              <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 mb-8 h-auto">
                 {demos.map((demo) => (
                   <TabsTrigger key={demo.id} value={demo.id} className="flex items-center gap-1.5 text-xs px-2 py-2" aria-label={demo.title}>
                     {demo.icon}
@@ -165,6 +172,23 @@ const Demos = () => {
                   </TabsTrigger>
                 ))}
               </TabsList>
+
+              <TabsContent value="utility-coordination">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-3">
+                      <Zap className="h-6 w-6 text-accent" />
+                      Utility Coordination — 10-Stage Lifecycle
+                    </CardTitle>
+                    <CardDescription>
+                      Play a simulated Highland Springs electric service from provider mapping to energization, and open each stage&apos;s workspace
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <UciLifecycleDemo />
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               <TabsContent value="portal-intake">
                 <Card>
