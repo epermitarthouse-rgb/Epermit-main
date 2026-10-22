@@ -373,5 +373,31 @@ describe("Supabase analyzer action buttons", () => {
     assert.equal(submitting.primaryLabel, "Uploading");
     assert.equal(submitting.primaryDisabled, true);
     assert.equal(submitting.cancelDisabled, true);
+
+    const savedOnly = analyzerActionPresentation({
+      hasProject: true,
+      hasRun: true,
+      runStatus: "completed",
+      fileCount: 0,
+      selectedSheetCount: 1,
+      failedSheets: 0,
+      submitting: false,
+      cancelling: false,
+    });
+    assert.equal(savedOnly.primaryLabel, "Update Analysis");
+    assert.equal(savedOnly.primaryDisabled, false);
+
+    const savedWhileProcessing = analyzerActionPresentation({
+      hasProject: true,
+      hasRun: true,
+      runStatus: "processing",
+      fileCount: 0,
+      selectedSheetCount: 82,
+      failedSheets: 0,
+      submitting: false,
+      cancelling: false,
+    });
+    assert.equal(savedWhileProcessing.primaryDisabled, true);
+    assert.equal(savedWhileProcessing.lockSelection, true);
   });
 });

@@ -55,6 +55,7 @@ import {
   fetchSupabaseAnalyzerRuns,
   finalizeSupabaseAnalyzerRun,
   isActiveSupabaseAnalyzerRun,
+  reanalyzeSupabaseAnalyzerRun,
   retrySupabaseAnalyzerJobs,
   updateSupabaseAnalyzerRun,
   uploadSupabaseAnalyzerFiles,
@@ -95,9 +96,18 @@ import {
   type AnalyzerSubmissionDraft,
 } from "@/lib/supabaseAnalyzer/pendingSelection";
 import {
+  planReanalysis,
+  reanalysisConfirmationCopy,
+  reanalysisRequestKey,
+  reanalyzeControls,
+  type ReanalysisIntent,
+  type ReanalysisPlan,
+} from "../../../supabase/functions/_shared/analyzerReanalysis.ts";
+import {
   analyzerActionPresentation,
   analyzerFileIdentity,
   planSheetUpdate,
+  runIsWorkerActive,
   updateConfirmationCopy,
   type SheetUpdatePlan,
 } from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
@@ -120,6 +130,9 @@ export function SupabaseCodeAnalyzer() {
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [updatePlan, setUpdatePlan] = useState<SheetUpdatePlan | null>(null);
+  const [reanalysisPlan, setReanalysisPlan] = useState<ReanalysisPlan | null>(null);
+  const [reanalysisIntent, setReanalysisIntent] = useState<ReanalysisIntent>("selected");
+  const [selectedDrawingIds, setSelectedDrawingIds] = useState<Set<string>>(() => new Set());
   const [dragActive, setDragActive] = useState(false);
   const [activeDiscipline, setActiveDiscipline] = useState("all");
   const [severityFilter, setSeverityFilter] = useState<FindingSeverityFilter>("all");
@@ -138,6 +151,9 @@ export function SupabaseCodeAnalyzer() {
   const selectionLockedRef = useRef(false);
   const updateFilesRef = useRef<File[]>([]);
   const draftRef = useRef<AnalyzerSubmissionDraft | null>(null);
+  const selectedDrawingIdsRef = useRef<Set<string>>(new Set());
+  const reanalysisRequestRef = useRef<{ key: string; runId: string } | null>(null);
+  const reanalysisFilesRef = useRef<File[]>([]);
   const selectionProjectRef = useRef(projectId);
 
   const selectedProject = projects.find((project) => project.id === projectId);
@@ -182,6 +198,9 @@ export function SupabaseCodeAnalyzer() {
     setExpandedJobIds(new Set());
     setExpandedFindingIds(new Set());
     setExistingDrawingsOpen(false);
+    setSelectedDrawingIds(new Set());
+    selectedDrawingIdsRef.current = new Set();
+    reanalysisRequestRef.current = null;
     if (!selectedRunId) {
       setDataset(null);
       return;
@@ -550,6 +569,7 @@ export function SupabaseCodeAnalyzer() {
     hasRun: Boolean(activeRun),
     runStatus: activeRun?.status ?? null,
     fileCount: files.length,
+    selectedSheetCount: selectedDrawingIds.size,
     failedSheets: activeRun?.failed_sheets || 0,
     submitting,
     cancelling,
@@ -582,6 +602,194 @@ export function SupabaseCodeAnalyzer() {
       if (next.has(findingId)) next.delete(findingId);
       else next.add(findingId);
       return next;
+    });
+  };
+
+  const drawingControls = reanalyzeControls({
+    hasProject: Boolean(projectId),
+    runStatus: activeRun?.status ?? null,
+    occupyingCount: capacity.existingCount,
+    selectedCount: selectedDrawingIds.size,
+    submitting,
+    cancelling,
+  });
+  const reanalysisCopy = reanalysisPlan ? reanalysisConfirmationCopy(reanalysisPlan, reanalysisIntent) : null;
+
+  const setDrawingSelection = (next: Set<string>) => {
+    selectedDrawingIdsRef.current = next;
+    setSelectedDrawingIds(next);
+  };
+
+  const toggleDrawingSelection = (jobId: string, checked: boolean) => {
+    if (drawingControls.selectionDisabled) return;
+    const next = new Set(selectedDrawingIdsRef.current);
+    if (checked) next.add(jobId);
+    else next.delete(jobId);
+    setDrawingSelection(next);
+  };
+
+  const sourceSheets = () => savedJobs.map((job) => ({
+    id: job.id,
+    ordinal: job.ordinal,
+    original_file_name: job.original_file_name,
+    file_size: job.file_size,
+    detected_sheet_number: job.detected_sheet_number,
+    detected_sheet_title: job.detected_sheet_title,
+    discipline: job.discipline,
+    status: job.status,
+    object_path: job.object_path,
+  }));
+
+  const openReanalysis = (intent: ReanalysisIntent) => {
+    if (submittingRef.current || cancellingRef.current) return;
+    if (!projectId || !activeRun || dataset?.run.id !== activeRun.id) {
+      toast.error("Analysis is still loading");
+      return;
+    }
+    if (runIsWorkerActive(activeRun.status) || activeRun.status === "uploading") {
+      toast.error("This analysis is still processing. Cancel it before reanalyzing drawings.");
+      return;
+    }
+    reanalysisFilesRef.current = [...filesRef.current];
+    const plan = planReanalysis({
+      sourceRunId: activeRun.id,
+      jobs: sourceSheets(),
+      selectedJobIds: intent === "all" ? "all" : [...selectedDrawingIdsRef.current],
+      incoming: reanalysisFilesRef.current,
+      confirmed: false,
+    });
+    if (plan.error) {
+      toast.error(plan.error);
+      return;
+    }
+    if (plan.totalSheets < 1) {
+      toast.error("Select at least one saved drawing");
+      return;
+    }
+    setReanalysisIntent(intent);
+    setReanalysisPlan(plan);
+  };
+
+  const executeReanalysis = async (intent: ReanalysisIntent, preview: ReanalysisPlan) => {
+    const activeProjectId = projectId;
+    const sourceRunId = activeRun?.id;
+    if (!activeProjectId || !sourceRunId) {
+      toast.error("Select a project before starting an analysis");
+      return;
+    }
+    const selectedIds = preview.selectedJobIds;
+    const replaceIds = new Map(
+      preview.items.flatMap((item) => (
+        item.replaceJobId
+          ? [[analyzerFileIdentity(item.fileName, item.fileSize), item.replaceJobId] as const]
+          : []
+      )),
+    );
+    const chosenFiles = reanalysisFilesRef.current;
+    const selectedFiles = chosenFiles.map((file) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/pdf",
+      replaceJobId: replaceIds.get(analyzerFileIdentity(file.name, file.size)) || null,
+    }));
+    const finalPlan = planReanalysis({
+      sourceRunId,
+      jobs: sourceSheets(),
+      selectedJobIds: intent === "all" ? "all" : selectedIds,
+      incoming: selectedFiles,
+      confirmed: true,
+    });
+    if (!finalPlan.accepted) {
+      toast.error(finalPlan.error || "Confirm the drawing update before reanalyzing");
+      return;
+    }
+    const requestKey = reanalysisRequestKey({
+      sourceRunId,
+      scope: intent === "all" ? "all" : "selected",
+      jobIds: selectedIds,
+      files: selectedFiles,
+      analysisMode,
+    });
+    const runId = reanalysisRequestRef.current?.key === requestKey
+      ? reanalysisRequestRef.current.runId
+      : crypto.randomUUID();
+    reanalysisRequestRef.current = { key: requestKey, runId };
+    if (finalPlan.uploadCount > 0) {
+      setUploadProgress({
+        completed: 0,
+        total: finalPlan.uploadCount,
+        fileName: chosenFiles[0]?.name || "drawing.pdf",
+      });
+    }
+    try {
+      const result = await reanalyzeSupabaseAnalyzerRun({
+        projectId: activeProjectId,
+        sourceRunId,
+        runId,
+        scope: intent === "all" ? "all" : "selected",
+        jobIds: intent === "all" ? [] : selectedIds,
+        files: selectedFiles,
+        confirmed: true,
+        analysisMode,
+        jurisdictionKey: jurisdictionKeyFor(jurisdiction),
+        jurisdictionLabel: jurisdiction,
+        projectType,
+        codeEdition: codeYear,
+        codeContext: codeContextForAnalyzer(jurisdiction, codeYear),
+      });
+      setSelectedRunId(result.runId);
+      if (result.uploads.length > 0) {
+        const uploaded = await uploadSupabaseAnalyzerFiles(
+          chosenFiles,
+          result.uploads,
+          (completed, total, fileName) => setUploadProgress({ completed, total, fileName }),
+        );
+        const remaining = failedUploadDescriptors(
+          result.uploads,
+          uploaded.failures.map((failure) => failure.jobId),
+        );
+        if (remaining.length > 0) {
+          if (uploaded.completed > 0) {
+            await finalizeSupabaseAnalyzerRun(activeProjectId, result.runId);
+            await loadRuns(activeProjectId);
+            await loadDataset(result.runId);
+          }
+          toast.warning(
+            `${remaining.length} sheet${remaining.length === 1 ? "" : "s"} could not be uploaded. They remain selected so you can try again.`,
+          );
+          return;
+        }
+        await finalizeSupabaseAnalyzerRun(activeProjectId, result.runId);
+      }
+      await loadRuns(activeProjectId);
+      await loadDataset(result.runId);
+      filesRef.current = [];
+      setFiles([]);
+      reanalysisFilesRef.current = [];
+      reanalysisRequestRef.current = null;
+      toast.success(
+        result.uploads.length > 0
+          ? "New analysis queued. The current run was kept."
+          : result.reused === 1
+            ? "1 saved drawing queued in a new analysis. The current run was kept."
+            : `${result.reused} saved drawings queued in a new analysis. The current run was kept.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not reanalyze drawings");
+    }
+  };
+
+  const confirmReanalysis = () => {
+    if (!reanalysisPlan || submittingRef.current || cancellingRef.current) return;
+    const preview = reanalysisPlan;
+    const intent = reanalysisIntent;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setReanalysisPlan(null);
+    void executeReanalysis(intent, preview).finally(() => {
+      submittingRef.current = false;
+      setSubmitting(false);
+      setUploadProgress(null);
     });
   };
 
@@ -727,6 +935,21 @@ export function SupabaseCodeAnalyzer() {
               remaining={capacity.remaining}
               expanded={existingDrawingsOpen}
               onToggle={() => setExistingDrawingsOpen((open) => !open)}
+              selectedIds={selectedDrawingIds}
+              onToggleJob={toggleDrawingSelection}
+              onSelectAll={() => {
+                if (drawingControls.selectionDisabled) return;
+                setDrawingSelection(new Set(existingDrawings.map((job) => job.id)));
+              }}
+              onDeselectAll={() => {
+                if (drawingControls.selectionDisabled) return;
+                setDrawingSelection(new Set());
+              }}
+              onReanalyzeSelected={() => openReanalysis("selected")}
+              onReanalyzeAll={() => openReanalysis("all")}
+              selectionDisabled={drawingControls.selectionDisabled}
+              selectedDisabled={drawingControls.selectedDisabled}
+              allDisabled={drawingControls.allDisabled}
             />
           ) : null}
 
@@ -812,7 +1035,13 @@ export function SupabaseCodeAnalyzer() {
             <Button
               variant="gold"
               size="lg"
-              onClick={() => void startAnalysis()}
+              onClick={() => {
+                if (selectedDrawingIdsRef.current.size > 0) {
+                  openReanalysis("update");
+                  return;
+                }
+                void startAnalysis();
+              }}
               disabled={actionPresentation.primaryDisabled}
               className="px-8"
               data-testid="button-analyze-compliance"
@@ -878,7 +1107,7 @@ export function SupabaseCodeAnalyzer() {
           ) : null}
           {activeRun && !runInProgress ? (
             <p className="text-center text-xs text-muted-foreground">
-              Add a new or revised drawing, then choose Update Analysis. Completed sheets stay unless you replace that drawing.
+              Add a new or revised drawing, then choose Update Analysis, or reanalyze saved drawings without uploading them again. A reanalysis creates a new analysis and keeps this run.
             </p>
           ) : null}
 
@@ -1052,6 +1281,54 @@ export function SupabaseCodeAnalyzer() {
             }}
             >
               {updateCopy?.confirmLabel || "Update Analysis"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(reanalysisCopy)}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setReanalysisPlan(null);
+        }}
+      >
+        <AlertDialogContent data-testid="reanalyze-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{reanalysisCopy?.title || "Reanalyze drawings"}</AlertDialogTitle>
+            <AlertDialogDescription>{reanalysisCopy?.intro}</AlertDialogDescription>
+          </AlertDialogHeader>
+          {reanalysisCopy && (reanalysisCopy.replacements.length > 0 || reanalysisCopy.adds.length > 0) ? (
+            <div className="space-y-3 text-sm text-muted-foreground">
+              {reanalysisCopy.replacements.length > 0 ? (
+                <ul className="list-disc space-y-1 pl-5">
+                  {reanalysisCopy.replacements.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {reanalysisCopy.adds.length > 0 ? (
+                <div>
+                  <p className="text-foreground">
+                    Add {reanalysisCopy.adds.length} new drawing{reanalysisCopy.adds.length === 1 ? "" : "s"}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {reanalysisCopy.adds.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>{reanalysisCopy?.cancelLabel || "Cancel"}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(event) => {
+                event.preventDefault();
+                confirmReanalysis();
+              }}
+            >
+              {reanalysisCopy?.confirmLabel || "Reanalyze Selected"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

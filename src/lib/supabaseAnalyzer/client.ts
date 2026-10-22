@@ -240,6 +240,58 @@ export function cancelSupabaseAnalyzerRun(projectId: string, runId: string) {
   });
 }
 
+export function reanalyzeSupabaseAnalyzerRun(input: {
+  projectId: string;
+  sourceRunId: string;
+  runId: string;
+  scope: "all" | "selected";
+  jobIds: string[];
+  files: Array<{ name: string; size: number; type?: string; replaceJobId?: string | null }>;
+  confirmed: boolean;
+  analysisMode?: StoredAnalysisMode;
+  jurisdictionKey: string;
+  jurisdictionLabel: string;
+  projectType: string;
+  codeEdition: string;
+  codeContext: string;
+}) {
+  return invokeRunAction<{
+    runId: string;
+    created: boolean;
+    uploads: Array<{
+      jobId: string;
+      ordinal: number;
+      fileName: string;
+      fileSize: number;
+      path: string;
+      token: string;
+    }>;
+    reused: number;
+    added: number;
+    replaced: number;
+  }>({
+    action: "reanalyze",
+    projectId: input.projectId,
+    sourceRunId: input.sourceRunId,
+    runId: input.runId,
+    scope: input.scope,
+    jobIds: input.jobIds,
+    confirmed: input.confirmed,
+    analysisMode: input.analysisMode ?? "both",
+    jurisdictionKey: input.jurisdictionKey,
+    jurisdictionLabel: input.jurisdictionLabel,
+    projectType: input.projectType,
+    codeEdition: input.codeEdition,
+    codeContext: input.codeContext,
+    files: input.files.map((file) => ({
+      name: file.name,
+      size: file.size,
+      type: file.type || "application/pdf",
+      replaceJobId: file.replaceJobId || null,
+    })),
+  });
+}
+
 export function updateSupabaseAnalyzerRun(input: {
   projectId: string;
   runId: string;

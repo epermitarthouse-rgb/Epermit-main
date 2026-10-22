@@ -17,6 +17,7 @@ import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Panel } from "@/components/design/ProductPrimitives";
 import type { SupabaseAnalyzerFinding, SupabaseAnalyzerSheetJob } from "@/lib/supabaseAnalyzer/client";
 import { existingDrawingsLabel } from "@/lib/supabaseAnalyzer/pendingSelection";
@@ -86,12 +87,30 @@ export function ExistingDrawingsPanel({
   remaining,
   expanded,
   onToggle,
+  selectedIds,
+  onToggleJob,
+  onSelectAll,
+  onDeselectAll,
+  onReanalyzeSelected,
+  onReanalyzeAll,
+  selectionDisabled,
+  selectedDisabled,
+  allDisabled,
 }: {
   jobs: SupabaseAnalyzerSheetJob[];
   count: number;
   remaining: number;
   expanded: boolean;
   onToggle: () => void;
+  selectedIds: ReadonlySet<string>;
+  onToggleJob: (jobId: string, checked: boolean) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  onReanalyzeSelected: () => void;
+  onReanalyzeAll: () => void;
+  selectionDisabled: boolean;
+  selectedDisabled: boolean;
+  allDisabled: boolean;
 }) {
   const panelId = useId();
   return (
@@ -108,51 +127,109 @@ export function ExistingDrawingsPanel({
           Remaining capacity: {remaining} sheets
         </p>
       </div>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-expanded={expanded}
-        aria-controls={panelId}
-        onClick={onToggle}
-        data-testid="view-existing-drawings"
-      >
-        <ChevronDown
-          className={cn("mr-2 h-4 w-4 transition-transform", expanded && "rotate-180")}
-          aria-hidden
-        />
-        View existing drawings
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          onClick={onToggle}
+          data-testid="view-existing-drawings"
+        >
+          <ChevronDown
+            className={cn("mr-2 h-4 w-4 transition-transform", expanded && "rotate-180")}
+            aria-hidden
+          />
+          View existing drawings
+        </Button>
+        <Button
+          type="button"
+          variant="gold"
+          size="sm"
+          disabled={selectedDisabled}
+          onClick={onReanalyzeSelected}
+          data-testid="reanalyze-selected"
+        >
+          Reanalyze Selected
+        </Button>
+        <Button
+          type="button"
+          variant="outlineGold"
+          size="sm"
+          disabled={allDisabled}
+          onClick={onReanalyzeAll}
+          data-testid="reanalyze-all"
+        >
+          Reanalyze All
+        </Button>
+      </div>
       {expanded ? (
-        <div id={panelId} className="max-h-80 overflow-auto rounded-lg border border-border/60">
-          <table className="w-full min-w-[36rem] text-left text-sm" data-testid="existing-drawings-list">
-            <thead className="sticky top-0 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 font-medium">Sheet</th>
-                <th className="px-3 py-2 font-medium">Title</th>
-                <th className="px-3 py-2 font-medium">File</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id} className="border-t border-border/60" data-testid="existing-drawing-row">
-                  <td className="px-3 py-2 font-medium text-foreground">
-                    {job.detected_sheet_number || `Sheet ${job.ordinal}`}
-                  </td>
-                  <td className="px-3 py-2 text-foreground">{job.detected_sheet_title || "—"}</td>
-                  <td className="max-w-[16rem] truncate px-3 py-2 text-muted-foreground" title={job.original_file_name}>
-                    {job.original_file_name}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Badge variant={statusVariant(job.status)} className="text-[10px]">
-                      {statusLabel(job.status)}
-                    </Badge>
-                  </td>
+        <div id={panelId} className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={selectionDisabled || jobs.length === 0}
+              onClick={onSelectAll}
+              data-testid="select-all-drawings"
+            >
+              Select All
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={selectionDisabled || selectedIds.size === 0}
+              onClick={onDeselectAll}
+              data-testid="deselect-all-drawings"
+            >
+              Deselect All
+            </Button>
+          </div>
+          <div className="max-h-80 overflow-auto rounded-lg border border-border/60">
+            <table className="w-full min-w-[36rem] text-left text-sm" data-testid="existing-drawings-list">
+              <thead className="sticky top-0 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Select</th>
+                  <th className="px-3 py-2 font-medium">Sheet</th>
+                  <th className="px-3 py-2 font-medium">Title</th>
+                  <th className="px-3 py-2 font-medium">File</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {jobs.map((job) => {
+                  const sheet = job.detected_sheet_number || `Sheet ${job.ordinal}`;
+                  const checked = selectedIds.has(job.id);
+                  return (
+                    <tr key={job.id} className="border-t border-border/60" data-testid="existing-drawing-row">
+                      <td className="px-3 py-2">
+                        <Checkbox
+                          checked={checked}
+                          disabled={selectionDisabled}
+                          onCheckedChange={(value) => onToggleJob(job.id, value === true)}
+                          aria-label={`Select ${sheet}`}
+                          data-testid="existing-drawing-checkbox"
+                        />
+                      </td>
+                      <td className="px-3 py-2 font-medium text-foreground">{sheet}</td>
+                      <td className="px-3 py-2 text-foreground">{job.detected_sheet_title || "—"}</td>
+                      <td className="max-w-[16rem] truncate px-3 py-2 text-muted-foreground" title={job.original_file_name}>
+                        {job.original_file_name}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge variant={statusVariant(job.status)} className="text-[10px]">
+                          {statusLabel(job.status)}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div id={panelId} hidden />

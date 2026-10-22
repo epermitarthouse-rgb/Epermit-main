@@ -4,6 +4,16 @@ import {
   resolveAnalyzerReviewScope,
 } from "../_shared/analyzerReviewScope.ts";
 import {
+  isObjectPathConflict,
+  materializeReanalysis,
+  planReanalysis,
+  rewriteReuseObjectPaths,
+  shouldRemoveStoredDrawing,
+  splitStorageObjectPath,
+  type MaterializedReanalysisJob,
+  type ReanalysisSourceSheet,
+} from "../_shared/analyzerReanalysis.ts";
+import {
   analyzerFileIdentity,
   applyCancellation,
   cleanAnalyzerFileName,
@@ -97,7 +107,15 @@ async function supersedeAnalyzerSheet(
 ) {
   await admin.from("supabase_analyzer_findings").delete().eq("sheet_job_id", job.id).eq("run_id", runId);
   if (job.object_path) {
-    await admin.storage.from(BUCKET).remove([job.object_path]);
+    const { count, error: shareError } = await admin
+      .from("supabase_analyzer_sheet_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("object_path", job.object_path)
+      .neq("id", job.id);
+    if (shareError) throw shareError;
+    if (shouldRemoveStoredDrawing(count || 0)) {
+      await admin.storage.from(BUCKET).remove([job.object_path]);
+    }
   }
   const { error } = await admin
     .from("supabase_analyzer_sheet_jobs")
@@ -317,6 +335,370 @@ async function handleSheetUpdate(
   });
 }
 
+const reanalysisFlights = new Map<string, Promise<Response>>();
+
+async function listedObjectNames(
+  admin: ReturnType<typeof createClient>,
+  prefix: string,
+): Promise<Set<string>> {
+  const names = new Set<string>();
+  for (let offset = 0; offset < 2000; offset += 100) {
+    const { data, error } = await admin.storage.from(BUCKET).list(prefix, { limit: 100, offset });
+    if (error) throw error;
+    const page = data || [];
+    for (const object of page) {
+      if (object?.name) names.add(object.name);
+    }
+    if (page.length < 100) break;
+  }
+  return names;
+}
+
+async function storageExistsForPaths(
+  admin: ReturnType<typeof createClient>,
+  objectPaths: readonly string[],
+): Promise<(objectPath: string) => boolean> {
+  const prefixes = new Map<string, Set<string>>();
+  for (const objectPath of objectPaths) {
+    const split = splitStorageObjectPath(objectPath);
+    if (!split || prefixes.has(split.prefix)) continue;
+    prefixes.set(split.prefix, await listedObjectNames(admin, split.prefix));
+  }
+  return (objectPath: string) => {
+    const split = splitStorageObjectPath(objectPath);
+    if (!split) return false;
+    return prefixes.get(split.prefix)?.has(split.name) === true;
+  };
+}
+
+function sheetJobInsert(job: MaterializedReanalysisJob) {
+  return {
+    id: job.id,
+    run_id: job.run_id,
+    project_id: job.project_id,
+    ordinal: job.ordinal,
+    original_file_name: job.original_file_name,
+    object_path: job.object_path,
+    file_size: job.file_size,
+    mime_type: "application/pdf",
+    discipline: job.discipline,
+    detected_sheet_number: job.detected_sheet_number,
+    detected_sheet_title: job.detected_sheet_title,
+    status: job.status,
+    available_at: new Date().toISOString(),
+  };
+}
+
+async function discardReanalysisRun(
+  admin: ReturnType<typeof createClient>,
+  runId: string,
+  copiedPaths: readonly string[],
+) {
+  if (copiedPaths.length > 0) {
+    await admin.storage.from(BUCKET).remove([...copiedPaths]);
+  }
+  await admin.from("supabase_analyzer_runs").delete().eq("id", runId);
+}
+
+async function signedReanalysisUploads(
+  admin: ReturnType<typeof createClient>,
+  jobs: readonly MaterializedReanalysisJob[],
+) {
+  const uploads = [];
+  for (const job of jobs) {
+    if (job.status !== "upload_pending") continue;
+    const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(job.object_path);
+    if (error || !data?.token) throw error || new Error("Could not create upload authorization");
+    uploads.push({
+      jobId: job.id,
+      ordinal: job.ordinal,
+      fileName: job.original_file_name,
+      fileSize: job.file_size,
+      path: job.object_path,
+      token: data.token,
+    });
+  }
+  return uploads;
+}
+
+async function replayReanalysis(
+  admin: ReturnType<typeof createClient>,
+  runId: string,
+  projectId: string,
+  createdAt: string,
+) {
+  const { data: jobs, error } = await admin
+    .from("supabase_analyzer_sheet_jobs")
+    .select("id, ordinal, original_file_name, object_path, file_size, status, detected_sheet_number, detected_sheet_title, discipline")
+    .eq("run_id", runId)
+    .eq("project_id", projectId);
+  if (error) throw error;
+  const rows = jobs || [];
+  if (rows.length === 0) {
+    const age = Date.now() - new Date(createdAt).getTime();
+    if (Number.isFinite(age) && age < 120_000) {
+      return json({ error: "This reanalysis is already in progress" }, 409);
+    }
+    await admin.from("supabase_analyzer_runs").delete().eq("id", runId).eq("project_id", projectId);
+    return null;
+  }
+  const materialized: MaterializedReanalysisJob[] = rows.map((row) => ({
+    id: String(row.id),
+    run_id: runId,
+    project_id: projectId,
+    ordinal: Number(row.ordinal),
+    original_file_name: String(row.original_file_name),
+    object_path: String(row.object_path),
+    source_object_path: null,
+    source_job_id: null,
+    file_size: Number(row.file_size),
+    status: row.status === "upload_pending" ? "upload_pending" : "queued",
+    detected_sheet_number: row.detected_sheet_number ? String(row.detected_sheet_number) : null,
+    detected_sheet_title: row.detected_sheet_title ? String(row.detected_sheet_title) : null,
+    discipline: row.discipline ? String(row.discipline) : null,
+  }));
+  const uploads = await signedReanalysisUploads(admin, materialized);
+  return json({
+    runId,
+    created: false,
+    uploads,
+    reused: materialized.filter((job) => job.status === "queued").length,
+    added: 0,
+    replaced: 0,
+  });
+}
+
+async function handleReanalysis(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  projectId: string,
+  body: Record<string, unknown>,
+  supabaseUrl: string,
+  serviceRoleKey: string,
+) {
+  if (Deno.env.get("SUPABASE_ANALYZER_ENABLED")?.toLowerCase() === "false") {
+    return json({ error: "Code Analyzer is temporarily unavailable" }, 503);
+  }
+  const sourceRunId = String(body.sourceRunId || "");
+  const requestedRunId = String(body.runId || "");
+  if (!sourceRunId) return json({ error: "sourceRunId is required" }, 400);
+  if (!requestedRunId) return json({ error: "runId is required" }, 400);
+  if (requestedRunId === sourceRunId) return json({ error: "Reanalysis needs a new run" }, 400);
+  if (body.confirmed !== true) {
+    return json({ error: "Confirm reanalysis before queueing drawings" }, 409);
+  }
+
+  const requestedMode = normalizeNewRunAnalysisMode(body.analysisMode);
+  if (typeof requestedMode !== "string") return json({ error: requestedMode.error }, 400);
+
+  const { data: existingRows, error: existingError } = await admin
+    .from("supabase_analyzer_runs")
+    .select("id, project_id, created_at")
+    .eq("id", requestedRunId)
+    .limit(1);
+  if (existingError) throw existingError;
+  const existing = existingRows?.[0];
+  if (existing) {
+    if (String(existing.project_id) !== projectId) return json({ error: "Analyzer run not found" }, 404);
+    const replay = await replayReanalysis(
+      admin,
+      requestedRunId,
+      projectId,
+      String(existing.created_at || ""),
+    );
+    if (replay) return replay;
+  }
+
+  const { data: sourceRows, error: sourceError } = await admin
+    .from("supabase_analyzer_runs")
+    .select("id, status, budget_limit_usd, jurisdiction_key, jurisdiction_label, project_type, code_edition, code_context")
+    .eq("id", sourceRunId)
+    .eq("project_id", projectId)
+    .limit(1);
+  if (sourceError) throw sourceError;
+  const source = sourceRows?.[0];
+  if (!source) return json({ error: "Analyzer run not found" }, 404);
+  if (runIsWorkerActive(String(source.status))) {
+    return json({ error: "This analysis is still processing" }, 409);
+  }
+
+  const requested = Array.isArray(body.files) ? body.files as Array<Record<string, unknown>> : [];
+  const incoming: IncomingAnalyzerSheet[] = requested.map((input) => ({
+    name: String(input?.name || ""),
+    size: Number(input?.size),
+    type: String(input?.type || "application/pdf"),
+    replaceJobId: input?.replaceJobId ? String(input.replaceJobId) : null,
+  }));
+  const scope = body.scope === "all" ? "all" : "selected";
+  const jobIds = Array.isArray(body.jobIds)
+    ? body.jobIds.map(String).filter(Boolean).slice(0, MAX_SHEETS)
+    : [];
+
+  const { data: jobRows, error: jobsError } = await admin
+    .from("supabase_analyzer_sheet_jobs")
+    .select("id, ordinal, original_file_name, file_size, detected_sheet_number, detected_sheet_title, discipline, status, object_path")
+    .eq("run_id", sourceRunId)
+    .eq("project_id", projectId);
+  if (jobsError) throw jobsError;
+  const sourceSheets: ReanalysisSourceSheet[] = (jobRows || []).map((row) => ({
+    id: String(row.id),
+    ordinal: Number(row.ordinal),
+    original_file_name: String(row.original_file_name),
+    file_size: Number(row.file_size),
+    detected_sheet_number: row.detected_sheet_number ? String(row.detected_sheet_number) : null,
+    detected_sheet_title: row.detected_sheet_title ? String(row.detected_sheet_title) : null,
+    discipline: row.discipline ? String(row.discipline) : null,
+    status: String(row.status),
+    object_path: String(row.object_path || ""),
+  }));
+
+  const draft = planReanalysis({
+    sourceRunId,
+    jobs: sourceSheets,
+    selectedJobIds: scope === "all" ? "all" : jobIds,
+    incoming,
+    confirmed: true,
+  });
+  if (!draft.accepted) {
+    return json({ error: draft.error || "Confirm reanalysis before queueing drawings" }, draft.needsConfirmation ? 409 : 400);
+  }
+
+  const storageExists = await storageExistsForPaths(
+    admin,
+    draft.items.flatMap((item) => item.action === "reuse" && item.objectPath ? [item.objectPath] : []),
+  );
+  const plan = planReanalysis({
+    sourceRunId,
+    jobs: sourceSheets,
+    selectedJobIds: scope === "all" ? "all" : jobIds,
+    incoming,
+    confirmed: true,
+    storageExists,
+  });
+  if (!plan.accepted) return json({ error: plan.error || "Saved drawings could not be queued" }, 400);
+
+  const materialized = materializeReanalysis(plan, {
+    runId: requestedRunId,
+    projectId,
+    analysisMode: requestedMode,
+    createJobId: () => crypto.randomUUID(),
+    reuseSourceKey: true,
+  });
+  if (materialized.ok === false) return json({ error: materialized.error }, 400);
+
+  const { count: activeRuns, error: activeError } = await admin
+    .from("supabase_analyzer_runs")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .in("status", ["uploading", "queued", "processing"]);
+  if (activeError) throw activeError;
+  if ((activeRuns || 0) >= 2) {
+    return json({ error: "This project already has two active analyzer runs" }, 409);
+  }
+
+  const jurisdictionKey = String(body.jurisdictionKey || source.jurisdiction_key || "dc").slice(0, 120);
+  const jurisdictionLabel = String(body.jurisdictionLabel || source.jurisdiction_label || "Washington, DC").slice(0, 200);
+  const projectType = String(body.projectType || source.project_type || "Commercial (General)").slice(0, 200);
+  const codeEdition = String(body.codeEdition || source.code_edition || "2017").slice(0, 100);
+  const codeContext = String(body.codeContext || source.code_context || "").slice(0, 500);
+  const analysisScope = resolveAnalyzerReviewScope({
+    mode: requestedMode,
+    jurisdictionKey,
+    jurisdictionLabel,
+    codeEdition,
+    codeContext,
+  });
+  const budget = Math.max(1, Math.min(Number(body.budgetLimitUsd) || Number(source.budget_limit_usd) || 20, 100));
+
+  const { error: runError } = await admin.from("supabase_analyzer_runs").insert({
+    id: requestedRunId,
+    project_id: projectId,
+    created_by: userId,
+    status: materialized.value.status,
+    jurisdiction_key: jurisdictionKey,
+    jurisdiction_label: jurisdictionLabel,
+    project_type: projectType,
+    code_edition: codeEdition,
+    code_context: codeContext,
+    analysis_mode: requestedMode,
+    analysis_scope: analysisScope,
+    source_coverage: "adoption_metadata_only",
+    ai_provider: "openai",
+    ai_model: "gpt-4o",
+    total_sheets: materialized.value.totalSheets,
+    budget_limit_usd: budget,
+  });
+  if (runError) {
+    if (isObjectPathConflict({ code: String(runError.code || ""), message: runError.message, details: String(runError.details || "") })) {
+      const replay = await replayReanalysis(admin, requestedRunId, projectId, new Date().toISOString());
+      if (replay) return replay;
+    }
+    const duplicate = String(runError.code || "") === "23505" || String(runError.message || "").toLowerCase().includes("duplicate");
+    if (duplicate) {
+      const replay = await replayReanalysis(admin, requestedRunId, projectId, new Date().toISOString());
+      if (replay) return replay;
+    }
+    throw runError;
+  }
+
+  let finalJobs = materialized.value.jobs;
+  const copied: string[] = [];
+  try {
+    const firstInsert = await admin.from("supabase_analyzer_sheet_jobs").insert(finalJobs.map(sheetJobInsert));
+    if (firstInsert.error) {
+      if (!isObjectPathConflict({
+        code: String(firstInsert.error.code || ""),
+        message: firstInsert.error.message,
+        details: String(firstInsert.error.details || ""),
+      })) {
+        throw firstInsert.error;
+      }
+      const rewritten = rewriteReuseObjectPaths(finalJobs, projectId, requestedRunId);
+      for (const copy of rewritten.copies) {
+        const { error: copyError } = await admin.storage.from(BUCKET).copy(copy.from, copy.to);
+        if (copyError) {
+          throw new Error(`${copy.fileName} is saved but could not be prepared for reanalysis`);
+        }
+        copied.push(copy.to);
+      }
+      finalJobs = rewritten.jobs;
+      const secondInsert = await admin.from("supabase_analyzer_sheet_jobs").insert(finalJobs.map(sheetJobInsert));
+      if (secondInsert.error) throw secondInsert.error;
+    }
+    const uploads = await signedReanalysisUploads(admin, finalJobs);
+    await admin.rpc("refresh_supabase_analyzer_run", { p_run_id: requestedRunId });
+    await admin.from("supabase_analyzer_audit_events").insert({
+      run_id: requestedRunId,
+      project_id: projectId,
+      actor_id: userId,
+      event_type: "run_reanalyzed",
+      metadata: {
+        source_run_id: sourceRunId,
+        request_id: requestedRunId,
+        analysis_mode: requestedMode,
+        reused: plan.reuseCount,
+        added: plan.added,
+        replaced: plan.replaced,
+        uploads: uploads.length,
+      },
+    });
+    if (finalJobs.some((job) => job.status === "queued")) {
+      await triggerProcessor(supabaseUrl, serviceRoleKey);
+    }
+    return json({
+      runId: requestedRunId,
+      created: true,
+      uploads,
+      reused: plan.reuseCount,
+      added: plan.added,
+      replaced: plan.replaced,
+    }, 201);
+  } catch (error) {
+    await discardReanalysisRun(admin, requestedRunId, copied);
+    throw error;
+  }
+}
+
 async function triggerProcessor(supabaseUrl: string, serviceRoleKey: string) {
   try {
     await fetch(`${supabaseUrl}/functions/v1/supabase-analyzer-processor`, {
@@ -487,6 +869,28 @@ Deno.serve(async (req) => {
       });
 
       return json({ runId, uploads }, 201);
+    }
+
+    if (action === "reanalyze") {
+      const flightKey = `${projectId}:${String(body.runId || "")}`;
+      if (body.runId) {
+        const pending = reanalysisFlights.get(flightKey);
+        if (pending) return pending;
+      }
+      const promise = handleReanalysis(
+        admin,
+        user.id,
+        projectId,
+        body,
+        supabaseUrl,
+        serviceRoleKey,
+      );
+      if (!body.runId) return promise;
+      const tracked = promise.finally(() => {
+        reanalysisFlights.delete(flightKey);
+      });
+      reanalysisFlights.set(flightKey, tracked);
+      return tracked;
     }
 
     const runId = String(body.runId || "");

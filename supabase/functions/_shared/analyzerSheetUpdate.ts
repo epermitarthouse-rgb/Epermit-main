@@ -514,6 +514,8 @@ export function analyzerActionPresentation(input: {
   hasRun: boolean;
   runStatus: string | null;
   fileCount: number;
+  /** Saved sheets chosen for reanalysis. Zero keeps the previous file-only rule. */
+  selectedSheetCount?: number;
   failedSheets: number;
   submitting: boolean;
   cancelling: boolean;
@@ -523,6 +525,7 @@ export function analyzerActionPresentation(input: {
   const runActive = workerActive || uploadActive;
   const cancelled = input.runStatus === "cancelled";
   const canUpdate = input.hasRun && runAllowsSheetUpdate(input.runStatus) && !workerActive;
+  const selectedSheetCount = input.selectedSheetCount ?? 0;
   let primaryLabel: AnalyzerActionPresentation["primaryLabel"] = "Analyze for Compliance";
   if (input.cancelling || workerActive) primaryLabel = "Processing";
   else if (input.submitting) primaryLabel = "Uploading";
@@ -534,7 +537,7 @@ export function analyzerActionPresentation(input: {
       || input.submitting
       || input.cancelling
       || workerActive
-      || input.fileCount === 0,
+      || (input.fileCount === 0 && selectedSheetCount === 0),
     showCancel: runActive || input.cancelling,
     cancelLabel: input.cancelling ? "Cancelling…" : "Cancel Analysis",
     cancelDisabled: input.cancelling || input.submitting,
