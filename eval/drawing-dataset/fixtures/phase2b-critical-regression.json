@@ -1,0 +1,222 @@
+{
+  "phase": "2B",
+  "version": "phase2b.critical-regression.v3",
+  "note": "Frozen drafts from Phase 2A.7 provisional assessments plus positive-control Critical cases. Used for local persist-time before/after comparison only. Not professionally verified truth. Simulated validator outcomes are not actual GPT-4o reanalysis. v3: cross-sheet uncertainty records a limitation without severity downgrade.",
+  "professionallyVerified": false,
+  "softFailContract": {
+    "description": "Severity may be adjusted only for demonstrable on-sheet technical errors (hydraulics, keynote mismatch, clear evidence contradiction). Cross-sheet unread references tag a verification limitation without changing severity or client-facing text. Soft-fail is not withhold/delete. originalSeverity/title/observation remain in raw_metadata.validation.",
+    "hardWithholdRules": [
+      "missing_required_field",
+      "thin_drawing_evidence",
+      "documented_requirement_restatement",
+      "outside_ibc_only_scope",
+      "outside_local_only_scope",
+      "near_duplicate"
+    ],
+    "limitationOnlyRules": [
+      "cross_sheet_detail_not_reviewed",
+      "cross_sheet_reference_in_set",
+      "cross_sheet_reference_unresolved"
+    ],
+    "severityAdjustRules": [
+      "hydraulic_density_area_not_flow_demand",
+      "absence_claim_contradicted_by_evidence",
+      "keynote_citation_mismatch",
+      "calculation_governing_method_required"
+    ]
+  },
+  "sheetIndexForProvisional": [
+    { "fileName": "A-1.03-00.pdf", "detectedSheetNumber": "A-1.03-00" },
+    { "fileName": "A-6.01.00.pdf", "detectedSheetNumber": "A-6.01" },
+    { "fileName": "FP200 .pdf", "detectedSheetNumber": "FP200" },
+    { "fileName": "M-1.4.pdf", "detectedSheetNumber": "M-1.4" },
+    { "fileName": "M-3.0.pdf", "detectedSheetNumber": "M-3.0" },
+    { "fileName": "S-201.00.pdf", "detectedSheetNumber": "S-201.00" }
+  ],
+  "cases": [
+    {
+      "id": "C-001",
+      "kind": "cross_sheet_limitation",
+      "expectRule": "cross_sheet_detail_not_reviewed",
+      "expectSeverity": "critical",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": true,
+      "draft": {
+        "category": "Architectural",
+        "severity": "critical",
+        "title": "Missing Ceiling Penetration Details",
+        "observation": "Details for penetrations through the ceiling, which may include sprinklers, ducts, or conduits, are not visible on the drawing.",
+        "drawing_evidence": "Absence of detailed penetration sections or notes on the plan. SEE SHEET A-6.01 FOR CEILING FINISHES.",
+        "drawing_location": "Both reflected ceiling plans on sheet A-1.03-00.",
+        "suggested_code_reference": "",
+        "recommendation": "Provide detailed penetration sections after reviewing referenced sheets."
+      }
+    },
+    {
+      "id": "C-002",
+      "kind": "demonstrable_technical_error",
+      "expectRule": "hydraulic_density_area_not_flow_demand",
+      "expectSeverity": "advisory",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": false,
+      "draft": {
+        "category": "Fire Protection",
+        "severity": "critical",
+        "title": "Inconsistent Hydraulic Calculations",
+        "observation": "The flow demand is stated as 596.81 GPM, yet with a density of 0.15 GPM per square foot and a discharge area of 1524 ft2, the calculated flow should be 228.6 GPM.",
+        "drawing_evidence": "Hydraulic Design box: Flow Demand: 596.81 GPM. Density: 0.15 GPM. Discharge Area: 1524 ft2. Hose Allowance: 250.00 GPM.",
+        "drawing_location": "Top left of the sheet, Hydraulic Design box.",
+        "suggested_code_reference": "",
+        "recommendation": "Re-evaluate the hydraulic calculations."
+      }
+    },
+    {
+      "id": "C-003",
+      "kind": "cross_sheet_limitation",
+      "expectRule": "cross_sheet_detail_not_reviewed",
+      "expectSeverity": "critical",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": true,
+      "draft": {
+        "category": "Mechanical",
+        "severity": "critical",
+        "title": "Refrigerant Line Insulation",
+        "observation": "The drawing does not provide information on the insulation requirements for refrigerant lines.",
+        "drawing_evidence": "KEYED NOTE 1: REFRIGERANT LINES UP THROUGH ROOF (TYP. 6 PLACES - SEE DETAIL 3 ON DRAWING M3.0).",
+        "drawing_location": "Keyed Notes, note 1.",
+        "suggested_code_reference": "2015 IMC Chapter 11",
+        "recommendation": "Specify insulation or confirm Detail 3 on M-3.0."
+      }
+    },
+    {
+      "id": "C-004",
+      "kind": "unresolved_detail_concern",
+      "expectRule": null,
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": true,
+      "draft": {
+        "category": "Structural",
+        "severity": "critical",
+        "title": "Foundation Details",
+        "observation": "Foundation reinforcement details are referenced but not visibly detailed on this sheet.",
+        "drawing_evidence": "MASONRY AND FOUNDATION NOTES: REINFORCE ALL WALLS WITH #4 @ 48\" O.C., FULL HEIGHT. HOOKED DOWEL BARS INTO FOOTINGS.",
+        "drawing_location": "Masonry and Foundation Notes",
+        "suggested_code_reference": "",
+        "recommendation": "Include reinforcement details or a specific sheet cross-reference."
+      }
+    }
+  ],
+  "positiveControls": [
+    {
+      "id": "P-001",
+      "kind": "legitimate_critical",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "Door hardware conflict with life-safety note; no absence/cross-sheet/hydraulic false-positive pattern.",
+      "draft": {
+        "category": "Means of Egress",
+        "severity": "critical",
+        "title": "Exit door hardware requires a key from the inside",
+        "observation": "The door schedule shows the main exit door hardware as a classroom lock with key required from the inside, which conflicts with the life safety note that exit doors operate without special knowledge or effort.",
+        "drawing_evidence": "Door schedule mark EX-1: hardware classroom lock, key required from the inside. Life Safety Note 4: exit doors operable from inside without special knowledge.",
+        "drawing_location": "Door schedule",
+        "suggested_code_reference": "2015 IBC Section 1010.1.9",
+        "recommendation": "Revise the EX-1 hardware so the exit door is operable from the inside without a key."
+      }
+    },
+    {
+      "id": "P-002",
+      "kind": "legitimate_critical",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "Clear width conflict; mentions another sheet for coordination but does not claim sheet-local absence of a required detail.",
+      "draft": {
+        "category": "Means of Egress",
+        "severity": "critical",
+        "title": "Exit door clear width below stated egress note",
+        "observation": "Door schedule mark EX-2 lists a 28-inch clear width, which conflicts with Life Safety Note 2 requiring 32 inches minimum clear width on this sheet. Related egress path notes also appear on sheet A-1.03.",
+        "drawing_evidence": "Door schedule EX-2: clear width 28 inches. Life Safety Note 2: EXIT DOORS SHALL PROVIDE 32 INCHES MINIMUM CLEAR WIDTH.",
+        "drawing_location": "Door schedule and Life Safety Notes",
+        "suggested_code_reference": "2015 IBC Section 1010.1.1",
+        "recommendation": "Revise EX-2 clear width to match the 32-inch minimum stated on this sheet."
+      }
+    },
+    {
+      "id": "P-003",
+      "kind": "legitimate_critical",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "Real hydraulic density conflict (design density below required), not density×area equated to FLOW DEMAND.",
+      "draft": {
+        "category": "Fire Protection",
+        "severity": "critical",
+        "title": "Hydraulic design density below occupancy requirement",
+        "observation": "The hydraulic design box lists density 0.10 GPM/ft2 for Ordinary Hazard Group 2, which conflicts with the fire protection note requiring 0.20 GPM/ft2 for that occupancy.",
+        "drawing_evidence": "Hydraulic Design: Density 0.10 GPM/ft2. Fire Protection Note 3: OH2 design density shall be 0.20 GPM per square foot. Hose Allowance: 250.00 GPM. Flow Demand: 480 GPM.",
+        "drawing_location": "Hydraulic Design box and Fire Protection Notes",
+        "suggested_code_reference": "NFPA 13",
+        "recommendation": "Reconcile the hydraulic design density with the 0.20 GPM/ft2 OH2 requirement stated on the sheet."
+      }
+    },
+    {
+      "id": "P-004",
+      "kind": "legitimate_critical",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "True omission with no cross-sheet pointer and no contradictory specification in evidence.",
+      "draft": {
+        "category": "Fire Protection",
+        "severity": "critical",
+        "title": "No fire extinguisher locations shown",
+        "observation": "The floor plan does not show portable fire extinguisher locations, and no extinguisher schedule or legend entry is provided on this sheet.",
+        "drawing_evidence": "Floor plan shows egress paths and sprinkler heads. Legend lists smoke detectors and exit signs. No extinguisher symbol or schedule appears on the sheet.",
+        "drawing_location": "First floor plan legend and plan area",
+        "suggested_code_reference": "2015 IFC Section 906.1",
+        "recommendation": "Add extinguisher locations or a schedule that identifies portable fire extinguisher coverage on this floor."
+      }
+    },
+    {
+      "id": "P-005",
+      "kind": "legitimate_critical",
+      "expectSeverity": "critical",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": false,
+      "expectRule": "cross_sheet_detail_not_reviewed",
+      "expectPreserveText": true,
+      "rationale": "Legitimate Critical that also cites SEE DETAIL must not be downgraded solely for unread cross-sheet context.",
+      "draft": {
+        "category": "Fire Protection",
+        "severity": "critical",
+        "title": "Rated shaft penetration seal not shown on this sheet",
+        "observation": "The rated shaft wall penetration for the grease duct is not visible on this plan, and the firestop system is not specified here. SEE DETAIL 5 ON DRAWING A-6.01 for related shaft construction.",
+        "drawing_evidence": "Shaft opening shown without firestop assembly callout. Note: SEE DETAIL 5 ON DRAWING A-6.01 FOR SHAFT WALL.",
+        "drawing_location": "Kitchen plan near grease duct shaft",
+        "suggested_code_reference": "2015 IBC Section 714.4",
+        "recommendation": "Show the firestop system at the shaft penetration on this sheet or confirm the assembly when Detail 5 on A-6.01 is reviewed."
+      }
+    }
+  ]
+}

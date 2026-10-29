@@ -6,6 +6,12 @@ import {
   type FindingReviewDecision,
   type ReviewDecisionStatus,
 } from "@/lib/supabaseAnalyzer/reviewDecisions";
+import { fetchAllPages } from "@/lib/supabaseAnalyzer/pagedFetch";
+import {
+  exportAuditInvokeFields,
+  parseExportAuditRequest,
+  type ExportAuditInvokeInput,
+} from "../../../supabase/functions/_shared/analyzerExportAudit.ts";
 
 export type { FindingReviewDecision, ReviewDecisionStatus };
 
@@ -249,6 +255,23 @@ export function cancelSupabaseAnalyzerRun(projectId: string, runId: string) {
   });
 }
 
+/** Persists an export audit event. Throws on transport/auth errors; callers that must not block a download should use withAnalyzerExportAudit. */
+export function recordSupabaseAnalyzerExport(request: ExportAuditInvokeInput & { projectId: string; runId: string }) {
+  const parsed = parseExportAuditRequest(exportAuditInvokeFields(request));
+  if (parsed.ok === false) return Promise.reject(new Error(parsed.error));
+  return invokeRunAction<{
+    recorded: boolean;
+    eventType: string;
+    stage: string;
+    clientReceipt: string;
+  }>({
+    action: "record_export",
+    projectId: request.projectId,
+    runId: request.runId,
+    ...exportAuditInvokeFields(request),
+  });
+}
+
 export function reanalyzeSupabaseAnalyzerRun(input: {
   projectId: string;
   sourceRunId: string;
@@ -365,35 +388,40 @@ function reviewFromRow(row: Record<string, unknown>): FindingReviewDecision | nu
 }
 
 export async function fetchSupabaseAnalyzerDataset(runId: string): Promise<AnalyzerRunDataset> {
-  const [runResult, jobsResult, findingsResult, reviewsResult] = await Promise.all([
+  const [runResult, jobRows, findingRows, reviewRows] = await Promise.all([
     supabase.from("supabase_analyzer_runs").select("*").eq("id", runId).single(),
-    supabase
+    fetchAllPages((from, to) => supabase
       .from("supabase_analyzer_sheet_jobs")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("run_id", runId)
-      .order("ordinal"),
-    supabase
+      .order("ordinal")
+      .order("id")
+      .range(from, to)),
+    fetchAllPages((from, to) => supabase
       .from("supabase_analyzer_findings")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("run_id", runId)
       .eq("is_published", true)
-      .order("finding_index"),
-    supabase
+      .order("sheet_job_id")
+      .order("finding_index")
+      .order("id")
+      .range(from, to)),
+    fetchAllPages((from, to) => supabase
       .from("supabase_analyzer_finding_reviews")
-      .select(REVIEW_COLUMNS)
-      .eq("run_id", runId),
+      .select(REVIEW_COLUMNS, { count: "exact" })
+      .eq("run_id", runId)
+      .order("finding_id")
+      .order("id")
+      .range(from, to)),
   ]);
   if (runResult.error) throw runResult.error;
-  if (jobsResult.error) throw jobsResult.error;
-  if (findingsResult.error) throw findingsResult.error;
-  if (reviewsResult.error) throw reviewsResult.error;
-  const reviews = ((reviewsResult.data || []) as Array<Record<string, unknown>>)
+  const reviews = (reviewRows as Array<Record<string, unknown>>)
     .map(reviewFromRow)
     .filter((review): review is FindingReviewDecision => review !== null && review.run_id === runId);
   return {
     run: runResult.data as SupabaseAnalyzerRun,
-    jobs: (jobsResult.data || []) as SupabaseAnalyzerSheetJob[],
-    findings: (findingsResult.data || []) as SupabaseAnalyzerFinding[],
+    jobs: jobRows as SupabaseAnalyzerSheetJob[],
+    findings: findingRows as SupabaseAnalyzerFinding[],
     reviews,
   };
 }

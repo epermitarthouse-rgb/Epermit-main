@@ -10,6 +10,13 @@ import {
   validateAnalyzerFindings,
   type SubmittedSheetRef,
 } from "../_shared/analyzerFindingQuality.ts";
+import {
+  crossSheetRetrievalAuditMetadata,
+  isCrossSheetRetrievalEnabled,
+  retrieveCrossSheetEvidence,
+  type CrossSheetRetrievalPack,
+  type RetrievableSheetJob,
+} from "../_shared/analyzerCrossSheetRetrieval.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -229,9 +236,10 @@ async function processJob(
     const fileData = `data:application/pdf;base64,${encodeBase64(bytes)}`;
     const systemPrompt = processorReviewPrompt(run);
     let sheetIndex: SubmittedSheetRef[] = [];
+    let retrievableJobs: RetrievableSheetJob[] = [];
     const { data: sheetRows, error: sheetIndexError } = await admin
       .from("supabase_analyzer_sheet_jobs")
-      .select("original_file_name, detected_sheet_number, detected_sheet_title, discipline")
+      .select("id, original_file_name, detected_sheet_number, detected_sheet_title, discipline, object_path")
       .eq("run_id", job.run_id)
       .limit(100);
     if (sheetIndexError) {
@@ -243,8 +251,47 @@ async function processJob(
         detectedSheetTitle: row.detected_sheet_title,
         discipline: row.discipline,
       }));
+      retrievableJobs = (sheetRows || []).map((row) => ({
+        fileName: String(row.original_file_name || ""),
+        detectedSheetNumber: row.detected_sheet_number,
+        detectedSheetTitle: row.detected_sheet_title,
+        discipline: row.discipline,
+        objectPath: row.object_path ? String(row.object_path) : null,
+        sheetJobId: row.id ? String(row.id) : null,
+      }));
     }
-    const userPrompt = buildAnalyzerUserPrompt(job.original_file_name, sheetIndex);
+
+    // Phase 3A: optional bounded cross-sheet excerpts. Failures never block baseline analysis.
+    let crossSheetPack: CrossSheetRetrievalPack | null = null;
+    try {
+      crossSheetPack = await retrieveCrossSheetEvidence({
+        enabled: isCrossSheetRetrievalEnabled(),
+        currentFileName: job.original_file_name,
+        currentPdfBytes: bytes,
+        sheetJobs: retrievableJobs,
+        deps: {
+          downloadPdf: async (objectPath: string) => {
+            const { data: relatedBlob, error: relatedError } = await admin.storage
+              .from(BUCKET)
+              .download(objectPath);
+            if (relatedError || !relatedBlob) {
+              throw new Error(relatedError?.message || "related_sheet_download_failed");
+            }
+            return new Uint8Array(await relatedBlob.arrayBuffer());
+          },
+        },
+      });
+    } catch (retrievalError) {
+      console.error(
+        "[supabase-analyzer] cross-sheet retrieval failed open",
+        job.id,
+        retrievalError instanceof Error ? retrievalError.message : retrievalError,
+      );
+      crossSheetPack = null;
+    }
+    const userPrompt = buildAnalyzerUserPrompt(job.original_file_name, sheetIndex, {
+      crossSheetEvidence: crossSheetPack?.promptBlock || null,
+    });
 
     const schema = {
       type: "object",
@@ -519,6 +566,10 @@ async function processJob(
         model: responseModel,
         response_id: responsePayload.id || null,
         request_id: requestId,
+        ...(crossSheetPack ? crossSheetRetrievalAuditMetadata(crossSheetPack) : {
+          cross_sheet_retrieval_enabled: false,
+          cross_sheet_retrieval_status: "disabled",
+        }),
       },
     });
     await completeJob(admin, job, workerId, "completed");

@@ -1,0 +1,7 @@
+# Isolated Phase 2A eval environment. Not used by the Supabase analyzer.
+pymupdf==1.28.2
+docling==2.73.1
+numpy>=1.26,<2
+opencv-python-headless>=4.8,<6
+shapely>=2.0
+Pillow>=10.0

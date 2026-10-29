@@ -7,6 +7,7 @@ import type { AnalyzerRunDataset, SupabaseAnalyzerFinding, SupabaseAnalyzerRun, 
 import { buildSupabaseAnalyzerJsonExport } from "./exportDataset.ts";
 import {
   buildReviewDecisionRecord,
+  expansionForRunSeverity,
   indexReviewDecisions,
   mergeReviewDecision,
   nextRunSeverityFilter,
@@ -169,6 +170,36 @@ describe("run and sheet finding filters", () => {
     assert.equal(view.visibleFindings.length, 0);
     assert.equal(view.emptyMessage, "No advisory findings match the current filters.");
     assert.equal(findings.length, 4);
+  });
+
+  it("drops drawings without the selected severity and keeps a widened drawing visible", () => {
+    const view = projectAnalyzerReview({
+      sheets,
+      findings,
+      discipline: "all",
+      runSeverity: "warning",
+    });
+    assert.deepEqual(view.sheets.map((sheet) => sheet.id), ["arch"]);
+    assert.deepEqual(view.visibleFindings.map((item) => item.id), ["a-w"]);
+    const widened = projectAnalyzerReview({
+      sheets,
+      findings,
+      discipline: "all",
+      runSeverity: "warning",
+      sheetSeverity: { arch: "all" },
+    });
+    assert.deepEqual(widened.findingsBySheet.get("arch")?.map((item) => item.id), ["a-c", "a-w"]);
+    assert.equal(widened.findingsBySheet.has("struct"), false);
+  });
+
+  it("restores the reviewer's open drawings when the filter returns to All", () => {
+    const selected = expansionForRunSeverity({ expandedJobIds: new Set(["struct"]), expansionBeforeFilter: null }, "critical", findings);
+    assert.deepEqual([...selected.expandedJobIds].sort(), ["arch", "struct"]);
+    const switched = expansionForRunSeverity(selected, "warning", findings);
+    assert.deepEqual([...switched.expandedJobIds], ["arch"]);
+    const reset = expansionForRunSeverity(switched, "all", findings);
+    assert.deepEqual([...reset.expandedJobIds], ["struct"]);
+    assert.equal(reset.expansionBeforeFilter, null);
   });
 
   it("keeps a per-sheet filter from changing the other sheet", () => {
@@ -344,6 +375,7 @@ describe("review persistence migration", () => {
     assert.match(sql, /UNIQUE \(run_id, finding_id\)/);
     assert.match(sql, /has_project_editor_access/);
     assert.match(sql, /has_project_access/);
+    assert.match(sql, /finding_review_saved/);
     assert.equal(sql.includes("UPDATE public.supabase_analyzer_findings"), false);
     assert.equal(sql.includes("code_analyzer_learning"), false);
     assert.equal(sql.includes("document_annotations"), false);

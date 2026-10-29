@@ -78,8 +78,15 @@ const SECTION_PHRASE = /\b((?:section|sec\.?|article|art\.?|chapter|ch\.?)\s+[0-
 const REQUIREMENT_LANGUAGE = /\b(must|shall|required to|is required|are required|are to be|to be provided|shall be)\b/i;
 const DISCREPANCY_LANGUAGE = /\b(not shown|not provided|not indicated|not specified|not detailed|missing|omitted|absent|conflicts?|contradict\w*|inconsistenc\w*|does not|doesn't|do not match|fails? to|contrary|discrepanc\w*|no indication|cannot be verified|illegible|less than the required|greater than the (?:allowed|maximum|required)|exceeds the|not the lesser|below the lesser)\b/i;
 const PROJECT_ABSENCE = /\b(?:not included here|not included in (?:the )?(?:set|project|submission|package|drawings)|not in the (?:submitted )?(?:set|project|package)|missing from the (?:set|project|drawings)|not part of the (?:set|project)|was not submitted|are not included|is not included)\b/i;
+const SHEET_LOCAL_ABSENCE = /\b(?:not visible on (?:the |this )?(?:drawing|sheet|plan)|absence of|absent from (?:the |this )?(?:drawing|sheet|plan)|not (?:visibly )?(?:shown|provided|indicated|specified|detailed|described)(?:\s+on (?:the |this )?(?:drawing|sheet|plan))?|lacks? (?:detailed|specific)|do not describe|does not (?:provide|describe|detail)|are not (?:visibly )?detailed)\b/i;
+const CROSS_SHEET_POINTER = /\b(?:see|refer(?:ence)?\s+to|refer)\b[^.\n]{0,40}\b(?:sheet|drawing|detail)\b|\bsee\s+detail\b|\bdetail\s+\d+\s+on\s+drawing\b/i;
 const LARGER_GOVERNS = /potential discrepancy|discrepancy in flow|maximum flow|potential maximum|larger (?:of the two|flow|value|result)|accommodate the potential maximum|might govern|should govern/i;
 const SELECTION_ERROR = /not the lesser|exceeds the (?:printed )?lesser|greater than the lesser|below the lesser|less than the lesser|does not (?:equal|follow|match) the (?:lesser|governing)/i;
+const HYDRAULIC_DENSITY_AREA = /\bdensity\b/i;
+const HYDRAULIC_FLOW_DEMAND = /\bflow\s+demand\b/i;
+const HYDRAULIC_INCONSISTENCY = /\b(?:inconsistenc\w*|should be|calculated flow|density\s*[×x*]\s*|gpm\s*per\s*square\s*foot)\b/i;
+const PRESENT_SPEC_SIGNAL = /\b(?:#\s*\d+\s*@|rebar|reinforc\w+|dowels?|armaflex|foam insulation|batt insulation|joint reinforcement|k-factor|hose allowance)\b/i;
+const ABSENCE_OF_SPEC = /\b(?:not (?:visibly )?(?:provide|provided|specified|detailed|described)|do not describe|does not (?:provide|describe|detail)|absence of|missing|lacks?)\b/i;
 const MEP_DISCIPLINES = new Set(["electrical", "plumbing", "mechanical", "fire", "fuel_gas"]);
 
 function oneLine(value: string, max: number): string {
@@ -167,12 +174,19 @@ export function formatSubmittedSheetIndex(sheets: SubmittedSheetRef[], currentFi
   ].join("\n");
 }
 
-export function buildAnalyzerUserPrompt(fileName: string, sheets: SubmittedSheetRef[]): string {
-  return [
+export function buildAnalyzerUserPrompt(
+  fileName: string,
+  sheets: SubmittedSheetRef[],
+  options: { crossSheetEvidence?: string | null } = {},
+): string {
+  const parts = [
     "Review this permit drawing sheet and return the structured preliminary observations.",
     `Current file: ${oneLine(fileName, 180)}`,
     formatSubmittedSheetIndex(sheets, fileName),
-  ].join("\n\n");
+  ];
+  const evidence = options.crossSheetEvidence?.trim();
+  if (evidence) parts.push(evidence);
+  return parts.join("\n\n");
 }
 
 function gpmTokens(text: string): string[] {
@@ -240,37 +254,155 @@ function resolveSheetReferences(text: string, sheets: SubmittedSheetRef[]) {
   return { resolved, unresolved };
 }
 
+/**
+ * Cross-sheet uncertainty is a verification limit, not proof of a false positive.
+ * Do not rewrite client-facing text or downgrade severity solely because a referenced
+ * sheet was not opened in this request. Record the limitation via the returned rule.
+ */
 function adjustCrossSheet(finding: DraftAnalyzerFinding, sheets: SubmittedSheetRef[]): { finding: DraftAnalyzerFinding; rule: string | null } {
-  const text = `${finding.title} ${finding.observation} ${finding.drawing_evidence}`;
-  if (!PROJECT_ABSENCE.test(text)) return { finding, rule: null };
+  const text = `${finding.title} ${finding.observation} ${finding.drawing_evidence} ${finding.recommendation}`;
+  const projectAbsence = PROJECT_ABSENCE.test(text);
+  const localAbsence = SHEET_LOCAL_ABSENCE.test(text);
+  const hasPointer = CROSS_SHEET_POINTER.test(text);
+  if (!projectAbsence && !(localAbsence && hasPointer)) return { finding, rule: null };
   const { resolved, unresolved } = resolveSheetReferences(text, sheets);
   if (resolved.length) {
-    const names = resolved.map((sheet) => oneLine(sheet.fileName, 120)).join(", ");
-    let observation = `The drawing refers to a sheet that is in the submitted set (${names}). This review did not read that sheet, so the reference does not establish that it is missing and does not establish compliance.`;
-    if (unresolved.length) {
-      observation += ` Unresolved references are not treated as absent from the project: ${unresolved.join(", ")}.`;
-    }
+    const detailPointer = hasPointer && localAbsence;
     return {
-      rule: "cross_sheet_reference_in_set",
-      finding: {
-        ...finding,
-        severity: "advisory",
-        title: "Referenced sheet is in the submitted set",
-        observation,
-        recommendation: `Review ${names} when that sheet is processed. Do not treat this cross-reference as a missing document.`,
-      },
+      rule: detailPointer ? "cross_sheet_detail_not_reviewed" : "cross_sheet_reference_in_set",
+      finding,
     };
   }
   if (!unresolved.length) return { finding, rule: null };
-  const severity = finding.severity === "critical" || finding.severity === "warning" ? "advisory" : finding.severity;
   return {
     rule: "cross_sheet_reference_unresolved",
-    finding: {
-      ...finding,
-      severity,
-      observation: `The drawing refers to ${unresolved.join(", ")}. The submitted sheet index did not resolve that reference. Absence from the project is not established.`,
-      recommendation: "Confirm the referenced sheet against the submitted filenames before treating it as missing.",
-    },
+    finding,
+  };
+}
+
+function crossSheetCoverageNote(rules: string[]): string | null {
+  if (!rules.some((rule) => rule.startsWith("cross_sheet_"))) return null;
+  return "Referenced sheet content was not reviewed in this request. Severity was not changed solely for that unread cross-sheet reference. Absence from the project and compliance are both unverified.";
+}
+
+function parseGpmValues(text: string): number[] {
+  return uniqueGpmTokens(text).map((token) => Number(token)).filter((value) => Number.isFinite(value));
+}
+
+function parseAreaSqFt(text: string): number | null {
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(?:ft(?:\u00b2|2)|sq\.?\s*ft|square\s*feet)/i);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseDensityGpmPerSqFt(text: string): number | null {
+  const match = text.match(/(\d+(?:\.\d+)?)\s*gpm(?:\s*\/\s*(?:ft(?:\u00b2|2)|sq\.?\s*ft)|\s*per\s*square\s*foot)?/i);
+  // Prefer an explicit density near the word density.
+  const densityNear = text.match(/density[^0-9]{0,24}(\d+(?:\.\d+)?)/i);
+  if (densityNear) {
+    const value = Number(densityNear[1]);
+    if (Number.isFinite(value) && value > 0 && value < 5) return value;
+  }
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 && value < 5 ? value : null;
+}
+
+/**
+ * Detects the recurring false-positive where density×discharge area is treated as FLOW DEMAND.
+ * Does not suppress legitimate hydraulic conflicts that cite governing selection errors.
+ */
+export function isDensityAreaFlowDemandAllegation(finding: DraftAnalyzerFinding): boolean {
+  const combined = `${finding.title}\n${finding.observation}\n${finding.drawing_evidence}\n${finding.recommendation}`;
+  if (!HYDRAULIC_DENSITY_AREA.test(combined) || !HYDRAULIC_FLOW_DEMAND.test(combined)) return false;
+  if (!HYDRAULIC_INCONSISTENCY.test(combined)) return false;
+  if (SELECTION_ERROR.test(combined)) return false;
+  const area = parseAreaSqFt(combined);
+  const density = parseDensityGpmPerSqFt(combined);
+  const flows = parseGpmValues(combined);
+  if (area && density && flows.length >= 2) {
+    const product = density * area;
+    const matchesProduct = flows.some((flow) => Math.abs(flow - product) <= Math.max(1, product * 0.02));
+    const hasLargerFlow = flows.some((flow) => flow > product * 1.05);
+    if (matchesProduct && hasLargerFlow) return true;
+  }
+  // Linguistic fallback when units are incomplete but the finding equates density×area to demand.
+  return /\b(?:density\s*[×x*]\s*(?:area|discharge)|calculated flow should be|should be\s+\d+(?:\.\d+)?\s*gpm)\b/i.test(combined);
+}
+
+function neutralizeDensityAreaFlowDemand(finding: DraftAnalyzerFinding): DraftAnalyzerFinding {
+  const combined = `${finding.observation} ${finding.drawing_evidence}`;
+  const hose = /\bhose\s+allowance\b/i.test(combined);
+  const observation = hose
+    ? "The hydraulic summary lists density, discharge area, hose allowance, and FLOW DEMAND as related but distinct values. Density × discharge area is the density-area sprinkler quantity, not proof that FLOW DEMAND is inconsistent."
+    : "The hydraulic summary's density × discharge area quantity is not the same as total FLOW DEMAND from a hydraulic calculation. Different values alone do not establish an inconsistency without the governing hydraulic method.";
+  return {
+    ...finding,
+    severity: "advisory",
+    title: "Hydraulic density-area versus flow demand",
+    observation,
+    recommendation: "Review the full hydraulic calculation (including hose allowance and supply analysis) before treating density × area and FLOW DEMAND as a conflict.",
+  };
+}
+
+function evidenceContradictsAbsenceClaim(finding: DraftAnalyzerFinding): boolean {
+  const claim = `${finding.title} ${finding.observation} ${finding.recommendation}`;
+  const evidence = finding.drawing_evidence || "";
+  if (!ABSENCE_OF_SPEC.test(claim) && !SHEET_LOCAL_ABSENCE.test(claim)) return false;
+  if (!PRESENT_SPEC_SIGNAL.test(evidence)) return false;
+  // Notes that state sizes do not prove graphic detail drawings exist; keep those concerns prioritized.
+  const detailDrawingGap = /\b(?:not (?:visibly )?detailed|missing (?:detail|section|drawing)s?|detail(?:s)?\b.*\b(?:missing|not|absent)|provide detailed)\b/i.test(claim);
+  // Evidence already states the kind of specification the finding says is missing.
+  if (/\breinforc|rebar|#\s*\d+\s*@|dowel/i.test(evidence) && /\breinforc|foundation|masonry/i.test(claim)) {
+    if (detailDrawingGap) return false;
+    return true;
+  }
+  if (/\binsulat|armaflex/i.test(evidence) && /\binsulat|refrigerant|armaflex/i.test(claim)) {
+    return true;
+  }
+  if (/\bhose allowance\b/i.test(evidence) && /\bhose|flow demand|hydraulic/i.test(claim)) {
+    return true;
+  }
+  if (detailDrawingGap) return false;
+  return PRESENT_SPEC_SIGNAL.test(evidence) && ABSENCE_OF_SPEC.test(claim);
+}
+
+function neutralizePresenceContradiction(finding: DraftAnalyzerFinding): DraftAnalyzerFinding {
+  return {
+    ...finding,
+    severity: "advisory",
+    title: "Specification appears in the cited evidence",
+    observation: "The cited drawing evidence already includes specification content related to this topic. A missing-specification conclusion is not established from that evidence alone.",
+    recommendation: "Re-read the cited notes or details and identify any remaining gap that is not already stated in the quoted evidence.",
+  };
+}
+
+
+function keynoteCitationMismatch(finding: DraftAnalyzerFinding): boolean {
+  const location = `${finding.drawing_location} ${finding.observation}`;
+  const noteMatch = location.match(/\bnotes?\s*(?:#|number|no\.?)?\s*(\d{1,2})\b/i)
+    || location.match(/\b(?:keyed\s+notes?,?\s*)?(?:note)\s+(\d{1,2})\b/i);
+  if (!noteMatch) return false;
+  const cited = noteMatch[1];
+  const evidence = finding.drawing_evidence || "";
+  if (!/\b(?:keyed\s+)?notes?\b/i.test(`${finding.drawing_location} ${evidence}`)) return false;
+  // If evidence clearly leads with a different boxed/numbered note, flag mismatch.
+  const evidenceNote = evidence.match(/(?:^|\n|\s)(\d{1,2})(?:\s*[\].:]|\s+)/);
+  if (!evidenceNote) {
+    // No note number recovered in evidence while location asserts one.
+    return !new RegExp(`\\b${cited}\\b`).test(evidence);
+  }
+  return evidenceNote[1] !== cited && !new RegExp(`\\b${cited}\\b`).test(evidence);
+}
+
+function neutralizeKeynoteMismatch(finding: DraftAnalyzerFinding): DraftAnalyzerFinding {
+  return {
+    ...finding,
+    severity: "advisory",
+    title: "Keynote citation needs confirmation",
+    observation: "The finding cites a keyed-note number that is not supported by the quoted drawing evidence. The note citation and the numbered note text on the sheet need to agree.",
+    recommendation: "Confirm the keyed-note number against the sheet before treating the specification as missing or deficient.",
   };
 }
 
@@ -288,6 +420,8 @@ function tokenOverlap(leftText: string, rightText: string): number {
 
 function isDocumentedRequirement(finding: DraftAnalyzerFinding): boolean {
   const severity = finding.severity.trim().toLowerCase();
+  // Critical/warning only: expanding to advisory over-withholds legitimate discrepancy advisories.
+  // Advisory note-restatement remains a tracked regression (see qualityBenchmark GFCI cases).
   if (severity !== "critical" && severity !== "warning") return false;
   const blob = `${finding.title} ${finding.observation} ${finding.drawing_evidence}`;
   if (DISCREPANCY_LANGUAGE.test(blob)) return false;
@@ -540,6 +674,21 @@ export function validateAnalyzerFindings(
       rules.push("calculation_governing_method_required");
     }
 
+    if (isDensityAreaFlowDemandAllegation(current)) {
+      current = neutralizeDensityAreaFlowDemand(current);
+      rules.push("hydraulic_density_area_not_flow_demand");
+    }
+
+    if (evidenceContradictsAbsenceClaim(current)) {
+      current = neutralizePresenceContradiction(current);
+      rules.push("absence_claim_contradicted_by_evidence");
+    }
+
+    if (keynoteCitationMismatch(current)) {
+      current = neutralizeKeynoteMismatch(current);
+      rules.push("keynote_citation_mismatch");
+    }
+
     if (isDocumentedRequirement(current)) {
       withhold(["documented_requirement_restatement"]);
       continue;
@@ -577,6 +726,10 @@ export function validateAnalyzerFindings(
       || (citation.stored || "") !== originalReference.trim()
       || rules.length > 0;
 
+    const baseCoverage = coverageLimitation(context);
+    const crossNote = crossSheetCoverageNote(rules);
+    const coverage = [baseCoverage, crossNote].filter(Boolean).join(" ");
+
     published.push({
       category: clip(current.category, 120),
       severity: publishedSeverity,
@@ -599,7 +752,7 @@ export function validateAnalyzerFindings(
         citationIssues: citation.issues,
         editionMappingApplied: citation.editionMappingApplied,
         independentlyVerified: false,
-        coverageLimitation: coverageLimitation(context),
+        coverageLimitation: coverage || null,
       },
     });
   }

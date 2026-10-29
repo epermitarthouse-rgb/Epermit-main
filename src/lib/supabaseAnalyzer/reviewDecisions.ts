@@ -53,6 +53,34 @@ export function nextRunSeverityFilter(
   return current === clicked ? "all" : clicked;
 }
 
+export interface RunSeverityExpansion {
+  expandedJobIds: Set<string>;
+  /** Sheets the reviewer had open before a severity was selected; restored by All Findings. */
+  expansionBeforeFilter: Set<string> | null;
+}
+
+/** Opens the drawings that contain the selected severity, and restores the reviewer's own expansion on All. */
+export function expansionForRunSeverity(
+  current: RunSeverityExpansion,
+  target: FindingSeverityFilter,
+  findings: readonly ReviewFilterFinding[],
+): RunSeverityExpansion {
+  if (target === "all") {
+    return {
+      expandedJobIds: new Set(current.expansionBeforeFilter ?? current.expandedJobIds),
+      expansionBeforeFilter: null,
+    };
+  }
+  const matching = new Set<string>();
+  for (const finding of findings) {
+    if (finding.severity === target) matching.add(finding.sheet_job_id);
+  }
+  return {
+    expandedJobIds: matching,
+    expansionBeforeFilter: current.expansionBeforeFilter ?? new Set(current.expandedJobIds),
+  };
+}
+
 export function isReviewDecisionStatus(value: unknown): value is ReviewDecisionStatus {
   return value === "accepted" || value === "modified" || value === "rejected";
 }
@@ -171,28 +199,36 @@ export function projectAnalyzerReview<T extends ReviewFilterFinding>(input: {
   runSeverity: FindingSeverityFilter;
   sheetSeverity?: Readonly<Record<string, FindingSeverityFilter | undefined>>;
 }): AnalyzerFilterView<T> {
-  const sheets = input.discipline === "all"
+  const disciplineSheets = input.discipline === "all"
     ? [...input.sheets]
     : input.sheets.filter((sheet) => sheet.discipline === input.discipline);
+  const findingsOnSheet = new Map<string, T[]>();
+  for (const finding of input.findings) {
+    const list = findingsOnSheet.get(finding.sheet_job_id) || [];
+    list.push(finding);
+    findingsOnSheet.set(finding.sheet_job_id, list);
+  }
+  const sheets: ReviewFilterSheet[] = [];
   const findingsBySheet = new Map<string, T[]>();
   const visibleFindings: T[] = [];
-  for (const sheet of sheets) {
-    const severity = input.sheetSeverity?.[sheet.id] ?? input.runSeverity;
-    const matched = input.findings.filter((finding) => (
-      finding.sheet_job_id === sheet.id
-      && (severity === "all" || finding.severity === severity)
-    ));
+  for (const sheet of disciplineSheets) {
+    const onSheet = findingsOnSheet.get(sheet.id) || [];
+    // A run-level severity keeps only the drawings that contain that severity.
+    if (input.runSeverity !== "all" && !onSheet.some((finding) => finding.severity === input.runSeverity)) continue;
+    const severity = effectiveSheetSeverity(input.runSeverity, input.sheetSeverity, sheet.id);
+    const matched = severity === "all" ? [...onSheet] : onSheet.filter((finding) => finding.severity === severity);
+    sheets.push(sheet);
     findingsBySheet.set(sheet.id, matched);
     visibleFindings.push(...matched);
   }
 
   let emptyMessage: string | null = null;
-  if (sheets.length === 0 && input.sheets.length > 0 && input.discipline !== "all") {
+  if (disciplineSheets.length === 0 && input.sheets.length > 0 && input.discipline !== "all") {
     emptyMessage = "No drawings in this discipline.";
   } else if (
-    sheets.length > 0
+    disciplineSheets.length > 0
     && visibleFindings.length === 0
-    && input.findings.some((finding) => sheets.some((sheet) => sheet.id === finding.sheet_job_id))
+    && disciplineSheets.some((sheet) => (findingsOnSheet.get(sheet.id) || []).length > 0)
     && (input.runSeverity !== "all" || sheetOverrideActive(input.sheetSeverity))
   ) {
     const label = severityFilterLabel(input.runSeverity).toLowerCase();

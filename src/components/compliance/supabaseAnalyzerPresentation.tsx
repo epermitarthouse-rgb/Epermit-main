@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import React, { useId, type ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -88,9 +88,9 @@ function sheetNumber(job: SupabaseAnalyzerSheetJob) {
   return job.detected_sheet_number || `Sheet ${job.ordinal}`;
 }
 
-function findingCountLabel(job: SupabaseAnalyzerSheetJob, count: number) {
+function findingCountLabel(job: SupabaseAnalyzerSheetJob, count: number, visible: number, filtered: boolean) {
   if (job.status !== "completed") return "—";
-  return String(count);
+  return filtered ? `${visible} of ${count}` : String(count);
 }
 
 export function ExistingDrawingsPanel({
@@ -427,6 +427,7 @@ function SheetSeverityFilters({
 export function SupabaseFindingCard({
   finding,
   review,
+  reportId = null,
   expanded,
   saving,
   onToggle,
@@ -436,6 +437,7 @@ export function SupabaseFindingCard({
 }: {
   finding: SupabaseAnalyzerFinding;
   review: FindingReviewDecision | null;
+  reportId?: string | null;
   expanded: boolean;
   saving: boolean;
   onToggle: () => void;
@@ -458,6 +460,8 @@ export function SupabaseFindingCard({
       data-testid="supabase-finding-card"
       data-severity={severity}
       data-decision={review?.decision || "none"}
+      data-finding-id={finding.id}
+      data-report-id={reportId || undefined}
       data-expanded={expanded ? "true" : "false"}
     >
       <div className="p-4">
@@ -473,7 +477,14 @@ export function SupabaseFindingCard({
               <Icon className={cn("h-5 w-5", config.color)} />
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="font-semibold leading-tight text-foreground">{finding.title}</h4>
+              <h4 className="font-semibold leading-tight text-foreground">
+                {reportId ? (
+                  <span className="mr-2 font-mono text-sm font-medium text-muted-foreground" data-testid="finding-report-id">
+                    {reportId}
+                  </span>
+                ) : null}
+                {finding.title}
+              </h4>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 {finding.category ? (
                   <Badge variant="outline" className="text-xs font-normal">{finding.category}</Badge>
@@ -598,6 +609,7 @@ export function DrawingReviewList({
   onDiscipline,
   onSheetSeverity,
   reviewsByFinding,
+  reportIdByFindingId,
   savingFindingId,
   onAccept,
   onModify,
@@ -617,6 +629,7 @@ export function DrawingReviewList({
   onDiscipline: (discipline: string) => void;
   onSheetSeverity: (jobId: string, filter: FindingSeverityFilter) => void;
   reviewsByFinding: ReadonlyMap<string, FindingReviewDecision>;
+  reportIdByFindingId?: ReadonlyMap<string, string>;
   savingFindingId: string | null;
   onAccept: (finding: SupabaseAnalyzerFinding) => void;
   onModify: (finding: SupabaseAnalyzerFinding) => void;
@@ -726,10 +739,15 @@ export function DrawingReviewList({
                         {statusLabel(job.status)}
                       </Badge>
                       <span
-                        className="w-8 shrink-0 text-right text-xs text-muted-foreground"
-                        aria-label={job.status === "completed" ? `${findings.length} findings` : "Finding count pending"}
+                        className="min-w-8 shrink-0 text-right text-xs text-muted-foreground"
+                        data-testid={`sheet-finding-count-${job.id}`}
+                        aria-label={job.status !== "completed"
+                          ? "Finding count pending"
+                          : sheetFilter === "all"
+                            ? `${findings.length} findings`
+                            : `${visibleFindings.length} of ${findings.length} findings shown`}
                       >
-                        {findingCountLabel(job, findings.length)}
+                        {findingCountLabel(job, findings.length, visibleFindings.length, sheetFilter !== "all")}
                       </span>
                     </button>
                     <div id={panelId} hidden={!expanded}>
@@ -803,6 +821,7 @@ export function DrawingReviewList({
                               key={finding.id}
                               finding={finding}
                               review={reviewsByFinding.get(finding.id) || null}
+                              reportId={reportIdByFindingId?.get(finding.id) || null}
                               expanded={expandedFindingIds.has(finding.id)}
                               saving={savingFindingId === finding.id}
                               onToggle={() => onToggleFinding(finding.id)}

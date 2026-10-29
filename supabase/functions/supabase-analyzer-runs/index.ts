@@ -26,6 +26,7 @@ import {
   type ExistingAnalyzerSheet,
   type IncomingAnalyzerSheet,
 } from "../_shared/analyzerSheetUpdate.ts";
+import { parseExportAuditRequest } from "../_shared/analyzerExportAudit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,7 +61,7 @@ function cleanFileName(value: unknown): string {
   return cleaned.slice(0, 240);
 }
 
-async function authorizeEditor(req: Request, projectId: string) {
+async function authorizeEditor(req: Request, projectId: string, access: "editor" | "member" = "editor") {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -82,12 +83,13 @@ async function authorizeEditor(req: Request, projectId: string) {
     return { error: json({ error: "Invalid session" }, 401) };
   }
 
+  const member = access === "member";
   const { data: allowed, error: accessError } = await userClient.rpc(
-    "has_project_editor_access",
+    member ? "has_project_access" : "has_project_editor_access",
     { _user_id: user.id, _project_id: projectId },
   );
   if (accessError || allowed !== true) {
-    return { error: json({ error: "Project write access required" }, 403) };
+    return { error: json({ error: member ? "Project access required" : "Project write access required" }, 403) };
   }
 
   return {
@@ -729,7 +731,11 @@ Deno.serve(async (req) => {
   const projectId = String(body.projectId || "");
   if (!projectId) return json({ error: "projectId is required" }, 400);
 
-  const authorization = await authorizeEditor(req, projectId);
+  const authorization = await authorizeEditor(
+    req,
+    projectId,
+    action === "record_export" ? "member" : "editor",
+  );
   if ("error" in authorization) return authorization.error;
   const { user, admin, supabaseUrl, serviceRoleKey } = authorization;
 
@@ -1086,6 +1092,25 @@ Deno.serve(async (req) => {
         metadata: { cancelled_jobs: cancelledJobIds.length },
       });
       return json({ cancelled: true, cancelledJobs: cancelledJobIds.length });
+    }
+
+    if (action === "record_export") {
+      const parsed = parseExportAuditRequest(body);
+      if (!parsed.ok) return json({ error: parsed.error }, 400);
+      const { error: insertError } = await admin.from("supabase_analyzer_audit_events").insert({
+        run_id: runId,
+        project_id: projectId,
+        actor_id: user.id,
+        event_type: parsed.eventType,
+        metadata: parsed.metadata,
+      });
+      if (insertError) throw insertError;
+      return json({
+        recorded: true,
+        eventType: parsed.eventType,
+        stage: parsed.metadata.stage,
+        clientReceipt: parsed.metadata.client_receipt,
+      });
     }
 
     return json({ error: "Unsupported action" }, 400);

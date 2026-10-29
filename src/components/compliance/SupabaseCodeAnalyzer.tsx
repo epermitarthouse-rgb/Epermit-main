@@ -47,6 +47,7 @@ import {
   PendingDrawingCards,
   type FindingSeverityFilter,
 } from "@/components/compliance/supabaseAnalyzerPresentation";
+import { SupabaseAnalyzerQualityDrawer } from "@/components/compliance/supabaseAnalyzerQualityDrawer";
 import { bytesLabel, statusLabel } from "@/components/compliance/supabaseAnalyzerLabels";
 import {
   SUPABASE_ANALYZER_MAX_SHEETS,
@@ -58,6 +59,7 @@ import {
   finalizeSupabaseAnalyzerRun,
   isActiveSupabaseAnalyzerRun,
   reanalyzeSupabaseAnalyzerRun,
+  recordSupabaseAnalyzerExport,
   retrySupabaseAnalyzerJobs,
   saveSupabaseAnalyzerReviewDecision,
   updateSupabaseAnalyzerRun,
@@ -67,6 +69,7 @@ import {
   type SupabaseAnalyzerRun,
 } from "@/lib/supabaseAnalyzer/client";
 import {
+  expansionForRunSeverity,
   mergeReviewDecision,
   reviewsByFindingForRun,
   type ReviewDecisionStatus,
@@ -90,6 +93,10 @@ import {
 } from "@/lib/supabaseAnalyzer/analysisMode";
 import { countSeverity, downloadSupabaseAnalyzerJson } from "@/lib/supabaseAnalyzer/exportDataset";
 import { exportSupabaseAnalyzerReport } from "@/lib/supabaseAnalyzer/report";
+import { buildArchitectReviewModel, fingerprintArchitectReview } from "@/lib/supabaseAnalyzer/architectReview";
+import { downloadArchitectReviewPdf } from "@/lib/supabaseAnalyzer/brandedReportDownload";
+import { withAnalyzerExportAudit, type AnalyzerExportFormat } from "@/lib/supabaseAnalyzer/exportAudit";
+import { downloadFindingsRegisterExcel } from "@/lib/supabaseAnalyzer/findingsRegisterDownload";
 import {
   analyzerSelectionSignature,
   analyzerSubmissionAction,
@@ -146,6 +153,7 @@ export function SupabaseCodeAnalyzer() {
   const [severityFilter, setSeverityFilter] = useState<FindingSeverityFilter>("all");
   const [sheetSeverity, setSheetSeverity] = useState<Record<string, FindingSeverityFilter>>({});
   const [savingFindingId, setSavingFindingId] = useState<string | null>(null);
+  const [exportingKind, setExportingKind] = useState<"pdf" | "excel" | null>(null);
   const [modifyTarget, setModifyTarget] = useState<SupabaseAnalyzerFinding | null>(null);
   const [modifiedText, setModifiedText] = useState("");
   const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(() => new Set());
@@ -166,6 +174,7 @@ export function SupabaseCodeAnalyzer() {
   const selectedDrawingIdsRef = useRef<Set<string>>(new Set());
   const reanalysisRequestRef = useRef<{ key: string; runId: string } | null>(null);
   const reanalysisFilesRef = useRef<File[]>([]);
+  const expansionBeforeFilterRef = useRef<Set<string> | null>(null);
   const selectionProjectRef = useRef(projectId);
 
   const selectedProject = projects.find((project) => project.id === projectId);
@@ -211,6 +220,7 @@ export function SupabaseCodeAnalyzer() {
     setModifyTarget(null);
     setModifiedText("");
     setExpandedJobIds(new Set());
+    expansionBeforeFilterRef.current = null;
     setExpandedFindingIds(new Set());
     setExistingDrawingsOpen(false);
     setSelectedDrawingIds(new Set());
@@ -580,9 +590,89 @@ export function SupabaseCodeAnalyzer() {
     () => reviewsByFindingForRun(dataset?.reviews || [], dataset?.run.id || ""),
     [dataset],
   );
+  const reportModel = useMemo(() => (dataset ? buildArchitectReviewModel(dataset) : null), [dataset]);
+  const [reportVersion, setReportVersion] = useState<{ runId: string; label: string } | null>(null);
+  useEffect(() => {
+    if (!dataset) {
+      setReportVersion(null);
+      return;
+    }
+    let current = true;
+    fingerprintArchitectReview(dataset)
+      .then((fingerprint) => {
+        if (current) setReportVersion({ runId: dataset.run.id, label: fingerprint.label });
+      })
+      .catch((error) => {
+        console.error("[supabase-analyzer] report fingerprint failed", error);
+        if (current) setReportVersion(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [dataset]);
+  const auditExport = <T,>(format: AnalyzerExportFormat, generate: () => Promise<T>) => {
+    if (!dataset) return generate();
+    return withAnalyzerExportAudit({
+      send: recordSupabaseAnalyzerExport,
+      dataset,
+      format,
+      generate,
+    });
+  };
+  const downloadArchitectReview = async () => {
+    if (!dataset || exportingKind) return;
+    setExportingKind("pdf");
+    try {
+      const result = await auditExport("architect-review-pdf", () => downloadArchitectReviewPdf(dataset, selectedProject?.name));
+      if (!result.logoIncluded) toast.warning("The report was created without the Commun-ET logo because the logo could not be loaded.");
+    } catch (error) {
+      console.error("[supabase-analyzer] architect review export failed", error);
+      toast.error("Could not create the architect review PDF");
+    } finally {
+      setExportingKind(null);
+    }
+  };
+  const downloadFindingsRegister = async () => {
+    if (!dataset || exportingKind) return;
+    setExportingKind("excel");
+    try {
+      const result = await auditExport("findings-register-xlsx", () => downloadFindingsRegisterExcel(dataset, selectedProject?.name));
+      if (!result.logoIncluded) toast.warning("The register was created without the Commun-ET logo because the logo could not be loaded.");
+    } catch (error) {
+      console.error("[supabase-analyzer] findings register export failed", error);
+      toast.error("Could not create the Excel findings register");
+    } finally {
+      setExportingKind(null);
+    }
+  };
+  const downloadSheetOrderPdf = () => {
+    if (!dataset) return;
+    void auditExport("sheet-order-pdf", async () => {
+      exportSupabaseAnalyzerReport(dataset, selectedProject?.name);
+    }).catch((error) => {
+      console.error("[supabase-analyzer] sheet-order PDF export failed", error);
+      toast.error("Could not create the sheet-order PDF");
+    });
+  };
+  const downloadAnalyzerJson = () => {
+    if (!dataset) return;
+    void auditExport("json", async () => {
+      downloadSupabaseAnalyzerJson(dataset, selectedProject?.name);
+    }).catch((error) => {
+      console.error("[supabase-analyzer] JSON export failed", error);
+      toast.error("Could not create the JSON export");
+    });
+  };
   const selectRunSeverity = (filter: FindingSeverityFilter) => {
+    const next = expansionForRunSeverity(
+      { expandedJobIds, expansionBeforeFilter: expansionBeforeFilterRef.current },
+      filter,
+      dataset?.findings || [],
+    );
+    expansionBeforeFilterRef.current = next.expansionBeforeFilter;
     setSeverityFilter(filter);
     setSheetSeverity({});
+    setExpandedJobIds(next.expandedJobIds);
   };
   const selectSheetSeverity = (jobId: string, filter: FindingSeverityFilter) => {
     setSheetSeverity((current) => ({ ...current, [jobId]: filter }));
@@ -1226,6 +1316,7 @@ export function SupabaseCodeAnalyzer() {
             processing={runInProgress}
             onSelect={selectRunSeverity}
           />
+          {dataset ? <SupabaseAnalyzerQualityDrawer dataset={dataset} /> : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2" data-testid="analysis-history-control">
               <Label className="text-sm text-muted-foreground">Analysis history</Label>
@@ -1242,9 +1333,21 @@ export function SupabaseCodeAnalyzer() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {activeRun.jurisdiction_label} · {activeRun.code_context} · {displayAnalysisMode(activeRun.analysis_mode)}
-            </p>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">
+                {activeRun.jurisdiction_label} · {activeRun.code_context} · {displayAnalysisMode(activeRun.analysis_mode)}
+              </p>
+              {reportModel && reportVersion && reportVersion.runId === activeRun.id ? (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="analyzer-report-version"
+                  title="Finding numbers belong to this report version. They change when findings or reviewer decisions change."
+                >
+                  Report version <span className="font-mono">{reportVersion.label}</span>
+                  {reportModel.isFinal ? "" : " · Draft"}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -1259,6 +1362,7 @@ export function SupabaseCodeAnalyzer() {
                   onDiscipline={setActiveDiscipline}
                   onSheetSeverity={selectSheetSeverity}
                   reviewsByFinding={reviewsByFinding}
+                  reportIdByFindingId={reportModel?.reportIdByFindingId}
                   savingFindingId={savingFindingId}
                   onAccept={(finding) => void persistDecision(finding, "accepted")}
                   onModify={openModify}
@@ -1287,19 +1391,39 @@ export function SupabaseCodeAnalyzer() {
                 Refresh
               </Button>
               <Button
+                variant="gold"
+                className="w-full justify-start"
+                data-testid="download-architect-review"
+                onClick={() => void downloadArchitectReview()}
+                disabled={!dataset || Boolean(exportingKind)}
+              >
+                {exportingKind === "pdf" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Download Architect Review (PDF)
+              </Button>
+              <Button
                 variant="outlineGold"
                 className="w-full justify-start"
-                onClick={() => dataset && exportSupabaseAnalyzerReport(dataset, selectedProject?.name)}
+                data-testid="download-findings-register"
+                onClick={() => void downloadFindingsRegister()}
+                disabled={!dataset || Boolean(exportingKind)}
+              >
+                {exportingKind === "excel" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Download Excel Register
+              </Button>
+              <Button
+                variant="outlineGold"
+                className="w-full justify-start"
+                onClick={downloadSheetOrderPdf}
                 disabled={!dataset}
               >
                 <Download className="mr-2 h-4 w-4" />
-                Download PDF
+                Download sheet-order PDF
               </Button>
               <Button
                 variant="outlineGold"
                 className="w-full justify-start"
                 data-testid="download-analyzer-json"
-                onClick={() => dataset && downloadSupabaseAnalyzerJson(dataset, selectedProject?.name)}
+                onClick={downloadAnalyzerJson}
                 disabled={!dataset}
               >
                 <Download className="mr-2 h-4 w-4" />

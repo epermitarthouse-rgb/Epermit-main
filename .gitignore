@@ -73,3 +73,8 @@ scraper-service/data/territory/electric/county_utility.json
 scraper-service/data/territory/electric/unresolved_providers.json
 !scraper-service/data/territory/electric/manifest.json
 !scraper-service/tests/fixtures/territory/**
+
+# Phase 2A drawing-evaluation extracts (client sheet text). Do not commit.
+eval/drawing-dataset/out/
+eval/drawing-dataset/.venv/
+eval/drawing-dataset/.cache/

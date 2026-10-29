@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import registry from "../../../shared/code-registry/jurisdiction-editions.json" with { type: "json" };
+import phase2bCriticalRegression from "../../../eval/drawing-dataset/fixtures/phase2b-critical-regression.json" with { type: "json" };
 import {
   DC_2017_REGISTRY_SNAPSHOT,
   displayAnalysisMode,
@@ -75,7 +76,29 @@ describe("sheet index", () => {
     assert.match(prompt, /Do not report it as missing/);
     assert.equal(prompt.includes("object_path"), false);
   });
+
+  it("exposes only filenames/detected numbers to GPT-4o — not other sheet PDF bytes or OCR", () => {
+    const prompt = buildAnalyzerUserPrompt("A-1.03-00.pdf", provisionalSheetIndexForPrompt());
+    assert.match(prompt, /filenames and detected numbers only; other sheets were not read/);
+    assert.match(prompt, /A-6\.01/);
+    assert.match(prompt, /current sheet/);
+    assert.doesNotMatch(prompt, /drawing_evidence|OCR|page image|base64|file_data/i);
+    assert.equal(prompt.includes("SEE DETAIL 3"), false);
+
+    const processor = readFileSync(join(__dirname, "../../../supabase/functions/supabase-analyzer-processor/index.ts"), "utf8");
+    assert.match(processor, /type:\s*"input_file"/);
+    assert.match(processor, /buildAnalyzerUserPrompt\(job\.original_file_name, sheetIndex/);
+    // One uploaded PDF per request; sheet index + optional text excerpts only (no extra PDF attachments).
+    const fileInputCount = [...processor.matchAll(/type:\s*"input_file"/g)].length;
+    assert.equal(fileInputCount, 1);
+    assert.match(processor, /retrieveCrossSheetEvidence\(/);
+    assert.match(processor, /select\("id, original_file_name, detected_sheet_number, detected_sheet_title, discipline, object_path"\)/);
+  });
 });
+
+function provisionalSheetIndexForPrompt(): SubmittedSheetRef[] {
+  return (phase2bCriticalRegression.sheetIndexForProvisional || []) as SubmittedSheetRef[];
+}
 
 describe("documented requirements are not critical defects", () => {
   it("withholds a GFCI note that the drawing already requires", () => {
@@ -131,13 +154,15 @@ describe("documented requirements are not critical defects", () => {
 });
 
 describe("cross-sheet references", () => {
-  it("does not claim E3.2 is absent when the submitted index contains it", () => {
+  it("records unread cross-sheet limits without downgrading severity or rewriting the observation", () => {
+    const observation = "Hood/fan interlock details are not provided on this sheet. The notes refer to drawing E3.2, which is not included here.";
+    const title = "Hood and Fan Interlock Details";
     const result = validateAnalyzerFindings([
       draft({
         category: "Mechanical",
         severity: "warning",
-        title: "Hood and Fan Interlock Details",
-        observation: "There is a reference to hood/fan interlock details on another drawing (E3.2) that is not included here.",
+        title,
+        observation,
         drawing_evidence: "REFER E3.2 FOR HOOD/FAN INTERLOCK DETAILS in the drawing notes.",
         drawing_location: "Drawing notes, item 10.",
         suggested_code_reference: "2015 IMC Section 507.2",
@@ -146,12 +171,242 @@ describe("cross-sheet references", () => {
     ], context({ sheetIndex, sheetDiscipline: "Mechanical" }));
     assert.equal(result.published.length, 1);
     const finding = result.published[0];
-    assert.equal(finding.severity, "advisory");
-    assert.match(finding.observation, /E-3\.2-00\.pdf/);
-    assert.match(finding.observation, /does not establish compliance/);
-    assert.doesNotMatch(finding.observation, /not included/i);
+    assert.equal(finding.severity, "warning");
+    assert.equal(finding.observation, observation);
+    assert.equal(finding.title, title);
+    assert.equal(
+      finding.validation.rules.some((rule) => rule.startsWith("cross_sheet_")),
+      true,
+    );
+    assert.equal(finding.validation.rules.includes("cross_sheet_detail_not_reviewed"), true);
+    assert.match(finding.validation.coverageLimitation || "", /Referenced sheet content was not reviewed/);
+    assert.match(finding.validation.coverageLimitation || "", /Severity was not changed solely/);
     assert.equal(finding.validation.independentlyVerified, false);
     assert.notEqual(finding.verification_status, "verified");
+  });
+});
+
+describe("Phase 2B critical failure patterns", () => {
+  const provisionalSheetIndex = (phase2bCriticalRegression.sheetIndexForProvisional || []) as SubmittedSheetRef[];
+
+  it("applies frozen Phase 2A.7 critical drafts without rewriting the fixture", () => {
+    const before = JSON.stringify(phase2bCriticalRegression);
+    for (const item of phase2bCriticalRegression.cases) {
+      const result = validateAnalyzerFindings([item.draft as DraftAnalyzerFinding], context({
+        sheetIndex: provisionalSheetIndex,
+        sheetDiscipline: item.draft.category,
+      }));
+      assert.equal(result.published.length, item.expectPublished === false ? 0 : 1);
+      assert.equal(result.withheld.length, item.expectWithheld ? 1 : 0);
+      const finding = result.published[0];
+      assert.equal(finding?.severity, item.expectSeverity);
+      assert.equal(finding?.validation.outcome, item.expectOutcome);
+      assert.equal(finding?.validation.originalSeverity, "critical");
+      assert.equal(finding?.validation.publishedSeverity, item.expectSeverity);
+      if (item.expectRule) {
+        assert.equal(finding?.validation.rules.includes(item.expectRule), true);
+      }
+      if (item.expectPreserveText) {
+        assert.equal(finding?.title, item.draft.title);
+        assert.equal(finding?.observation, item.draft.observation);
+        assert.equal(finding?.recommendation, item.draft.recommendation);
+      }
+    }
+    assert.equal(JSON.stringify(phase2bCriticalRegression), before);
+    assert.equal(phase2bCriticalRegression.professionallyVerified, false);
+  });
+
+  it("does not downgrade Critical solely for unread cross-sheet references (C-001/C-003)", () => {
+    for (const item of phase2bCriticalRegression.cases.filter((entry) => entry.kind === "cross_sheet_limitation")) {
+      const result = validateAnalyzerFindings([item.draft as DraftAnalyzerFinding], context({
+        sheetIndex: provisionalSheetIndex,
+        sheetDiscipline: item.draft.category,
+      }));
+      assert.equal(result.withheld.length, 0, `${item.id} must not hard-withhold`);
+      assert.equal(result.published.length, 1, `${item.id} must remain published`);
+      const finding = result.published[0]!;
+      assert.equal(finding.severity, "critical", `${item.id} severity`);
+      assert.equal(finding.title, item.draft.title);
+      assert.equal(finding.observation, item.draft.observation);
+      assert.ok(finding.validation.rules.includes(item.expectRule));
+      assert.ok(phase2bCriticalRegression.softFailContract.limitationOnlyRules.includes(item.expectRule));
+      assert.equal(
+        phase2bCriticalRegression.softFailContract.severityAdjustRules.includes(item.expectRule),
+        false,
+      );
+      assert.match(finding.validation.coverageLimitation || "", /Severity was not changed solely/);
+    }
+  });
+
+  it("keeps C-004 foundation detail concerns Critical when notes exist but details are unresolved", () => {
+    const item = phase2bCriticalRegression.cases.find((entry) => entry.id === "C-004")!;
+    const result = validateAnalyzerFindings([item.draft as DraftAnalyzerFinding], context({
+      sheetIndex: provisionalSheetIndex,
+      sheetDiscipline: item.draft.category,
+    }));
+    assert.equal(result.published[0]?.severity, "critical");
+    assert.equal(result.published[0]?.validation.outcome, "accepted");
+    assert.equal(result.published[0]?.validation.rules.includes("absence_claim_contradicted_by_evidence"), false);
+    assert.equal(result.published[0]?.observation, item.draft.observation);
+  });
+
+  it("still severity-adjusts demonstrable on-sheet technical errors (C-002)", () => {
+    const item = phase2bCriticalRegression.cases.find((entry) => entry.id === "C-002")!;
+    const result = validateAnalyzerFindings([item.draft as DraftAnalyzerFinding], context({
+      sheetIndex: provisionalSheetIndex,
+      sheetDiscipline: item.draft.category,
+    }));
+    assert.equal(result.withheld.length, 0);
+    assert.equal(result.published[0]?.severity, "advisory");
+    assert.equal(result.published[0]?.validation.rules.includes("hydraulic_density_area_not_flow_demand"), true);
+    assert.equal(result.published[0]?.validation.originalSeverity, "critical");
+    assert.ok(phase2bCriticalRegression.softFailContract.severityAdjustRules.includes("hydraulic_density_area_not_flow_demand"));
+  });
+
+  it("preserves positive-control Critical safety findings (no accidental suppression)", () => {
+    const controls = phase2bCriticalRegression.positiveControls || [];
+    assert.ok(controls.length >= 5);
+    for (const item of controls) {
+      const result = validateAnalyzerFindings([item.draft as DraftAnalyzerFinding], context({
+        sheetIndex: provisionalSheetIndex,
+        sheetDiscipline: item.draft.category,
+      }));
+      assert.equal(result.withheld.length, 0, `${item.id} withheld`);
+      assert.equal(result.published.length, 1, `${item.id} missing`);
+      const finding = result.published[0]!;
+      assert.equal(finding.severity, "critical", `${item.id} severity`);
+      assert.equal(finding.validation.outcome, item.expectOutcome || "accepted", `${item.id} outcome`);
+      assert.equal(finding.title, item.draft.title);
+      assert.equal(finding.observation, item.draft.observation);
+      if (item.expectRulesEmpty) {
+        assert.deepEqual(finding.validation.rules, []);
+        for (const adjustRule of phase2bCriticalRegression.softFailContract.severityAdjustRules) {
+          assert.equal(finding.validation.rules.includes(adjustRule), false, `${item.id} hit ${adjustRule}`);
+        }
+      }
+      if (item.expectRule) {
+        assert.equal(finding.validation.rules.includes(item.expectRule), true);
+      }
+      if (item.expectPreserveText) {
+        assert.equal(finding.recommendation, item.draft.recommendation);
+      }
+    }
+  });
+
+  it("does not treat density × discharge area as FLOW DEMAND inconsistency (C-002)", () => {
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Fire Protection",
+        severity: "critical",
+        title: "Inconsistent Hydraulic Calculations",
+        observation: "The flow demand is stated as 596.81 GPM, yet with a density of 0.15 GPM per square foot and a discharge area of 1524 ft2, the calculated flow should be 228.6 GPM. This inconsistency raises concerns about the accuracy of the hydraulic design.",
+        drawing_evidence: "Hydraulic Design box: Flow Demand: 596.81 GPM. Density: 0.15 GPM. Discharge Area: 1524 ft2. Hose Allowance: 250.00 GPM.",
+        drawing_location: "Top left of the sheet, Hydraulic Design box.",
+        suggested_code_reference: "",
+        recommendation: "Re-evaluate the hydraulic calculations to ensure all design criteria align with code requirements.",
+      }),
+    ], context({ sheetDiscipline: "Fire Protection" }));
+    assert.equal(result.published.length, 1);
+    const finding = result.published[0];
+    assert.equal(finding.severity, "advisory");
+    assert.equal(finding.validation.rules.includes("hydraulic_density_area_not_flow_demand"), true);
+    assert.match(finding.observation, /density-area|density × discharge area|FLOW DEMAND/i);
+    assert.doesNotMatch(finding.observation, /inconsistency raises concerns/i);
+  });
+
+  it("tags C-003 SEE DETAIL cross-sheet limits without downgrading Critical", () => {
+    const observation = "The drawing does not provide information on the insulation requirements for refrigerant lines.";
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Mechanical",
+        severity: "critical",
+        title: "Refrigerant Line Insulation",
+        observation,
+        drawing_evidence: "KEYED NOTE 1: REFRIGERANT LIQUID AND SUCTION LINES UP THROUGH ROOF (TYP. 6 PLACES - SEE DETAIL 3 ON DRAWING M3.0).",
+        drawing_location: "Keyed Notes, note 1.",
+        suggested_code_reference: "2015 IMC Chapter 11",
+        recommendation: "Specify insulation on the plan or confirm Detail 3 on M-3.0.",
+      }),
+    ], context({
+      sheetIndex: [
+        ...sheetIndex,
+        { fileName: "M-3.0.pdf", detectedSheetNumber: "M-3.0", detectedSheetTitle: "Mechanical Details" },
+      ],
+      sheetDiscipline: "Mechanical",
+    }));
+    assert.equal(result.published[0]?.severity, "critical");
+    assert.equal(result.published[0]?.observation, observation);
+    assert.equal(result.published[0]?.validation.rules.includes("cross_sheet_detail_not_reviewed"), true);
+  });
+
+  it("does not clear Critical foundation-detail concerns merely because reinforcement notes exist (C-004)", () => {
+    const observation = "Foundation reinforcement details are referenced but not visibly detailed on this sheet.";
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Structural",
+        severity: "critical",
+        title: "Foundation Details",
+        observation,
+        drawing_evidence: "MASONRY AND FOUNDATION NOTES: REINFORCE ALL WALLS WITH #4 @ 48\" O.C., FULL HEIGHT, LAP 24\". ANCHOR ALL VERTICAL REINFORCEMENT TO FOOTINGS WITH HOOKED DOWEL BARS.",
+        drawing_location: "Middle notes panel under Masonry and Foundation Notes",
+        suggested_code_reference: "",
+        recommendation: "Include a detailed drawing or cross-reference a specific sheet that provides reinforcement details.",
+      }),
+    ], context({ sheetDiscipline: "Structural" }));
+    assert.equal(result.published[0]?.severity, "critical");
+    assert.equal(result.published[0]?.observation, observation);
+    assert.equal(result.published[0]?.validation.rules.includes("absence_claim_contradicted_by_evidence"), false);
+  });
+
+  it("still adjusts when evidence clearly contradicts a missing-reinforcement claim", () => {
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Structural",
+        severity: "critical",
+        title: "Missing wall reinforcement",
+        observation: "Wall reinforcement is missing from the masonry notes on this sheet.",
+        drawing_evidence: "MASONRY NOTES: REINFORCE ALL WALLS WITH #4 @ 48\" O.C., FULL HEIGHT. HOOKED DOWEL BARS INTO FOOTINGS.",
+        drawing_location: "Masonry notes",
+        suggested_code_reference: "",
+        recommendation: "Provide reinforcement callouts in the masonry notes.",
+      }),
+    ], context({ sheetDiscipline: "Structural" }));
+    assert.equal(result.published[0]?.severity, "advisory");
+    assert.equal(result.published[0]?.validation.rules.includes("absence_claim_contradicted_by_evidence"), true);
+  });
+
+  it("flags a keyed-note number that does not appear in the quoted evidence", () => {
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Mechanical",
+        severity: "warning",
+        title: "Refrigerant Line Insulation",
+        observation: "Keyed note 22 does not describe insulation requirements.",
+        drawing_evidence: "REFRIGERANT LIQUID AND SUCTION LINES UP THROUGH ROOF TO CONDENSING UNITS.",
+        drawing_location: "Keyed Notes, note 22.",
+        suggested_code_reference: "",
+        recommendation: "Confirm the note number and insulation specification.",
+      }),
+    ], context({ sheetDiscipline: "Mechanical" }));
+    assert.equal(result.published[0]?.validation.rules.includes("keynote_citation_mismatch"), true);
+    assert.equal(result.published[0]?.severity, "advisory");
+  });
+
+  it("keeps a legitimate hydraulic conflict that is not density×area versus FLOW DEMAND", () => {
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Fire Protection",
+        severity: "warning",
+        title: "Hydraulic node pressure shortfall",
+        observation: "The remote-area calculation shows available pressure 28 psi against a required 45 psi at the base of the riser.",
+        drawing_evidence: "Hydraulic summary: required pressure 45 psi. Water supply graph available 28 psi at design flow.",
+        drawing_location: "Hydraulic calculations",
+        suggested_code_reference: "",
+        recommendation: "Resolve the pressure shortfall or revise the sprinkler design.",
+      }),
+    ], context({ sheetDiscipline: "Fire Protection" }));
+    assert.equal(result.published[0]?.severity, "warning");
+    assert.equal(result.published[0]?.validation.rules.includes("hydraulic_density_area_not_flow_demand"), false);
   });
 });
 
