@@ -1,0 +1,28 @@
+{
+  "version": "phase3-stage12-flagoff-verification.v1",
+  "professionallyVerified": false,
+  "status": "completed",
+  "commit": "7a6ded5f6b3d02fe4d60206a8d4a5720e48791de",
+  "deployedProcessor": {
+    "slug": "supabase-analyzer-processor",
+    "status": "ACTIVE",
+    "version": 10,
+    "projectRef": "eeqxyjrcldivtpikcpvk"
+  },
+  "flagOffRunId": "e98125b8-79c0-4810-bc91-de0bdcd2e3e9",
+  "baselineRunId": "f50df719-02f0-411f-852d-0ed0c5456b60",
+  "visualEvidenceFlag": "disabled_default_off",
+  "crossSheetRetrievalFlag": "disabled_default_off",
+  "runScopedIsolationAvailable": false,
+  "enhancedModeRuns": "not_started_requires_approval_to_enable_global_secret",
+  "estimatedCostUsd": 0.051333,
+  "publishedFindings": 10,
+  "withheldFindings": 1,
+  "withheldRules": ["false_date_chronology_claim"],
+  "sheets": ["A-3.06-00.pdf", "A-6.00-00.pdf", "FP200 .pdf"],
+  "notes": [
+    "Flag-off run verifies deploy safety and Phase 2B/v9 safeguards still apply.",
+    "Always-on system prompt rule 22 documents visual evidence packs but injects no packs when the flag is off.",
+    "Stage 1+2 enhanced comparison requires temporary SUPABASE_ANALYZER_VISUAL_EVIDENCE=true (global blast radius) — not started."
+  ]
+}
