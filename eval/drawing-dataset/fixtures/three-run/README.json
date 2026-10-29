@@ -1,0 +1,9 @@
+{
+  "professionallyVerified": false,
+  "note": "Frozen abbreviated published findings from three full production runs. Used for offline repeatability (topic retention / severity variation), not precision/recall.",
+  "runs": {
+    "baseline": "649fdaa6-14b9-45b9-bd62-695166363f75",
+    "phase2b": "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+    "v8": "b982a22c-5501-49d9-a8ef-ab4078a14b27"
+  }
+}

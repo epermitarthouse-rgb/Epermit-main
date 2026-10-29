@@ -1,0 +1,88 @@
+{
+  "version": "three-run-evidence-baseline.v1",
+  "professionallyVerified": false,
+  "note": "Tracked technical topics across baseline / Phase 2B / v8 production runs. Repeatability evidence only — not ground-truth accuracy labels.",
+  "runs": {
+    "baseline": "649fdaa6-14b9-45b9-bd62-695166363f75",
+    "phase2b": "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+    "v8": "b982a22c-5501-49d9-a8ef-ab4078a14b27"
+  },
+  "trackedTopics": [
+    {
+      "id": "A1_false_future_dates",
+      "sheet": "A-1.00-00.pdf",
+      "topic": "date_revision_admin",
+      "assessment": "Classic false future-date FP suppressed when phrased classically; v8 residual 'not future' meta finding is an unsupported admin observation.",
+      "acrossRuns": {
+        "baseline": "warning Revisions Dates Discrepancy",
+        "phase2b": "critical Date discrepancy on revisions",
+        "v8": "advisory Future revision date observation (not-future meta)"
+      }
+    },
+    {
+      "id": "A201_false_future_vs_analysis",
+      "sheet": "A-2.01-00.pdf",
+      "topic": "date_revision_admin",
+      "assessment": "v8 published false chronology ('10/15/26 is in the future compared to 2026-10-29'). Root cause: narrow future-claim lexicon.",
+      "acrossRuns": {
+        "baseline": "variable date/revision advisories",
+        "phase2b": "variable",
+        "v8": "warning Date Discrepancy (false future claim)"
+      }
+    },
+    {
+      "id": "A306_guardrail_height",
+      "sheet": "A-3.06-00.pdf",
+      "topic": "guardrail_height",
+      "assessment": "Recurring missing-height claim with rising severity W→A→Critical. Offline OCR shows 3'-6\"MIN HEIGHT FROM near guard-rail notes — provisional, not professionally verified applicability.",
+      "acrossRuns": {
+        "baseline": "warning Guard Rail Height Verification",
+        "phase2b": "advisory Guardrail Height Confirmation",
+        "v8": "critical Guardrail Height Missing Verification"
+      },
+      "ocrProvisional": {
+        "origin": "visual_interpretation",
+        "independentlyVerified": false,
+        "quotedStrings": [
+          "3'-6\"MIN HEIGHT FROM",
+          "EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT",
+          "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO"
+        ]
+      }
+    },
+    {
+      "id": "A6_door_locking_fire",
+      "sheet": "A-6.00",
+      "topic": "door_locking / door_fire_rating",
+      "assessment": "Phase 2B emitted two Criticals; v8 milder W/A only. Disappearance is model variation — not proven correction. Persist-time cannot auto-clear absence drafts that do not quote hardware.",
+      "acrossRuns": {
+        "baseline": "warnings/advisories",
+        "phase2b": "2× critical locking + fire-rating",
+        "v8": "milder warning/advisory only"
+      }
+    },
+    {
+      "id": "FP200_hydraulic_density_flow",
+      "sheet": "FP200",
+      "topic": "hydraulic_density_flow",
+      "assessment": "Baseline Critical density×area≠demand; later runs advisory. Hydraulic soft-fail unused when model stops emitting the FP pattern.",
+      "acrossRuns": {
+        "baseline": "critical Inconsistent Hydraulic Calculations",
+        "phase2b": "advisory (hose / related)",
+        "v8": "advisory restates demand"
+      }
+    }
+  ],
+  "falsePositiveCandidates": [
+    "A-2.01 Date Discrepancy (v8)",
+    "FP100 Future Revision Date (v8)",
+    "P-1.1 Revised drawing date discrepancy (v8)",
+    "A-1.00 Future revision date observation (v8 not-future meta)",
+    "A-3.06 Guardrail Height Missing Verification when 3'-6\" MIN HEIGHT is visible (OCR provisional)"
+  ],
+  "unexplainedDisappearances": [
+    "A-6 locking/fire Criticals (phase2b → v8)",
+    "FP200 density×area Critical (baseline → later)",
+    "Baseline C-001–C-004 Criticals not retained as Criticals"
+  ]
+}

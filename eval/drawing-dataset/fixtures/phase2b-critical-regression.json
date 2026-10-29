@@ -1,10 +1,10 @@
 {
   "phase": "2B",
-  "version": "phase2b.critical-regression.v4",
-  "note": "Frozen drafts from Phase 2A.7 provisional assessments plus positive-control Critical cases. Used for local persist-time before/after comparison only. Not professionally verified truth. Simulated validator outcomes are not actual GPT-4o reanalysis. v3: cross-sheet uncertainty records a limitation without severity downgrade. v4: false date chronology claims are hard-withheld; door hardware/fire-rating absence contradiction when evidence quotes those specs.",
+  "version": "phase2b.critical-regression.v5",
+  "note": "Frozen drafts from Phase 2A.7 provisional assessments plus positive-control Critical cases and v8 production date/height patterns. Used for local persist-time before/after comparison only. Not professionally verified truth. Simulated validator outcomes are not actual GPT-4o reanalysis. v3: cross-sheet uncertainty records a limitation without severity downgrade. v4: false date chronology claims are hard-withheld; door hardware/fire-rating absence contradiction when evidence quotes those specs. v5: expanded date chronology (formats/negation/revision-vs-analysis admin) + guardrail height soft-fail only when quoted height is associated with the cited guardrail/detail (not generic MIN HEIGHT elsewhere).",
   "professionallyVerified": false,
   "softFailContract": {
-    "description": "Severity may be adjusted only for demonstrable on-sheet technical errors (hydraulics, keynote mismatch, clear evidence contradiction). Cross-sheet unread references tag a verification limitation without changing severity or client-facing text. Soft-fail is not withhold/delete. originalSeverity/title/observation remain in raw_metadata.validation. Demonstrably false future-date chronology claims are hard-withheld.",
+    "description": "Severity may be adjusted only for demonstrable on-sheet technical errors (hydraulics, keynote mismatch, clear evidence contradiction). Cross-sheet unread references tag a verification limitation without changing severity or client-facing text. Soft-fail is not withhold/delete. originalSeverity/title/observation remain in raw_metadata.validation. Demonstrably false future-date chronology claims and unsupported date-admin observations are hard-withheld.",
     "hardWithholdRules": [
       "missing_required_field",
       "thin_drawing_evidence",
@@ -12,7 +12,8 @@
       "outside_ibc_only_scope",
       "outside_local_only_scope",
       "near_duplicate",
-      "false_date_chronology_claim"
+      "false_date_chronology_claim",
+      "unsupported_date_admin_observation"
     ],
     "limitationOnlyRules": [
       "cross_sheet_detail_not_reviewed",
@@ -233,6 +234,162 @@
         "drawing_location": "Middle right of the sheet",
         "suggested_code_reference": "IBC 2015, Section 716 - Opening Protectives",
         "recommendation": "Provide fire-rating information for doors as required by code."
+      }
+    },
+    {
+      "id": "D-003",
+      "kind": "false_date_chronology",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "false_date_chronology_claim",
+      "analysisDate": "2026-10-29T16:11:25.000Z",
+      "rationale": "v8 A-2.01 Warning: 10/15/26 incorrectly called future vs analysis 2026-10-29 (phrase 'is in the future compared to').",
+      "draft": {
+        "category": "Architecture",
+        "severity": "warning",
+        "title": "Date Discrepancy",
+        "observation": "Revision date '10/15/26' is in the future compared to analysis date '2026-10-29'.",
+        "drawing_evidence": "Title block revision date 10/15/26.",
+        "drawing_location": "Title block",
+        "suggested_code_reference": "",
+        "recommendation": "Correct the revision date chronology relative to the analysis date."
+      }
+    },
+    {
+      "id": "D-004",
+      "kind": "false_date_chronology",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "false_date_chronology_claim",
+      "analysisDate": "2026-10-29T16:11:25.000Z",
+      "rationale": "v8 FP100 Warning: title/body imply a future-revision problem while cited month-name dates are all on or before analysis day.",
+      "draft": {
+        "category": "Fire Protection",
+        "severity": "warning",
+        "title": "Future Revision Date",
+        "observation": "The revision date is October 14, 2026, compared to the analysis date of October 29, 2026, which indicates the drawing should reflect changes well after the revision date.",
+        "drawing_evidence": "Revision block lists October 14, 2026.",
+        "drawing_location": "Title block",
+        "suggested_code_reference": "",
+        "recommendation": "Confirm the revision history against the project record."
+      }
+    },
+    {
+      "id": "D-004b",
+      "kind": "unsupported_date_admin",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "unsupported_date_admin_observation",
+      "analysisDate": "2026-10-29T16:11:25.000Z",
+      "rationale": "Same FP100 substance without a 'future' lexicon hit — revision-before-analysis treated as a defect.",
+      "draft": {
+        "category": "Fire Protection",
+        "severity": "warning",
+        "title": "Revision date versus analysis timeline",
+        "observation": "The revision date is October 14, 2026, compared to the analysis date of October 29, 2026, which indicates the drawing should reflect changes well after the revision date.",
+        "drawing_evidence": "Revision block lists October 14, 2026.",
+        "drawing_location": "Title block",
+        "suggested_code_reference": "",
+        "recommendation": "Confirm the revision history against the project record."
+      }
+    },
+    {
+      "id": "D-005",
+      "kind": "unsupported_date_admin",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "unsupported_date_admin_observation",
+      "analysisDate": "2026-10-29T16:11:25.000Z",
+      "rationale": "v8 P-1.1 Warning: revision before analysis called inconsistent.",
+      "draft": {
+        "category": "Plumbing",
+        "severity": "warning",
+        "title": "Revised drawing date discrepancy",
+        "observation": "The revision date listed as 10/14/2026 is inconsistent as this analysis is on 10/29/2026.",
+        "drawing_evidence": "Revision date 10/14/2026 in title block.",
+        "drawing_location": "Title block",
+        "suggested_code_reference": "",
+        "recommendation": "Reconcile the revision date with the analysis timeline."
+      }
+    },
+    {
+      "id": "D-006",
+      "kind": "unsupported_date_admin",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "unsupported_date_admin_observation",
+      "analysisDate": "2026-10-29T16:11:25.000Z",
+      "rationale": "v8 A-1.00 Advisory: vacuous 'not in the future' meta commentary.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "advisory",
+        "title": "Future revision date observation",
+        "observation": "The REVISED PERMIT SET is dated 10/15/2026, which is not in the future according to the analysis date of 10/29/2026.",
+        "drawing_evidence": "REVISED PERMIT SET dated 10/15/2026.",
+        "drawing_location": "Title block",
+        "suggested_code_reference": "",
+        "recommendation": "No action required if the date is correctly not future."
+      }
+    },
+    {
+      "id": "A306-HEIGHT-QUOTE",
+      "kind": "demonstrable_technical_error",
+      "expectRule": "absence_claim_contradicted_by_evidence",
+      "expectSeverity": "advisory",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": false,
+      "rationale": "When cited evidence quotes 3'-6\" MIN HEIGHT associated with the same guardrail elevation/detail, missing-height Criticals must soft-fail. Offline OCR on A-3.06 shows this string; applicability still needs professional confirmation.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Guardrail Height Missing Verification",
+        "observation": "Detail does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+        "drawing_evidence": "Guard Rail Elevation Detail @ High Roof, detail 1. Note: 3'-6\"MIN HEIGHT FROM top of deck membrane. EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT.",
+        "drawing_location": "Upper left of sheet, detail 1.",
+        "suggested_code_reference": "IBC 2015 Section 1015.3",
+        "recommendation": "Verify and document that guardrail height meets the minimum code requirement of 42 inches."
+      }
+    },
+    {
+      "id": "A306-HEIGHT-PROD",
+      "kind": "professional_review_unchanged",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "v8 production Critical cites the detail name only without quoting the 3'-6\" height. Persist-time cannot see the PDF. Leave published for professional/visual review — do not auto-clear from OCR alone.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Guardrail Height Missing Verification",
+        "observation": "Detail does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+        "drawing_evidence": "Guard Rail Elevation Detail @ High Roof, detail 1.",
+        "drawing_location": "Upper left of sheet, detail 1.",
+        "suggested_code_reference": "IBC 2015 Section 1015.3",
+        "recommendation": "Verify and document that guardrail height meets the minimum code requirement of 42 inches."
+      }
+    },
+    {
+      "id": "A306-HEIGHT-GENERIC",
+      "kind": "professional_review_unchanged",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "Generic MIN HEIGHT on an unrelated detail must not auto-downgrade a guardrail-height Critical.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Guardrail Height Missing Verification",
+        "observation": "Detail 1 does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+        "drawing_evidence": "Roof curb note at detail 4: MIN HEIGHT FROM membrane. Separate parapet callout only.",
+        "drawing_location": "Upper left of sheet, detail 1.",
+        "suggested_code_reference": "IBC 2015 Section 1015.3",
+        "recommendation": "Verify and document that guardrail height meets the minimum code requirement of 42 inches."
       }
     }
   ],

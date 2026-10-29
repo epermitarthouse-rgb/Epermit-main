@@ -1,0 +1,1842 @@
+{
+  "run_id": "b982a22c-5501-49d9-a8ef-ab4078a14b27",
+  "label": "v8",
+  "professionallyVerified": false,
+  "findings": [
+    {
+      "file": "E-3.1-00.pdf",
+      "sev": "warning",
+      "title": "Branch Circuit Description Discrepancy",
+      "obs": "The table labeled 'TABLE W4' indicates different amperage values for circuits than might be depicted elsewhere.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-3.1-00.pdf",
+      "sev": "warning",
+      "title": "Incomplete Grounding Detail",
+      "obs": "Grounding notes mention connection methods but lack specific details on electrode types or locations.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-3.1-00.pdf",
+      "sev": "advisory",
+      "title": "Absence of Lighting Control System Detailed Description",
+      "obs": "General notes refer to lighting control but do not detail the means or methods.",
+      "outcome": "adjusted",
+      "rules": [
+        "cross_sheet_detail_not_reviewed",
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "DM-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "General Demolition Coordination",
+      "obs": "Demolition shall be carried out in a safe manner and in accordance with applicable laws and ordinances.",
+      "outcome": "adjusted",
+      "rules": [
+        "generic_compliance_label"
+      ]
+    },
+    {
+      "file": "DM-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Protection of Existing Structures",
+      "obs": "Protect and maintain walls, ceilings, and other existing structures that are to remain during demolition.",
+      "outcome": "adjusted",
+      "rules": [
+        "generic_compliance_label"
+      ]
+    },
+    {
+      "file": "DM-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Utility Disconnection",
+      "obs": "Verify disconnection of all utilities before commencing demolition.",
+      "outcome": "adjusted",
+      "rules": [
+        "generic_compliance_label"
+      ]
+    },
+    {
+      "file": "DM-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Fire Safety During Demolition",
+      "obs": "All safety devices and fire protection shall remain functional throughout demolition.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-3.06-00.pdf",
+      "sev": "critical",
+      "title": "Guardrail Height Missing Verification",
+      "obs": "Detail does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.06-00.pdf",
+      "sev": "advisory",
+      "title": "Insulation Specification for Wall Sections",
+      "obs": "Wall section details lack specific insulation material and R-value information.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.01-00.pdf",
+      "sev": "warning",
+      "title": "Potential non-compliance with accessibility standards",
+      "obs": "A note states: 'PROVIDE CALL BOX, LOCATION TBD'. Specification for call box location is unclear.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.01-00.pdf",
+      "sev": "advisory",
+      "title": "Incomplete details on fire separation",
+      "obs": "Note mentions '1hr. fire rated partition', but details are not specified.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.01-00.pdf",
+      "sev": "advisory",
+      "title": "Keynote citation needs confirmation",
+      "obs": "The finding cites a keyed-note number that is not supported by the quoted drawing evidence. The note citation and the numbered note text on the sheet need to agree.",
+      "outcome": "adjusted",
+      "rules": [
+        "keynote_citation_mismatch"
+      ]
+    },
+    {
+      "file": "E-2.2-00.pdf",
+      "sev": "advisory",
+      "title": "Emergency Lighting Compliance",
+      "obs": "The emergency lighting system is designed to maintain at least 1 foot-candle in the path of egress per EL5 note. It references NFPA 101 compliance.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-2.2-00.pdf",
+      "sev": "warning",
+      "title": "Citing Incorrect Reference for Local Code Compliance",
+      "obs": "General Notes refer to NFPA 101 for lighting compliance, which is correct, but the drawing does not specify compliance with the 2017 DC Construction Codes, which may include additi",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.01-00.pdf",
+      "sev": "warning",
+      "title": "'Not Used' Scale Information",
+      "obs": "Detail 8 is labeled as 'NOT USED' with scale information missing, indicated as '##############'.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.01-00.pdf",
+      "sev": "warning",
+      "title": "Inconsistent Revision Date Recording",
+      "obs": "The revision table lists 'FIRST ISSUE' without a date, which may be an oversight.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-3.00-0.pdf",
+      "sev": "warning",
+      "title": "Missing Special Requirement Details",
+      "obs": "Special requirements for several equipment items are indicated as KES without elaboration.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-3.00-0.pdf",
+      "sev": "advisory",
+      "title": "Unspecified Equipment Locations",
+      "obs": "Certain items reference the equipment schedule without specifying exact locations in the building.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-3.00-0.pdf",
+      "sev": "advisory",
+      "title": "Verification Notes",
+      "obs": "'KES to verify exact quantity per market' is noted for some items, signaling a need for verification not documented in the schedule.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EN-1.00-0.pdf",
+      "sev": "advisory",
+      "title": "Interior Lighting Compliance",
+      "obs": "The sheet includes an Interior Lighting Compliance Certificate indicating compliance with power requirements for lighting fixtures.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-3.04-00.pdf",
+      "sev": "advisory",
+      "title": "Certification Validity",
+      "obs": "The sheet has a professional certification block stating it is prepared and approved by a licensed architect.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-2.00-00.pdf",
+      "sev": "warning",
+      "title": "Unresolved Sheet Reference",
+      "obs": "The drawing refers to key notes on areas to be demolished, but one note references 'SEE DETAIL' without specific detail information on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-2.00-00.pdf",
+      "sev": "advisory",
+      "title": "Safety Notes",
+      "obs": "Demolition elevation notes mention 'All safety demolition plans' but no detailed safety procedure is outlined on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-3.0.pdf",
+      "sev": "warning",
+      "title": "Insufficient detail on roof opening dimensions",
+      "obs": "The detail for the roof opening only indicates '2'-3\"' with minimal context or further specification.",
+      "outcome": "adjusted",
+      "rules": [
+        "unrelated_discipline"
+      ]
+    },
+    {
+      "file": "M-3.0.pdf",
+      "sev": "advisory",
+      "title": "Potential clearance issue with duct installation",
+      "obs": "The clearance above the suspended ceiling appears minimal in the section detail of duct installation.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "MD-1.1.pdf",
+      "sev": "warning",
+      "title": "Demolition Scope Detailing",
+      "obs": "The sheet indicates removal of ductwork and diffusers but lacks detailed instructions or notes for demolition procedures.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-4.0-00.pdf",
+      "sev": "warning",
+      "title": "Occupancy sensor connection detail discrepancy",
+      "obs": "The occupancy sensor detail appears to show wiring connections but lacks specification for sensor type or manufacturer.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-4.0-00.pdf",
+      "sev": "warning",
+      "title": "Lack of labeling for circuit specifics",
+      "obs": "The diagram for low voltage conduit does not indicate the specific circuit designations or load requirements.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-4.0-00.pdf",
+      "sev": "warning",
+      "title": "Detector loop and conduit size mismatch",
+      "obs": "Notes indicate a required conduit size of 3/4\" and 1\" in different sections for detector loops.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-4.0-00.pdf",
+      "sev": "advisory",
+      "title": "Potential coordination issue with HVAC grounding",
+      "obs": "HVAC grounding detail shows a grounding method, but may conflict with mechanical system requirements not visible in this drawing.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-4.0.pdf",
+      "sev": "advisory",
+      "title": "Standard Specification Confusion",
+      "obs": "Multiple notes reference manufacturer guidelines without specifying which standards to prioritize if conflicts arise.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-4.0.pdf",
+      "sev": "advisory",
+      "title": "Exhaust Ducting Clearance",
+      "obs": "Notes specify criteria for exhaust ducting, including no contact with combustible construction, that require careful application and site verification.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-4.0.pdf",
+      "sev": "advisory",
+      "title": "Equipment Support and Vibration Isolation",
+      "obs": "Notes require equipment mounted as shown on plans, with vibration isolators as necessary, without detailing required isolator type.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-2.02.00.pdf",
+      "sev": "warning",
+      "title": "Lack of GFCI Receptacle Indication",
+      "obs": "The kitchen elevation and service areas do not visibly indicate the use of Ground Fault Circuit Interrupter (GFCI) protection for electrical outlets adjacent to water sources.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-2.02.00.pdf",
+      "sev": "advisory",
+      "title": "Fire-rated Assembly Details Not Shown",
+      "obs": "The sheet does not specify any fire-rated assemblies or separation details for areas that may require them, such as areas adjacent to service counters or kitchen equipment.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-2.02.00.pdf",
+      "sev": "advisory",
+      "title": "Coordination of Finish Materials",
+      "obs": "The finishes for various areas are indicated but may require further coordination to ensure consistency across the project, especially where transitions occur.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-201.00.pdf",
+      "sev": "advisory",
+      "title": "Scale Discrepancy",
+      "obs": "Wall section 2 is labeled with \"SCALE: 3/4\"=1'-0\" but design notes are at \"NO SCALE.\"",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-201.00.pdf",
+      "sev": "advisory",
+      "title": "General Notes Need Clarification",
+      "obs": "Structural notes are extensive but not specific to sheet-requested details, such as unusual load considerations.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-1.00-0.pdf",
+      "sev": "advisory",
+      "title": "Unclear Equipment Labeling",
+      "obs": "Several equipment labels and numbers are not fully readable or are truncated.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-1.00-0.pdf",
+      "sev": "warning",
+      "title": "Dimension Discrepancy in Plan",
+      "obs": "The dimension provided for a section marked as HOLD (11'-1\") conflicts with the overall layout dimensions.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-1.00-0.pdf",
+      "sev": "warning",
+      "title": "Insufficient Detail for Seating Area",
+      "obs": "Seating count tag is mentioned but lacks detailed description or count.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "EQ-1.00-0.pdf",
+      "sev": "advisory",
+      "title": "Certifications and Approvals",
+      "obs": "The professional certification section includes a license number and signature, but it might require validation against current regulations.",
+      "outcome": "adjusted",
+      "rules": [
+        "unsupported_local_amendment"
+      ]
+    },
+    {
+      "file": "A-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Future revision date observation",
+      "obs": "The REVISED PERMIT SET is dated 10/15/2026, which is not in the future according to the analysis date of 10/29/2026.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.00-00.pdf",
+      "sev": "warning",
+      "title": "Lack of accessible path details",
+      "obs": "The sheet does not provide detailed information regarding accessible paths or specific ADA requirements.",
+      "outcome": "adjusted",
+      "rules": [
+        "cross_sheet_detail_not_reviewed",
+        "generic_compliance_label"
+      ]
+    },
+    {
+      "file": "A-1.00-00.pdf",
+      "sev": "warning",
+      "title": "Plan Keyed Notes Not Fully Cross-referenced",
+      "obs": "Several plan keyed notes are indicated without corresponding detailed narrative or callouts on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-4.1-00.pdf",
+      "sev": "warning",
+      "title": "Incomplete BAS Installation Details",
+      "obs": "The note states, 'REFER TO M1.2 FOR TS, HS, AND ATS LOCATIONS,' but specific locations are not provided on this sheet.",
+      "outcome": "adjusted",
+      "rules": [
+        "unrelated_discipline"
+      ]
+    },
+    {
+      "file": "E-4.1-00.pdf",
+      "sev": "advisory",
+      "title": "Keynote citation needs confirmation",
+      "obs": "The finding cites a keyed-note number that is not supported by the quoted drawing evidence. The note citation and the numbered note text on the sheet need to agree.",
+      "outcome": "adjusted",
+      "rules": [
+        "keynote_citation_mismatch"
+      ]
+    },
+    {
+      "file": "A-3.05-00.pdf",
+      "sev": "warning",
+      "title": "Missing Flashing Detail",
+      "obs": "In the wall section at Rear Thin Brick (Detail 6), flashing is indicated but lacks specific material or installation details.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.05-00.pdf",
+      "sev": "advisory",
+      "title": "Lack of Insulation Specification",
+      "obs": "Insulation is shown in the wall sections but does not include R-value or type specifications.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.05-00.pdf",
+      "sev": "advisory",
+      "title": "Scupper Slope Specification",
+      "obs": "Scupper is detailed but does not explicitly specify the slope to ensure proper drainage.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-1.3.pdf",
+      "sev": "warning",
+      "title": "Potential clearance issue for RTU installation",
+      "obs": "RTU03 shows a label 'TOTAL UNIT WEIGHT INCLUDING ACCESSORIES 750LBS' near its location without clear indication of structural support or clearance dimensions.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-1.3.pdf",
+      "sev": "advisory",
+      "title": "Lack of detailed description for plumbing vent cap installation",
+      "obs": "A generic '3\"x4\" PLUMBING VENT CAP' label is shown without installation detail or reference to a specification sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-4.3-00.pdf",
+      "sev": "warning",
+      "title": "Reference to General Electrical Notes",
+      "obs": "The sheet contains the note 'SEE SHEET E3.1 FOR GENERAL ELECTRICAL NOTES', but does not include these notes directly.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-3.2-00.pdf",
+      "sev": "advisory",
+      "title": "Missing GFCI Specification for Appliances",
+      "obs": "The electrical diagrams and notes do not specify Ground Fault Circuit Interrupter (GFCI) protection for outlets near water sources.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "FP201.pdf",
+      "sev": "warning",
+      "title": "Missing detail reference for automatic air vent",
+      "obs": "A note indicates a requirement for an automatic air vent ('REF FP300'), but no specific detail is visible on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP201.pdf",
+      "sev": "advisory",
+      "title": "Verification of hydraulic design parameters",
+      "obs": "Hydraulic design table shows density of 0.10 GPM and a K-factor of 5.6 for the 2nd floor dining area.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP201.pdf",
+      "sev": "advisory",
+      "title": "Contractor verification notes for system components",
+      "obs": "The contractor is required to verify the lowest point for system drainage and provide head guards on exposed heads.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP201.pdf",
+      "sev": "advisory",
+      "title": "Monitored control valve location",
+      "obs": "Monitored control valve is to be located on ceiling for basement, as noted.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.0-00.pdf",
+      "sev": "warning",
+      "title": "Incomplete Electrical POS Certification",
+      "obs": "The electrical POS certification section is incomplete, with empty fields for the general contractor, date, and electrical contractor notes.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.0-00.pdf",
+      "sev": "warning",
+      "title": "Undefined Cable Supports Specification",
+      "obs": "The low voltage cable management specification indicates that cable supports must be used, but does not provide specific material or installation methods.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-1.0-00.pdf",
+      "sev": "advisory",
+      "title": "Presence of Visual Inspection Checklists",
+      "obs": "Includes multiple checklists for visual inspection of electrical components to ensure compliance with McDonald's specifications.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-1.1.pdf",
+      "sev": "warning",
+      "title": "Duct Size Label Inconsistency",
+      "obs": "The plan shows multiple 14\" \u00d8 ducts labeled as 'TYP. 9', but not all appear to be connected. Clarification on the TYPICAL designation may be necessary.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-1.1.pdf",
+      "sev": "advisory",
+      "title": "Lack of Duct Insulation Information",
+      "obs": "The drawing does not specify insulation for the ducts, which could be crucial for thermal requirements.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-1.1.pdf",
+      "sev": "advisory",
+      "title": "Mechanical Equipment Location Coordination",
+      "obs": "The location of mechanical equipment such as exhaust fans (EF) is shown but may need alignment with architectural elements.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-2.0-00.pdf",
+      "sev": "advisory",
+      "title": "Backflow Preventer Detail Reference",
+      "obs": "The drawing references a backflow preventer at the filtration system labeled 'SEE DETAIL 5 ON SHEET P-3.0.'",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-2.0-00.pdf",
+      "sev": "warning",
+      "title": "Flow Rate Specification",
+      "obs": "Multiple sections of piping are labeled with 'SET AT 1.0 GPM' and '2.0 GPM'.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-2.0-00.pdf",
+      "sev": "advisory",
+      "title": "Hose-End Drain Down Valve Presence",
+      "obs": "The drawing includes a '3/4\" hose-end drain down valve'.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-2.1-00.pdf",
+      "sev": "warning",
+      "title": "Potential Inconsistency in Emergency Lighting Requirements",
+      "obs": "Sheet notes state LED fixtures should comply with NEC Section 700, needing inverter connection for 1.5 hours of illumination. However, no explicit detail confirms all fixture types",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-2.1-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination for Logo Sign Lighting",
+      "obs": "Lighting for McDonald's Arch Logo sign is dependent on verifying location to adequately illuminate the sign.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-2.1-00.pdf",
+      "sev": "advisory",
+      "title": "Emergency Lighting Placement Verification",
+      "obs": "Field verification is required to ensure emergency battery lighting wall packs in Playplace provide maximum illumination.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-2.1-00.pdf",
+      "sev": "advisory",
+      "title": "Need for Coordination with Decor Drawings",
+      "obs": "Multiple notes indicate the need to coordinate light fixture specifications and details with decor drawings.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.04.00.pdf",
+      "sev": "warning",
+      "title": "Egress Path Obstruction",
+      "obs": "The egress path through the dining area appears narrow and potentially obstructed by seating arrangements, which may not maintain the required minimum width for egress.",
+      "outcome": "adjusted",
+      "rules": [
+        "generic_compliance_label"
+      ]
+    },
+    {
+      "file": "A-1.04.00.pdf",
+      "sev": "advisory",
+      "title": "Missing Directional Signage Detail",
+      "obs": "No details for directional exit signage are provided on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.04.00.pdf",
+      "sev": "advisory",
+      "title": "Coordination with Occupancy Calculations",
+      "obs": "Occupancy calculations are outlined but should be coordinated with seating changes for compliance.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "CV-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Code Analysis Needs Verification",
+      "obs": "The code analysis section lists applicable codes, including 2015 IBC and local amendments. Specific compliance with these codes is not detailed on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "CV-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Professional Certification Noted",
+      "obs": "The sheet includes a certification by a licensed architect, affirming preparation or approval of the documents.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "CV-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Revision History Tracking",
+      "obs": "The revision history includes several permit comments and owner revisions, with the latest revision dated 10/15/26.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "CV-1.00-00.pdf",
+      "sev": "advisory",
+      "title": "Absent Detail Confirmation",
+      "obs": "Information on this cover sheet references details and content provided on other indexed sheets. Verification requires examination of those sheets.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.4-00.pdf",
+      "sev": "warning",
+      "title": "Absence of Wall Clean-out Locations",
+      "obs": "The drawing notes mention that wall clean-outs for waste piping are not shown for clarity. They direct to see general notes for requirements.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.4-00.pdf",
+      "sev": "advisory",
+      "title": "Insulation for Storm Drainage Piping",
+      "obs": "The drawing specifies that all horizontal storm drainage piping shall be insulated to prevent condensation, but insulation details are not shown.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.4-00.pdf",
+      "sev": "advisory",
+      "title": "Proper Sealing of Penetrations",
+      "obs": "The drawing instructs that penetrations through draft stop walls must be properly sealed.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.4-00.pdf",
+      "sev": "advisory",
+      "title": "Pumped Suction Pipe Layout",
+      "obs": "The drawing specifies a pumped suction pipe from the cellar to above first floor ceiling and further extends it along the wall.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-3.0-00.pdf",
+      "sev": "warning",
+      "title": "Lack of GFCI indication for outlets near sinks",
+      "obs": "The electrical schedule lists several outlets near sinks without specifying GFCI protection.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-3.0-00.pdf",
+      "sev": "advisory",
+      "title": "Unclear load calculation for circuits",
+      "obs": "Load calculations for listed circuits are not clearly detailed on the schedule.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-202.00.pdf",
+      "sev": "warning",
+      "title": "Missing Material Specifications",
+      "obs": "The wall sections detail the structural elements but do not specify material grades or standards for the steel members.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "S-202.00.pdf",
+      "sev": "warning",
+      "title": "Connection Design Detail Ambiguity",
+      "obs": "Connection details are listed, but specific type or method of fastening (e.g., bolts, welds) is not consistently described.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "S-202.00.pdf",
+      "sev": "advisory",
+      "title": "Verification of Existing Conditions",
+      "obs": "Notes reference existing structures (e.g., existing roof truss) but do not provide validation that existing conditions meet current code requirements.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.02-00.pdf",
+      "sev": "advisory",
+      "title": "Professional Certification Validity",
+      "obs": "Sheet includes a professional certification by a licensed architect in the District of Columbia, with the license number provided (ARC40001205).",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.02-00.pdf",
+      "sev": "advisory",
+      "title": "Revised Permit Set Information",
+      "obs": "The sheet is labeled as a 'REVISED PERMIT SET' with a revision date of 10/15/2026, ensuring recent updates are captured.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.02-00.pdf",
+      "sev": "advisory",
+      "title": "Detail Sections Provided",
+      "obs": "Three different wall sections and one control joint detail are provided to illustrate various parts of the building.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.3-00.pdf",
+      "sev": "advisory",
+      "title": "Incomplete specification for weatherproof junction boxes",
+      "obs": "The drawing requires electrical contractors to provide weatherproof junction boxes for various applications (Notes E5 and E12). However, it does not specify detailed installation r",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.3-00.pdf",
+      "sev": "warning",
+      "title": "Potential conflict in circuit specification for GFCI receptacles",
+      "obs": "The plan note E2 specifies that GFCI receptacles should be connected to circuit CCT.#13 from panel AP-5, yet does not disclose if all required receptacles can indeed be served from",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-204.00.pdf",
+      "sev": "advisory",
+      "title": "Grease interceptor details",
+      "obs": "The grease interceptor plan and section details (Details 6 and 7) depict the dimensions and installation requirements for a grease interceptor including location and connections.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "S-204.00.pdf",
+      "sev": "advisory",
+      "title": "Framing section coordination",
+      "obs": "Detail 5, a framing section, requires metal bracing, but further coordination with architectural and structural drawings may be necessary to confirm compatibility.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "advisory",
+      "title": "Fire Sprinkler System Design Guidance",
+      "obs": "The notes state that the design shown is for bidding guidance only, and the contractor must submit shop drawings for approval by the AHJ.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "advisory",
+      "title": "Coordination of Fire Protection Components",
+      "obs": "Notes require coordination of fire protection components with architectural, structural, mechanical, and electrical systems.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "warning",
+      "title": "Reference to Detailed Design Standards",
+      "obs": "The sheet references NFPA 13 (2016 and 2019) for various occupancy classifications but does not provide full calculation details.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "advisory",
+      "title": "Alarm and Monitoring Requirements",
+      "obs": "Sprinkler systems must be monitored by an off-site central station per NFPA 13 and 72.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "advisory",
+      "title": "Sprinkler Protection Above Ceilings",
+      "obs": "Sprinkler protection is required above ceilings in combustible construction areas.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "warning",
+      "title": "Two NFPA Editions Cited",
+      "obs": "The drawing cites both NFPA 13 (2016) and NFPA 13 (2019), which may cause confusion regarding applicable standards.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP100.pdf",
+      "sev": "warning",
+      "title": "Future Revision Date",
+      "obs": "The revision date is October 14, 2026, compared to the analysis date of October 29, 2026, which indicates the drawing should reflect changes well after the revision date.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.0-00.pdf",
+      "sev": "advisory",
+      "title": "Keynote citation needs confirmation",
+      "obs": "The finding cites a keyed-note number that is not supported by the quoted drawing evidence. The note citation and the numbered note text on the sheet need to agree.",
+      "outcome": "adjusted",
+      "rules": [
+        "keynote_citation_mismatch",
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.0-00.pdf",
+      "sev": "advisory",
+      "title": "Water-Hammer Arrestor Installation",
+      "obs": "Install water-hammer arrestor where quick-closing valves are utilized, per manufacturer's instructions.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-1.06-00.pdf",
+      "sev": "advisory",
+      "title": "Roof Drainage Annotations",
+      "obs": "The plan includes annotations for roof scuppers and gutter locations, highlighting drainage paths and downspouts.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.06-00.pdf",
+      "sev": "advisory",
+      "title": "Roofing System Specification",
+      "obs": "The Roofing System note specifies installation of singly-ply membrane with a slope to roof drains.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.06-00.pdf",
+      "sev": "advisory",
+      "title": "Exhaust Fan Locations",
+      "obs": "Roof plan indicates specific locations for exhaust fans and HVAC units, with requirements to mount units on curbs.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.06-00.pdf",
+      "sev": "warning",
+      "title": "Insufficient Detail on Roof Flashing",
+      "obs": "General note specifies flashing but lacks detail on specific materials or installation requirements.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-2.00-00.pdf",
+      "sev": "warning",
+      "title": "Labeling of Glass Information Missing",
+      "obs": "The note for 'LABELING OF GLASS' is listed but lacks specific labeling instructions or standards.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-2.00-00.pdf",
+      "sev": "advisory",
+      "title": "Revision Description Format",
+      "obs": "The revisions table includes 'FIRST ISSUE' with a placeholder date as '00', which is inconsistent with other precise dates.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.03-00.pdf",
+      "sev": "warning",
+      "title": "Ceiling height not specified",
+      "obs": "The sheet does not clearly specify the ceiling heights for the mezzanine and basement levels.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.03-00.pdf",
+      "sev": "advisory",
+      "title": "General note requires electrical coordination",
+      "obs": "General note specifies that all ceilings are to coordinate with electrical systems.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-2.01-00.pdf",
+      "sev": "warning",
+      "title": "Incomplete demolition documentation",
+      "obs": "The demolition elevation notes state 'REFER TO APPLICABLE PROVISIONS OF CHAPTER 33 OF 2013', but do not specify detailed protection measures or references specific to the tasks.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-2.01-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination for demolition sequencing",
+      "obs": "Notice regarding electrical and mechanical disconnections prior to demolition suggests coordination with related trades.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-2.1-00.pdf",
+      "sev": "advisory",
+      "title": "Sanitary Sewer Connection Requirement",
+      "obs": "The diagram includes the note: 'EXTEND AND CONNECT TO NEAREST SANITARY SEWER. SANITARY SEWER SHALL NOT CONNECT UPSTREAM OF GREASE INTERCEPTOR.'",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-2.1-00.pdf",
+      "sev": "warning",
+      "title": "Material Specifications",
+      "obs": "Material specifications for the piping system are not detailed on the isometric.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-2.1-00.pdf",
+      "sev": "advisory",
+      "title": "Vent Pipe Sizing Clarification",
+      "obs": "The diagram shows multiple sizes for vent pipes but does not provide a sizing method or criteria.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.1-00.pdf",
+      "sev": "warning",
+      "title": "Revised drawing date discrepancy",
+      "obs": "The revision date listed as 10/14/2026 is inconsistent as this analysis is on 10/29/2026.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.1-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination for valve accessibility",
+      "obs": "Noted that shut-off and balancing valves should be located over suspended ceilings for accessibility and not in areas with drywall ceilings.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.1-00.pdf",
+      "sev": "advisory",
+      "title": "Insulation requirements",
+      "obs": "All water distribution piping shall be insulated, but insulation is not shown on this drawing to maintain clarity.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-3.01-00.pdf",
+      "sev": "warning",
+      "title": "Insufficient Detail on Insulation Specification",
+      "obs": "The wall section notes '1/2\" EXTERIOR SHEATHING MINERAL FIBER SHEATHING' without any specific R-value or manufacturer reference.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.01-00.pdf",
+      "sev": "advisory",
+      "title": "Lack of Fastener Details",
+      "obs": "The sections do not describe the type or spacing of fasteners for attaching the exterior sheathing.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.00-00.pdf",
+      "sev": "advisory",
+      "title": "Detail Annotation Inconsistency",
+      "obs": "Detail '6' is labeled 'NOT USED,' potentially confusing or irrelevant if included without context.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.1-00.pdf",
+      "sev": "advisory",
+      "title": "GFCI Protection Requirement",
+      "obs": "The general notes specify that all kitchen equipment must be protected with GFCI circuit breakers per the latest NEC requirements.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-1.1-00.pdf",
+      "sev": "advisory",
+      "title": "Equipment Grounding Conductor",
+      "obs": "Each kitchen equipment circuit requires a separate green insulated equipment grounding conductor.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "E-1.1-00.pdf",
+      "sev": "warning",
+      "title": "Electrical Equipment Mounting Heights",
+      "obs": "The general notes state to refer to another sheet for equipment specifications and mounting heights, but specifics are not provided here.",
+      "outcome": "adjusted",
+      "rules": [
+        "cross_sheet_reference_unresolved"
+      ]
+    },
+    {
+      "file": "E-1.1-00.pdf",
+      "sev": "advisory",
+      "title": "Hood Controls Interlock Requirement",
+      "obs": "Interlock hood controls with associated exhaust fan and rooftop unit prior to rough-in.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.1-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination with KES Panel",
+      "obs": "There is a requirement to coordinate connections with the 'KES' panel supplier.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.5-00.pdf",
+      "sev": "warning",
+      "title": "Specification for Sealing Draft Stop Wall Penetrations",
+      "obs": "The drawing notes state 'PENETRATIONS THROUGH DRAFT STOP WALLS SHALL BE PROPERLY SEALED.' However, the specific methods or materials for sealing are not detailed on this sheet.",
+      "outcome": "adjusted",
+      "rules": [
+        "unrelated_discipline"
+      ]
+    },
+    {
+      "file": "P-1.5-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination of Pipe Routes",
+      "obs": "The drawing notes emphasize the need to coordinate all pipe routes with other trades.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "G-0.00-0.pdf",
+      "sev": "advisory",
+      "title": "Revision Date Verification",
+      "obs": "The most recent revision date is 10/15/26, which is before the analysis date of 10/29/26.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "G-0.00-0.pdf",
+      "sev": "advisory",
+      "title": "Certification Statement",
+      "obs": "The sheet includes a professional certification statement by a licensed architect under the laws of the State of DC.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "G-0.00-0.pdf",
+      "sev": "advisory",
+      "title": "Compliance with Codes",
+      "obs": "General note 1 specifies compliance with codes, laws, ordinances, rules, and regulations.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "G-0.00-0.pdf",
+      "sev": "advisory",
+      "title": "Life Safety Detail Reference",
+      "obs": "Life safety note references additional detail work on other sheets.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-1.01-00.pdf",
+      "sev": "advisory",
+      "title": "Hazardous Materials Survey",
+      "obs": "Demolition Notes suggest potential handling of hazardous materials but do not specify if a survey was completed.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-1.2.pdf",
+      "sev": "warning",
+      "title": "Inconsistent Duct Sizing Annotation",
+      "obs": "The plan shows a 10\"\u00d8 supply duct from the basement, but details on the same plan indicate a 14\"\u00d8 duct connection at another location, which may cause confusion.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-1.2.pdf",
+      "sev": "advisory",
+      "title": "Ventilation Schedule Discrepancy",
+      "obs": "The ventilation schedule table references IMC Section 403.3 but does not reconcile with visible duct layout elements.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-1.2.pdf",
+      "sev": "advisory",
+      "title": "Duct Routing Coordination",
+      "obs": "There are several points where duct routes converge, which may require further review to ensure adequate clearances and support.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-1.4.pdf",
+      "sev": "warning",
+      "title": "Piping Installation Specifications",
+      "obs": "The drawing does not specify installation methods or insulation requirements for the piping.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-1.4.pdf",
+      "sev": "warning",
+      "title": "Refrigerant Piping Routes",
+      "obs": "Refrigerant piping routes are shown extending through several areas but lack clear vertical transition details.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP300.pdf",
+      "sev": "advisory",
+      "title": "Automatic Air Vent Manufacturer Specification",
+      "obs": "Automatic air vent shall only be of the following manufacturers (no substitutions): Engineered Corrosion Solutions Model: Ejector Automatic Air Vent, SouthTek Model: Dual Vent O2 R",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP300.pdf",
+      "sev": "warning",
+      "title": "Sealing Requirement for Ceiling Penetrations",
+      "obs": "Instruction to seal the interface between boot flange and top of ceiling panel using adhesive provided with boot and to apply strap ties on boot around dry sprinkler barrel. Option",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP300.pdf",
+      "sev": "warning",
+      "title": "Hydraulic Design Information",
+      "obs": "Hydraulic placard location is shown but the specific hydraulic information is not provided in the drawing.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP300.pdf",
+      "sev": "advisory",
+      "title": "Installation Procedure for Dry Pendent Sprinkler",
+      "obs": "The drawing includes multiple options for installing dry pendent sprinklers, but it does not specify which option is preferred or required.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.02-00.pdf",
+      "sev": "warning",
+      "title": "Placard Detail Inaccuracy",
+      "obs": "The drawing notes specify a line for \"MAXIMUM ALLOWABLE CAPACITY\" and \"MAXIMUM SEATING CAPACITY\"; however, the terms are used interchangeably without clear differentiation.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.02-00.pdf",
+      "sev": "advisory",
+      "title": "Incomplete Placard Installation Note",
+      "obs": "The note states the GC is to provide and install placards per Section 1004.3 of the 2017 DC Building Code but does not specify if the placard format is final.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.2-00.pdf",
+      "sev": "warning",
+      "title": "Wall Clean-Outs Not Shown",
+      "obs": "Wall clean-outs for waste piping are not shown for clarity, as stated in Drawing Note 2.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.2-00.pdf",
+      "sev": "warning",
+      "title": "Storm Drainage Insulation",
+      "obs": "Insulation for horizontal storm drainage piping is not shown for clarity.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.2-00.pdf",
+      "sev": "advisory",
+      "title": "Sanitary Sizing Coordination",
+      "obs": "The note mentions sanitary sizing and location coordination with all field conditions prior to construction.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-001.00.pdf",
+      "sev": "warning",
+      "title": "Column location changes",
+      "obs": "The drawing revision table indicates that columns have been moved as part of revision #5 dated 10/13/26.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-001.00.pdf",
+      "sev": "advisory",
+      "title": "Lack of detailed connection specifications",
+      "obs": "The plan does not include specific details or specifications for column-to-beam connections.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.6-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination of Plumbing Rough-In Locations",
+      "obs": "Note 2 requires coordination of plumbing rough-in locations with the existing structure.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.6-00.pdf",
+      "sev": "advisory",
+      "title": "Seal Penetrations in Draft Stop Walls",
+      "obs": "Note 4 requires penetrations through draft stop walls to be properly sealed.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.6-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination with Other Trades",
+      "obs": "Note 3 advises coordinating all pipe routes with other trades.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.2-00.pdf",
+      "sev": "warning",
+      "title": "Unclear Electrical Routing",
+      "obs": "The electrical routing for the outlet connections in the mezzanine plan shows multiple outlets marked as '(TYPICAL),' but the specific paths and connections to these outlets are no",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.2-00.pdf",
+      "sev": "advisory",
+      "title": "Lack of GFCI Indication",
+      "obs": "The water heater connections (P2) do not indicate whether GFCI protection is required or provided, which is typically necessary in certain wet or damp locations.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-1.2-00.pdf",
+      "sev": "warning",
+      "title": "Elevation Level Discrepancy",
+      "obs": "The basement plan and mezzanine plan show overlapping areas with different elevations which could lead to confusion in construction.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-203.00.pdf",
+      "sev": "warning",
+      "title": "Lack of specification for materials",
+      "obs": "The wall sections show various connections and structural elements, but there is no specification for the materials (e.g., type of steel, insulation) to be used in these sections.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "S-203.00.pdf",
+      "sev": "advisory",
+      "title": "Potential discrepancy in connection details",
+      "obs": "Connection details show different labels and notations that may need consistent documentation to ensure clarity and constructability.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "S-203.00.pdf",
+      "sev": "advisory",
+      "title": "Verification of structural integrity of connections",
+      "obs": "The structural connections shown do not have accompanying calculations or verification of load-bearing capacity.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-6.00-00.pdf",
+      "sev": "warning",
+      "title": "Incomplete Door Function Description",
+      "obs": "Door schedule lists some doors without a complete description of hardware function or use, such as in the door types D5 and D6.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-6.00-00.pdf",
+      "sev": "advisory",
+      "title": "Inconsistent Window Identifications",
+      "obs": "Window types W4 and W5 dimension annotations slightly differ in the window types illustrations compared to the general notes' descriptions.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-6.00-00.pdf",
+      "sev": "advisory",
+      "title": "Potential Issues with Door Swing Note",
+      "obs": "General notes state all doors shall be re-hung in the direction of egress, but specific door schedule entries do not indicate current swing direction.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-4.1-00.pdf",
+      "sev": "advisory",
+      "title": "Keynote citation needs confirmation",
+      "obs": "The finding cites a keyed-note number that is not supported by the quoted drawing evidence. The note citation and the numbered note text on the sheet need to agree.",
+      "outcome": "adjusted",
+      "rules": [
+        "keynote_citation_mismatch"
+      ]
+    },
+    {
+      "file": "P-4.1-00.pdf",
+      "sev": "advisory",
+      "title": "Backflow preventer schedule coordination",
+      "obs": "The backflow preventer schedule specifies models and ASSE listings, but it includes multiple applications and systems.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-4.1-00.pdf",
+      "sev": "advisory",
+      "title": "Sewage ejector specifications and notes",
+      "obs": "Sewage ejector schedule includes detailed specifications with design and operational notes, which require field verification for compliance.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP200 .pdf",
+      "sev": "advisory",
+      "title": "Sprinkler coverage for combustible spaces",
+      "obs": "The plan includes a note: 'SPRINKLER ALL COMBUSTIBLE SPACES ABOVE CEILINGS, TYP.'",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "FP200 .pdf",
+      "sev": "advisory",
+      "title": "Fire Flow and Pressure Requirements",
+      "obs": "The hydraulic design table lists the flow demand as 596.81 GPM and pressure demand as 31.92 psi.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-2.0.pdf",
+      "sev": "advisory",
+      "title": "Exhaust Hood Certification",
+      "obs": "The exhaust hood is stated to be compliant with NSF Standard 2 and performance tested per UL 710. However, further verification of the certification documents may be necessary.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "M-2.0.pdf",
+      "sev": "warning",
+      "title": "Hood/Fan Interlock Details Reference",
+      "obs": "The sheet references 'Refer E3.2 for hood/fan interlock details' but E-3.2 is not included in the visible sheet review.",
+      "outcome": "adjusted",
+      "rules": [
+        "cross_sheet_reference_in_set"
+      ]
+    },
+    {
+      "file": "M-2.0.pdf",
+      "sev": "advisory",
+      "title": "Capture Jet Plenum Attachment",
+      "obs": "Drawing notes indicate 'Capture Jet Plenums are to be attached when called out per kitchen schedule,' requiring coordination with other documentation.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "E-4.2-00.pdf",
+      "sev": "advisory",
+      "title": "Grounding Detail Review Needed",
+      "obs": "The grounding detail references multiple connections but may require further coordination with utility company specifications.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.8-00.pdf",
+      "sev": "advisory",
+      "title": "Local Code Compliance Notes",
+      "obs": "Multiple instances where connections are specified to be 'per local codes.'",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.8-00.pdf",
+      "sev": "advisory",
+      "title": "Verification in Field Required",
+      "obs": "Notes indicate 'Verify in Field' (VIF) for certain installation heights and connections.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.8-00.pdf",
+      "sev": "advisory",
+      "title": "Backflow Prevention",
+      "obs": "Connection from backflow preventer requires verification.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.8-00.pdf",
+      "sev": "advisory",
+      "title": "Beverage System Installer Connection",
+      "obs": "Final connections to be completed by Beverage System Installer.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-002.00.pdf",
+      "sev": "advisory",
+      "title": "Potential need for additional structural details",
+      "obs": "The high roof framing plan outlines key structural components, but may require further sectional details or specifications to fully assess load distribution and anchoring.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "S-002.00.pdf",
+      "sev": "advisory",
+      "title": "Coordination with mechanical systems",
+      "obs": "The plan should consider coordination with mechanical systems indicated on other sheets.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "MD-1.3.pdf",
+      "sev": "advisory",
+      "title": "Missing Demolition Notes",
+      "obs": "The demolition plan does not include specific notes on handling or disposing of removed materials.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "MD-1.3.pdf",
+      "sev": "advisory",
+      "title": "Coordination with Structural Plan",
+      "obs": "Demolition plan indicates removal of structural elements such as roof curbs.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.00-00.pdf",
+      "sev": "warning",
+      "title": "Potential ADA Compliance Concern with Lavatory Height",
+      "obs": "The lavatory section detail (detail 8) lacks information on the clear space under the sink for wheelchair users, which is critical for ADA compliance.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.00-00.pdf",
+      "sev": "warning",
+      "title": "Absence of Dimensions for Signage Mounting Height",
+      "obs": "The typical signage height elevation (detail 4) does not specify the exact mounting height above the floor, which is essential for ADA compliance.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-4.00-00.pdf",
+      "sev": "advisory",
+      "title": "Toilet Room Door Swing Potential Conflict",
+      "obs": "The toilet room plan (detail 1) shows door swings that may not accommodate wheelchair maneuverability effectively.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-1.02-00.pdf",
+      "sev": "advisory",
+      "title": "Incomplete Demolition Scope Description",
+      "obs": "Keyed Note 1 instructs to 'REMOVE EXISTING MECHANICAL ROOFTOP EQUIPMENT PER MECHANICAL PLANS,' but no specific equipment is listed on this sheet.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "DM-1.02-00.pdf",
+      "sev": "advisory",
+      "title": "Potential Coordination with Structural Plans",
+      "obs": "The plan notes demolition of existing roofing to the decking, but there is no reference to structural sheets for coordination.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "DM-1.02-00.pdf",
+      "sev": "advisory",
+      "title": "Coordination with Other Disciplines",
+      "obs": "Demolition of the rooftop involves various equipment and systems; noted coordination is required with mechanical, electrical, and plumbing plans.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-6.01.00.pdf",
+      "sev": "warning",
+      "title": "Lack of Specification for ADA Compliance",
+      "obs": "The finish schedule does not explicitly state compliance with ADA requirements for slip resistance in wet areas such as toilet and kitchen floors.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "A-6.01.00.pdf",
+      "sev": "advisory",
+      "title": "Verification of Material Approval",
+      "obs": "The note states that all finishes must be submitted for approval before installation, but there is no mention of compliance with local material standards.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-3.0-00.pdf",
+      "sev": "advisory",
+      "title": "Flow Rate Calculation Methodology",
+      "obs": "The flow rate calculation for the grease interceptor uses the lesser of flow rate by pipe size and flow rate by fixtures, with a decision point at 75 GPM for the grease interceptor",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-3.0-00.pdf",
+      "sev": "warning",
+      "title": "Missing Grease Interceptor Specifications",
+      "obs": "The grease interceptor detail refers to an external document for specifications ('Grease Interceptor-spec-sheet-pdf.pdf'), which is not present in this drawing.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-3.0-00.pdf",
+      "sev": "advisory",
+      "title": "Inferred Fixture Schedule Reference",
+      "obs": "The keyed notes regularly reference a 'plumbing fixture schedule,' which is not visible on this sheet. The schedule might be on another sheet in the drawing set.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "S-300.00.pdf",
+      "sev": "warning",
+      "title": "Unclear Risk Category for Masonry",
+      "obs": "The table section for masonry on the 'SCHEDULE OF SPECIAL INSPECTIONS' does not specify the Building Risk Category beyond 'Masonry (Level ; Building Risk Category )'.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "MD-1.2.pdf",
+      "sev": "advisory",
+      "title": "Ductwork Demolition Clarity",
+      "obs": "The mezzanine and basement plans specify existing supply and return ductwork removal or retention, but lack specific demolition sequence or phasing information.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.3-00.pdf",
+      "sev": "advisory",
+      "title": "Field Coordination Note",
+      "obs": "The note states: 'SANITARY SIZING AND LOCATION TO BE COORDINATED WITH ALL FIELD CONDITIONS PRIOR TO CONSTRUCTION.'",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.3-00.pdf",
+      "sev": "advisory",
+      "title": "Grease Interceptor Details",
+      "obs": "The sheet notes: 'SEE DETAIL 1 ON DRAWING P-3.0 FOR ADDITIONAL INFORMATION.'",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.05.00.pdf",
+      "sev": "advisory",
+      "title": "Travel Distance Calculation Review",
+      "obs": "The sheet includes a 'Travel Distance Calculation' labeled as N.T.S. (not to scale) with a stated maximum travel distance of 320 feet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.05.00.pdf",
+      "sev": "advisory",
+      "title": "Occupancy and Egress Capacity",
+      "obs": "Second floor occupancy calculations are noted with a maximum total of 80 persons and corresponding egress calculations.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.05.00.pdf",
+      "sev": "advisory",
+      "title": "ADA Compliance Note",
+      "obs": "The drawing specifies locations for ADA-compliant seating areas and paths.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.05.00.pdf",
+      "sev": "advisory",
+      "title": "Plan and Legend Coordination",
+      "obs": "The legend includes symbols for different door types and walls, which should be consistently applied across the plans.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.03-00.pdf",
+      "sev": "warning",
+      "title": "Parapet Fire Rating Verification",
+      "obs": "The drawing shows a parapet detail at the vestibule without a specified fire rating.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.03-00.pdf",
+      "sev": "advisory",
+      "title": "Specification appears in the cited evidence",
+      "obs": "The cited drawing evidence already includes specification content related to this topic. A missing-specification conclusion is not established from that evidence alone.",
+      "outcome": "adjusted",
+      "rules": [
+        "absence_claim_contradicted_by_evidence"
+      ]
+    },
+    {
+      "file": "A-3.03-00.pdf",
+      "sev": "advisory",
+      "title": "Architectural and Structural Coordination",
+      "obs": "Architectural wall section details reference existing structural elements without specifying modifications.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-3.03-00.pdf",
+      "sev": "advisory",
+      "title": "Sealing Recommendations for Canopy Junctions",
+      "obs": "Detail for canopy attachment calls for specific manufacturer attachment details but does not show sealing methods.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-1.7-00.pdf",
+      "sev": "warning",
+      "title": "Lack of Backflow Prevention Details",
+      "obs": "The drawing mentions connections to backflow preventers for soda systems (TAG #031.03P4), but lacks detailed specifications or information on backflow prevention devices.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "P-1.7-00.pdf",
+      "sev": "advisory",
+      "title": "Verify In Field (VIF) Notations",
+      "obs": "Multiple items in the plumbing schedule specify 'VERIFY IN FIELD' for installation heights and connections.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-2.01-00.pdf",
+      "sev": "advisory",
+      "title": "General Glazing Notes",
+      "obs": "The sheet contains general glazing notes for doors and windows, specifying the need for compliance with safety standards but lacks detailed section references or specifications for",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-2.01-00.pdf",
+      "sev": "warning",
+      "title": "Date Discrepancy",
+      "obs": "Revision date '10/15/26' is in the future compared to analysis date '2026-10-29'.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-4.1.pdf",
+      "sev": "advisory",
+      "title": "Specific Equipment Brand Requirement",
+      "obs": "The notes specify 'NO SUBSTITUTIONS PERMITTED' for Accurex equipment.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-4.1.pdf",
+      "sev": "advisory",
+      "title": "Interlock with Hood",
+      "obs": "Fan units are to be interlocked with warewasher switching contact.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "M-4.1.pdf",
+      "sev": "warning",
+      "title": "Hood/Fan Interlock Details Reference",
+      "obs": "The drawing refers to another sheet for hood/fan interlock details.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-4.0-00.pdf",
+      "sev": "advisory",
+      "title": "Missing Expansion Tank Schedule",
+      "obs": "The general plumbing notes refer to an expansion tank schedule that is not included on this sheet.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "P-4.0-00.pdf",
+      "sev": "advisory",
+      "title": "Backflow Prevention Device Types",
+      "obs": "Notes specify different types of backflow preventers without specific device types confirmed as per local codes.",
+      "outcome": "adjusted",
+      "rules": [
+        "section_not_supported"
+      ]
+    },
+    {
+      "file": "EQ-2.00-0.pdf",
+      "sev": "warning",
+      "title": "Inconsistent Sheet Title Formatting",
+      "obs": "The sheet is titled \"2ST FLOOR EQUIPMENT PLAN\" which appears to be a typographical error for \"2ND FLOOR EQUIPMENT PLAN\".",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.02-00.pdf",
+      "sev": "advisory",
+      "title": "Insufficient Labeling on Lighting Layout",
+      "obs": "The lighting layout lacks sufficient labeling for fixture types in some sections.",
+      "outcome": "accepted",
+      "rules": []
+    },
+    {
+      "file": "A-1.02-00.pdf",
+      "sev": "advisory",
+      "title": "Monitor Installation Detail Clarification Needed",
+      "obs": "The monitor installation detail (Detail 9) does not clearly specify structural support requirements.",
+      "outcome": "accepted",
+      "rules": []
+    }
+  ]
+}

@@ -90,8 +90,27 @@ const HYDRAULIC_INCONSISTENCY = /\b(?:inconsistenc\w*|should be|calculated flow|
 const PRESENT_SPEC_SIGNAL = /\b(?:#\s*\d+\s*@|rebar|reinforc\w+|dowels?|armaflex|foam insulation|batt insulation|joint reinforcement|k-factor|hose allowance|panic hardware|lockset|cylindrical lock|alarm lock|1\s*ea\s+(?:panic|lock)|fire[- ]rated gaskets?|provide fire[- ]rated|fire[- ]rated (?:door|opening|assembly)|ul\s*label)\b/i;
 const ABSENCE_OF_SPEC = /\b(?:not (?:visibly )?(?:provide|provided|specified|detailed|described|indicated)|do not describe|does not (?:provide|describe|detail|indicate|clearly specify)|absence of|missing|lacks?|unclear)\b/i;
 const DRAWING_DATE_TOKEN = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/g;
-const FUTURE_DATE_CLAIM = /\b(?:future dates?|dates?\s+(?:that\s+are\s+)?(?:in\s+the\s+)?future|lists?\s+future|after the (?:issue|permit|analysis|permit set) date|not consistent with current timelines|unusually futuristic)\b/i;
+const ISO_DATE_TOKEN = /\b(20\d{2})-(\d{2})-(\d{2})\b/g;
+const MONTH_NAME_SOURCE =
+  "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+const MONTH_NAME_DATE = new RegExp(
+  `\\b(${MONTH_NAME_SOURCE})\\s+(\\d{1,2})(?:,)?\\s+(20\\d{2})\\b`,
+  "gi",
+);
+const MONTH_NAME_TO_INDEX: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4,
+  may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11,
+  dec: 12, december: 12,
+};
+/** Affirmative “dates are future” claims — includes phrasing variants from production runs. */
+const FUTURE_DATE_CLAIM = /\b(?:future dates?|future revision dates?|dates?\s+(?:that\s+are\s+)?(?:in\s+the\s+)?future|(?:is|are|was|were)\s+in\s+the\s+future|in the future compared to|lists?\s+future|after the (?:issue|permit|analysis|permit set) date|not consistent with current timelines|unusually futuristic)\b/i;
+/** Vacuous meta commentary that a printed date is not future. */
+const NEGATED_FUTURE_DATE_CLAIM = /\b(?:is|are|was|were)\s+not\s+in\s+the\s+future\b|\bnot\s+(?:a\s+)?future\s+date\b|\bis not in the future according to the analysis date\b/i;
 const ISSUE_DATE_LABEL = /\b(?:issue date|permit(?:\s+set)?\s+date|revised permit set)\b/i;
+const REVISION_DATE_LABEL = /\b(?:revision dates?|revised drawing|drawing dates?|revised permit set)\b/i;
+const ANALYSIS_DATE_MENTION = /\b(?:analysis dates?|this analysis|analysis is on)\b/i;
+const DATE_ADMIN_PROBLEM = /\b(?:inconsist\w*|discrepanc\w*|should reflect changes well after|incorrect|error|problem)\b/i;
 const MEP_DISCIPLINES = new Set(["electrical", "plumbing", "mechanical", "fire", "fuel_gas"]);
 
 function oneLine(value: string, max: number): string {
@@ -351,9 +370,53 @@ function neutralizeDensityAreaFlowDemand(finding: DraftAnalyzerFinding): DraftAn
   };
 }
 
+const GUARD_OR_RAIL = /\b(?:guard(?:\s*-?\s*rail)?s?|railing)\b/i;
+const GUARDRAIL_HEIGHT_DIMENSION =
+  /\d+\s*['′]\s*-?\s*\d+\s*"?\s*(?:MIN\.?\s*)?HEIGHT\b|\bMIN\.?\s*HEIGHT(?:\s+FROM)?\b|\b(?:42|36)\s*(?:inches|in\.?)\b[^.\n]{0,40}\b(?:min(?:imum)?\s*)?height\b/i;
+
+function claimsMissingGuardOrRailHeight(claim: string): boolean {
+  const aboutGuard = GUARD_OR_RAIL.test(claim);
+  const aboutHeight = /\bheight\b/i.test(claim);
+  if (!aboutGuard || !aboutHeight) return false;
+  return ABSENCE_OF_SPEC.test(claim)
+    || SHEET_LOCAL_ABSENCE.test(claim)
+    || /\bdoes not confirm\b|\bcannot (?:be )?confirm|\bnot (?:labeled|shown|indicated|documented)\b|\bomit(?:s|ted)?\b/i.test(claim);
+}
+
+/**
+ * Soft-fail only when quoted evidence ties a height dimension to the same guardrail/detail
+ * under review. Bare "MIN HEIGHT" elsewhere on a sheet (or in unrelated evidence text) must not
+ * auto-downgrade. Production drafts that name a detail without quoting an applicable height stay published.
+ */
+function evidenceQuotesApplicableGuardrailHeight(finding: DraftAnalyzerFinding): boolean {
+  const evidence = finding.drawing_evidence || "";
+  if (!GUARD_OR_RAIL.test(evidence) || !GUARDRAIL_HEIGHT_DIMENSION.test(evidence)) return false;
+
+  // Require the height token and guard/rail language to co-occur in a local window (same note/detail).
+  const associated =
+    /\b(?:guard(?:\s*-?\s*rail)?s?|railing)\b[\s\S]{0,96}(?:\d+\s*['′]\s*-?\s*\d+\s*"?\s*(?:MIN\.?\s*)?HEIGHT\b|MIN\.?\s*HEIGHT(?:\s+FROM)?\b|(?:42|36)\s*(?:inches|in\.?)\b)/i.test(evidence)
+    || /(?:\d+\s*['′]\s*-?\s*\d+\s*"?\s*(?:MIN\.?\s*)?HEIGHT\b|MIN\.?\s*HEIGHT(?:\s+FROM)?\b|(?:42|36)\s*(?:inches|in\.?)\b[^.\n]{0,40}(?:min(?:imum)?\s*)?height\b)[\s\S]{0,96}\b(?:guard(?:\s*-?\s*rail)?s?|railing)\b/i.test(evidence);
+  if (!associated) return false;
+
+  const claimScope = `${finding.title} ${finding.observation} ${finding.drawing_location}`;
+  const detailRef = claimScope.match(/\bdetail\s*#?\s*(\d+)\b/i);
+  if (detailRef) {
+    const detailNo = detailRef[1];
+    const evidenceHasSameDetail = new RegExp(`\\bdetail\\s*#?\\s*${detailNo}\\b`, "i").test(evidence);
+    const evidenceNamesGuardElevation = /\bguard(?:\s*-?\s*rail)?\s+elevation\b/i.test(evidence);
+    // If the finding targets a numbered detail, evidence must cite that detail or the named guardrail elevation.
+    if (!evidenceHasSameDetail && !evidenceNamesGuardElevation) return false;
+  }
+  return true;
+}
+
 function evidenceContradictsAbsenceClaim(finding: DraftAnalyzerFinding): boolean {
   const claim = `${finding.title} ${finding.observation} ${finding.recommendation}`;
   const evidence = finding.drawing_evidence || "";
+  // Height soft-fail only for applicable guardrail-scoped quoted dimensions — not generic sheet text.
+  if (claimsMissingGuardOrRailHeight(claim) && evidenceQuotesApplicableGuardrailHeight(finding)) {
+    return true;
+  }
   if (!ABSENCE_OF_SPEC.test(claim) && !SHEET_LOCAL_ABSENCE.test(claim)) return false;
   if (!PRESENT_SPEC_SIGNAL.test(evidence)) return false;
   // Notes that state sizes do not prove graphic detail drawings exist; keep those concerns prioritized.
@@ -401,11 +464,34 @@ export function parseDrawingCalendarDate(month: string, day: string, year: strin
   return date;
 }
 
+function parseMonthNameDate(monthName: string, day: string, year: string): Date | null {
+  const monthNum = MONTH_NAME_TO_INDEX[monthName.toLowerCase()];
+  if (!monthNum) return null;
+  return parseDrawingCalendarDate(String(monthNum), day, year);
+}
+
+/**
+ * Extract calendar dates from MM/DD(/YYYY), Month DD, YYYY, and YYYY-MM-DD forms.
+ * Used for chronology checks only — not a general NLP date parser.
+ */
 export function extractDrawingCalendarDates(text: string): Date[] {
   const dates: Date[] = [];
+  const seen = new Set<number>();
+  const push = (parsed: Date | null) => {
+    if (!parsed) return;
+    const key = parsed.getTime();
+    if (seen.has(key)) return;
+    seen.add(key);
+    dates.push(parsed);
+  };
   for (const match of text.matchAll(DRAWING_DATE_TOKEN)) {
-    const parsed = parseDrawingCalendarDate(match[1], match[2], match[3]);
-    if (parsed) dates.push(parsed);
+    push(parseDrawingCalendarDate(match[1], match[2], match[3]));
+  }
+  for (const match of text.matchAll(ISO_DATE_TOKEN)) {
+    push(parseDrawingCalendarDate(match[2], match[3], match[1]));
+  }
+  for (const match of text.matchAll(MONTH_NAME_DATE)) {
+    push(parseMonthNameDate(match[1], match[2], match[3]));
   }
   return dates;
 }
@@ -434,8 +520,14 @@ function findingHasMaterialSafetyClaimBeyondDates(finding: DraftAnalyzerFinding)
   );
 }
 
+function assertsFutureDateClaim(blob: string): boolean {
+  if (NEGATED_FUTURE_DATE_CLAIM.test(blob)) return false;
+  return FUTURE_DATE_CLAIM.test(blob)
+    || (ISSUE_DATE_LABEL.test(blob) && /\b(?:after|future|later than)\b/i.test(blob));
+}
+
 /**
- * True when the finding's chronology claim is demonstrably false from cited MM/DD/YY dates
+ * True when the finding's chronology claim is demonstrably false from cited calendar dates
  * (e.g. Feb/Jul 2026 called future relative to Oct 15, 2026, or all cited dates precede analysisDate).
  * Ambiguous/incomplete dates do not trigger. Does not withhold life-safety findings that are not date-admin claims.
  */
@@ -445,25 +537,25 @@ export function isDemonstrablyFalseDateChronologyClaim(
 ): boolean {
   if (findingHasMaterialSafetyClaimBeyondDates(finding)) return false;
   const blob = `${finding.title}\n${finding.observation}\n${finding.drawing_evidence}\n${finding.recommendation}`;
-  if (!FUTURE_DATE_CLAIM.test(blob) && !(ISSUE_DATE_LABEL.test(blob) && /\b(?:after|future|later than)\b/i.test(blob))) {
-    return false;
-  }
+  if (!assertsFutureDateClaim(blob)) return false;
   const dates = extractDrawingCalendarDates(blob);
   if (!dates.length) return false;
 
   const issueNear = blob.match(
-    /\b(?:issue date|permit(?:\s+set)?\s+date|revised permit set)\b[^0-9]{0,32}(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+    /\b(?:issue date|permit(?:\s+set)?\s+date|revised permit set)\b[^0-9]{0,40}(\d{1,2}\/\d{1,2}\/\d{2,4}|20\d{2}-\d{2}-\d{2})/i,
   ) || blob.match(
-    /(\d{1,2}\/\d{1,2}\/\d{2,4})[^.\n]{0,32}\b(?:issue date|permit(?:\s+set)?\s+date)/i,
+    /(\d{1,2}\/\d{1,2}\/\d{2,4}|20\d{2}-\d{2}-\d{2})[^.\n]{0,40}\b(?:issue date|permit(?:\s+set)?\s+date)/i,
   );
   if (issueNear) {
-    const issueDate = parseDateToken(issueNear[1]);
+    const raw = issueNear[1];
+    const issueDate = /^\d{4}-/.test(raw)
+      ? parseDrawingCalendarDate(raw.slice(5, 7), raw.slice(8, 10), raw.slice(0, 4))
+      : parseDateToken(raw);
     if (issueDate) {
       const others = dates.filter((date) => date.getTime() !== issueDate.getTime());
       if (
         others.length > 0
         && others.every((date) => date.getTime() <= issueDate.getTime())
-        && (FUTURE_DATE_CLAIM.test(blob) || /\b(?:after|later than|future)\b/i.test(blob))
       ) {
         return true;
       }
@@ -471,8 +563,40 @@ export function isDemonstrablyFalseDateChronologyClaim(
   }
 
   const analysisDay = resolveAnalysisCalendarDate(analysisDate);
-  if (!analysisDay || !FUTURE_DATE_CLAIM.test(blob)) return false;
+  if (!analysisDay) return false;
   return dates.every((date) => date.getTime() <= analysisDay.getTime());
+}
+
+/**
+ * Vacuous or ordinary revision-history commentary that is not a compliance defect:
+ * negated "not future" meta findings, or treating revision date &lt; analysis date as an inconsistency.
+ * Does not suppress true post-analysis future dates or life-safety findings.
+ */
+export function isUnsupportedDateAdminObservation(
+  finding: DraftAnalyzerFinding,
+  analysisDate?: string | Date | null,
+): boolean {
+  if (findingHasMaterialSafetyClaimBeyondDates(finding)) return false;
+  const blob = `${finding.title}\n${finding.observation}\n${finding.drawing_evidence}\n${finding.recommendation}`;
+  const dates = extractDrawingCalendarDates(blob);
+  const analysisDay = resolveAnalysisCalendarDate(analysisDate);
+
+  if (NEGATED_FUTURE_DATE_CLAIM.test(blob)) {
+    // "…is not in the future" relative to analysis is not a review finding.
+    if (!analysisDay) return true;
+    if (!dates.length) return true;
+    return dates.every((date) => date.getTime() <= analysisDay.getTime());
+  }
+
+  // Ordinary revision history framed as a defect solely because revision precedes analysis.
+  const revisionVsAnalysis = REVISION_DATE_LABEL.test(blob)
+    && ANALYSIS_DATE_MENTION.test(blob)
+    && DATE_ADMIN_PROBLEM.test(blob)
+    && !assertsFutureDateClaim(blob);
+  if (!revisionVsAnalysis || !analysisDay || !dates.length) return false;
+  // Keep true future-dated revisions (any cited date after analysis).
+  if (dates.some((date) => date.getTime() > analysisDay.getTime())) return false;
+  return true;
 }
 
 function neutralizePresenceContradiction(finding: DraftAnalyzerFinding): DraftAnalyzerFinding {
@@ -773,6 +897,10 @@ export function validateAnalyzerFindings(
     let current: DraftAnalyzerFinding = { ...input, drawing_evidence: evidence };
     if (isDemonstrablyFalseDateChronologyClaim(current, context.analysisDate)) {
       withhold(["false_date_chronology_claim"]);
+      continue;
+    }
+    if (isUnsupportedDateAdminObservation(current, context.analysisDate)) {
+      withhold(["unsupported_date_admin_observation"]);
       continue;
     }
 

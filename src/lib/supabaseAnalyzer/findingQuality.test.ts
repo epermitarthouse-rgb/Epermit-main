@@ -220,6 +220,8 @@ describe("Phase 2B critical failure patterns", () => {
     assert.equal(JSON.stringify(phase2bCriticalRegression), before);
     assert.equal(phase2bCriticalRegression.professionallyVerified, false);
     assert.ok(phase2bCriticalRegression.softFailContract.hardWithholdRules.includes("false_date_chronology_claim"));
+    assert.ok(phase2bCriticalRegression.softFailContract.hardWithholdRules.includes("unsupported_date_admin_observation"));
+    assert.equal(phase2bCriticalRegression.version, "phase2b.critical-regression.v5");
   });
 
   it("does not downgrade Critical solely for unread cross-sheet references (C-001/C-003)", () => {
@@ -749,6 +751,108 @@ describe("supported discrepancies and scope", () => {
     assert.equal(result.withheld.length, 0);
     assert.equal(result.published[0]?.severity, "critical");
   });
+
+  it("withholds v8 A-2.01 / FP100 / P-1.1 / A-1.00 date regression cases", () => {
+    const analysisDate = "2026-10-29T16:11:25.000Z";
+    const a201 = validateAnalyzerFindings([
+      draft({
+        severity: "warning",
+        title: "Date Discrepancy",
+        observation: "Revision date '10/15/26' is in the future compared to analysis date '2026-10-29'.",
+        drawing_evidence: "Title block revision date 10/15/26.",
+        recommendation: "Correct the revision date chronology relative to the analysis date.",
+      }),
+    ], context({ analysisDate }));
+    assert.equal(a201.published.length, 0);
+    assert.equal(a201.withheld[0]?.rules.includes("false_date_chronology_claim"), true);
+
+    const fp100 = validateAnalyzerFindings([
+      draft({
+        severity: "warning",
+        title: "Future Revision Date",
+        observation: "The revision date is October 14, 2026, compared to the analysis date of October 29, 2026, which indicates the drawing should reflect changes well after the revision date.",
+        drawing_evidence: "Revision block lists October 14, 2026.",
+        recommendation: "Confirm the revision history against the project record.",
+      }),
+    ], context({ analysisDate }));
+    assert.equal(fp100.published.length, 0);
+    assert.equal(fp100.withheld[0]?.rules.includes("false_date_chronology_claim"), true);
+
+    const p11 = validateAnalyzerFindings([
+      draft({
+        severity: "warning",
+        title: "Revised drawing date discrepancy",
+        observation: "The revision date listed as 10/14/2026 is inconsistent as this analysis is on 10/29/2026.",
+        drawing_evidence: "Revision date 10/14/2026 in title block.",
+        recommendation: "Reconcile the revision date with the analysis timeline.",
+      }),
+    ], context({ analysisDate }));
+    assert.equal(p11.published.length, 0);
+    assert.equal(p11.withheld[0]?.rules.includes("unsupported_date_admin_observation"), true);
+
+    const a100 = validateAnalyzerFindings([
+      draft({
+        severity: "advisory",
+        title: "Future revision date observation",
+        observation: "The REVISED PERMIT SET is dated 10/15/2026, which is not in the future according to the analysis date of 10/29/2026.",
+        drawing_evidence: "REVISED PERMIT SET dated 10/15/2026.",
+        recommendation: "No action required if the date is correctly not future.",
+      }),
+    ], context({ analysisDate }));
+    assert.equal(a100.published.length, 0);
+    assert.equal(a100.withheld[0]?.rules.includes("unsupported_date_admin_observation"), true);
+  });
+
+  it("soft-fails guardrail missing-height only when quoted height applies to the cited guardrail detail", () => {
+    const quoted = validateAnalyzerFindings([
+      draft({
+        category: "Architecture",
+        severity: "critical",
+        title: "Guardrail Height Missing Verification",
+        observation: "Detail does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+        drawing_evidence: "Guard Rail Elevation Detail @ High Roof, detail 1. Note: 3'-6\"MIN HEIGHT FROM top of deck membrane. EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT.",
+        drawing_location: "Upper left of sheet, detail 1.",
+        suggested_code_reference: "IBC 2015 Section 1015.3",
+        recommendation: "Verify and document that guardrail height meets the minimum code requirement of 42 inches.",
+      }),
+    ], context());
+    assert.equal(quoted.published[0]?.severity, "advisory");
+    assert.equal(quoted.published[0]?.validation.rules.includes("absence_claim_contradicted_by_evidence"), true);
+
+    const prodShaped = validateAnalyzerFindings([
+      draft({
+        category: "Architecture",
+        severity: "critical",
+        title: "Guardrail Height Missing Verification",
+        observation: "Detail does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+        drawing_evidence: "Guard Rail Elevation Detail @ High Roof, detail 1.",
+        drawing_location: "Upper left of sheet, detail 1.",
+        suggested_code_reference: "IBC 2015 Section 1015.3",
+        recommendation: "Verify and document that guardrail height meets the minimum code requirement of 42 inches.",
+      }),
+    ], context());
+    assert.equal(prodShaped.published[0]?.severity, "critical");
+    assert.equal(prodShaped.published[0]?.validation.rules.length, 0);
+
+    // Generic MIN HEIGHT elsewhere (no guardrail association / wrong detail) must not auto-downgrade.
+    const genericMinHeight = validateAnalyzerFindings([
+      draft({
+        category: "Architecture",
+        severity: "critical",
+        title: "Guardrail Height Missing Verification",
+        observation: "Detail 1 does not confirm guardrail height, raising compliance concerns with minimum height standard.",
+        drawing_evidence: "Roof curb note at detail 4: MIN HEIGHT FROM membrane. Separate parapet callout only.",
+        drawing_location: "Upper left of sheet, detail 1.",
+        suggested_code_reference: "IBC 2015 Section 1015.3",
+        recommendation: "Verify and document that guardrail height meets the minimum code requirement of 42 inches.",
+      }),
+    ], context());
+    assert.equal(genericMinHeight.published[0]?.severity, "critical");
+    assert.equal(
+      genericMinHeight.published[0]?.validation.rules.includes("absence_claim_contradicted_by_evidence"),
+      false,
+    );
+  });
 });
 
 describe("prompts and historical runs", () => {
@@ -778,7 +882,10 @@ describe("prompts and historical runs", () => {
     assert.equal(legacy.includes("Analysis mode scope"), false);
     assert.equal(displayAnalysisMode(null), "Legacy review");
     assert.match(legacy, /Analysis date \(UTC\): 2026-10-29/);
-    assert.match(legacy, /analysis date listed in Review context/);
+    assert.match(legacy, /Call a printed date "future" only when it is after the analysis date/);
+    assert.match(legacy, /is not in the future/);
+    assert.match(legacy, /3'-6" MIN HEIGHT/);
+    assert.match(legacy, /Do not escalate severity for the same on-sheet evidence/);
     assert.match(legacy, /explicit drawing requirement/);
     assert.match(legacy, /lesser-of/);
     assert.match(legacy, /2014 NEC/);
