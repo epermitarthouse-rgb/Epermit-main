@@ -59,6 +59,8 @@ type AnalyzerRun = {
   status: string;
   budget_limit_usd: number;
   estimated_cost_usd: number;
+  started_at?: string | null;
+  created_at?: string | null;
 };
 
 type Finding = {
@@ -234,7 +236,8 @@ async function processJob(
 
     const bytes = new Uint8Array(await fileBlob.arrayBuffer());
     const fileData = `data:application/pdf;base64,${encodeBase64(bytes)}`;
-    const systemPrompt = processorReviewPrompt(run);
+    const analysisDate = run.started_at || run.created_at || new Date().toISOString();
+    const systemPrompt = processorReviewPrompt(run, { analysisDate });
     let sheetIndex: SubmittedSheetRef[] = [];
     let retrievableJobs: RetrievableSheetJob[] = [];
     const { data: sheetRows, error: sheetIndexError } = await admin
@@ -433,6 +436,7 @@ async function processJob(
       codeContext: run.code_context,
       sheetIndex,
       sheetDiscipline: analysis.discipline,
+      analysisDate,
     });
     const usage = (responsePayload.usage || {}) as Record<string, unknown>;
     const inputTokens = Math.max(0, Number(usage.input_tokens) || 0);

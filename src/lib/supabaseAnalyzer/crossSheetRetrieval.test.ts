@@ -293,7 +293,9 @@ describe("Phase 3A prompt assembly and Phase 2B coexistence", () => {
 
   it("keeps C-001–C-004 and positive Critical controls under Phase 2B rules", () => {
     const provisionalSheetIndex = phase2bCriticalRegression.sheetIndexForProvisional || [];
-    for (const item of phase2bCriticalRegression.cases) {
+    const benchmarkCases = phase2bCriticalRegression.cases.filter((item) => /^C-00[1-4]$/.test(item.id));
+    assert.equal(benchmarkCases.length, 4);
+    for (const item of benchmarkCases) {
       const result = validateAnalyzerFindings([item.draft as never], {
         analysisMode: "both",
         jurisdictionKey: "dc",

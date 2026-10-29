@@ -48,7 +48,10 @@ async function main() {
 
   const caseRows = [];
   for (const item of fixture.cases) {
-    const result = validateAnalyzerFindings([item.draft], dcContext(sheetIndex, item.draft.category));
+    const result = validateAnalyzerFindings([item.draft], {
+      ...dcContext(sheetIndex, item.draft.category),
+      analysisDate: item.analysisDate || "2026-10-29T15:00:00.000Z",
+    });
     const published = result.published[0];
     caseRows.push({
       id: item.id,

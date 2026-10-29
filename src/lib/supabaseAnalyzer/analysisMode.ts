@@ -3,6 +3,7 @@ export {
   DC_2017_REGISTRY_SNAPSHOT,
   analysisModeShortLabel,
   displayAnalysisMode,
+  formatAnalysisDateLabel,
   isStoredAnalysisMode,
   legacySupabaseAnalyzerPrompt,
   normalizeNewRunAnalysisMode,

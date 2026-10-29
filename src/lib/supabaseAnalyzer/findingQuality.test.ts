@@ -195,16 +195,21 @@ describe("Phase 2B critical failure patterns", () => {
       const result = validateAnalyzerFindings([item.draft as DraftAnalyzerFinding], context({
         sheetIndex: provisionalSheetIndex,
         sheetDiscipline: item.draft.category,
+        analysisDate: (item as { analysisDate?: string }).analysisDate || "2026-10-29T15:00:00.000Z",
       }));
-      assert.equal(result.published.length, item.expectPublished === false ? 0 : 1);
-      assert.equal(result.withheld.length, item.expectWithheld ? 1 : 0);
+      assert.equal(result.published.length, item.expectPublished === false ? 0 : 1, item.id);
+      assert.equal(result.withheld.length, item.expectWithheld ? 1 : 0, item.id);
+      if (item.expectWithheld) {
+        assert.equal(result.withheld[0]?.rules.includes(item.expectRule as string), true, item.id);
+        continue;
+      }
       const finding = result.published[0];
-      assert.equal(finding?.severity, item.expectSeverity);
-      assert.equal(finding?.validation.outcome, item.expectOutcome);
-      assert.equal(finding?.validation.originalSeverity, "critical");
-      assert.equal(finding?.validation.publishedSeverity, item.expectSeverity);
+      assert.equal(finding?.severity, item.expectSeverity, item.id);
+      assert.equal(finding?.validation.outcome, item.expectOutcome, item.id);
+      assert.equal(finding?.validation.originalSeverity, item.draft.severity, item.id);
+      assert.equal(finding?.validation.publishedSeverity, item.expectSeverity, item.id);
       if (item.expectRule) {
-        assert.equal(finding?.validation.rules.includes(item.expectRule), true);
+        assert.equal(finding?.validation.rules.includes(item.expectRule), true, item.id);
       }
       if (item.expectPreserveText) {
         assert.equal(finding?.title, item.draft.title);
@@ -214,6 +219,7 @@ describe("Phase 2B critical failure patterns", () => {
     }
     assert.equal(JSON.stringify(phase2bCriticalRegression), before);
     assert.equal(phase2bCriticalRegression.professionallyVerified, false);
+    assert.ok(phase2bCriticalRegression.softFailContract.hardWithholdRules.includes("false_date_chronology_claim"));
   });
 
   it("does not downgrade Critical solely for unread cross-sheet references (C-001/C-003)", () => {
@@ -686,6 +692,63 @@ describe("supported discrepancies and scope", () => {
     assert.equal(result.published.length, 0);
     assert.equal(result.withheld[0]?.rules.includes("thin_drawing_evidence"), true);
   });
+
+  it("withholds demonstrably false future-date chronology (A-1.00 production pattern)", () => {
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Architecture",
+        severity: "critical",
+        title: "Date discrepancy on revisions",
+        observation: "The revision block lists future dates for permit comments (e.g., 02/16/26, 07/17/26) relative to the issue date of 10/15/26.",
+        drawing_evidence: "Revision block shows permit comments on 02/16/26 and 07/17/26, which are after the issue date 10/15/26.",
+        drawing_location: "Revision block, bottom right corner",
+        recommendation: "Verify and correct the dates of revisions to ensure they reflect the proper sequencing and approval timeline.",
+      }),
+    ], context({ analysisDate: "2026-10-29T14:55:28.000Z" }));
+    assert.equal(result.published.length, 0);
+    assert.equal(result.withheld[0]?.rules.includes("false_date_chronology_claim"), true);
+  });
+
+  it("does not withhold ambiguous date text or genuine post-analysis future dates", () => {
+    const ambiguous = validateAnalyzerFindings([
+      draft({
+        severity: "warning",
+        title: "Revision dates need review",
+        observation: "The revisions list includes future dates that are not consistent with current timelines.",
+        drawing_evidence: "Title block revisions list dates in 2026 without day and month.",
+        recommendation: "Confirm the printed revision timeline with the project record.",
+      }),
+    ], context({ analysisDate: "2026-10-29T00:00:00.000Z" }));
+    assert.equal(ambiguous.withheld.length, 0);
+    assert.equal(ambiguous.published.length, 1);
+
+    const genuineFuture = validateAnalyzerFindings([
+      draft({
+        severity: "warning",
+        title: "Future revision date",
+        observation: "Revision 11/01/26 is in the future relative to the analysis timeline.",
+        drawing_evidence: "Revision block lists 11/01/26 after other 2026 entries.",
+        recommendation: "Confirm whether 11/01/26 is an intended future revision date.",
+      }),
+    ], context({ analysisDate: "2026-10-15T00:00:00.000Z" }));
+    assert.equal(genuineFuture.withheld.length, 0);
+    assert.equal(genuineFuture.published.length, 1);
+  });
+
+  it("does not withhold life-safety Criticals that mention dates incidentally", () => {
+    const result = validateAnalyzerFindings([
+      draft({
+        category: "Means of Egress",
+        severity: "critical",
+        title: "Exit door locking mechanism conflicts with egress note",
+        observation: "Door EX-1 requires a key from the inside, conflicting with the egress note. Revision 02/16/26 is also listed in the title block.",
+        drawing_evidence: "Door schedule EX-1 classroom lock key inside. Life Safety Note 4: exit doors operable without special knowledge. Revision 02/16/26.",
+        recommendation: "Revise EX-1 hardware so the exit is operable without a key.",
+      }),
+    ], context({ analysisDate: "2026-10-29T00:00:00.000Z" }));
+    assert.equal(result.withheld.length, 0);
+    assert.equal(result.published[0]?.severity, "critical");
+  });
 });
 
 describe("prompts and historical runs", () => {
@@ -710,10 +773,12 @@ describe("prompts and historical runs", () => {
       jurisdiction_key: "dc",
       code_edition: "2017",
     };
-    const legacy = processorReviewPrompt({ ...base, analysis_mode: null });
-    assert.equal(legacy, legacySupabaseAnalyzerPrompt(base));
+    const legacy = processorReviewPrompt({ ...base, analysis_mode: null }, { analysisDate: "2026-10-29T14:55:28.000Z" });
+    assert.equal(legacy, legacySupabaseAnalyzerPrompt(base, { analysisDate: "2026-10-29T14:55:28.000Z" }));
     assert.equal(legacy.includes("Analysis mode scope"), false);
     assert.equal(displayAnalysisMode(null), "Legacy review");
+    assert.match(legacy, /Analysis date \(UTC\): 2026-10-29/);
+    assert.match(legacy, /analysis date listed in Review context/);
     assert.match(legacy, /explicit drawing requirement/);
     assert.match(legacy, /lesser-of/);
     assert.match(legacy, /2014 NEC/);
@@ -854,6 +919,10 @@ describe("prompts and historical runs", () => {
     assert.equal(reportSource.includes("validateAnalyzerFindings"), false);
     assert.match(processor, /validateAnalyzerFindings\(/);
     assert.match(processor, /buildAnalyzerUserPrompt\(/);
+    assert.match(processor, /processorReviewPrompt\(run,\s*\{\s*analysisDate\s*\}\)/);
+    assert.match(processor, /analysisDate/);
+    assert.match(processor, /started_at/);
+    assert.match(processor, /created_at/);
     const validateAt = processor.indexOf("validateAnalyzerFindings(");
     const insertAt = processor.indexOf(".insert(findingRows)");
     assert.equal(validateAt > 0 && validateAt < insertAt, true);

@@ -289,13 +289,24 @@ function scopePrompt(
   return lines.join(" ");
 }
 
-export function legacySupabaseAnalyzerPrompt(run: {
-  jurisdiction_label: string;
-  code_context: string;
-  project_type: string;
-  jurisdiction_key?: string;
-  code_edition?: string;
-}): string {
+/** Format a run timestamp as UTC YYYY-MM-DD for prompt injection. Empty when unusable. */
+export function formatAnalysisDateLabel(value: string | Date | null | undefined): string {
+  if (value == null || value === "") return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+export function legacySupabaseAnalyzerPrompt(
+  run: {
+    jurisdiction_label: string;
+    code_context: string;
+    project_type: string;
+    jurisdiction_key?: string;
+    code_edition?: string;
+  },
+  options: { analysisDate?: string | Date | null } = {},
+): string {
   const editionGuidance = isDc2017AnalyzerContext({
     jurisdictionKey: run.jurisdiction_key,
     jurisdictionLabel: run.jurisdiction_label,
@@ -304,6 +315,10 @@ export function legacySupabaseAnalyzerPrompt(run: {
   })
     ? dc2017EditionGuidance()
     : "No verified adopted-edition record is available for this selection. Do not invent an IBC, NEC, IPC, IMC, IFC, or local-amendment edition.";
+  const analysisDateLabel = formatAnalysisDateLabel(options.analysisDate);
+  const analysisDateLine = analysisDateLabel
+    ? `- Analysis date (UTC): ${analysisDateLabel}. Use this date when judging whether a printed revision or drawing date is in the future.`
+    : "- Analysis date (UTC): not supplied. Do not invent an analysis date, and do not call printed revision dates future.";
   return `You are performing a preliminary professional review of one commercial permit drawing sheet.
 
 Review context:
@@ -312,6 +327,7 @@ Review context:
 - Project type: ${run.project_type}
 - Source coverage: adoption metadata is recorded, but complete authoritative technical code text is not supplied.
 - ${editionGuidance}
+${analysisDateLine}
 
 Rules:
 1. Analyze only content actually visible in the attached drawing. Never infer a condition from the filename.
@@ -333,20 +349,23 @@ Rules:
 17. For sprinkler hydraulic summaries, density × discharge area is not total FLOW DEMAND. Do not treat those different values as an inconsistency. Hose allowance is a separate listed quantity and does not by itself prove either value wrong.
 18. Do not claim a specification is missing when the quoted drawing evidence already states that specification (for example reinforcement sizes, insulation products, or hose allowance).
 19. Keyed-note numbers must match the numbered note you quote. Do not cite note N unless that number appears with the quoted note text.
-20. Revision or drawing dates are not "future" unless they are after the analysis date you were given. Do not invent an analysis date.
+20. Revision or drawing dates are not "future" unless they are after the analysis date listed in Review context. Do not invent a different analysis date. A revision date that falls before an issue date on the same sheet is not a future-date discrepancy.
 21. Supporting excerpts from referenced sheets are machine-extracted text-layer snippets with provenance. They are not verified code compliance. An empty or failed excerpt means content was not retrieved—not that the detail is missing or compliant. Never downgrade a Critical finding solely because retrieval failed.`;
 }
 
-export function processorReviewPrompt(run: {
-  analysis_mode?: string | null;
-  analysis_scope?: { promptScope?: string } | null;
-  jurisdiction_label: string;
-  jurisdiction_key?: string;
-  code_edition?: string;
-  code_context: string;
-  project_type: string;
-}): string {
-  const legacy = legacySupabaseAnalyzerPrompt(run);
+export function processorReviewPrompt(
+  run: {
+    analysis_mode?: string | null;
+    analysis_scope?: { promptScope?: string } | null;
+    jurisdiction_label: string;
+    jurisdiction_key?: string;
+    code_edition?: string;
+    code_context: string;
+    project_type: string;
+  },
+  options: { analysisDate?: string | Date | null } = {},
+): string {
+  const legacy = legacySupabaseAnalyzerPrompt(run, options);
   if (!isStoredAnalysisMode(run.analysis_mode)) return legacy;
   const promptScope = run.analysis_scope?.promptScope
     || resolveAnalyzerReviewScope({

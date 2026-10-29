@@ -1,17 +1,18 @@
 {
   "phase": "2B",
-  "version": "phase2b.critical-regression.v3",
-  "note": "Frozen drafts from Phase 2A.7 provisional assessments plus positive-control Critical cases. Used for local persist-time before/after comparison only. Not professionally verified truth. Simulated validator outcomes are not actual GPT-4o reanalysis. v3: cross-sheet uncertainty records a limitation without severity downgrade.",
+  "version": "phase2b.critical-regression.v4",
+  "note": "Frozen drafts from Phase 2A.7 provisional assessments plus positive-control Critical cases. Used for local persist-time before/after comparison only. Not professionally verified truth. Simulated validator outcomes are not actual GPT-4o reanalysis. v3: cross-sheet uncertainty records a limitation without severity downgrade. v4: false date chronology claims are hard-withheld; door hardware/fire-rating absence contradiction when evidence quotes those specs.",
   "professionallyVerified": false,
   "softFailContract": {
-    "description": "Severity may be adjusted only for demonstrable on-sheet technical errors (hydraulics, keynote mismatch, clear evidence contradiction). Cross-sheet unread references tag a verification limitation without changing severity or client-facing text. Soft-fail is not withhold/delete. originalSeverity/title/observation remain in raw_metadata.validation.",
+    "description": "Severity may be adjusted only for demonstrable on-sheet technical errors (hydraulics, keynote mismatch, clear evidence contradiction). Cross-sheet unread references tag a verification limitation without changing severity or client-facing text. Soft-fail is not withhold/delete. originalSeverity/title/observation remain in raw_metadata.validation. Demonstrably false future-date chronology claims are hard-withheld.",
     "hardWithholdRules": [
       "missing_required_field",
       "thin_drawing_evidence",
       "documented_requirement_restatement",
       "outside_ibc_only_scope",
       "outside_local_only_scope",
-      "near_duplicate"
+      "near_duplicate",
+      "false_date_chronology_claim"
     ],
     "limitationOnlyRules": [
       "cross_sheet_detail_not_reviewed",
@@ -112,6 +113,126 @@
         "drawing_location": "Masonry and Foundation Notes",
         "suggested_code_reference": "",
         "recommendation": "Include reinforcement details or a specific sheet cross-reference."
+      }
+    },
+    {
+      "id": "D-001",
+      "kind": "false_date_chronology",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "false_date_chronology_claim",
+      "analysisDate": "2026-10-29T15:00:00.000Z",
+      "rationale": "Production A-1.00 Critical: Feb/Jul 2026 called future relative to issue date 10/15/26.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Date discrepancy on revisions",
+        "observation": "The revision block lists future dates for permit comments (e.g., 02/16/26, 07/17/26) relative to the issue date of 10/15/26.",
+        "drawing_evidence": "Revision block shows permit comments on 02/16/26 and 07/17/26, which are after the issue date 10/15/26.",
+        "drawing_location": "Revision block, bottom right corner",
+        "suggested_code_reference": "",
+        "recommendation": "Verify and correct the dates of revisions to ensure they reflect the proper sequencing and approval timeline."
+      }
+    },
+    {
+      "id": "D-002",
+      "kind": "false_date_chronology",
+      "expectWithheld": true,
+      "expectPublished": false,
+      "expectRule": "false_date_chronology_claim",
+      "analysisDate": "2026-10-26T00:00:00.000Z",
+      "rationale": "Baseline A-1.00 Warning W-002 pattern: 2026 revision dates called future vs analysis date.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "warning",
+        "title": "Revisions Dates Discrepancy",
+        "observation": "The revisions list includes future dates (e.g., 02/16/26, 07/17/26) that are not consistent with current timelines.",
+        "drawing_evidence": "Revisions listed in the title block have dates in 2026 including 02/16/26 and 07/17/26.",
+        "drawing_location": "Title block",
+        "suggested_code_reference": "",
+        "recommendation": "Verify the revision dates against the project timeline."
+      }
+    },
+    {
+      "id": "A6-LOCK-QUOTE",
+      "kind": "demonstrable_technical_error",
+      "expectRule": "absence_claim_contradicted_by_evidence",
+      "expectSeverity": "advisory",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": false,
+      "rationale": "When cited evidence already quotes panic/lock hardware, locking-absence Criticals must soft-fail. Does not auto-clear production Criticals whose evidence only restates absence.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Unclear door locking mechanism specification",
+        "observation": "The Door Schedule does not clearly specify locking mechanisms for doors that could affect egress safety.",
+        "drawing_evidence": "Hardware set lists 1 EA PANIC 9975EO-LD and 1 EA LOCK ND80PD RHO 626 SCHLAGE. Note: ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS. PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+        "drawing_location": "Door & Hardware Schedule",
+        "suggested_code_reference": "IBC 2015, Chapter 10 - Means of Egress",
+        "recommendation": "Review door hardware details for compliance with egress safety requirements."
+      }
+    },
+    {
+      "id": "A6-FIRE-QUOTE",
+      "kind": "demonstrable_technical_error",
+      "expectRule": "absence_claim_contradicted_by_evidence",
+      "expectSeverity": "advisory",
+      "expectOutcome": "adjusted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectPreserveText": false,
+      "rationale": "Fire-rating absence contradicted when evidence quotes fire-rated gasket / rating language.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Missing fire-rating specifications for doors",
+        "observation": "The Door Schedule does not indicate fire-rating specifications for doors where required.",
+        "drawing_evidence": "General door note 11: PROVIDE FIRE RATED GASKETS FOR DOOR #11. Door schedule and hardware notes address opening protectives for rated doors.",
+        "drawing_location": "Door Schedule and general door notes",
+        "suggested_code_reference": "IBC 2015, Section 716 - Opening Protectives",
+        "recommendation": "Provide fire-rating information for doors as required by code."
+      }
+    },
+    {
+      "id": "A6-LOCK-PROD",
+      "kind": "professional_review_unchanged",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "Production A-6 locking Critical evidence only restates absence for D01/D02 without quoting hardware. Offline OCR contradicts the claim, but persist-time cannot see the PDF. Left published for professional review — do not auto-downgrade.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Unclear door locking mechanism specification",
+        "observation": "The Door Schedule does not clearly specify locking mechanisms for doors that could affect egress safety.",
+        "drawing_evidence": "Door Schedule table lacks specific locking mechanism details for doors D01 and D02.",
+        "drawing_location": "Middle right of the sheet",
+        "suggested_code_reference": "IBC 2015, Chapter 10 - Means of Egress",
+        "recommendation": "Review door hardware details for compliance with egress safety requirements."
+      }
+    },
+    {
+      "id": "A6-FIRE-PROD",
+      "kind": "professional_review_unchanged",
+      "expectSeverity": "critical",
+      "expectOutcome": "accepted",
+      "expectPublished": true,
+      "expectWithheld": false,
+      "expectRulesEmpty": true,
+      "rationale": "Production A-6 fire-rating Critical cites schedule-table absence only. Offline OCR shows at least door #11 fire-rated gasket notes elsewhere on sheet; full schedule-column completeness needs professional/visual review. Do not auto-downgrade.",
+      "draft": {
+        "category": "Architecture",
+        "severity": "critical",
+        "title": "Missing fire-rating specifications for doors",
+        "observation": "The Door Schedule does not indicate fire-rating specifications for doors where required.",
+        "drawing_evidence": "No fire-rating information is present within the Door Schedule table.",
+        "drawing_location": "Middle right of the sheet",
+        "suggested_code_reference": "IBC 2015, Section 716 - Opening Protectives",
+        "recommendation": "Provide fire-rating information for doors as required by code."
       }
     }
   ],

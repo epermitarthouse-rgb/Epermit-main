@@ -290,7 +290,7 @@ describe("analysis mode scope", () => {
     const processor = readFileSync(join(__dirname, "../../../supabase/functions/supabase-analyzer-processor/index.ts"), "utf8");
     assert.match(runs, /normalizeNewRunAnalysisMode\(body\.analysisMode\)/);
     assert.match(runs, /analysis_mode: requestedMode/);
-    assert.match(processor, /processorReviewPrompt\(run\)/);
+    assert.match(processor, /processorReviewPrompt\(run,\s*\{\s*analysisDate\s*\}\)/);
     assert.equal(processor.includes("https://api.openai.com/v1/responses"), true);
     assert.equal(/analysis_mode\s*=\s*"both"/.test(processor), false);
   });

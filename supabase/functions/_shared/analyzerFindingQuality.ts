@@ -64,6 +64,8 @@ export interface AnalyzerValidationContext {
   codeContext: string;
   sheetIndex: SubmittedSheetRef[];
   sheetDiscipline?: string | null;
+  /** UTC instant for "future date" checks. Prefer run started_at / created_at. */
+  analysisDate?: string | Date | null;
 }
 
 interface FamilyRecord {
@@ -85,8 +87,11 @@ const SELECTION_ERROR = /not the lesser|exceeds the (?:printed )?lesser|greater 
 const HYDRAULIC_DENSITY_AREA = /\bdensity\b/i;
 const HYDRAULIC_FLOW_DEMAND = /\bflow\s+demand\b/i;
 const HYDRAULIC_INCONSISTENCY = /\b(?:inconsistenc\w*|should be|calculated flow|density\s*[×x*]\s*|gpm\s*per\s*square\s*foot)\b/i;
-const PRESENT_SPEC_SIGNAL = /\b(?:#\s*\d+\s*@|rebar|reinforc\w+|dowels?|armaflex|foam insulation|batt insulation|joint reinforcement|k-factor|hose allowance)\b/i;
-const ABSENCE_OF_SPEC = /\b(?:not (?:visibly )?(?:provide|provided|specified|detailed|described)|do not describe|does not (?:provide|describe|detail)|absence of|missing|lacks?)\b/i;
+const PRESENT_SPEC_SIGNAL = /\b(?:#\s*\d+\s*@|rebar|reinforc\w+|dowels?|armaflex|foam insulation|batt insulation|joint reinforcement|k-factor|hose allowance|panic hardware|lockset|cylindrical lock|alarm lock|1\s*ea\s+(?:panic|lock)|fire[- ]rated gaskets?|provide fire[- ]rated|fire[- ]rated (?:door|opening|assembly)|ul\s*label)\b/i;
+const ABSENCE_OF_SPEC = /\b(?:not (?:visibly )?(?:provide|provided|specified|detailed|described|indicated)|do not describe|does not (?:provide|describe|detail|indicate|clearly specify)|absence of|missing|lacks?|unclear)\b/i;
+const DRAWING_DATE_TOKEN = /\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/g;
+const FUTURE_DATE_CLAIM = /\b(?:future dates?|dates?\s+(?:that\s+are\s+)?(?:in\s+the\s+)?future|lists?\s+future|after the (?:issue|permit|analysis|permit set) date|not consistent with current timelines|unusually futuristic)\b/i;
+const ISSUE_DATE_LABEL = /\b(?:issue date|permit(?:\s+set)?\s+date|revised permit set)\b/i;
 const MEP_DISCIPLINES = new Set(["electrical", "plumbing", "mechanical", "fire", "fuel_gas"]);
 
 function oneLine(value: string, max: number): string {
@@ -364,8 +369,110 @@ function evidenceContradictsAbsenceClaim(finding: DraftAnalyzerFinding): boolean
   if (/\bhose allowance\b/i.test(evidence) && /\bhose|flow demand|hydraulic/i.test(claim)) {
     return true;
   }
+  if (/\b(?:panic hardware|lockset|cylindrical lock|alarm lock|schlage|von duprin|lockguard|1\s*ea\s+(?:panic|lock))\b/i.test(evidence)
+    && /\b(?:lock|locking|panic|egress)\b/i.test(claim)) {
+    return true;
+  }
+  // Require affirmative fire-rating language — not the words "fire-rating" inside an absence claim.
+  if (/\b(?:fire[- ]rated gaskets?|provide fire[- ]rated|fire[- ]rated (?:door|opening|assembly)|ul\s*label|opening protectives?\b.*\b(?:provided|listed|shown))\b/i.test(evidence)
+    && /\b(?:fire[- ]rat|opening protective)\b/i.test(claim)) {
+    return true;
+  }
   if (detailDrawingGap) return false;
   return PRESENT_SPEC_SIGNAL.test(evidence) && ABSENCE_OF_SPEC.test(claim);
+}
+
+/** Parse MM/DD/YY or MM/DD/YYYY drawing dates as UTC calendar days. Two-digit years map to 20xx. */
+export function parseDrawingCalendarDate(month: string, day: string, year: string): Date | null {
+  const monthNum = Number(month);
+  const dayNum = Number(day);
+  let yearNum = Number(year);
+  if (!Number.isFinite(monthNum) || !Number.isFinite(dayNum) || !Number.isFinite(yearNum)) return null;
+  if (year.length === 2) yearNum = 2000 + yearNum;
+  if (yearNum < 1990 || yearNum > 2100 || monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) return null;
+  const date = new Date(Date.UTC(yearNum, monthNum - 1, dayNum));
+  if (
+    date.getUTCFullYear() !== yearNum
+    || date.getUTCMonth() !== monthNum - 1
+    || date.getUTCDate() !== dayNum
+  ) {
+    return null;
+  }
+  return date;
+}
+
+export function extractDrawingCalendarDates(text: string): Date[] {
+  const dates: Date[] = [];
+  for (const match of text.matchAll(DRAWING_DATE_TOKEN)) {
+    const parsed = parseDrawingCalendarDate(match[1], match[2], match[3]);
+    if (parsed) dates.push(parsed);
+  }
+  return dates;
+}
+
+export function resolveAnalysisCalendarDate(value: string | Date | null | undefined): Date | null {
+  if (value == null || value === "") return null;
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function parseDateToken(token: string): Date | null {
+  const match = token.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!match) return null;
+  return parseDrawingCalendarDate(match[1], match[2], match[3]);
+}
+
+function findingHasMaterialSafetyClaimBeyondDates(finding: DraftAnalyzerFinding): boolean {
+  const title = finding.title || "";
+  const body = `${finding.observation} ${finding.recommendation}`;
+  const dateAdminTitle = /\b(date|revision|title block|permit set)\b/i.test(title)
+    && !/\b(egress|fire|sprinkler|structural|life safety|locking|panic|hardware)\b/i.test(title);
+  if (dateAdminTitle) return false;
+  return /\b(?:means of egress|egress width|fire[- ]rat|sprinkler|standpipe|structural|life safety|locking mechanism|panic hardware)\b/i.test(
+    `${title} ${body}`,
+  );
+}
+
+/**
+ * True when the finding's chronology claim is demonstrably false from cited MM/DD/YY dates
+ * (e.g. Feb/Jul 2026 called future relative to Oct 15, 2026, or all cited dates precede analysisDate).
+ * Ambiguous/incomplete dates do not trigger. Does not withhold life-safety findings that are not date-admin claims.
+ */
+export function isDemonstrablyFalseDateChronologyClaim(
+  finding: DraftAnalyzerFinding,
+  analysisDate?: string | Date | null,
+): boolean {
+  if (findingHasMaterialSafetyClaimBeyondDates(finding)) return false;
+  const blob = `${finding.title}\n${finding.observation}\n${finding.drawing_evidence}\n${finding.recommendation}`;
+  if (!FUTURE_DATE_CLAIM.test(blob) && !(ISSUE_DATE_LABEL.test(blob) && /\b(?:after|future|later than)\b/i.test(blob))) {
+    return false;
+  }
+  const dates = extractDrawingCalendarDates(blob);
+  if (!dates.length) return false;
+
+  const issueNear = blob.match(
+    /\b(?:issue date|permit(?:\s+set)?\s+date|revised permit set)\b[^0-9]{0,32}(\d{1,2}\/\d{1,2}\/\d{2,4})/i,
+  ) || blob.match(
+    /(\d{1,2}\/\d{1,2}\/\d{2,4})[^.\n]{0,32}\b(?:issue date|permit(?:\s+set)?\s+date)/i,
+  );
+  if (issueNear) {
+    const issueDate = parseDateToken(issueNear[1]);
+    if (issueDate) {
+      const others = dates.filter((date) => date.getTime() !== issueDate.getTime());
+      if (
+        others.length > 0
+        && others.every((date) => date.getTime() <= issueDate.getTime())
+        && (FUTURE_DATE_CLAIM.test(blob) || /\b(?:after|later than|future)\b/i.test(blob))
+      ) {
+        return true;
+      }
+    }
+  }
+
+  const analysisDay = resolveAnalysisCalendarDate(analysisDate);
+  if (!analysisDay || !FUTURE_DATE_CLAIM.test(blob)) return false;
+  return dates.every((date) => date.getTime() <= analysisDay.getTime());
 }
 
 function neutralizePresenceContradiction(finding: DraftAnalyzerFinding): DraftAnalyzerFinding {
@@ -664,6 +771,11 @@ export function validateAnalyzerFindings(
     }
 
     let current: DraftAnalyzerFinding = { ...input, drawing_evidence: evidence };
+    if (isDemonstrablyFalseDateChronologyClaim(current, context.analysisDate)) {
+      withhold(["false_date_chronology_claim"]);
+      continue;
+    }
+
     const rules: string[] = [];
     const crossSheet = adjustCrossSheet(current, context.sheetIndex);
     current = crossSheet.finding;
