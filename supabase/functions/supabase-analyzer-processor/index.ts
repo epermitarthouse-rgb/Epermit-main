@@ -17,6 +17,12 @@ import {
   type CrossSheetRetrievalPack,
   type RetrievableSheetJob,
 } from "../_shared/analyzerCrossSheetRetrieval.ts";
+import {
+  isVisualEvidenceEnabled,
+  retrieveVisualEvidence,
+  visualEvidenceAuditMetadata,
+  type VisualEvidenceResult,
+} from "../_shared/analyzerVisualEvidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -264,6 +270,24 @@ async function processJob(
       }));
     }
 
+    // Phase 3 Stage 1–2: optional sheet-local visual evidence. Failures never block baseline analysis.
+    // Independent of Phase 3A CSR (keep CSR default off).
+    let visualEvidence: VisualEvidenceResult | null = null;
+    try {
+      visualEvidence = await retrieveVisualEvidence({
+        enabled: isVisualEvidenceEnabled(),
+        fileName: job.original_file_name,
+        pdfBytes: bytes,
+      });
+    } catch (visualError) {
+      console.error(
+        "[supabase-analyzer] visual evidence failed open",
+        job.id,
+        visualError instanceof Error ? visualError.message : visualError,
+      );
+      visualEvidence = null;
+    }
+
     // Phase 3A: optional bounded cross-sheet excerpts. Failures never block baseline analysis.
     let crossSheetPack: CrossSheetRetrievalPack | null = null;
     try {
@@ -293,6 +317,7 @@ async function processJob(
       crossSheetPack = null;
     }
     const userPrompt = buildAnalyzerUserPrompt(job.original_file_name, sheetIndex, {
+      visualEvidence: visualEvidence?.promptBlock || null,
       crossSheetEvidence: crossSheetPack?.promptBlock || null,
     });
 
@@ -570,6 +595,10 @@ async function processJob(
         model: responseModel,
         response_id: responsePayload.id || null,
         request_id: requestId,
+        ...(visualEvidence ? visualEvidenceAuditMetadata(visualEvidence) : {
+          visual_evidence_enabled: false,
+          visual_evidence_status: "disabled",
+        }),
         ...(crossSheetPack ? crossSheetRetrievalAuditMetadata(crossSheetPack) : {
           cross_sheet_retrieval_enabled: false,
           cross_sheet_retrieval_status: "disabled",

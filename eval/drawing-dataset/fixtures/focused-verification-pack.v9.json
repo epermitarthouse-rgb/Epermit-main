@@ -1,0 +1,73 @@
+{
+  "version": "focused-verification-pack.v9",
+  "professionallyVerified": false,
+  "status": "completed",
+  "focusedRunId": "f50df719-02f0-411f-852d-0ed0c5456b60",
+  "deployedCommit": "a8ccda0abc9202a8faae30b08868f098f5bb4674",
+  "deployedProcessor": {
+    "slug": "supabase-analyzer-processor",
+    "status": "ACTIVE",
+    "version": 9,
+    "projectRef": "eeqxyjrcldivtpikcpvk"
+  },
+  "completedAt": "2026-10-29T16:59:56.043958+00",
+  "publishedFindings": 20,
+  "withheldFindings": 4,
+  "estimatedCostUsd": 0.118239,
+  "notStarted": false,
+  "phase3aCrossSheetRetrieval": "disabled_default_off",
+  "matchPriorRuns": {
+    "analysis_mode": "both",
+    "jurisdiction_key": "dc",
+    "jurisdiction_label": "Washington D.C. (12A DCMR)",
+    "code_edition": "2017",
+    "code_context": "2017 DC Construction Codes (2015 IBC base)",
+    "project_type": "Commercial (General)",
+    "ai_model": "gpt-4o"
+  },
+  "baselineRuns": {
+    "baseline": "649fdaa6-14b9-45b9-bd62-695166363f75",
+    "phase2b": "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+    "v8": "b982a22c-5501-49d9-a8ef-ab4078a14b27"
+  },
+  "sheets": [
+    {
+      "file": "A-1.00-00.pdf",
+      "why": "Date admin / not-future meta; classic chronology control"
+    },
+    {
+      "file": "A-2.01-00.pdf",
+      "why": "False future claim vs analysis date"
+    },
+    {
+      "file": "A-3.06-00.pdf",
+      "why": "Guardrail height Critical / detail-scoped evidence"
+    },
+    {
+      "file": "A-6.00.pdf",
+      "why": "Door locking / fire-rating topic retention"
+    },
+    {
+      "file": "FP100.pdf",
+      "why": "Revision-date admin FP"
+    },
+    {
+      "file": "FP200.pdf",
+      "why": "Hydraulic density×area topic retention"
+    },
+    {
+      "file": "P-1.1-00.pdf",
+      "why": "Revision vs analysis inconsistency admin FP"
+    }
+  ],
+  "acceptanceChecks": [
+    "Incorrect future-date claims and irrelevant administrative date observations are prevented or withheld with audit rules.",
+    "Validation audit distinguishes false_date_chronology_claim / unsupported_date_admin_observation interceptions from model non-emission.",
+    "A-3.06 handled per quoted applicable evidence; production-shaped unquoted Critical may remain for review.",
+    "Legitimate door hardware, fire-rating, and hydraulic concerns remain visible when generated; no unsupported Critical downgrades.",
+    "CSR remains disabled on all sheet jobs.",
+    "Completion, persistence, reviewer actions, and reporting remain functional."
+  ],
+  "costNote": "Initiating this pack requires paid GPT-4o vision calls for up to 7 sheets. Do not start until explicit approval.",
+  "notStarted": true
+}

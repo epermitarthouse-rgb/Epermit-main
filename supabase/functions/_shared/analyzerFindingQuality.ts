@@ -201,13 +201,18 @@ export function formatSubmittedSheetIndex(sheets: SubmittedSheetRef[], currentFi
 export function buildAnalyzerUserPrompt(
   fileName: string,
   sheets: SubmittedSheetRef[],
-  options: { crossSheetEvidence?: string | null } = {},
+  options: {
+    visualEvidence?: string | null;
+    crossSheetEvidence?: string | null;
+  } = {},
 ): string {
   const parts = [
     "Review this permit drawing sheet and return the structured preliminary observations.",
     `Current file: ${oneLine(fileName, 180)}`,
     formatSubmittedSheetIndex(sheets, fileName),
   ];
+  const visual = options.visualEvidence?.trim();
+  if (visual) parts.push(visual);
   const evidence = options.crossSheetEvidence?.trim();
   if (evidence) parts.push(evidence);
   return parts.join("\n\n");
