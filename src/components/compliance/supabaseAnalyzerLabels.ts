@@ -5,9 +5,9 @@ export function statusLabel(status: string) {
     upload_pending: "Awaiting upload",
     uploading: "Uploading drawings",
     queued: "Queued",
-    processing: "Processing",
-    completed: "Completed",
-    completed_with_errors: "Completed with sheet errors",
+    processing: "Analyzing drawings",
+    completed: "Analysis complete",
+    completed_with_errors: "Analysis complete (with sheet errors)",
     failed: "Failed",
     cancelled: "Cancelled",
   };

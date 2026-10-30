@@ -262,7 +262,7 @@ export function PendingDrawingCards({
   return (
     <div className="space-y-2 text-left" data-testid="analyzer-new-uploads">
       <p className="text-sm font-medium text-foreground">Selected drawings</p>
-      <div className={PENDING_GRID_CLASS}>
+      <div className={`${PENDING_GRID_CLASS} max-h-[min(40vh,360px)] overflow-y-auto overscroll-contain pr-1`}>
         {files.map((file, index) => (
           <div
             key={`${file.name}:${file.size}:${index}`}

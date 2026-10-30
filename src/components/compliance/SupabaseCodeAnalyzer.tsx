@@ -127,9 +127,21 @@ import {
   updateConfirmationCopy,
   type SheetUpdatePlan,
 } from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
+import {
+  deriveAnalyzerWorkflowView,
+  type LiveUploadProgress,
+} from "@/lib/supabaseAnalyzer/workflowStatus";
 
 const ACTIVE_STATUSES = new Set(["uploading", "queued", "processing"]);
 const EMPTY_SHEETS: AnalyzerRunDataset["jobs"] = [];
+
+const CONFIRM_DIALOG_CONTENT_CLASS =
+  "flex max-h-[min(90dvh,90vh)] w-[calc(100%-1.5rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:w-full";
+const CONFIRM_DIALOG_HEADER_CLASS = "shrink-0 space-y-2 px-6 pt-6 text-left";
+const CONFIRM_DIALOG_BODY_CLASS =
+  "min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4";
+const CONFIRM_DIALOG_FOOTER_CLASS =
+  "shrink-0 border-t bg-background px-6 py-4 sm:space-x-2";
 
 export function SupabaseCodeAnalyzer() {
   const { projects } = useProjects();
@@ -161,11 +173,7 @@ export function SupabaseCodeAnalyzer() {
   const [expandedJobIds, setExpandedJobIds] = useState<Set<string>>(() => new Set());
   const [expandedFindingIds, setExpandedFindingIds] = useState<Set<string>>(() => new Set());
   const [existingDrawingsOpen, setExistingDrawingsOpen] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{
-    completed: number;
-    total: number;
-    fileName: string;
-  } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<LiveUploadProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const filesRef = useRef<File[]>([]);
   const submittingRef = useRef(false);
@@ -178,6 +186,8 @@ export function SupabaseCodeAnalyzer() {
   const reanalysisFilesRef = useRef<File[]>([]);
   const expansionBeforeFilterRef = useRef<Set<string> | null>(null);
   const selectionProjectRef = useRef(projectId);
+  const datasetRequestIdRef = useRef(0);
+  const uploadSessionRunIdRef = useRef<string | null>(null);
 
   const selectedProject = projects.find((project) => project.id === projectId);
   const totalBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
@@ -198,16 +208,60 @@ export function SupabaseCodeAnalyzer() {
   }, []);
 
   const loadDataset = useCallback(async (runId: string) => {
+    const requestId = ++datasetRequestIdRef.current;
     const nextDataset = await fetchSupabaseAnalyzerDataset(runId);
+    // Ignore stale responses so an older completed snapshot cannot overwrite a newer upload session.
+    if (requestId !== datasetRequestIdRef.current) return null;
+    if (
+      uploadSessionRunIdRef.current === runId
+      && submittingRef.current
+      && nextDataset.run.status === "completed"
+    ) {
+      const optimistic = {
+        ...nextDataset,
+        run: {
+          ...nextDataset.run,
+          status: "uploading" as const,
+          completed_at: null,
+        },
+      };
+      setDataset(optimistic);
+      setRuns((current) => current.map((run) => run.id === runId ? optimistic.run : run));
+      return optimistic;
+    }
     setDataset(nextDataset);
     setRuns((current) => current.map((run) => run.id === runId ? nextDataset.run : run));
     return nextDataset;
+  }, []);
+
+  const markRunUploading = useCallback((runId: string) => {
+    uploadSessionRunIdRef.current = runId;
+    setDataset((current) => (
+      current && current.run.id === runId
+        ? {
+          ...current,
+          run: {
+            ...current.run,
+            status: "uploading",
+            completed_at: null,
+          },
+        }
+        : current
+    ));
+    setRuns((current) => current.map((run) => (
+      run.id === runId
+        ? { ...run, status: "uploading", completed_at: null }
+        : run
+    )));
   }, []);
 
   useEffect(() => {
     setDataset(null);
     setRuns([]);
     setSelectedRunId(null);
+    setUploadProgress(null);
+    uploadSessionRunIdRef.current = null;
+    datasetRequestIdRef.current += 1;
     if (!projectId) return;
     setLoading(true);
     void loadRuns(projectId)
@@ -395,7 +449,14 @@ export function SupabaseCodeAnalyzer() {
     const submission = confirmedPlan ? "update" as const : action;
     submittingRef.current = true;
     setSubmitting(true);
-    setUploadProgress({ completed: 0, total: selected.length, fileName: selected[0]?.name || "drawing.pdf" });
+    setUploadProgress({
+      completed: 0,
+      total: selected.length,
+      fileName: selected[0]?.name || "drawing.pdf",
+      phase: "uploading",
+      failed: 0,
+    });
+    let keepUploadProgress = false;
     try {
       let runId: string;
       let uploads = draftRef.current?.uploads || [];
@@ -419,6 +480,7 @@ export function SupabaseCodeAnalyzer() {
           runId,
           uploads,
         };
+        markRunUploading(runId);
       } else if (submission === "update") {
         const plan = confirmedPlan || planSheetUpdate(dataset?.jobs || [], selected, { confirmed: true });
         const replaceIds = new Map(
@@ -446,6 +508,7 @@ export function SupabaseCodeAnalyzer() {
           draftRef.current = null;
           filesRef.current = [];
           setFiles([]);
+          uploadSessionRunIdRef.current = null;
           return;
         }
         draftRef.current = {
@@ -454,8 +517,17 @@ export function SupabaseCodeAnalyzer() {
           runId,
           uploads,
         };
+        markRunUploading(runId);
+        setUploadProgress({
+          completed: 0,
+          total: uploads.length,
+          fileName: uploads[0]?.fileName || selected[0]?.name || "drawing.pdf",
+          phase: "uploading",
+          failed: 0,
+        });
       } else {
         runId = draftRef.current!.runId;
+        markRunUploading(runId);
       }
 
       setSelectedRunId(runId);
@@ -463,7 +535,13 @@ export function SupabaseCodeAnalyzer() {
         const uploaded = await uploadSupabaseAnalyzerFiles(
           selected,
           uploads,
-          (completed, total, fileName) => setUploadProgress({ completed, total, fileName }),
+          (completed, total, fileName) => setUploadProgress((current) => ({
+            completed,
+            total,
+            fileName,
+            phase: "uploading",
+            failed: current?.failed || 0,
+          })),
         );
         const remaining = failedUploadDescriptors(
           uploads,
@@ -476,19 +554,33 @@ export function SupabaseCodeAnalyzer() {
           uploads: remaining,
         };
         if (remaining.length > 0) {
+          setUploadProgress({
+            completed: uploaded.completed,
+            total: uploads.length,
+            phase: "complete",
+            failed: remaining.length,
+          });
+          keepUploadProgress = true;
           if (uploaded.completed > 0) {
             await finalizeSupabaseAnalyzerRun(activeProjectId!, runId);
             await loadRuns(activeProjectId!);
             await loadDataset(runId);
           }
           toast.warning(
-            `${remaining.length} sheet${remaining.length === 1 ? "" : "s"} could not be uploaded. They remain selected so you can try again.`,
+            `${remaining.length} drawing${remaining.length === 1 ? "" : "s"} could not be uploaded. They remain selected so you can retry.`,
           );
           return;
         }
+        setUploadProgress({
+          completed: uploaded.completed,
+          total: uploads.length,
+          phase: "complete",
+          failed: 0,
+        });
       }
 
       const finalized = await finalizeSupabaseAnalyzerRun(activeProjectId!, runId);
+      uploadSessionRunIdRef.current = null;
       await loadRuns(activeProjectId!);
       await loadDataset(runId);
       draftRef.current = null;
@@ -508,11 +600,12 @@ export function SupabaseCodeAnalyzer() {
         toast.success(`${finalized.queued} drawing sheets queued for analysis`);
       }
     } catch (error) {
+      uploadSessionRunIdRef.current = null;
       toast.error(error instanceof Error ? error.message : "Could not start analysis");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
-      setUploadProgress(null);
+      if (!keepUploadProgress) setUploadProgress(null);
     }
   };
 
@@ -740,6 +833,21 @@ export function SupabaseCodeAnalyzer() {
   selectionLockedRef.current = actionPresentation.lockSelection;
   const updateCopy = updatePlan ? updateConfirmationCopy(updatePlan) : null;
   const savedJobs = dataset?.run.id === selectedRunId ? dataset.jobs : EMPTY_SHEETS;
+  const pendingMutates = useMemo(() => {
+    if (files.length === 0 || !activeRun || runInProgress || submitting) return false;
+    const plan = planSheetUpdate(savedJobs, files);
+    return plan.mutates === true;
+  }, [files, activeRun, runInProgress, submitting, savedJobs]);
+  const workflowView = useMemo(
+    () => deriveAnalyzerWorkflowView({
+      run: activeRun,
+      jobs: savedJobs,
+      pendingMutates,
+      liveUpload: uploadProgress,
+      submitting,
+    }),
+    [activeRun, savedJobs, pendingMutates, uploadProgress, submitting],
+  );
   const capacity = useMemo(
     () => selectionCapacity({ saved: savedJobs, pending: files }),
     [savedJobs, files],
@@ -1231,7 +1339,7 @@ export function SupabaseCodeAnalyzer() {
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {uploadProgress
-                    ? `Uploading ${uploadProgress.completed} / ${uploadProgress.total}`
+                    ? `Uploading ${uploadProgress.completed}/${uploadProgress.total}`
                     : "Uploading"}
                 </>
               ) : actionPresentation.primaryLabel === "Processing" ? (
@@ -1279,39 +1387,69 @@ export function SupabaseCodeAnalyzer() {
               </Button>
             ) : null}
           </div>
-          {actionPresentation.statusText ? (
+          {actionPresentation.statusText && !workflowView.drawingSetOutdated ? (
             <div className="flex justify-center">
               <Badge variant="outline" data-testid="analyzer-run-status">
                 {actionPresentation.statusText}
               </Badge>
             </div>
           ) : null}
-          {activeRun && !runInProgress ? (
+          {workflowView.drawingSetOutdated ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center" data-testid="analyzer-ready-for-analysis">
+              <p className="text-sm font-medium text-foreground">{workflowView.headline}</p>
+              {workflowView.detail ? (
+                <p className="mt-1 text-xs text-muted-foreground">{workflowView.detail}</p>
+              ) : null}
+            </div>
+          ) : activeRun && !runInProgress && workflowView.stage !== "uploading" ? (
             <p className="text-center text-xs text-muted-foreground">
               Add a new or revised drawing, then choose Update Analysis, or reanalyze saved drawings without uploading them again. A reanalysis creates a new analysis and keeps this run.
             </p>
           ) : null}
 
-          {uploadProgress ? (
+          {workflowView.stage === "uploading" && workflowView.upload ? (
             <div className="space-y-2" data-testid="drawing-upload-progress">
               <Progress
-                value={(uploadProgress.completed / Math.max(1, uploadProgress.total)) * 100}
+                value={workflowView.progressPercent ?? 0}
                 className="h-2"
               />
-              <p className="text-center text-sm text-muted-foreground">
-                Uploading {uploadProgress.fileName} · {uploadProgress.completed} / {uploadProgress.total}
+              <p className="text-center text-sm text-foreground">
+                {workflowView.headline}
               </p>
+              {workflowView.detail ? (
+                <p className="text-center text-xs text-muted-foreground">{workflowView.detail}</p>
+              ) : null}
             </div>
           ) : null}
 
-          {activeRun && activeRun.total_sheets > 0 ? (
+          {!workflowView.drawingSetOutdated && workflowView.stage === "ocr_prep" ? (
+            <div className="space-y-2" data-testid="analyzer-ocr-progress">
+              <Progress value={workflowView.progressPercent ?? 0} className="h-2" />
+              <p className="text-center text-sm text-foreground">{workflowView.headline}</p>
+              {workflowView.detail ? (
+                <p className="text-center text-xs text-muted-foreground">{workflowView.detail}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!workflowView.drawingSetOutdated
+            && activeRun
+            && activeRun.total_sheets > 0
+            && workflowView.stage !== "uploading"
+            && workflowView.stage !== "ocr_prep"
+            && workflowView.stage !== "ready" ? (
             <div className="space-y-2" data-testid="analyzer-sheet-progress">
-              <Progress value={progress} className="h-2" />
+              <Progress value={workflowView.progressPercent ?? progress} className="h-2" />
               <p className="text-center text-sm text-foreground">
-                {finishedSheets} of {activeRun.total_sheets} sheets finished
+                {workflowView.headline || `${finishedSheets} of ${activeRun.total_sheets} sheets finished`}
               </p>
+              {workflowView.upload ? (
+                <p className="text-center text-xs text-muted-foreground">
+                  {workflowView.upload.uploaded}/{workflowView.upload.total} drawings uploaded
+                </p>
+              ) : null}
               <p className="text-center text-xs text-muted-foreground">
-                Queued {activeRun.queued_sheets} · Processing {activeRun.processing_sheets} · Completed {activeRun.completed_sheets} · Failed {activeRun.failed_sheets}{cancelledSheets > 0 ? ` · Cancelled ${cancelledSheets}` : ""} · {progress}%
+                Queued {activeRun.queued_sheets} · Processing {activeRun.processing_sheets} · Completed {activeRun.completed_sheets} · Failed {activeRun.failed_sheets}{cancelledSheets > 0 ? ` · Cancelled ${cancelledSheets}` : ""} · {workflowView.progressPercent ?? progress}%
               </p>
             </div>
           ) : null}
@@ -1331,16 +1469,26 @@ export function SupabaseCodeAnalyzer() {
           className="space-y-6"
           data-testid="supabase-analyzer-results"
         >
+          {workflowView.treatFindingsAsPrevious ? (
+            <div
+              className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+              data-testid="previous-analyses-banner"
+            >
+              Previous analysis results are shown below for reference. The current drawing set is ready for a new analysis.
+            </div>
+          ) : null}
           <FindingsMatrix
             counts={findingCounts}
             active={severityFilter}
-            processing={runInProgress}
+            processing={runInProgress && !workflowView.drawingSetOutdated}
             onSelect={selectRunSeverity}
           />
           {dataset ? <SupabaseAnalyzerQualityDrawer dataset={dataset} /> : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2" data-testid="analysis-history-control">
-              <Label className="text-sm text-muted-foreground">Analysis history</Label>
+              <Label className="text-sm text-muted-foreground">
+                {workflowView.treatFindingsAsPrevious ? "Previous analyses" : "Analysis history"}
+              </Label>
               <Select value={selectedRunId || undefined} onValueChange={setSelectedRunId}>
                 <SelectTrigger className="w-[280px] max-w-full">
                   <SelectValue placeholder="Select an analysis" />
@@ -1514,47 +1662,61 @@ export function SupabaseCodeAnalyzer() {
           if (!open && !submitting) setUpdatePlan(null);
         }}
       >
-        <AlertDialogContent data-testid="update-analysis-dialog">
-          <AlertDialogHeader>
+        <AlertDialogContent className={CONFIRM_DIALOG_CONTENT_CLASS} data-testid="update-analysis-dialog">
+          <AlertDialogHeader className={CONFIRM_DIALOG_HEADER_CLASS}>
             <AlertDialogTitle>{updateCopy?.title || "Update Analysis"}</AlertDialogTitle>
             <AlertDialogDescription>{updateCopy?.intro}</AlertDialogDescription>
           </AlertDialogHeader>
           {updateCopy ? (
-            <div className="space-y-3 text-sm text-muted-foreground">
-              {updateCopy.replacements.length > 0 ? (
-                <ul className="list-disc space-y-1 pl-5">
-                  {updateCopy.replacements.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {updateCopy.adds.length > 0 ? (
-                <div>
-                  <p className="text-foreground">
-                    Add {updateCopy.adds.length} new drawing{updateCopy.adds.length === 1 ? "" : "s"}
-                  </p>
-                  <ul className="mt-1 list-disc space-y-1 pl-5">
-                    {updateCopy.adds.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {updateCopy.skipped.length > 0 ? (
-                <ul className="list-disc space-y-1 pl-5">
-                  {updateCopy.skipped.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              ) : null}
+            <div className={CONFIRM_DIALOG_BODY_CLASS} data-testid="update-analysis-drawing-list">
+              <div className="space-y-3 text-sm text-muted-foreground">
+                {updateCopy.replacements.length > 0 ? (
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Replace {updateCopy.replacements.length} drawing{updateCopy.replacements.length === 1 ? "" : "s"}
+                    </p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {updateCopy.replacements.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {updateCopy.adds.length > 0 ? (
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Add {updateCopy.adds.length} new drawing{updateCopy.adds.length === 1 ? "" : "s"}
+                    </p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {updateCopy.adds.map((name) => (
+                        <li key={name}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {updateCopy.skipped.length > 0 ? (
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {updateCopy.skipped.length} drawing{updateCopy.skipped.length === 1 ? "" : "s"} unchanged
+                    </p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {updateCopy.skipped.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
-          <AlertDialogFooter>
+          <AlertDialogFooter className={CONFIRM_DIALOG_FOOTER_CLASS}>
             <AlertDialogCancel disabled={submitting}>{updateCopy?.cancelLabel || "Cancel"}</AlertDialogCancel>
-            <AlertDialogAction disabled={submitting} onClick={(event) => {
-              event.preventDefault();
-              confirmUpdate();
-            }}
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(event) => {
+                event.preventDefault();
+                confirmUpdate();
+              }}
             >
               {updateCopy?.confirmLabel || "Update Analysis"}
             </AlertDialogAction>
@@ -1567,35 +1729,42 @@ export function SupabaseCodeAnalyzer() {
           if (!open && !submitting) setReanalysisPlan(null);
         }}
       >
-        <AlertDialogContent data-testid="reanalyze-dialog">
-          <AlertDialogHeader>
+        <AlertDialogContent className={CONFIRM_DIALOG_CONTENT_CLASS} data-testid="reanalyze-dialog">
+          <AlertDialogHeader className={CONFIRM_DIALOG_HEADER_CLASS}>
             <AlertDialogTitle>{reanalysisCopy?.title || "Reanalyze drawings"}</AlertDialogTitle>
             <AlertDialogDescription>{reanalysisCopy?.intro}</AlertDialogDescription>
           </AlertDialogHeader>
           {reanalysisCopy && (reanalysisCopy.replacements.length > 0 || reanalysisCopy.adds.length > 0) ? (
-            <div className="space-y-3 text-sm text-muted-foreground">
-              {reanalysisCopy.replacements.length > 0 ? (
-                <ul className="list-disc space-y-1 pl-5">
-                  {reanalysisCopy.replacements.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {reanalysisCopy.adds.length > 0 ? (
-                <div>
-                  <p className="text-foreground">
-                    Add {reanalysisCopy.adds.length} new drawing{reanalysisCopy.adds.length === 1 ? "" : "s"}
-                  </p>
-                  <ul className="mt-1 list-disc space-y-1 pl-5">
-                    {reanalysisCopy.adds.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+            <div className={CONFIRM_DIALOG_BODY_CLASS} data-testid="reanalyze-drawing-list">
+              <div className="space-y-3 text-sm text-muted-foreground">
+                {reanalysisCopy.replacements.length > 0 ? (
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Replace {reanalysisCopy.replacements.length} drawing{reanalysisCopy.replacements.length === 1 ? "" : "s"}
+                    </p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {reanalysisCopy.replacements.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {reanalysisCopy.adds.length > 0 ? (
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Add {reanalysisCopy.adds.length} new drawing{reanalysisCopy.adds.length === 1 ? "" : "s"}
+                    </p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {reanalysisCopy.adds.map((name) => (
+                        <li key={name}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
-          <AlertDialogFooter>
+          <AlertDialogFooter className={CONFIRM_DIALOG_FOOTER_CLASS}>
             <AlertDialogCancel disabled={submitting}>{reanalysisCopy?.cancelLabel || "Cancel"}</AlertDialogCancel>
             <AlertDialogAction
               disabled={submitting}
