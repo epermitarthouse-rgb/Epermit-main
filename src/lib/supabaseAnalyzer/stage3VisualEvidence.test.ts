@@ -264,6 +264,46 @@ describe("Stage 3 full-coverage OCR gate", () => {
     assert.equal(approved.blockGpt, false);
     assert.equal(approved.code, "approved_partial");
   });
+
+  it("rejects terminal coverage that still has OCR failures or incomplete sheets", () => {
+    const failed = evaluateStage3OcrRunGate({
+      analysisScope: {
+        stage3FullCoverageOcr: true,
+        stage3OcrPreprocess: {
+          gateMode: "blocking",
+          terminal: true,
+          requiredSheetCount: 82,
+          missingEvidence: 0,
+          incompleteSheets: ["E-1.00-00.pdf", "S-1.00-00.pdf"],
+          counts: { completed: 80, failed: 2, pending: 0, processing: 0, skipped: 0 },
+          macWorkerLastHeartbeat: new Date().toISOString(),
+        },
+      },
+      now: Date.now(),
+    });
+    assert.equal(failed.blockGpt, true);
+    assert.equal(failed.code, "blocking_incomplete");
+    assert.deepEqual(failed.incompleteSheets, ["E-1.00-00.pdf", "S-1.00-00.pdf"]);
+    assert.match(failed.reason, /E-1\.00-00\.pdf/);
+
+    const ready = evaluateStage3OcrRunGate({
+      analysisScope: {
+        stage3FullCoverageOcr: true,
+        stage3OcrPreprocess: {
+          gateMode: "blocking",
+          terminal: true,
+          requiredSheetCount: 82,
+          missingEvidence: 0,
+          incompleteSheets: [],
+          counts: { completed: 82, failed: 0, pending: 0, processing: 0, skipped: 0 },
+          macWorkerLastHeartbeat: new Date().toISOString(),
+        },
+      },
+      now: Date.now(),
+    });
+    assert.equal(ready.blockGpt, false);
+    assert.equal(ready.code, "ok");
+  });
 });
 
 describe("Stage 3 processor wiring (source contract)", () => {
@@ -280,5 +320,8 @@ describe("Stage 3 processor wiring (source contract)", () => {
     assert.match(processor, /evaluateStage3OcrRunGate/);
     assert.match(processor, /stage3 visual evidence failed open/);
     assert.match(processor, /Never waits for Mac|never waits for Mac/i);
+    // Full-coverage retrieval must not reintroduce pilot/topic allow-lists in the processor.
+    assert.doesNotMatch(processor, /TARGET_SHEET_IDS|A-3\.06.*A-6\.00|topic.?allow|pilot.?only/i);
+    assert.match(processor, /createStage3StoragePackLoader/);
   });
 });

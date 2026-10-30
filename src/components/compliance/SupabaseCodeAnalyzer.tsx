@@ -1002,6 +1002,7 @@ export function SupabaseCodeAnalyzer() {
         files: selectedFiles,
         confirmed: true,
         analysisMode,
+        stage3FullCoverageOcr,
         jurisdictionKey: jurisdictionKeyFor(jurisdiction),
         jurisdictionLabel: jurisdiction,
         projectType,

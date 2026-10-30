@@ -3,7 +3,7 @@
  */
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,7 +19,6 @@ import {
 } from "../lib/stage3MacOcrWorker.mjs";
 import { mapManifestSheetsToJobs } from "../lib/stage3WorkerSupabase.mjs";
 import { extractGuardrailDetailEvidence } from "../lib/stage3VisualExtractionSpike.mjs";
-import { readFile } from "node:fs/promises";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const datasetOut = path.resolve(here, "../out/mcd-649fdaa6");
@@ -118,5 +117,21 @@ describe("Stage 3 full-set worker (layout-full, no fresh Vision OCR)", () => {
       const result = await processClaimedJob(paths, claimed, { freshOcr: false });
       assert.match(result.pack.promptBlock, /density|flowDemand|FLOW DEMAND/i);
     }
+  });
+
+  it("does not suppress non-pilot topics from full-set packs", async () => {
+    const manifest = await loadAuthoritativeDrawingManifest(datasetOut);
+    const electrical = manifest.sheets.find((row) => String(row.relativePath || "").toUpperCase().startsWith("E-"));
+    assert.ok(electrical, "expected an electrical sheet in the 82-sheet set");
+    const paths = resolveWorkerPaths(workerRoot);
+    const packNames = await readdir(paths.packs);
+    const packName = packNames.find((name) => name.startsWith(`${electrical.id}.`) || name.includes(electrical.sha256));
+    assert.ok(packName, `missing pack for ${electrical.relativePath}`);
+    const pack = JSON.parse(await readFile(path.join(paths.packs, packName), "utf8"));
+    assert.equal(pack.independentlyVerified, false);
+    assert.ok(pack.topic);
+    assert.notEqual(pack.topic, "guardrail_detail_height");
+    assert.ok(String(pack.promptBlock || "").length > 20);
+    assert.match(String(pack.status || ""), /recovered|partial/);
   });
 });

@@ -37,7 +37,8 @@ export async function uploadAndVerifyFullSetPacks(options = {}) {
   }
 
   const manifest = await loadAuthoritativeDrawingManifest(datasetOut);
-  const jobs = live && !dryRun
+  // Fetch live sheet-job IDs whenever --live is set (including --dry-run association checks).
+  const jobs = live
     ? await listRunSheetJobs({ projectId, runId }, options)
     : (options.jobs || []);
   const association = mapManifestSheetsToJobs(manifest.sheets, jobs);

@@ -43,20 +43,61 @@ export function runStatePath(workerRoot, runId) {
   return path.join(path.resolve(workerRoot), "runs", `${runId}.state.json`);
 }
 
-export async function loadRunState(workerRoot, runId) {
-  const filePath = runStatePath(workerRoot, runId);
-  if (!existsSync(filePath)) return null;
-  return JSON.parse(await readFile(filePath, "utf8"));
+/** Serialize concurrent load/save of the same run state file (worker concurrency > 1). */
+const runStateLocks = new Map();
+
+function withRunStateLock(workerRoot, runId, task) {
+  const key = `${path.resolve(workerRoot)}::${runId}`;
+  const previous = runStateLocks.get(key) || Promise.resolve();
+  const next = previous.catch(() => null).then(task);
+  runStateLocks.set(key, next.finally(() => {
+    if (runStateLocks.get(key) === next) runStateLocks.delete(key);
+  }));
+  return next;
 }
 
-export async function saveRunState(workerRoot, state) {
+async function readRunStateUnlocked(workerRoot, runId) {
+  const filePath = runStatePath(workerRoot, runId);
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    return JSON.parse(await readFile(filePath, "utf8"));
+  }
+}
+
+async function writeRunStateUnlocked(workerRoot, state) {
   const dir = path.join(path.resolve(workerRoot), "runs");
   await mkdir(dir, { recursive: true });
   state.updatedAt = new Date().toISOString();
   recomputeCounts(state);
   const filePath = path.join(dir, `${state.runId}.state.json`);
-  await writeFile(filePath, JSON.stringify(state, null, 2));
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+  await writeFile(tempPath, JSON.stringify(state, null, 2));
+  const { rename } = await import("node:fs/promises");
+  await rename(tempPath, filePath);
   return state;
+}
+
+export async function loadRunState(workerRoot, runId) {
+  return withRunStateLock(workerRoot, runId, () => readRunStateUnlocked(workerRoot, runId));
+}
+
+export async function saveRunState(workerRoot, state) {
+  return withRunStateLock(workerRoot, state.runId, () => writeRunStateUnlocked(workerRoot, state));
+}
+
+/**
+ * Atomic read → mutate → write for one run. Prefer this under worker concurrency.
+ */
+export async function updateRunState(workerRoot, runId, mutator) {
+  return withRunStateLock(workerRoot, runId, async () => {
+    const current = await readRunStateUnlocked(workerRoot, runId);
+    if (!current) return null;
+    const next = (await mutator(current)) || current;
+    return writeRunStateUnlocked(workerRoot, next);
+  });
 }
 
 export function recomputeCounts(state) {
@@ -112,11 +153,28 @@ export function isRunOcrTerminal(state) {
   return terminal >= total && total > 0;
 }
 
+function sheetHasRecoveredEvidence(row) {
+  const packStatus = String(row?.packStatus || "");
+  return packStatus.includes("recovered") || packStatus.includes("partial");
+}
+
+export function listIncompleteOcrSheets(state) {
+  const incomplete = [];
+  for (const [relativePath, row] of Object.entries(state.sheets || {})) {
+    const status = String(row.status || "pending");
+    if (status === "skipped") continue;
+    if (status === "completed" && sheetHasRecoveredEvidence(row)) continue;
+    incomplete.push(row.relativePath || row.sheetId || relativePath);
+  }
+  return incomplete.slice(0, 120);
+}
+
 export function summarizeRunState(state) {
   recomputeCounts(state);
   const total = Object.keys(state.sheets || {}).length;
+  const incompleteSheets = listIncompleteOcrSheets(state);
   const missingEvidence = Object.values(state.sheets || {}).filter(
-    (row) => row.status === "completed" && !row.packStatus,
+    (row) => row.status === "completed" && !sheetHasRecoveredEvidence(row),
   ).length;
   return {
     runId: state.runId,
@@ -128,6 +186,7 @@ export function summarizeRunState(state) {
     counts: state.counts,
     terminal: isRunOcrTerminal(state),
     missingEvidence,
+    incompleteSheets,
     cancelled: Boolean(state.cancelled),
     macWorkerLastHeartbeat: state.macWorkerLastHeartbeat,
     updatedAt: state.updatedAt,
@@ -145,6 +204,7 @@ export function toAnalysisScopePreprocessSummary(state) {
     counts: summary.counts,
     terminal: summary.terminal,
     missingEvidence: summary.missingEvidence,
+    incompleteSheets: summary.incompleteSheets,
     macWorkerLastHeartbeat: state.macWorkerLastHeartbeat,
     updatedAt: state.updatedAt,
     cancelled: Boolean(state.cancelled),

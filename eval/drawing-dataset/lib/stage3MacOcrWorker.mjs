@@ -40,6 +40,7 @@ import {
   saveRunState,
   setSheetStatus,
   summarizeRunState,
+  updateRunState,
 } from "./stage3OcrRunState.mjs";
 import { syncRunPreprocessSummary } from "./stage3WorkerSupabase.mjs";
 
@@ -649,11 +650,11 @@ export async function retrySheetJob(paths, relativePath, options = {}) {
 
 async function touchRunStateForJob(paths, job, patch) {
   if (!job.runId || !job.relativePath) return;
-  const state = await loadRunState(paths.root, job.runId);
-  if (!state) return;
-  setSheetStatus(state, job.relativePath, patch);
-  state.macWorkerLastHeartbeat = new Date().toISOString();
-  await saveRunState(paths.root, state);
+  await updateRunState(paths.root, job.runId, (state) => {
+    setSheetStatus(state, job.relativePath, patch);
+    state.macWorkerLastHeartbeat = new Date().toISOString();
+    return state;
+  });
 }
 
 function workerPathsRoot(paths) {

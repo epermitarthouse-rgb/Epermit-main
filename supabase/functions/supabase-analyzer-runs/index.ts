@@ -604,13 +604,19 @@ async function handleReanalysis(
   const projectType = String(body.projectType || source.project_type || "Commercial (General)").slice(0, 200);
   const codeEdition = String(body.codeEdition || source.code_edition || "2017").slice(0, 100);
   const codeContext = String(body.codeContext || source.code_context || "").slice(0, 500);
-  const analysisScope = resolveAnalyzerReviewScope({
+  const baseScope = resolveAnalyzerReviewScope({
     mode: requestedMode,
     jurisdictionKey,
     jurisdictionLabel,
     codeEdition,
     codeContext,
   });
+  // Same opt-in as create — Update Analysis / reanalyze must persist full-coverage flags or Stage 3 stays off.
+  const analysisScope = body.stage3FullCoverageOcr === true
+    ? mergeStage3FullCoverageRunOptIn(baseScope as Record<string, unknown>, true, {
+      requiredSheetCount: materialized.value.totalSheets,
+    })
+    : baseScope;
   const budget = Math.max(1, Math.min(Number(body.budgetLimitUsd) || Number(source.budget_limit_usd) || 20, 100));
 
   const { error: runError } = await admin.from("supabase_analyzer_runs").insert({

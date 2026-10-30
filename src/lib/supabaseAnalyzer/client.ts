@@ -284,6 +284,8 @@ export function reanalyzeSupabaseAnalyzerRun(input: {
   files: Array<{ name: string; size: number; type?: string; replaceJobId?: string | null }>;
   confirmed: boolean;
   analysisMode?: StoredAnalysisMode;
+  /** Operator opt-in: persist full-coverage Stage 3 OCR gate on the new reanalysis run. */
+  stage3FullCoverageOcr?: boolean;
   jurisdictionKey: string;
   jurisdictionLabel: string;
   projectType: string;
@@ -313,6 +315,7 @@ export function reanalyzeSupabaseAnalyzerRun(input: {
     jobIds: input.jobIds,
     confirmed: input.confirmed,
     analysisMode: input.analysisMode ?? "both",
+    stage3FullCoverageOcr: input.stage3FullCoverageOcr === true,
     jurisdictionKey: input.jurisdictionKey,
     jurisdictionLabel: input.jurisdictionLabel,
     projectType: input.projectType,

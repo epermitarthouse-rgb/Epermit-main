@@ -123,6 +123,8 @@ describe("supabase analyzer workflow status", () => {
           stage3OcrPreprocess: {
             requiredSheetCount: 82,
             terminal: false,
+            missingEvidence: 0,
+            incompleteSheets: ["Z-9.99-00.pdf", "M-1.00-00.pdf"],
             counts: { completed: 20, pending: 60, processing: 2, failed: 0, skipped: 0 },
           },
         },
@@ -131,8 +133,40 @@ describe("supabase analyzer workflow status", () => {
       pendingMutates: false,
     });
     assert.equal(view.stage, "ocr_prep");
-    assert.equal(view.headline, "Preparing drawing evidence — 20/82");
+    assert.equal(view.headline, "OCR processed — 20/82 · evidence verification pending");
     assert.match(view.detail || "", /82\/82 drawings uploaded/);
+    assert.match(view.detail || "", /Z-9\.99-00\.pdf/);
+    assert.equal(view.ocr?.evidenceVerified, false);
+    assert.equal(view.analysis, null);
+  });
+
+  it("shows evidence verified ready state without claiming GPT injection", () => {
+    const view = deriveAnalyzerWorkflowView({
+      run: {
+        status: "queued",
+        total_sheets: 82,
+        completed_sheets: 0,
+        failed_sheets: 0,
+        processing_sheets: 0,
+        analysis_scope: {
+          stage3FullCoverageOcr: true,
+          stage3OcrPreprocess: {
+            requiredSheetCount: 82,
+            terminal: true,
+            missingEvidence: 0,
+            incompleteSheets: [],
+            counts: { completed: 82, pending: 0, processing: 0, failed: 0, skipped: 0 },
+          },
+        },
+      },
+      jobs: Array.from({ length: 82 }, () => ({ status: "queued" })),
+      pendingMutates: false,
+    });
+    assert.equal(view.stage, "ready");
+    assert.match(view.headline, /Evidence verified — ready for analysis \(82\/82\)/);
+    assert.doesNotMatch(view.headline, /injected/i);
+    assert.equal(view.ocr?.evidenceVerified, true);
+    assert.equal(view.analysis, null);
   });
 
   it("shows analyzing and complete labels from persisted sheet counts", () => {

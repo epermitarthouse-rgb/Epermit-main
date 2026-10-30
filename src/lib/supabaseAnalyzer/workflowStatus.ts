@@ -57,10 +57,14 @@ export interface AnalyzerWorkflowView {
   ocr: {
     ready: number;
     total: number;
+    evidenceVerified?: boolean;
+    incompleteSheets?: string[];
   } | null;
   analysis: {
     finished: number;
     total: number;
+    /** True only after GPT sheet jobs have finished — never inferred from OCR alone. */
+    injectedConfirmed?: boolean;
   } | null;
 }
 
@@ -73,27 +77,51 @@ function isStage3FullCoverage(scope: unknown): boolean {
   return (scope as Record<string, unknown>).stage3FullCoverageOcr === true;
 }
 
-function readOcrCounts(scope: unknown): { ready: number; total: number; terminal: boolean } | null {
+function readOcrCounts(scope: unknown): {
+  ready: number;
+  total: number;
+  terminal: boolean;
+  evidenceVerified: boolean;
+  incompleteSheets: string[];
+  failed: number;
+} | null {
   if (!isStage3FullCoverage(scope)) return null;
   const raw = (scope as Record<string, unknown>).stage3OcrPreprocess;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { ready: 0, total: 0, terminal: false };
+    return {
+      ready: 0,
+      total: 0,
+      terminal: false,
+      evidenceVerified: false,
+      incompleteSheets: [],
+      failed: 0,
+    };
   }
   const preprocess = raw as {
     requiredSheetCount?: number;
     terminal?: boolean;
+    missingEvidence?: number;
+    incompleteSheets?: unknown;
     counts?: { completed?: number; failed?: number; skipped?: number; pending?: number; processing?: number };
   };
   const counts = preprocess.counts || {};
   const ready = Number(counts.completed || 0) + Number(counts.skipped || 0);
+  const failed = Number(counts.failed || 0);
   const total = Math.max(
     0,
     Number(preprocess.requiredSheetCount || 0)
-      || ready + Number(counts.pending || 0) + Number(counts.processing || 0) + Number(counts.failed || 0),
+      || ready + Number(counts.pending || 0) + Number(counts.processing || 0) + failed,
   );
-  const terminalCount = ready + Number(counts.failed || 0);
+  const terminalCount = ready + failed;
   const terminal = preprocess.terminal === true || (total > 0 && terminalCount >= total);
-  return { ready, total, terminal };
+  const incompleteSheets = Array.isArray(preprocess.incompleteSheets)
+    ? preprocess.incompleteSheets.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 120)
+    : [];
+  const evidenceVerified = terminal
+    && failed === 0
+    && Number(preprocess.missingEvidence || 0) === 0
+    && (total <= 0 || Number(counts.completed || 0) >= total);
+  return { ready, total, terminal, evidenceVerified, incompleteSheets, failed };
 }
 
 export function countPersistedUploadManifest(jobs: readonly AnalyzerJobStatusSlice[]) {
@@ -239,25 +267,64 @@ export function deriveAnalyzerWorkflowView(input: {
     };
   }
 
-  // OCR prep only when Stage 3 full-coverage is enabled for this run and not yet terminal
+  // OCR prep only when Stage 3 full-coverage is enabled for this run and not yet verified
   if (
     ocr
-    && !ocr.terminal
+    && !ocr.evidenceVerified
     && (runStatus === "queued" || runStatus === "processing")
   ) {
     const total = Math.max(ocr.total, run?.total_sheets || 0, uploadManifest.total);
     const ready = Math.min(ocr.ready, total || ocr.ready);
+    const incomplete = ocr.incompleteSheets || [];
+    const incompleteDetail = incomplete.length
+      ? `Incomplete: ${incomplete.slice(0, 8).join(", ")}${incomplete.length > 8 ? "…" : ""}`
+      : null;
     return {
       stage: "ocr_prep",
       headline: total > 0
-        ? `Preparing drawing evidence — ${ready}/${total}`
+        ? `OCR processed — ${ready}/${total} · evidence verification pending`
         : "Preparing drawing evidence",
-      detail: `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded`,
+      detail: [
+        `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded`,
+        incompleteDetail,
+        "Paid analysis stays blocked until every sheet has verified OCR evidence (or an explicit override).",
+      ].filter(Boolean).join(" · "),
       progressPercent: total > 0 ? Math.round((ready / total) * 100) : 0,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
       upload: uploadManifest,
-      ocr: { ready, total },
+      ocr: {
+        ready,
+        total,
+        evidenceVerified: false,
+        incompleteSheets: incomplete,
+      },
+      analysis: null,
+    };
+  }
+
+  if (
+    ocr
+    && ocr.evidenceVerified
+    && (runStatus === "queued" || (runStatus === "processing" && (run?.completed_sheets || 0) === 0 && (run?.failed_sheets || 0) === 0 && (run?.processing_sheets || 0) === 0))
+  ) {
+    const total = Math.max(ocr.total, run?.total_sheets || 0, uploadManifest.total);
+    return {
+      stage: "ready",
+      headline: total > 0
+        ? `Evidence verified — ready for analysis (${ocr.ready}/${total})`
+        : "Evidence verified — ready for analysis",
+      detail: `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded · OCR injection is confirmed only after analysis starts`,
+      progressPercent: 100,
+      drawingSetOutdated: false,
+      treatFindingsAsPrevious: false,
+      upload: uploadManifest.total > 0 ? uploadManifest : null,
+      ocr: {
+        ready: ocr.ready,
+        total,
+        evidenceVerified: true,
+        incompleteSheets: [],
+      },
       analysis: null,
     };
   }
@@ -268,18 +335,26 @@ export function deriveAnalyzerWorkflowView(input: {
       total,
       (run?.completed_sheets || 0) + (run?.failed_sheets || 0),
     );
+    const injectedConfirmed = finished > 0;
     return {
       stage: "analyzing",
       headline: `Analyzing drawings — ${finished}/${total}`,
       detail: ocr
-        ? `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded`
+        ? `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded · OCR packs available for this run (injection confirmed per completed sheet)`
         : null,
       progressPercent: Math.round((finished / total) * 100),
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
       upload: uploadManifest.total > 0 ? uploadManifest : null,
-      ocr: ocr ? { ready: ocr.ready, total: ocr.total } : null,
-      analysis: { finished, total },
+      ocr: ocr
+        ? {
+          ready: ocr.ready,
+          total: ocr.total,
+          evidenceVerified: ocr.evidenceVerified,
+          incompleteSheets: ocr.incompleteSheets,
+        }
+        : null,
+      analysis: { finished, total, injectedConfirmed },
     };
   }
 
@@ -302,8 +377,15 @@ export function deriveAnalyzerWorkflowView(input: {
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
       upload: uploadManifest.total > 0 ? uploadManifest : null,
-      ocr: ocr ? { ready: ocr.ready, total: ocr.total } : null,
-      analysis: { finished, total },
+      ocr: ocr
+        ? {
+          ready: ocr.ready,
+          total: ocr.total,
+          evidenceVerified: ocr.evidenceVerified,
+          incompleteSheets: ocr.incompleteSheets,
+        }
+        : null,
+      analysis: { finished, total, injectedConfirmed: finished > 0 },
     };
   }
 
