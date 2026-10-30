@@ -415,7 +415,9 @@ describe("Phase 3 visual evidence preserves Critical controls", () => {
     assert.match(processor, /retrieveCrossSheetEvidence\(/);
     assert.match(processor, /isCrossSheetRetrievalEnabled\(/);
     assert.match(processor, /validateAnalyzerFindings\(/);
-    assert.match(processor, /visualEvidence:\s*visualEvidence\?\.promptBlock/);
+    assert.match(processor, /mergeVisualEvidencePromptBlocks\(/);
+    assert.match(processor, /visualEvidence\?\.promptBlock/);
+    assert.match(processor, /stage3Evidence\?\.promptBlock/);
     // Still a single PDF attachment path.
     const fileInputCount = [...processor.matchAll(/type:\s*"input_file"/g)].length;
     assert.equal(fileInputCount, 1);

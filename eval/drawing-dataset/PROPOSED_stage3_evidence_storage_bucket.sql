@@ -1,0 +1,31 @@
+-- SUPERSEDED by migration:
+--   supabase/migrations/20261031040000_supabase_analyzer_stage3_evidence_bucket.sql
+-- Apply that single migration only after security gate + explicit approval.
+-- This file remains as design notes; do not apply it directly.
+--
+-- Private Supabase Storage bucket for Stage 3 Apple Vision OCR evidence packs.
+-- Drawings bucket (supabase-analyzer-drawings) is PDF-only and unsuitable for JSON packs.
+--
+-- Security intent:
+-- - public = false (no public URLs)
+-- - JSON only, small file size
+-- - No anon/authenticated object policies — Edge processor + Mac worker use
+--   service-role or a future restricted worker credential server-side only
+-- - Path layout: {projectId}/{runId}/{sheetJobId}/{sha}.{method}.{version}.json
+
+-- INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+-- VALUES (
+--   'supabase-analyzer-stage3-evidence',
+--   'supabase-analyzer-stage3-evidence',
+--   false,
+--   262144, -- 256 KiB
+--   ARRAY['application/json']::text[]
+-- )
+-- ON CONFLICT (id) DO UPDATE SET
+--   public = false,
+--   file_size_limit = EXCLUDED.file_size_limit,
+--   allowed_mime_types = EXCLUDED.allowed_mime_types;
+--
+-- -- Intentionally omit storage.objects policies for authenticated/anon.
+-- -- Service role bypasses RLS; least-privilege worker JWT can be added later
+-- -- with path checks on (storage.foldername(name))[1] = project_id.

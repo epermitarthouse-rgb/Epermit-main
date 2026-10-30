@@ -114,3 +114,8 @@ verify_jwt = false
 
 [functions.supabase-analyzer-processor]
 verify_jwt = false
+
+# Stage 3 Mac OCR pack upload. JWT platform verify disabled; handler requires
+# STAGE3_WORKER_UPLOAD_TOKEN or project-editor user JWT. Rejects service-role bearer.
+[functions.supabase-analyzer-stage3-evidence]
+verify_jwt = false

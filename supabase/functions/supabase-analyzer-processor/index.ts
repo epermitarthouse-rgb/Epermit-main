@@ -23,6 +23,19 @@ import {
   visualEvidenceAuditMetadata,
   type VisualEvidenceResult,
 } from "../_shared/analyzerVisualEvidence.ts";
+import {
+  isStage3VisualEvidenceEnabled,
+  mergeVisualEvidencePromptBlocks,
+  retrieveStage3VisualEvidence,
+  stage3VisualEvidenceAuditMetadata,
+  type Stage3VisualEvidenceResult,
+} from "../_shared/analyzerStage3VisualEvidence.ts";
+import {
+  STAGE3_EVIDENCE_BUCKET,
+  createStage3StoragePackLoader,
+  parseAnalyzerDrawingObjectPath,
+  sha256Hex,
+} from "../_shared/analyzerStage3StorageBridge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -288,6 +301,60 @@ async function processJob(
       visualEvidence = null;
     }
 
+    // Phase 3 Stage 3: optional Apple Vision OCR packs from private Storage cache.
+    // Never runs OCR on Edge; never waits for Mac. Default-off; independent of Stage 1–2 and CSR.
+    let stage3Evidence: Stage3VisualEvidenceResult | null = null;
+    try {
+      const stage3Enabled = isStage3VisualEvidenceEnabled();
+      let contentSha256: string | null = null;
+      let stage3Deps: Parameters<typeof retrieveStage3VisualEvidence>[0]["deps"] = {};
+      if (stage3Enabled) {
+        contentSha256 = await sha256Hex(bytes);
+        const parsedPath = parseAnalyzerDrawingObjectPath(job.object_path);
+        const projectId = String(job.project_id || parsedPath?.projectId || "");
+        const runId = String(job.run_id || parsedPath?.runId || "");
+        const sheetJobId = String(job.id || parsedPath?.sheetJobId || "");
+        if (projectId && runId && sheetJobId && contentSha256) {
+          stage3Deps = {
+            loadCompletedPacks: createStage3StoragePackLoader({
+              identity: {
+                projectId,
+                runId,
+                sheetJobId,
+                contentSha256,
+              },
+              storage: {
+                download: async (bucket, objectPath) => {
+                  // Private evidence bucket only — never drawings bucket, never public URLs.
+                  if (bucket !== STAGE3_EVIDENCE_BUCKET) return null;
+                  const { data, error } = await admin.storage.from(bucket).download(objectPath);
+                  if (error || !data) return null;
+                  return new Uint8Array(await data.arrayBuffer());
+                },
+              },
+            }),
+          };
+        }
+      }
+      stage3Evidence = await retrieveStage3VisualEvidence({
+        enabled: stage3Enabled,
+        fileName: job.original_file_name,
+        contentSha256,
+        objectPath: job.object_path ? String(job.object_path) : null,
+        projectId: job.project_id ? String(job.project_id) : null,
+        runId: job.run_id ? String(job.run_id) : null,
+        sheetJobId: job.id ? String(job.id) : null,
+        deps: stage3Deps,
+      });
+    } catch (stage3Error) {
+      console.error(
+        "[supabase-analyzer] stage3 visual evidence failed open",
+        job.id,
+        stage3Error instanceof Error ? stage3Error.message : stage3Error,
+      );
+      stage3Evidence = null;
+    }
+
     // Phase 3A: optional bounded cross-sheet excerpts. Failures never block baseline analysis.
     let crossSheetPack: CrossSheetRetrievalPack | null = null;
     try {
@@ -317,7 +384,10 @@ async function processJob(
       crossSheetPack = null;
     }
     const userPrompt = buildAnalyzerUserPrompt(job.original_file_name, sheetIndex, {
-      visualEvidence: visualEvidence?.promptBlock || null,
+      visualEvidence: mergeVisualEvidencePromptBlocks(
+        visualEvidence?.promptBlock || null,
+        stage3Evidence?.promptBlock || null,
+      ),
       crossSheetEvidence: crossSheetPack?.promptBlock || null,
     });
 
@@ -598,6 +668,10 @@ async function processJob(
         ...(visualEvidence ? visualEvidenceAuditMetadata(visualEvidence) : {
           visual_evidence_enabled: false,
           visual_evidence_status: "disabled",
+        }),
+        ...(stage3Evidence ? stage3VisualEvidenceAuditMetadata(stage3Evidence) : {
+          stage3_visual_evidence_enabled: false,
+          stage3_visual_evidence_status: "disabled",
         }),
         ...(crossSheetPack ? crossSheetRetrievalAuditMetadata(crossSheetPack) : {
           cross_sheet_retrieval_enabled: false,

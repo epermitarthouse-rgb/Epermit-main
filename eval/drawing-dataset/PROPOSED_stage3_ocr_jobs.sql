@@ -1,0 +1,33 @@
+-- PROPOSED ONLY — do not apply without explicit approval.
+-- Not placed under supabase/migrations/ so it will not auto-apply.
+--
+-- Local Stage 3 Mac pilot uses a filesystem job queue under
+-- eval/drawing-dataset/out/.../stage3-mac-worker/ (gitignored).
+-- Apply this only when promoting to a hosted Mac with Supabase-backed jobs.
+--
+-- Rationale: do not dual-claim supabase_analyzer_sheet_jobs between Mac OCR
+-- and the Edge GPT processor. Keep analyzer fail-open when packs are missing.
+
+-- create table if not exists public.supabase_analyzer_stage3_ocr_jobs (
+--   id uuid primary key default gen_random_uuid(),
+--   project_id uuid not null,
+--   run_id uuid references public.supabase_analyzer_runs(id),
+--   sheet_job_id uuid references public.supabase_analyzer_sheet_jobs(id),
+--   object_path text,
+--   content_sha256 text not null,
+--   sheet_id text,
+--   extraction_method text not null default 'macos-vision',
+--   extraction_version text not null,
+--   status text not null default 'pending',
+--   claimed_by text,
+--   lease_expires_at timestamptz,
+--   attempts int not null default 0,
+--   max_attempts int not null default 3,
+--   pack jsonb,
+--   last_error text,
+--   created_at timestamptz not null default now(),
+--   completed_at timestamptz
+-- );
+--
+-- -- Future: service_role claim/heartbeat/release RPCs; no anon access.
+-- -- Packs remain independentlyVerified=false; never auto-clear Criticals.
