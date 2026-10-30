@@ -8,12 +8,17 @@ import { isVisualEvidenceEnabled } from "../../../supabase/functions/_shared/ana
 import { isCrossSheetRetrievalEnabled } from "../../../supabase/functions/_shared/analyzerCrossSheetRetrieval.ts";
 import {
   STAGE3_VISUAL_EVIDENCE_VERSION,
+  assertStage3RunJobAuthorization,
   formatStage3VisualEvidencePrompt,
   isStage3VisualEvidenceEnabled,
+  isStage3VisualEvidenceEnabledForRun,
+  isStage3VisualEvidenceGloballyBlocked,
+  isStage3VisualEvidenceRunAuthorized,
   mergeVisualEvidencePromptBlocks,
   retrieveStage3VisualEvidence,
   stage3CacheKey,
   stage3VisualEvidenceAuditMetadata,
+  withStage3VisualEvidenceRunOptIn,
 } from "../../../supabase/functions/_shared/analyzerStage3VisualEvidence.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +31,12 @@ function envMap(values: Record<string, string | undefined>) {
   };
 }
 
+const optedInRun = {
+  id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  project_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+  analysis_scope: { stage3VisualEvidence: true, promptScope: "keep-me" },
+};
+
 describe("Stage 3 visual evidence flag independence", () => {
   it("defaults off and ignores Stage 1–2 / CSR flags", () => {
     assert.equal(isStage3VisualEvidenceEnabled(envMap({})), false);
@@ -35,6 +46,56 @@ describe("Stage 3 visual evidence flag independence", () => {
     assert.equal(isStage3VisualEvidenceEnabled(envMap({ ANALYZER_CROSS_SHEET_RETRIEVAL: "true" })), false);
     assert.equal(isVisualEvidenceEnabled(envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "true" })), false);
     assert.equal(isCrossSheetRetrievalEnabled(envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "true" })), false);
+  });
+});
+
+describe("Stage 3 run-scoped activation", () => {
+  it("requires run opt-in; global env=true alone does not enable", () => {
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: { id: "r1", project_id: "p1", analysis_scope: {} },
+      env: envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "true" }),
+    }), false);
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: optedInRun,
+      env: envMap({}),
+    }), true);
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: optedInRun,
+      env: envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "true" }),
+    }), true);
+  });
+
+  it("honors emergency kill-switch even when the run opted in", () => {
+    assert.equal(isStage3VisualEvidenceGloballyBlocked(envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "false" })), true);
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: optedInRun,
+      env: envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "false" }),
+    }), false);
+  });
+
+  it("rejects mismatched job/run authorization", () => {
+    assert.equal(isStage3VisualEvidenceRunAuthorized(optedInRun), true);
+    assert.equal(assertStage3RunJobAuthorization({
+      run: optedInRun,
+      job: { run_id: optedInRun.id, project_id: optedInRun.project_id },
+    }), true);
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: optedInRun,
+      job: { run_id: "cccccccc-cccc-cccc-cccc-cccccccccccc", project_id: optedInRun.project_id },
+    }), false);
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: optedInRun,
+      job: { run_id: optedInRun.id, project_id: "dddddddd-dddd-dddd-dddd-dddddddddddd" },
+    }), false);
+  });
+
+  it("merges run opt-in without dropping analysis_scope fields", () => {
+    const merged = withStage3VisualEvidenceRunOptIn({ promptScope: "x", mode: "both" }, true);
+    assert.equal(merged.stage3VisualEvidence, true);
+    assert.equal(merged.promptScope, "x");
+    const cleared = withStage3VisualEvidenceRunOptIn(merged, false);
+    assert.equal("stage3VisualEvidence" in cleared, false);
+    assert.equal(cleared.promptScope, "x");
   });
 });
 
@@ -186,7 +247,8 @@ describe("Stage 3 processor wiring (source contract)", () => {
       join(__dirname, "../../../supabase/functions/supabase-analyzer-processor/index.ts"),
       "utf8",
     );
-    assert.match(processor, /isStage3VisualEvidenceEnabled/);
+    assert.match(processor, /isStage3VisualEvidenceEnabledForRun/);
+    assert.match(processor, /analysis_scope/);
     assert.match(processor, /retrieveStage3VisualEvidence/);
     assert.match(processor, /mergeVisualEvidencePromptBlocks/);
     assert.match(processor, /stage3VisualEvidenceAuditMetadata/);

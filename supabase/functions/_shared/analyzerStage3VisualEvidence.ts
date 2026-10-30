@@ -3,8 +3,11 @@
  *
  * Edge never runs Vision OCR. The Mac worker writes bounded packs; this module
  * only loads completed packs (or reports missing) and formats a prompt block.
- * Default-off via ANALYZER_STAGE3_VISUAL_EVIDENCE. Independent of Stage 1–2
- * ANALYZER_VISUAL_EVIDENCE and Phase 3A ANALYZER_CROSS_SHEET_RETRIEVAL.
+ * Default-off. Activation is **run-scoped** via
+ * `supabase_analyzer_runs.analysis_scope.stage3VisualEvidence === true`.
+ * Global env `ANALYZER_STAGE3_VISUAL_EVIDENCE=false` is an emergency kill-switch.
+ * Env `=true` alone does **not** enable Stage 3 for unrelated runs.
+ * Independent of Stage 1–2 ANALYZER_VISUAL_EVIDENCE and Phase 3A CSR.
  * Failures / missing packs never block baseline PDF→GPT analysis.
  */
 export const STAGE3_VISUAL_EVIDENCE_VERSION = "phase3.stage3-visual-evidence.v1";
@@ -87,18 +90,108 @@ function oneLine(value: string, max: number): string {
   return value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+export type Stage3RunActivationSource = {
+  id?: string | null;
+  project_id?: string | null;
+  analysis_scope?: unknown;
+} | null | undefined;
+
+export type Stage3JobActivationSource = {
+  run_id?: string | null;
+  project_id?: string | null;
+} | null | undefined;
+
+function stage3EnvValue(
+  env: { get(key: string): string | undefined } | undefined,
+): string | undefined {
+  const source = env ?? (typeof Deno !== "undefined" ? Deno.env : undefined);
+  if (!source) return undefined;
+  return source.get("ANALYZER_STAGE3_VISUAL_EVIDENCE")
+    ?? source.get("SUPABASE_ANALYZER_STAGE3_VISUAL_EVIDENCE");
+}
+
 /**
- * Default-off Stage 3 flag. Independent of Stage 1–2 and CSR.
- * Prefer ANALYZER_STAGE3_VISUAL_EVIDENCE (Edge-safe; no SUPABASE_ prefix).
+ * Emergency kill-switch. When env is explicitly `false`, Stage 3 is off for every run.
+ */
+export function isStage3VisualEvidenceGloballyBlocked(
+  env: { get(key: string): string | undefined } | undefined = undefined,
+): boolean {
+  const value = stage3EnvValue(env);
+  return typeof value === "string" && value.toLowerCase() === "false";
+}
+
+/**
+ * Run opt-in stored on `analysis_scope.stage3VisualEvidence` (existing jsonb; no migration).
+ */
+export function isStage3VisualEvidenceRunAuthorized(run: Stage3RunActivationSource): boolean {
+  const scope = run?.analysis_scope;
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return false;
+  return (scope as Record<string, unknown>).stage3VisualEvidence === true;
+}
+
+/**
+ * Server-side run authorization: optional job must belong to the run/project.
+ */
+export function assertStage3RunJobAuthorization(input: {
+  run: Stage3RunActivationSource;
+  job?: Stage3JobActivationSource;
+}): boolean {
+  const run = input.run;
+  if (!run) return false;
+  const job = input.job;
+  if (!job) return true;
+  if (job.run_id != null && run.id != null && String(job.run_id) !== String(run.id)) {
+    return false;
+  }
+  if (
+    job.project_id != null
+    && run.project_id != null
+    && String(job.project_id) !== String(run.project_id)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Stage 3 is enabled only when the run opts in and the kill-switch is not engaged.
+ * Global env `true` alone does not enable Stage 3 (avoids unrelated-job activation).
+ */
+export function isStage3VisualEvidenceEnabledForRun(input: {
+  run?: Stage3RunActivationSource;
+  job?: Stage3JobActivationSource;
+  env?: { get(key: string): string | undefined };
+}): boolean {
+  if (isStage3VisualEvidenceGloballyBlocked(input.env)) return false;
+  if (!isStage3VisualEvidenceRunAuthorized(input.run)) return false;
+  return assertStage3RunJobAuthorization({ run: input.run, job: input.job });
+}
+
+/**
+ * @deprecated Prefer `isStage3VisualEvidenceEnabledForRun`. Kept for tests/docs:
+ * reports whether the legacy global env string is literally `true` (not sufficient alone).
  */
 export function isStage3VisualEvidenceEnabled(
   env: { get(key: string): string | undefined } | undefined = undefined,
 ): boolean {
-  const source = env ?? (typeof Deno !== "undefined" ? Deno.env : undefined);
-  if (!source) return false;
-  const value = source.get("ANALYZER_STAGE3_VISUAL_EVIDENCE")
-    ?? source.get("SUPABASE_ANALYZER_STAGE3_VISUAL_EVIDENCE");
+  const value = stage3EnvValue(env);
   return typeof value === "string" && value.toLowerCase() === "true";
+}
+
+/** Merge run-scoped Stage 3 opt-in into existing analysis_scope without dropping review fields. */
+export function withStage3VisualEvidenceRunOptIn(
+  analysisScope: Record<string, unknown> | null | undefined,
+  enabled: boolean,
+): Record<string, unknown> {
+  const base = analysisScope && typeof analysisScope === "object" && !Array.isArray(analysisScope)
+    ? { ...analysisScope }
+    : {};
+  if (enabled) {
+    base.stage3VisualEvidence = true;
+  } else {
+    delete base.stage3VisualEvidence;
+  }
+  return base;
 }
 
 export function stage3CacheKey(input: {

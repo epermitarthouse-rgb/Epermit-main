@@ -165,6 +165,10 @@ node --test eval/drawing-dataset/tests/*.test.mjs
 
 Tests cover skipped unexpected files, duplicate names, duplicate bytes, multi-page PDFs, corrupt PDFs, empty extraction failure, unread ink, missing pages, and unchanged finding wording.
 
+## Phase 3 Stage 3 — Mac Vision OCR (pilot)
+
+Optional Apple Vision packs for A-3.06 / A-6.00 (and similar targeted sheets). Activation is **run-scoped** via `analysis_scope.stage3VisualEvidence` on `supabase_analyzer_runs`; `ANALYZER_STAGE3_VISUAL_EVIDENCE=false` is the emergency kill-switch. Operating procedure: [`STAGE3_MAC_WORKER_OPS.md`](./STAGE3_MAC_WORKER_OPS.md). Outputs stay under gitignored `out/.../stage3-mac-worker/`.
+
 ## Outputs
 
 | File | Role |

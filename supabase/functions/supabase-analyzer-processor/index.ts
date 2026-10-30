@@ -24,7 +24,7 @@ import {
   type VisualEvidenceResult,
 } from "../_shared/analyzerVisualEvidence.ts";
 import {
-  isStage3VisualEvidenceEnabled,
+  isStage3VisualEvidenceEnabledForRun,
   mergeVisualEvidencePromptBlocks,
   retrieveStage3VisualEvidence,
   stage3VisualEvidenceAuditMetadata,
@@ -64,14 +64,14 @@ type ClaimedJob = {
 
 type AnalyzerRun = {
   id: string;
-  project_id: string;
+  project_id: string; // used for Stage 3 run/job authorization
   jurisdiction_key: string;
   jurisdiction_label: string;
   project_type: string;
   code_edition: string;
   code_context: string;
   analysis_mode?: string | null;
-  analysis_scope?: { promptScope?: string } | null;
+  analysis_scope?: { promptScope?: string; stage3VisualEvidence?: boolean } | null;
   source_coverage: string;
   ai_provider: string;
   ai_model: string;
@@ -302,10 +302,21 @@ async function processJob(
     }
 
     // Phase 3 Stage 3: optional Apple Vision OCR packs from private Storage cache.
-    // Never runs OCR on Edge; never waits for Mac. Default-off; independent of Stage 1–2 and CSR.
+    // Never runs OCR on Edge; never waits for Mac. Run-scoped via analysis_scope;
+    // global env=false is kill-switch. Independent of Stage 1–2 and CSR.
     let stage3Evidence: Stage3VisualEvidenceResult | null = null;
     try {
-      const stage3Enabled = isStage3VisualEvidenceEnabled();
+      const stage3Enabled = isStage3VisualEvidenceEnabledForRun({
+        run: {
+          id: run.id,
+          project_id: run.project_id,
+          analysis_scope: run.analysis_scope,
+        },
+        job: {
+          run_id: job.run_id,
+          project_id: job.project_id,
+        },
+      });
       let contentSha256: string | null = null;
       let stage3Deps: Parameters<typeof retrieveStage3VisualEvidence>[0]["deps"] = {};
       if (stage3Enabled) {

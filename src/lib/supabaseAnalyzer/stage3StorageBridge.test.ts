@@ -336,7 +336,7 @@ describe("Stage 3 Storage upload → processor retrieve (mock)", () => {
     assert.match(processor, /STAGE3_EVIDENCE_BUCKET/);
     assert.match(processor, /sha256Hex\(bytes\)/);
     assert.match(processor, /bucket !== STAGE3_EVIDENCE_BUCKET/);
-    assert.match(processor, /ANALYZER_STAGE3_VISUAL_EVIDENCE|isStage3VisualEvidenceEnabled/);
+    assert.match(processor, /isStage3VisualEvidenceEnabledForRun/);
   });
 
   it("documents bucket migration path (apply only after security gate)", () => {

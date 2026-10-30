@@ -29,9 +29,10 @@ export function isSupabaseAnalyzerVisualEvidenceUiEnabled(): boolean {
 
 /**
  * Client-visible documentation of Phase 3 Stage 3 Apple Vision OCR packs.
- * Server-side gating uses ANALYZER_STAGE3_VISUAL_EVIDENCE on the processor (default off).
- * Independent of Stage 1–2 visual evidence and cross-sheet retrieval. This Vite flag
- * does not enable Stage 3 packs by itself.
+ * Server-side gating is **run-scoped** (`analysis_scope.stage3VisualEvidence`) with
+ * global `ANALYZER_STAGE3_VISUAL_EVIDENCE=false` as emergency kill-switch. Independent
+ * of Stage 1–2 visual evidence and cross-sheet retrieval. This Vite flag does not
+ * enable Stage 3 packs by itself.
  */
 export function isSupabaseAnalyzerStage3VisualEvidenceUiEnabled(): boolean {
   const value = import.meta.env.VITE_SUPABASE_ANALYZER_STAGE3_VISUAL_EVIDENCE;
