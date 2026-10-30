@@ -1,0 +1,47 @@
+{
+  "id": "professional-benchmark.v1",
+  "version": "1.0.0",
+  "professionallyVerified": false,
+  "precisionRecallMeasured": false,
+  "purpose": "Review-ready subset for qualified architects/engineers. Analyzer and OCR outputs are not ground truth.",
+  "baselineRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+  "comparisonRunIds": [
+    "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+    "b982a22c-5501-49d9-a8ef-ab4078a14b27",
+    "265d6850-bbf8-4bd2-a8d3-9b1a5435418b",
+    "db6475d4-c449-477a-9b2a-cdc7a9154db1"
+  ],
+  "reviewerClassifications": [
+    "confirmed_issue",
+    "false_positive",
+    "partially_supported",
+    "insufficient_evidence",
+    "not_applicable"
+  ],
+  "phase2a6LabelMap": {
+    "confirmed_issue": { "findingValidity": "confirmed_valid", "technicalCorrectness": "technically_correct" },
+    "false_positive": { "findingValidity": "false_positive", "technicalCorrectness": "technically_incorrect" },
+    "partially_supported": { "findingValidity": "needs_more_evidence", "technicalCorrectness": "technically_uncertain" },
+    "insufficient_evidence": { "findingValidity": "needs_more_evidence", "technicalCorrectness": "technically_uncertain" },
+    "not_applicable": { "findingValidity": "not_applicable", "technicalCorrectness": "not_reviewed" }
+  },
+  "itemCount": 18,
+  "missedIssueSheetCount": 6,
+  "files": {
+    "items": "items.json",
+    "missedIssueSlots": "missed-issue-slots.json",
+    "labelMap": "LABEL_MAP.md",
+    "worksheetTemplate": "review-worksheet.template.csv",
+    "arcInstructions": "ARC_REVIEWER_INSTRUCTIONS.md",
+    "arcPackageReadme": "ARC_PACKAGE_README.md",
+    "feedbackLedger": "feedback-ledger.jsonl",
+    "feedbackLedgerSchema": "feedback-ledger.schema.json",
+    "linkMap": "benchmark-link-map.v1.json"
+  },
+  "limitations": [
+    "No client drawings or OCR crops are stored in this pack.",
+    "Evidence quotations are machine- or analyzer-sourced and independentlyVerified=false.",
+    "Do not compute a single overall accuracy percentage from unlabeled or provisional rows.",
+    "Code Analyzer V2 is out of scope."
+  ]
+}

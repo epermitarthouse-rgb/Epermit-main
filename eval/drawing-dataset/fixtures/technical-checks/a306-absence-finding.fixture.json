@@ -1,0 +1,11 @@
+{
+  "sheetId": "A-3.06",
+  "findings": [
+    {
+      "title": "Guardrail Height Missing Verification",
+      "severity": "critical",
+      "observation": "The detail does not confirm guardrail height.",
+      "drawing_evidence": "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF"
+    }
+  ]
+}

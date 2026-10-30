@@ -1,0 +1,27 @@
+{
+  "id": "A-3.06.guardrail_detail_height.0f060fd40089",
+  "sheetId": "A-3.06",
+  "topic": "guardrail_detail_height",
+  "status": "evidence_recovered",
+  "extractedTexts": [
+    "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+    "GUARD RAIL DETAIL @ HIGH ROOF",
+    "3'-6\"MIN HEIGHT FROM",
+    "EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT",
+    "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO"
+  ],
+  "detailIdentifier": "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+  "assessment": {
+    "status": "associated_to_guardrail_detail",
+    "applicableToGuardrail": "likely_same_detail_candidate",
+    "detailIdentifier": "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+    "heightText": "3'-6\"MIN HEIGHT FROM",
+    "guardText": "EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT",
+    "note": "3'-6\" MIN HEIGHT co-located with guard-rail OCR/notes (candidate association only).",
+    "independentlyVerified": false
+  },
+  "independentlyVerified": false,
+  "criticalControls": null,
+  "source": "stage3_pack",
+  "path": "fixtures/technical-checks/A-3.06.c20cc018310747ea435c888f7c1b1d4884ef8d1054b16da9ab770a504a33b6cf.fixture.json"
+}

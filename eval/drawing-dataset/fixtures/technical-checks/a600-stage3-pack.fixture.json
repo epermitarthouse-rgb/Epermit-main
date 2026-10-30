@@ -1,0 +1,37 @@
+{
+  "id": "A-6.00.door_schedule_structured.efcdcae63937",
+  "sheetId": "A-6.00",
+  "topic": "door_schedule_structured",
+  "status": "evidence_recovered",
+  "extractedTexts": [
+    "DOOR SCHEDULE",
+    "1 EA CLOSER [GENERIC]",
+    "1 EA PANIC DEVICE [GENERIC]",
+    "1 EA LOCKSET [GENERIC]",
+    "PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+    "1 EA ALARM LOCK [GENERIC]"
+  ],
+  "detailIdentifier": "DOOR SCHEDULE",
+  "assessment": {
+    "note": "Sanitized fixture for eval; independentlyVerified=false",
+    "independentlyVerified": false
+  },
+  "independentlyVerified": false,
+  "criticalControls": {
+    "controls": [
+      {
+        "id": "blanket-locking-absence",
+        "softFailCandidate": true,
+        "note": "Sanitized"
+      },
+      {
+        "id": "blanket-fire-absence",
+        "softFailCandidate": true,
+        "note": "Sanitized"
+      }
+    ],
+    "independentlyVerified": false
+  },
+  "source": "stage3_pack",
+  "path": "fixtures/technical-checks/A-6.00.28369090ce34e1d503f9364bc293f9be51ff37bb521dd50a86968b472411c56d.fixture.json"
+}

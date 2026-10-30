@@ -1,0 +1,52 @@
+{
+  "version": "professional-benchmark.missed-issues.v1",
+  "independentlyVerified": false,
+  "instructions": "Reviewers record issues the analyzer did not identify. Leave empty until a qualified person confirms a miss. Do not fill from AI guesses.",
+  "sheets": [
+    {
+      "sheetId": "A-3.06",
+      "drawingNumber": "A-3.06-00",
+      "missedIssues": []
+    },
+    {
+      "sheetId": "A-6.00",
+      "drawingNumber": "A-6.00-00",
+      "missedIssues": []
+    },
+    {
+      "sheetId": "FP200",
+      "drawingNumber": "FP200",
+      "missedIssues": []
+    },
+    {
+      "sheetId": "A-1.03-00",
+      "drawingNumber": "A-1.03-00",
+      "missedIssues": []
+    },
+    {
+      "sheetId": "S-201.00",
+      "drawingNumber": "S-201.00",
+      "missedIssues": []
+    },
+    {
+      "sheetId": "M-1.4",
+      "drawingNumber": "M-1.4",
+      "missedIssues": []
+    }
+  ],
+  "missedIssueTemplate": {
+    "id": null,
+    "title": null,
+    "severity": null,
+    "observation": null,
+    "drawingLocation": null,
+    "evidenceQuote": null,
+    "codeEditionSection": null,
+    "reviewerIdentity": null,
+    "reviewerRole": null,
+    "reviewedAt": null,
+    "professionallyVerified": false,
+    "contributesToMetrics": false,
+    "notes": "Set contributesToMetrics true only when authorizeMetricsContribution is intentional."
+  }
+}

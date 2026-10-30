@@ -1,0 +1,618 @@
+{
+  "version": "professional-benchmark.items.v1",
+  "independentlyVerified": false,
+  "items": [
+    {
+      "id": "pb-v1-001",
+      "priority": "critical_life_safety",
+      "sheetId": "FP200",
+      "drawingNumber": "FP200",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "fp-hydraulic-density-area",
+      "technicalCheckId": "hydraulic.density_area_vs_flow_demand",
+      "analyzerFinding": {
+        "title": "Inconsistent Hydraulic Calculations",
+        "severity": "critical",
+        "rationale": "Treats density × area (228.6 GPM) as conflicting with FLOW DEMAND 596.81 GPM."
+      },
+      "evidenceQuote": "Density 0.15 gpm/ft² × 1,524 ft² = 228.6 gpm vs FLOW DEMAND 596.81 GPM; hose allowance 250 GPM noted on sheet family.",
+      "drawingLocation": "Hydraulic calculations summary block",
+      "codeEditionSection": null,
+      "codeBasisNote": "NFPA 13 density-area method is a proxy only; edition not confirmed in DC registry snapshot.",
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "analyzer_finding_plus_fixture_facts",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "supported_issue",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-002",
+      "priority": "critical_life_safety",
+      "sheetId": "A-3.06",
+      "drawingNumber": "A-3.06-00",
+      "revision": null,
+      "sourceRunId": "b982a22c-5501-49d9-a8ef-ab4078a14b27",
+      "findingOrCheckId": "A306_guardrail_height",
+      "technicalCheckId": "guardrail.height_associated_to_detail",
+      "analyzerFinding": {
+        "title": "Guardrail Height Missing Verification",
+        "severity": "critical",
+        "rationale": "Claims guardrail detail does not confirm height."
+      },
+      "evidenceQuote": "3'-6\"MIN HEIGHT FROM associated with GUARD RAIL ELEVATION DETAIL @ HIGH ROOF (Stage 3 pack; provisional).",
+      "drawingLocation": "Guard rail elevation detail @ high roof",
+      "codeEditionSection": null,
+      "codeBasisNote": "IBC guard height requirements not asserted here without professional review.",
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "stage3_macos_vision_pack",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "supported_issue",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-003",
+      "priority": "critical_life_safety",
+      "sheetId": "A-3.06",
+      "drawingNumber": "A-3.06-00",
+      "revision": null,
+      "sourceRunId": "db6475d4-c449-477a-9b2a-cdc7a9154db1",
+      "findingOrCheckId": "stage3-guard-rail-height-requirement",
+      "technicalCheckId": "guardrail.height_specified",
+      "analyzerFinding": {
+        "title": "Guard Rail Height Requirement",
+        "severity": "advisory",
+        "rationale": "Quotes recovered minimum height rather than alleging absence."
+      },
+      "evidenceQuote": "3'-6\" MIN HEIGHT FROM",
+      "drawingLocation": "Guard rail elevation detail @ high roof",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "stage3_run_db6475d4_finding",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "no_issue_evidenced",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-004",
+      "priority": "door_schedule",
+      "sheetId": "A-6.00",
+      "drawingNumber": "A-6.00-00",
+      "revision": null,
+      "sourceRunId": "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+      "findingOrCheckId": "A6_door_locking",
+      "technicalCheckId": "door.absence_claim_vs_quoted_hardware",
+      "analyzerFinding": {
+        "title": "Unclear door locking mechanism specification",
+        "severity": "critical",
+        "rationale": "Phase 2B Critical alleging locking mechanism issues."
+      },
+      "evidenceQuote": "1 EA PANIC 9975EO-LD; 1 EA LOCK ND80PD; PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+      "drawingLocation": "Door schedule / hardware notes",
+      "codeEditionSection": null,
+      "codeBasisNote": "Quoted hardware does not clear lock-vs-egress conflicts.",
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "stage3_pack_plus_phase2b_finding",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "supported_issue",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-005",
+      "priority": "door_schedule",
+      "sheetId": "A-6.00",
+      "drawingNumber": "A-6.00-00",
+      "revision": null,
+      "sourceRunId": "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+      "findingOrCheckId": "A6_door_fire_rating",
+      "technicalCheckId": "door.fire_rating_info",
+      "analyzerFinding": {
+        "title": "Missing fire-rating specifications for doors",
+        "severity": "critical",
+        "rationale": "Phase 2B Critical on fire-rating absence."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Door schedule fire-rating columns (reviewer to confirm)",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "analyzer_finding",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "unresolved",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-006",
+      "priority": "door_schedule",
+      "sheetId": "A-6.00",
+      "drawingNumber": "A-6.00-00",
+      "revision": null,
+      "sourceRunId": "db6475d4-c449-477a-9b2a-cdc7a9154db1",
+      "findingOrCheckId": "stage3-panic-hardware",
+      "technicalCheckId": "door.hardware_present",
+      "analyzerFinding": {
+        "title": "Panic Hardware Requirement",
+        "severity": "advisory",
+        "rationale": "Quotes schedule note on panic hardware."
+      },
+      "evidenceQuote": "Provide panic hardware for all exterior doors as noted on the door schedule.",
+      "drawingLocation": "Door schedule general notes",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "stage3_run_finding",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "no_issue_evidenced",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-007",
+      "priority": "critical_life_safety",
+      "sheetId": "A-1.03-00",
+      "drawingNumber": "A-1.03-00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "prov-ceiling-penetration-cross-sheet",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Penetration (C-001 match)",
+        "severity": "critical",
+        "rationale": "RCP-local penetration omission without cross-sheet verification."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Reflected ceiling plan / finish notes",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": ["SEE SHEET / DETAIL pointers on sheet family (reviewer to confirm)"],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_provisional",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-008",
+      "priority": "critical_life_safety",
+      "sheetId": "M-1.4",
+      "drawingNumber": "M-1.4",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "prov-refrigerant-keynote-cross-sheet",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Refrigerant insulation (C-003 match)",
+        "severity": "critical",
+        "rationale": "Declared missing despite detail cross-reference."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Keyed notes 1–2 citing M3.0 Detail 3",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": ["M-3.0 Detail 3"],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_provisional",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-009",
+      "priority": "structural",
+      "sheetId": "S-201.00",
+      "drawingNumber": "S-201.00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "prov-foundation-reinforcement-notes",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Foundation reinforcement (C-004 match)",
+        "severity": "critical",
+        "rationale": "Treated as absent despite masonry/foundation notes."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Masonry and Foundation Notes",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": ["Other S-sheets may carry graphic sections"],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_provisional",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-010",
+      "priority": "admin_date",
+      "sheetId": "A-1.00-00",
+      "drawingNumber": "A-1.00-00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "fp-revision-dates-future",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Revisions Dates Discrepancy",
+        "severity": "warning",
+        "rationale": "2026 revision dates called future relative to 2026 analysis."
+      },
+      "evidenceQuote": "Revision dates 02/16/26 and 07/17/26 vs analysis timestamp 2026-10-26.",
+      "drawingLocation": "Title block / revisions",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_verified_regression",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-011",
+      "priority": "admin_date",
+      "sheetId": "A-2.01-00",
+      "drawingNumber": "A-2.01-00",
+      "revision": null,
+      "sourceRunId": "b982a22c-5501-49d9-a8ef-ab4078a14b27",
+      "findingOrCheckId": "A201_false_future_vs_analysis",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Date Discrepancy",
+        "severity": "warning",
+        "rationale": "v8 false chronology claim on revision date."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Revisions",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "three_run_evidence_baseline",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-012",
+      "priority": "electrical_restatement",
+      "sheetId": "E-1.1-00",
+      "drawingNumber": "E-1.1-00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "fp-gfci-note-restatement",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "GFCI Protection for Kitchen Equipment",
+        "severity": "advisory",
+        "rationale": "Restates explicit general note without discrepancy."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Electrical general notes",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_verified_regression",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-013",
+      "priority": "electrical_restatement",
+      "sheetId": "E-1.3-00",
+      "drawingNumber": "E-1.3-00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "fp-gfci-provided-note",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "GFCI Protection Requirement",
+        "severity": "advisory",
+        "rationale": "Weatherproof GFCI provision restated."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Note E2",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_verified_regression",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-014",
+      "priority": "code_edition",
+      "sheetId": "FP201",
+      "drawingNumber": "FP201",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "prov-nfpa13-edition-w051",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Sprinkler Head",
+        "severity": "warning",
+        "rationale": "Cites NFPA 13 2015; DC list may be 2013."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Sprinkler notes",
+      "codeEditionSection": null,
+      "codeBasisNote": "Analyzer registry snapshot records NFPA 70 only for electrical; NFPA 13 edition not independently confirmed.",
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_provisional",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-015",
+      "priority": "structural",
+      "sheetId": "S-204.00",
+      "drawingNumber": "S-204.00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "prov-section-1705-16-2",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Incomplete Reference for Inspections",
+        "severity": "warning",
+        "rationale": "IBC §1705.16.2 may not exist in examined text."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Special inspections notes",
+      "codeEditionSection": "IBC §1705.16.2 (existence unverified)",
+      "codeBasisNote": "Analyzer has no section index.",
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_provisional",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-016",
+      "priority": "guardrail",
+      "sheetId": "A-3.06",
+      "drawingNumber": "A-3.06-00",
+      "revision": null,
+      "sourceRunId": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "findingOrCheckId": "prov-guard-21-inch",
+      "technicalCheckId": null,
+      "analyzerFinding": {
+        "title": "Guard Installation",
+        "severity": "advisory",
+        "rationale": "21-inch opening note without location exception check."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Guard notes",
+      "codeEditionSection": null,
+      "codeBasisNote": "IBC sphere rules require professional location check.",
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "qualityBenchmark_provisional",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": null,
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-017",
+      "priority": "consistency",
+      "sheetId": "A-6.00",
+      "drawingNumber": "A-6.00-00",
+      "revision": null,
+      "sourceRunId": "b982a22c-5501-49d9-a8ef-ab4078a14b27",
+      "findingOrCheckId": "A6_disappearance_vs_phase2b",
+      "technicalCheckId": "door.hardware_present",
+      "analyzerFinding": {
+        "title": "(no matching Critical in v8)",
+        "severity": null,
+        "rationale": "Phase 2B locking/fire Criticals not re-emitted in v8 — unexplained disappearance for reviewer awareness."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Door schedule",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "cross_run_consistency",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "no_issue_evidenced",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    },
+    {
+      "id": "pb-v1-018",
+      "priority": "hydraulic",
+      "sheetId": "FP200",
+      "drawingNumber": "FP200",
+      "revision": null,
+      "sourceRunId": "265d6850-bbf8-4bd2-a8d3-9b1a5435418b",
+      "findingOrCheckId": "stage12-hydraulic-design-summary",
+      "technicalCheckId": "hydraulic.hose_allowance_noted",
+      "analyzerFinding": {
+        "title": "Hydraulic Design Summary",
+        "severity": "advisory",
+        "rationale": "Stage 1–2 advisory restatement; density×area Critical not re-emitted."
+      },
+      "evidenceQuote": null,
+      "drawingLocation": "Hydraulic summary",
+      "codeEditionSection": null,
+      "codeBasisNote": null,
+      "crossSheetRefs": [],
+      "evidenceProvenance": {
+        "origin": "stage12_run_finding",
+        "independentlyVerified": false
+      },
+      "technicalCheckOutcomeHint": "unresolved",
+      "reviewer": {
+        "decision": null,
+        "explanation": null,
+        "identity": null,
+        "role": null,
+        "reviewedAt": null,
+        "professionallyVerified": false,
+        "contributesToMetrics": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "version": "benchmark-link-map.v1",
+  "note": "Maps stable finding/check identifiers to professional benchmark item ids. Does not write to production DB.",
+  "links": [
+    { "pbItemId": "pb-v1-001", "findingOrCheckId": "fp-hydraulic-density-area", "technicalCheckId": "hydraulic.density_area_vs_flow_demand", "sheetId": "FP200" },
+    { "pbItemId": "pb-v1-002", "findingOrCheckId": "A306_guardrail_height", "technicalCheckId": "guardrail.height_associated_to_detail", "sheetId": "A-3.06" },
+    { "pbItemId": "pb-v1-003", "findingOrCheckId": "stage3-guard-rail-height-requirement", "technicalCheckId": "guardrail.height_specified", "sheetId": "A-3.06" },
+    { "pbItemId": "pb-v1-004", "findingOrCheckId": "A6_door_locking", "technicalCheckId": "door.absence_claim_vs_quoted_hardware", "sheetId": "A-6.00" },
+    { "pbItemId": "pb-v1-005", "findingOrCheckId": "A6_door_fire_rating", "technicalCheckId": "door.fire_rating_info", "sheetId": "A-6.00" },
+    { "pbItemId": "pb-v1-006", "findingOrCheckId": "stage3-panic-hardware", "technicalCheckId": "door.hardware_present", "sheetId": "A-6.00" },
+    { "pbItemId": "pb-v1-007", "findingOrCheckId": "prov-ceiling-penetration-cross-sheet", "technicalCheckId": null, "sheetId": "A-1.03-00" },
+    { "pbItemId": "pb-v1-008", "findingOrCheckId": "prov-refrigerant-keynote-cross-sheet", "technicalCheckId": null, "sheetId": "M-1.4" },
+    { "pbItemId": "pb-v1-009", "findingOrCheckId": "prov-foundation-reinforcement-notes", "technicalCheckId": null, "sheetId": "S-201.00" },
+    { "pbItemId": "pb-v1-010", "findingOrCheckId": "fp-revision-dates-future", "technicalCheckId": null, "sheetId": "A-1.00-00" },
+    { "pbItemId": "pb-v1-011", "findingOrCheckId": "A201_false_future_vs_analysis", "technicalCheckId": null, "sheetId": "A-2.01-00" },
+    { "pbItemId": "pb-v1-012", "findingOrCheckId": "fp-gfci-note-restatement", "technicalCheckId": null, "sheetId": "E-1.1-00" },
+    { "pbItemId": "pb-v1-013", "findingOrCheckId": "fp-gfci-provided-note", "technicalCheckId": null, "sheetId": "E-1.3-00" },
+    { "pbItemId": "pb-v1-014", "findingOrCheckId": "prov-nfpa13-edition-w051", "technicalCheckId": null, "sheetId": "FP201" },
+    { "pbItemId": "pb-v1-015", "findingOrCheckId": "prov-section-1705-16-2", "technicalCheckId": null, "sheetId": "S-204.00" },
+    { "pbItemId": "pb-v1-016", "findingOrCheckId": "prov-guard-21-inch", "technicalCheckId": null, "sheetId": "A-3.06" },
+    { "pbItemId": "pb-v1-017", "findingOrCheckId": "A6_disappearance_vs_phase2b", "technicalCheckId": "door.hardware_present", "sheetId": "A-6.00" },
+    { "pbItemId": "pb-v1-018", "findingOrCheckId": "stage12-hydraulic-design-summary", "technicalCheckId": "hydraulic.hose_allowance_noted", "sheetId": "FP200" }
+  ]
+}

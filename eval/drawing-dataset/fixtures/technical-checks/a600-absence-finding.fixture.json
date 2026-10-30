@@ -1,0 +1,11 @@
+{
+  "sheetId": "A-6.00",
+  "findings": [
+    {
+      "title": "Unclear door locking mechanism specification",
+      "severity": "critical",
+      "observation": "Door locking mechanism is missing from the schedule review.",
+      "drawing_evidence": "DOOR SCHEDULE table excerpt"
+    }
+  ]
+}

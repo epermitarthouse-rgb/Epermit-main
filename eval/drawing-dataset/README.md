@@ -169,6 +169,31 @@ Tests cover skipped unexpected files, duplicate names, duplicate bytes, multi-pa
 
 Optional Apple Vision packs for A-3.06 / A-6.00 (and similar targeted sheets). Activation is **run-scoped** via `analysis_scope.stage3VisualEvidence` on `supabase_analyzer_runs`; `ANALYZER_STAGE3_VISUAL_EVIDENCE=false` is the emergency kill-switch. Operating procedure: [`STAGE3_MAC_WORKER_OPS.md`](./STAGE3_MAC_WORKER_OPS.md). Outputs stay under gitignored `out/.../stage3-mac-worker/`.
 
+## Finding consistency & professional accuracy (eval)
+
+Deterministic technical checks (A-3.06 / A-6.00 / FP200) live in `src/lib/supabaseAnalyzer/technicalChecks.ts` with fixtures under `fixtures/technical-checks/`. They run **alongside** GPT discovery; missing evidence is `unresolved`, never an auto-violation. OCR quotes never certify compliance.
+
+```bash
+node --experimental-strip-types eval/drawing-dataset/cli/technical-check-report.mjs
+node --experimental-strip-types eval/drawing-dataset/cli/consistency-repeatability-report.mjs
+node eval/drawing-dataset/cli/professional-benchmark-worksheet.mjs
+```
+
+Root-cause fixture: [`fixtures/finding-consistency-root-cause.v1.json`](./fixtures/finding-consistency-root-cause.v1.json). Review pack: [`fixtures/professional-benchmark/v1/`](./fixtures/professional-benchmark/v1/). Methodology: [`PROFESSIONAL_ACCURACY_METHODOLOGY.md`](./PROFESSIONAL_ACCURACY_METHODOLOGY.md). Consolidated report: [`FINDING_CONSISTENCY_AND_ACCURACY_REPORT.md`](./FINDING_CONSISTENCY_AND_ACCURACY_REPORT.md). Precision/recall stay **Not measured** until qualified review authorizes metrics.
+
+### ARC professional review & learning loop (eval)
+
+ARC reviewers use [`fixtures/professional-benchmark/v1/ARC_REVIEWER_INSTRUCTIONS.md`](./fixtures/professional-benchmark/v1/ARC_REVIEWER_INSTRUCTIONS.md). Operators follow [`ARC_PACKAGE_README.md`](./fixtures/professional-benchmark/v1/ARC_PACKAGE_README.md). Live project findings still use existing Accept / Modify / Reject (no UI redesign). Structured feedback lands in `feedback-ledger.jsonl` and never auto-changes production prompts.
+
+```bash
+node eval/drawing-dataset/cli/professional-benchmark-worksheet.mjs
+node eval/drawing-dataset/cli/merge-professional-worksheet.mjs --csv /path/to/filled.csv
+node eval/drawing-dataset/cli/record-missed-issue.mjs --sheet A-3.06 --title "..." --location "..." --identity "..." --role "RA"
+node eval/drawing-dataset/cli/export-finalized-decisions.mjs
+```
+
+Handover: [`ARC_HANDOVER.md`](./ARC_HANDOVER.md). Readiness: [`ARC_LEARNING_LOOP_READINESS.md`](./ARC_LEARNING_LOOP_READINESS.md).
+
 ## Outputs
 
 | File | Role |

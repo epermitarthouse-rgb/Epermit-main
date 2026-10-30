@@ -1,0 +1,24 @@
+{
+  "sheetId": "FP200",
+  "hydraulicFacts": {
+    "densityGpmPerSqFt": 0.15,
+    "areaSqFt": 1524,
+    "flowDemandGpm": 596.81,
+    "hoseAllowanceGpm": 250,
+    "quotedNotes": [
+      "FLOW DEMAND 596.81 GPM",
+      "DENSITY 0.15 GPM/FT2",
+      "AREA 1524 FT2",
+      "HOSE ALLOWANCE 250 GPM"
+    ]
+  },
+  "findings": [
+    {
+      "title": "Inconsistent Hydraulic Calculations",
+      "severity": "critical",
+      "observation": "Flow demand 596.81 GPM is inconsistent with density 0.15 \u00d7 area 1524 = 228.6 GPM.",
+      "drawing_evidence": "Density 0.15 gpm/ft2, area 1524 ft2, FLOW DEMAND 596.81 GPM"
+    }
+  ],
+  "packs": []
+}

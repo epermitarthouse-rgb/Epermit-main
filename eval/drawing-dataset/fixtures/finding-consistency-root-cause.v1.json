@@ -1,0 +1,138 @@
+{
+  "version": "finding-consistency-root-cause.v1",
+  "professionallyVerified": false,
+  "precisionRecallMeasured": false,
+  "note": "Issue-matched inconsistency analysis across historical Supabase analyzer runs. Fewer findings are not treated as higher accuracy. Stage 3 run db6475d4 is 2-sheet only and not count-comparable.",
+  "runs": {
+    "baseline": {
+      "id": "649fdaa6-14b9-45b9-bd62-695166363f75",
+      "sheets": 82,
+      "publishedFindings": 252,
+      "visualEvidence": false,
+      "stage3": false
+    },
+    "phase2b": {
+      "id": "75a7ad57-9733-4544-8e73-5f3a7b91fbd4",
+      "sheets": 82,
+      "publishedFindings": 246,
+      "visualEvidence": false,
+      "stage3": false,
+      "notes": "Persist-time Phase 2B guards + expanded prompt rules"
+    },
+    "v8": {
+      "id": "b982a22c-5501-49d9-a8ef-ab4078a14b27",
+      "sheets": 82,
+      "publishedFindings": 214,
+      "visualEvidence": false,
+      "stage3": false
+    },
+    "stage12": {
+      "id": "265d6850-bbf8-4bd2-a8d3-9b1a5435418b",
+      "sheets": 82,
+      "publishedFindings": 188,
+      "visualEvidence": true,
+      "stage3": false,
+      "notes": "Temporary global ANALYZER_VISUAL_EVIDENCE; CSR off; reanalyze from v8"
+    },
+    "stage3": {
+      "id": "db6475d4-c449-477a-9b2a-cdc7a9154db1",
+      "sheets": 2,
+      "publishedFindings": 6,
+      "visualEvidence": false,
+      "stage3": true,
+      "notes": "A-3.06 and A-6.00 only; macOS Vision packs injected; ~$0.029"
+    }
+  },
+  "rootCauses": [
+    {
+      "id": "gpt_emission_variance",
+      "summary": "GPT-4o open-ended discovery emits, omits, or reframes the same technical topic across otherwise similar runs.",
+      "evidence": [
+        "A-6.00 Phase 2B emitted two Critical locking/fire findings; v8 did not re-emit them (under-emission, not proven fix).",
+        "FP200 baseline Critical density×area vs FLOW DEMAND disappeared in later full runs (advisory restatement only).",
+        "A-3.06 severity drifted warning → advisory → critical across baseline / Phase 2B / v8."
+      ],
+      "implication": "Persist-time validators can only adjust matching drafts; they cannot restore missing Criticals."
+    },
+    {
+      "id": "evidence_availability_and_association",
+      "summary": "CAD-outlined sheets often lack usable PDF text for height/hardware; Stage 1–2 text packs and Stage 3 Vision packs change what the model can quote.",
+      "evidence": [
+        "Stage 1–2 A-3.06 advisory still claimed look-for did not confirm 3'-6\" MIN HEIGHT.",
+        "Stage 3 Vision pack associated 3'-6\" MIN HEIGHT FROM with GUARD RAIL ELEVATION DETAIL @ HIGH ROOF; model quoted it as positive advisories.",
+        "Phase 2B guardrail soft-fail only fires when the draft quotes an applicable height tied to the guardrail detail."
+      ],
+      "implication": "Missing OCR/text association produces unsupported absence claims; recovered OCR must not auto-clear Criticals."
+    },
+    {
+      "id": "validator_coverage_gaps",
+      "summary": "Soft-fail rules are pattern-gated; baseline FP200 Critical was tagged unrelated_discipline rather than hydraulic_density_area_not_flow_demand.",
+      "evidence": [
+        "phase2b-critical-regression.json documents A306-HEIGHT-PROD and A6-*-PROD stay Critical when absence drafts do not quote contradicting evidence.",
+        "Hydraulic soft-fail unused when later runs never emit the density×area pattern."
+      ],
+      "implication": "Validators reduce some false positives when emitted; they do not create issue-tracking continuity."
+    },
+    {
+      "id": "no_cross_run_issue_identity",
+      "summary": "Runs do not share stable technical-check IDs; matching relies on heuristic sheet+topic+token overlap.",
+      "evidence": [
+        "three-run-repeatability-report uses Jaccard topic retention, not professional adjudication.",
+        "Title wording changes break naive matching even when the underlying issue is the same."
+      ],
+      "implication": "Deterministic technical-check IDs are required for repeatability independent of GPT titles."
+    },
+    {
+      "id": "config_and_prompt_deltas",
+      "summary": "Prompt rules, persist guards, and evidence flags differ across the five runs and amplify emission differences.",
+      "evidence": [
+        "Phase 2B added quote-before-absence prompt guidance and persist soft-fails.",
+        "Stage 1–2 temporarily enabled visual evidence globally; Stage 3 used run-scoped Vision packs with Stage 1–2 off."
+      ],
+      "implication": "Separate model variance from prompt/validator/evidence changes when measuring consistency."
+    }
+  ],
+  "issueMatchedExamples": [
+    {
+      "topic": "guardrail_height",
+      "sheet": "A-3.06-00.pdf",
+      "acrossRuns": {
+        "baseline": { "severity": "warning", "title": "Guard Rail Height Verification" },
+        "phase2b": { "severity": "advisory", "title": "Guardrail Height Confirmation" },
+        "v8": { "severity": "critical", "title": "Guardrail Height Missing Verification" },
+        "stage12": { "severity": "advisory", "title": "Guardrail Height Specification", "note": "look-for did not confirm MIN HEIGHT" },
+        "stage3": { "severity": "advisory", "title": "Guard Rail Height Requirement", "note": "quotes 3'-6\\\" MIN HEIGHT FROM" }
+      },
+      "primaryCause": "gpt_emission_variance + evidence_availability_and_association"
+    },
+    {
+      "topic": "door_locking_fire",
+      "sheet": "A-6.00-00.pdf",
+      "acrossRuns": {
+        "baseline": { "severity": "mixed", "note": "warnings/advisories on hardware" },
+        "phase2b": { "severity": "critical", "note": "locking + fire-rating Criticals" },
+        "v8": { "severity": "milder", "note": "Criticals not re-emitted" },
+        "stage12": { "severity": "advisory", "title": "Door Hardware and Fire Rating Verification" },
+        "stage3": { "severity": "advisory", "note": "panic hardware / closer quotes; no fire Critical" }
+      },
+      "primaryCause": "gpt_emission_variance"
+    },
+    {
+      "topic": "hydraulic_density_flow",
+      "sheet": "FP200 .pdf",
+      "acrossRuns": {
+        "baseline": { "severity": "critical", "title": "Inconsistent Hydraulic Calculations" },
+        "phase2b": { "severity": "advisory", "note": "hose/demand restatement" },
+        "v8": { "severity": "advisory", "note": "fire flow/pressure restatement" },
+        "stage12": { "severity": "advisory", "note": "hydraulic design summary" },
+        "stage3": { "severity": null, "note": "sheet not in controlled run" }
+      },
+      "primaryCause": "gpt_emission_variance + validator_coverage_gaps"
+    }
+  ],
+  "doNotInterpret": [
+    "Fewer published findings as higher accuracy",
+    "Stage 3 6-finding count as an 82-sheet improvement",
+    "OCR quotes as professionally verified compliance"
+  ]
+}

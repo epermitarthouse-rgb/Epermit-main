@@ -1,0 +1,21 @@
+{
+  "id": "FP200.hydraulic_design.b96429d702f7",
+  "sheetId": "FP200",
+  "topic": "hydraulic_design",
+  "status": "evidence_recovered",
+  "extractedTexts": [
+    "HYDRAULIC CALCULATIONS",
+    "DENSITY 0.15 GPM/FT2",
+    "AREA 1524 FT2",
+    "FLOW DEMAND 596.81 GPM",
+    "HOSE ALLOWANCE 250 GPM"
+  ],
+  "detailIdentifier": "HYDRAULIC DESIGN",
+  "assessment": {
+    "independentlyVerified": false
+  },
+  "independentlyVerified": false,
+  "criticalControls": null,
+  "source": "stage3_pack",
+  "path": "fixtures/technical-checks/FP200.983bbfcf38083ff04c7b5c93092f2267f3d5776a01f92ff71411460107127dea.fixture.json"
+}
