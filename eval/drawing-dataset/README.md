@@ -135,7 +135,9 @@ Persist-time guards in `supabase/functions/_shared/analyzerFindingQuality.ts` an
 
 ## Phase 3A cross-sheet evidence retrieval
 
-Optional processor path (default **off**): `SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL=true`. Detects explicit SEE SHEET/DETAIL references, downloads up to three resolved same-run PDFs, extracts bounded text-layer excerpts via Deno `unpdf`, and appends provenance-tagged snippets to the GPT user prompt. Failures fail open to the baseline current-PDF + sheet-index path. Does not import the McDonald's eval dataset or change Code Analyzer V2. Plan artifact (gitignored): `out/mcd-649fdaa6/phase3a/technical-plan.md`.
+Optional processor path (default **off**): `ANALYZER_CROSS_SHEET_RETRIEVAL=true` (preferred Edge secret; legacy `SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL` also accepted). Detects explicit SEE SHEET/DETAIL references, downloads up to three resolved same-run PDFs, extracts bounded text-layer excerpts via Deno `unpdf`, and appends provenance-tagged snippets to the GPT user prompt. Failures fail open to the baseline current-PDF + sheet-index path. Independent of `ANALYZER_VISUAL_EVIDENCE`. Does not import the McDonald's eval dataset or change Code Analyzer V2. Plan artifact (gitignored): `out/mcd-649fdaa6/phase3a/technical-plan.md`.
+
+Optional Stage 1–2 sheet-local visual evidence (default **off**): `ANALYZER_VISUAL_EVIDENCE=true` (preferred; Edge rejects `SUPABASE_`-prefixed secret names). Injects bounded text-layer topic packs and quote-before-absence look-fors. Failures fail open. Independent of cross-sheet retrieval.
 
 Sheet matching uses the normalized filename, then a unique trailing `-0` / `-00` suffix, then a single title-block token only when the filename is not itself a sheet id. A title-block token does not override a filename. `S-204.00` can carry two published titles on one file. `S-300.00` stays unmatched when the fixture has no identity for it, even if the text layer names another sheet. Zip members are listed and not unpacked. AppleDouble `._` sidecars are classified separately from drawings.
 

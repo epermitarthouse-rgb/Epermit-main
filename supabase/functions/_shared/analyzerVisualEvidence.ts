@@ -5,7 +5,8 @@
  * Stage 2: bounded text-layer topic packs via unpdf (reuse Phase 3A extractPdfTextLayer).
  *
  * Failures must never stop baseline sheet analysis. Packs are not verified compliance.
- * Independent of SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL (keep CSR default off).
+ * Independent of ANALYZER_CROSS_SHEET_RETRIEVAL (keep CSR default off).
+ * Edge secrets cannot use the SUPABASE_ prefix; prefer ANALYZER_VISUAL_EVIDENCE.
  * Does not run macOS Vision OCR on Edge.
  */
 import { extractPdfTextLayer } from "./analyzerCrossSheetRetrieval.ts";
@@ -114,12 +115,18 @@ function sheetKeyFromFileName(fileName: string): string {
   return oneLine(cleaned.replace(/[^A-Z0-9]+/g, ""), 24) || "sheet";
 }
 
-/** Env feature flag — default off; independent of cross-sheet retrieval. */
+/**
+ * Env feature flag — default off; independent of cross-sheet retrieval.
+ * Prefer ANALYZER_VISUAL_EVIDENCE (settable on Edge). Legacy
+ * SUPABASE_ANALYZER_VISUAL_EVIDENCE is also accepted if present.
+ */
 export function isVisualEvidenceEnabled(
   env: { get(key: string): string | undefined } | undefined = undefined,
 ): boolean {
   const source = env ?? (typeof Deno !== "undefined" ? Deno.env : undefined);
-  const value = source?.get("SUPABASE_ANALYZER_VISUAL_EVIDENCE");
+  if (!source) return false;
+  const value = source.get("ANALYZER_VISUAL_EVIDENCE")
+    ?? source.get("SUPABASE_ANALYZER_VISUAL_EVIDENCE");
   return typeof value === "string" && value.toLowerCase() === "true";
 }
 

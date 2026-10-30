@@ -49,9 +49,32 @@ const sheetJobs: RetrievableSheetJob[] = [
 describe("Phase 3A cross-sheet retrieval feature flag", () => {
   it("defaults off and enables only for explicit true", () => {
     assert.equal(isCrossSheetRetrievalEnabled({ get: () => undefined }), false);
-    assert.equal(isCrossSheetRetrievalEnabled({ get: () => "false" }), false);
-    assert.equal(isCrossSheetRetrievalEnabled({ get: () => "true" }), true);
-    assert.equal(isCrossSheetRetrievalEnabled({ get: () => "TRUE" }), true);
+    assert.equal(
+      isCrossSheetRetrievalEnabled({ get: (key) => key === "ANALYZER_CROSS_SHEET_RETRIEVAL" ? "false" : undefined }),
+      false,
+    );
+    assert.equal(
+      isCrossSheetRetrievalEnabled({ get: (key) => key === "ANALYZER_CROSS_SHEET_RETRIEVAL" ? "true" : undefined }),
+      true,
+    );
+    assert.equal(
+      isCrossSheetRetrievalEnabled({ get: (key) => key === "ANALYZER_CROSS_SHEET_RETRIEVAL" ? "TRUE" : undefined }),
+      true,
+    );
+    assert.equal(
+      isCrossSheetRetrievalEnabled({
+        get: (key) => key === "SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL" ? "true" : undefined,
+      }),
+      true,
+      "legacy SUPABASE_ name still accepted",
+    );
+    assert.equal(
+      isCrossSheetRetrievalEnabled({
+        get: (key) => key === "ANALYZER_VISUAL_EVIDENCE" ? "true" : undefined,
+      }),
+      false,
+      "visual evidence alone must not enable CSR",
+    );
   });
 });
 

@@ -91,12 +91,19 @@ function sheetTokenPattern(): RegExp {
   return new RegExp(SHEET_TOKEN_SOURCE, "gi");
 }
 
-/** Env feature flag — default off so client-facing analyzer stays baseline. */
+/**
+ * Env feature flag — default off so client-facing analyzer stays baseline.
+ * Prefer ANALYZER_CROSS_SHEET_RETRIEVAL (settable on Edge). Legacy
+ * SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL is also accepted if present.
+ * Independent of ANALYZER_VISUAL_EVIDENCE.
+ */
 export function isCrossSheetRetrievalEnabled(
   env: { get(key: string): string | undefined } | undefined = undefined,
 ): boolean {
   const source = env ?? (typeof Deno !== "undefined" ? Deno.env : undefined);
-  const value = source?.get("SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL");
+  if (!source) return false;
+  const value = source.get("ANALYZER_CROSS_SHEET_RETRIEVAL")
+    ?? source.get("SUPABASE_ANALYZER_CROSS_SHEET_RETRIEVAL");
   return typeof value === "string" && value.toLowerCase() === "true";
 }
 

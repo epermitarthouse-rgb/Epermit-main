@@ -69,18 +69,38 @@ function context() {
   };
 }
 
+function envMap(entries: Record<string, string | undefined>): { get(key: string): string | undefined } {
+  return { get: (key) => entries[key] };
+}
+
 describe("Phase 3 visual evidence feature flag", () => {
   it("defaults off and enables only for explicit true", () => {
     assert.equal(isVisualEvidenceEnabled({ get: () => undefined }), false);
-    assert.equal(isVisualEvidenceEnabled({ get: () => "false" }), false);
-    assert.equal(isVisualEvidenceEnabled({ get: () => "true" }), true);
-    assert.equal(isVisualEvidenceEnabled({ get: () => "TRUE" }), true);
+    assert.equal(isVisualEvidenceEnabled(envMap({ ANALYZER_VISUAL_EVIDENCE: "false" })), false);
+    assert.equal(isVisualEvidenceEnabled(envMap({ ANALYZER_VISUAL_EVIDENCE: "true" })), true);
+    assert.equal(isVisualEvidenceEnabled(envMap({ ANALYZER_VISUAL_EVIDENCE: "TRUE" })), true);
+    assert.equal(
+      isVisualEvidenceEnabled(envMap({ SUPABASE_ANALYZER_VISUAL_EVIDENCE: "true" })),
+      true,
+      "legacy SUPABASE_ name still accepted",
+    );
   });
 
   it("stays independent of cross-sheet retrieval flag", () => {
-    assert.equal(isVisualEvidenceEnabled({ get: () => "true" }), true);
-    assert.equal(isCrossSheetRetrievalEnabled({ get: () => undefined }), false);
-    assert.equal(isCrossSheetRetrievalEnabled({ get: () => "false" }), false);
+    assert.equal(isVisualEvidenceEnabled(envMap({ ANALYZER_VISUAL_EVIDENCE: "true" })), true);
+    assert.equal(isCrossSheetRetrievalEnabled(envMap({ ANALYZER_VISUAL_EVIDENCE: "true" })), false);
+    assert.equal(
+      isCrossSheetRetrievalEnabled(envMap({
+        ANALYZER_VISUAL_EVIDENCE: "true",
+        ANALYZER_CROSS_SHEET_RETRIEVAL: "false",
+      })),
+      false,
+    );
+    assert.equal(
+      isVisualEvidenceEnabled(envMap({ ANALYZER_CROSS_SHEET_RETRIEVAL: "true" })),
+      false,
+      "CSR alone must not enable visual evidence",
+    );
   });
 
   it("preserves baseline user prompt construction when visual evidence is disabled", async () => {
