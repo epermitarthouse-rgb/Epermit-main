@@ -31,6 +31,10 @@ import {
   type Stage3VisualEvidenceResult,
 } from "../_shared/analyzerStage3VisualEvidence.ts";
 import {
+  evaluateStage3OcrRunGate,
+  stage3OcrGateAuditMetadata,
+} from "../_shared/analyzerStage3OcrReadiness.ts";
+import {
   STAGE3_EVIDENCE_BUCKET,
   createStage3StoragePackLoader,
   parseAnalyzerDrawingObjectPath,
@@ -71,7 +75,12 @@ type AnalyzerRun = {
   code_edition: string;
   code_context: string;
   analysis_mode?: string | null;
-  analysis_scope?: { promptScope?: string; stage3VisualEvidence?: boolean } | null;
+  analysis_scope?: {
+    promptScope?: string;
+    stage3VisualEvidence?: boolean;
+    stage3FullCoverageOcr?: boolean;
+    stage3OcrPreprocess?: Record<string, unknown>;
+  } | null;
   source_coverage: string;
   ai_provider: string;
   ai_model: string;
@@ -402,6 +411,19 @@ async function processJob(
       crossSheetEvidence: crossSheetPack?.promptBlock || null,
     });
 
+    const stage3OcrGate = evaluateStage3OcrRunGate({
+      analysisScope: run.analysis_scope,
+    });
+    if (stage3OcrGate.blockGpt) {
+      throw new ProcessorError(
+        stage3OcrGate.reason,
+        stage3OcrGate.code === "mac_offline_timeout"
+          ? "stage3_ocr_mac_offline"
+          : "stage3_ocr_preprocessing_incomplete",
+        stage3OcrGate.code !== "mac_offline_timeout",
+      );
+    }
+
     const schema = {
       type: "object",
       additionalProperties: false,
@@ -680,6 +702,7 @@ async function processJob(
           visual_evidence_enabled: false,
           visual_evidence_status: "disabled",
         }),
+        ...stage3OcrGateAuditMetadata(stage3OcrGate),
         ...(stage3Evidence ? stage3VisualEvidenceAuditMetadata(stage3Evidence) : {
           stage3_visual_evidence_enabled: false,
           stage3_visual_evidence_status: "disabled",

@@ -20,6 +20,10 @@ import {
   stage3VisualEvidenceAuditMetadata,
   withStage3VisualEvidenceRunOptIn,
 } from "../../../supabase/functions/_shared/analyzerStage3VisualEvidence.ts";
+import {
+  evaluateStage3OcrRunGate,
+  mergeStage3FullCoverageRunOptIn,
+} from "../../../supabase/functions/_shared/analyzerStage3OcrReadiness.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -241,6 +245,27 @@ describe("Stage 3 retrieveStage3VisualEvidence fail-open", () => {
   });
 });
 
+describe("Stage 3 full-coverage OCR gate", () => {
+  it("blocks GPT for incomplete full-coverage runs and fail-opens ordinary runs", () => {
+    assert.equal(evaluateStage3OcrRunGate({ analysisScope: {} }).blockGpt, false);
+    const blocking = evaluateStage3OcrRunGate({
+      analysisScope: mergeStage3FullCoverageRunOptIn({}, true),
+      now: Date.now(),
+    });
+    assert.equal(blocking.blockGpt, true);
+    assert.equal(blocking.code, "blocking_incomplete");
+
+    const approved = evaluateStage3OcrRunGate({
+      analysisScope: {
+        stage3FullCoverageOcr: true,
+        stage3OcrPreprocess: { gateMode: "approved_partial", terminal: false },
+      },
+    });
+    assert.equal(approved.blockGpt, false);
+    assert.equal(approved.code, "approved_partial");
+  });
+});
+
 describe("Stage 3 processor wiring (source contract)", () => {
   it("wires processor fail-open Stage 3 retrieval independent of CSR/VE", () => {
     const processor = readFileSync(
@@ -252,6 +277,7 @@ describe("Stage 3 processor wiring (source contract)", () => {
     assert.match(processor, /retrieveStage3VisualEvidence/);
     assert.match(processor, /mergeVisualEvidencePromptBlocks/);
     assert.match(processor, /stage3VisualEvidenceAuditMetadata/);
+    assert.match(processor, /evaluateStage3OcrRunGate/);
     assert.match(processor, /stage3 visual evidence failed open/);
     assert.match(processor, /Never waits for Mac|never waits for Mac/i);
   });

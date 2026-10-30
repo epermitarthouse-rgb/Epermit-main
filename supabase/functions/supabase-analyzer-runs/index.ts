@@ -3,6 +3,7 @@ import {
   normalizeNewRunAnalysisMode,
   resolveAnalyzerReviewScope,
 } from "../_shared/analyzerReviewScope.ts";
+import { mergeStage3FullCoverageRunOptIn } from "../_shared/analyzerStage3OcrReadiness.ts";
 import {
   isObjectPathConflict,
   materializeReanalysis,
@@ -794,13 +795,19 @@ Deno.serve(async (req) => {
       if (typeof requestedMode !== "string") {
         return json({ error: requestedMode.error }, 400);
       }
-      const analysisScope = resolveAnalyzerReviewScope({
+      const baseScope = resolveAnalyzerReviewScope({
         mode: requestedMode,
         jurisdictionKey,
         jurisdictionLabel,
         codeEdition,
         codeContext,
       });
+      // Operator opt-in only — Stage 3 full-coverage OCR remains off unless requested.
+      const analysisScope = body.stage3FullCoverageOcr === true
+        ? mergeStage3FullCoverageRunOptIn(baseScope as Record<string, unknown>, true, {
+          requiredSheetCount: files.length,
+        })
+        : baseScope;
       const budget = Math.max(1, Math.min(Number(body.budgetLimitUsd) || 20, 100));
 
       const { error: runError } = await admin.from("supabase_analyzer_runs").insert({

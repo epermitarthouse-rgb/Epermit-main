@@ -33,6 +33,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -137,6 +138,7 @@ export function SupabaseCodeAnalyzer() {
   const [projectType, setProjectType] = useState("Commercial (General)");
   const [codeYear, setCodeYear] = useState(DC_CODE_EDITION);
   const [analysisMode, setAnalysisMode] = useState<StoredAnalysisMode>("both");
+  const [stage3FullCoverageOcr, setStage3FullCoverageOcr] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [runs, setRuns] = useState<SupabaseAnalyzerRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -407,6 +409,7 @@ export function SupabaseCodeAnalyzer() {
           codeEdition: codeYear,
           codeContext: codeContextForAnalyzer(jurisdiction, codeYear),
           analysisMode,
+          stage3FullCoverageOcr,
         });
         runId = created.runId;
         uploads = created.uploads;
@@ -1083,6 +1086,24 @@ export function SupabaseCodeAnalyzer() {
               </div>
             </CardContent>
           </Card>
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2"
+            data-testid="stage3-full-coverage-control"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Stage 3 full-coverage OCR</p>
+              <p className="text-xs text-muted-foreground">
+                Optional for this run only. Defers paid GPT until Mac OCR packs are ready for every sheet. Off by default.
+              </p>
+            </div>
+            <Switch
+              checked={stage3FullCoverageOcr}
+              disabled={submitting}
+              onCheckedChange={setStage3FullCoverageOcr}
+              data-testid="switch-stage3-full-coverage"
+              aria-label="Enable Stage 3 full-coverage OCR for this run"
+            />
+          </div>
           <p className="text-xs text-muted-foreground">{reviewScope.limitation}</p>
           <Badge variant="outline" className="h-auto whitespace-normal text-left font-normal">
             {codeContext}

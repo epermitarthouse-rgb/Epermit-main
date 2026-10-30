@@ -142,6 +142,8 @@ export async function createSupabaseAnalyzerRun(input: {
   codeEdition: string;
   codeContext: string;
   analysisMode?: StoredAnalysisMode;
+  /** Operator opt-in: run-scoped Stage 3 full-coverage OCR gate (default off). */
+  stage3FullCoverageOcr?: boolean;
   budgetLimitUsd?: number;
 }) {
   return invokeRunAction<{
@@ -163,6 +165,7 @@ export async function createSupabaseAnalyzerRun(input: {
     codeEdition: input.codeEdition,
     codeContext: input.codeContext,
     analysisMode: input.analysisMode ?? "both",
+    stage3FullCoverageOcr: input.stage3FullCoverageOcr === true,
     budgetLimitUsd: input.budgetLimitUsd ?? 20,
     files: input.files.map((file) => ({
       name: file.name,

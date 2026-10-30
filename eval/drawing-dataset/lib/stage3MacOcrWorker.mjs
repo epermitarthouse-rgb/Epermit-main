@@ -24,6 +24,24 @@ import {
 } from "./stage3VisualExtractionSpike.mjs";
 import { PILOT_SHEETS } from "./visualEvidencePilot.mjs";
 import { uploadStage3PackToStorage, uploadStage3PackViaEdge } from "./stage3StorageUpload.mjs";
+import {
+  loadAuthoritativeDrawingManifest,
+  resolvePdfPath,
+} from "./stage3DrawingManifest.mjs";
+import {
+  extractGenericSheetEvidence,
+  formatGenericStage3PromptBlock,
+  inferSheetTopic,
+} from "./stage3GenericSheetEvidence.mjs";
+import {
+  defaultRunState,
+  initRunSheets,
+  loadRunState,
+  saveRunState,
+  setSheetStatus,
+  summarizeRunState,
+} from "./stage3OcrRunState.mjs";
+import { syncRunPreprocessSummary } from "./stage3WorkerSupabase.mjs";
 
 async function maybeUploadPack(storage, job, pack) {
   if (!storage || !job.projectId || !job.runId || !job.sheetJobId) return null;
@@ -59,7 +77,8 @@ async function maybeUploadPack(storage, job, pack) {
   });
 }
 
-export const STAGE3_WORKER_VERSION = "phase3.stage3-mac-ocr-worker.v1";
+export const STAGE3_WORKER_VERSION = "phase3.stage3-mac-ocr-worker.v2-fullset";
+export const DEFAULT_WORKER_CONCURRENCY = 2;
 export const STAGE3_EXTRACTION_METHOD = "macos-vision";
 /** Align cache version with analyzer Stage 3 module. */
 export const STAGE3_EXTRACTION_VERSION = "phase3.stage3-visual-evidence.v1";
@@ -119,9 +138,7 @@ export function buildJobRecord(sheet, options = {}) {
     projectId: options.projectId || null,
     runId: options.runId || null,
     sheetJobId: options.sheetJobId || id,
-    topic: sheet.id === "A-3.06" ? "guardrail_detail_height"
-      : sheet.id === "A-6.00" ? "door_schedule_structured"
-        : "hydraulic_design",
+    topic: inferSheetTopic(sheet.id),
     extractionMethod: STAGE3_EXTRACTION_METHOD,
     extractionVersion: STAGE3_EXTRACTION_VERSION,
     status: "pending",
@@ -249,10 +266,20 @@ function rebuildAssociationsFromFreshOcr(cachedLayout, recovered) {
   };
 }
 
+function normalizePilotSheetId(sheetId) {
+  const id = String(sheetId || "").toUpperCase();
+  if (id.startsWith("A-3.06")) return "A-3.06";
+  if (id.startsWith("A-6.00")) return "A-6.00";
+  if (id === "FP200" || id.startsWith("FP200")) return "FP200";
+  return null;
+}
+
 function extractForSheet(sheetId, layout) {
-  if (sheetId === "A-3.06") return extractGuardrailDetailEvidence(layout, { mode: "stage3_visual" });
-  if (sheetId === "A-6.00") return extractDoorScheduleEvidence(layout, { mode: "stage3_visual" });
-  return extractHydraulicEvidence(layout, { mode: "stage3_visual" });
+  const pilotKey = normalizePilotSheetId(sheetId);
+  if (pilotKey === "A-3.06") return extractGuardrailDetailEvidence(layout, { mode: "stage3_visual" });
+  if (pilotKey === "A-6.00") return extractDoorScheduleEvidence(layout, { mode: "stage3_visual" });
+  if (pilotKey === "FP200") return extractHydraulicEvidence(layout, { mode: "stage3_visual" });
+  return extractGenericSheetEvidence(layout, { sheetId, topic: inferSheetTopic(sheetId) });
 }
 
 /**
@@ -264,7 +291,9 @@ export async function processClaimedJob(paths, job, options = {}) {
   const key = cacheKey(job.contentSha256, job.extractionMethod, job.extractionVersion);
   const cachePath = path.join(paths.cache, `${key}.json`);
 
-  if (!options.force && existsSync(cachePath)) {
+  await touchRunStateForJob(paths, job, { status: "processing", cacheKey: key });
+
+  if (!options.force && !job.forceRetry && existsSync(cachePath)) {
     const cached = JSON.parse(await readFile(cachePath, "utf8"));
     const packPath = path.join(paths.packs, `${job.sheetId}.${job.contentSha256}.json`);
     await writeFile(packPath, JSON.stringify(cached, null, 2));
@@ -295,6 +324,16 @@ export async function processClaimedJob(paths, job, options = {}) {
       // already moved
     }
     await appendAudit(paths, { event: "cache_hit", jobId: job.id, cacheKey: key });
+    await touchRunStateForJob(paths, job, {
+      status: "completed",
+      cacheKey: key,
+      packStatus: cached.status,
+      sheetJobId: job.sheetJobId || null,
+    });
+    if (options.syncSupabase && job.runId) {
+      const state = await loadRunState(paths.root, job.runId);
+      if (state) await syncRunPreprocessSummary(state, options).catch(() => null);
+    }
     return { status: "cache_hit", pack: cached, job: doneJob };
   }
 
@@ -338,9 +377,12 @@ export async function processClaimedJob(paths, job, options = {}) {
     extractionMethod: STAGE3_EXTRACTION_METHOD,
     cacheKey: key,
   };
-  if (job.sheetId === "A-6.00") {
+  if (normalizePilotSheetId(job.sheetId) === "A-6.00") {
     stage3.criticalControls = evaluateCriticalControls(stage3);
   }
+  stage3.promptBlock = stage3.promptBlock
+    || formatStage3PromptBlock(stage3)
+    || formatGenericStage3PromptBlock(stage3);
 
   const envelope = {
     id: stage3.id,
@@ -421,6 +463,16 @@ export async function processClaimedJob(paths, job, options = {}) {
     latencyMs: doneJob.latencyMs,
     storageUploaded: Boolean(storageUpload && !storageUpload.error),
   });
+  await touchRunStateForJob(paths, job, {
+    status: "completed",
+    cacheKey: key,
+    packStatus: envelope.status,
+    sheetJobId: job.sheetJobId || null,
+  });
+  if (options.syncSupabase && job.runId) {
+    const state = await loadRunState(paths.root, job.runId);
+    if (state) await syncRunPreprocessSummary(state, options).catch(() => null);
+  }
   return { status: "done", pack: envelope, job: doneJob };
 }
 
@@ -451,6 +503,12 @@ export async function failClaimedJob(paths, job, error) {
     jobId: job.id,
     error: message.slice(0, 240),
   });
+  if (!retry) {
+    await touchRunStateForJob(paths, job, {
+      status: "failed",
+      lastError: message.slice(0, 240),
+    });
+  }
   return failedJob;
 }
 
@@ -480,6 +538,126 @@ export async function loadCompletedPacksFromWorkerRoot(rootDir, ctx = {}) {
     }
   }
   return [];
+}
+
+export async function enqueueFullSetJobs(options = {}) {
+  const paths = resolveWorkerPaths(options.rootDir);
+  await ensureWorkerDirs(paths);
+  const manifest = await loadAuthoritativeDrawingManifest(options.datasetOut);
+  if (manifest.missingLayout.length) {
+    throw new Error(`layout_pages_missing:${manifest.missingLayout.length}`);
+  }
+  const sourceDir = options.sourceDir || manifest.sourceFilesDir;
+  const jobs = [];
+  for (const sheet of manifest.sheets) {
+    jobs.push(buildJobRecord(sheet, {
+      pdfPath: resolvePdfPath(manifest, sheet, { sourceDir, fallbackSourceDir: options.fallbackSourceDir }),
+      layoutPagePath: sheet.layoutPagePath,
+      projectId: options.projectId || null,
+      runId: options.runId || null,
+      sheetJobId: options.sheetJobMap?.[sheet.relativePath] || null,
+    }));
+  }
+
+  let runState = options.runId
+    ? (await loadRunState(options.rootDir, options.runId)) || defaultRunState({
+      projectId: options.projectId,
+      runId: options.runId,
+      requiredSheetCount: manifest.pdfSheetCount,
+    })
+    : null;
+  if (runState) {
+    initRunSheets(runState, manifest.sheets, options.sheetJobMap || {});
+    runState.macWorkerLastHeartbeat = new Date().toISOString();
+    await saveRunState(options.rootDir, runState);
+    if (options.syncSupabase) {
+      try {
+        await syncRunPreprocessSummary(runState, options);
+      } catch (error) {
+        await appendAudit(paths, {
+          event: "run_preprocess_sync_failed",
+          runId: runState.runId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  const enqueued = await enqueueJobs(paths, jobs);
+  await appendAudit(paths, {
+    event: "enqueue_full_set",
+    sheetCount: manifest.pdfSheetCount,
+    inventoryNote: manifest.discrepancyNote,
+    runId: options.runId || null,
+  });
+  return { manifest, enqueued, runState: runState ? summarizeRunState(runState) : null };
+}
+
+export async function cancelPendingJobs(paths, options = {}) {
+  await ensureWorkerDirs(paths);
+  const cancelled = [];
+  for (const name of await readdir(paths.pending)) {
+    if (!name.endsWith(".json")) continue;
+    const pendingPath = path.join(paths.pending, name);
+    const job = JSON.parse(await readFile(pendingPath, "utf8"));
+    job.status = "cancelled";
+    job.cancelledAt = new Date().toISOString();
+    await writeFile(path.join(paths.failed, name.replace(".json", ".cancelled.json")), JSON.stringify(job, null, 2));
+    await unlink(pendingPath);
+    cancelled.push(job.id);
+  }
+  if (options.runId) {
+    const state = await loadRunState(workerPathsRoot(paths), options.runId);
+    if (state) {
+      state.cancelled = true;
+      state.gateMode = "blocking";
+      for (const row of Object.values(state.sheets)) {
+        if (row.status === "pending") row.status = "skipped";
+      }
+      await saveRunState(workerPathsRoot(paths), state);
+    }
+  }
+  await appendAudit(paths, { event: "cancel_pending", count: cancelled.length, runId: options.runId || null });
+  return cancelled;
+}
+
+export async function retrySheetJob(paths, relativePath, options = {}) {
+  const state = options.runId ? await loadRunState(workerPathsRoot(paths), options.runId) : null;
+  const doneNames = await readdir(paths.done);
+  for (const name of doneNames) {
+    if (!name.endsWith(".json")) continue;
+    const job = JSON.parse(await readFile(path.join(paths.done, name), "utf8"));
+    if (job.relativePath !== relativePath) continue;
+    const retryJob = {
+      ...job,
+      id: `${job.id}-retry-${Date.now().toString(36).slice(-6)}`,
+      status: "pending",
+      attempts: 0,
+      forceRetry: true,
+    };
+    delete retryJob.completedAt;
+    delete retryJob.cacheHit;
+    await writeFile(path.join(paths.pending, `${retryJob.id}.json`), JSON.stringify(retryJob, null, 2));
+    if (state) {
+      setSheetStatus(state, relativePath, { status: "pending", lastError: null });
+      await saveRunState(workerPathsRoot(paths), state);
+    }
+    return retryJob;
+  }
+  throw new Error(`retry_sheet_not_found:${relativePath}`);
+}
+
+async function touchRunStateForJob(paths, job, patch) {
+  if (!job.runId || !job.relativePath) return;
+  const state = await loadRunState(paths.root, job.runId);
+  if (!state) return;
+  setSheetStatus(state, job.relativePath, patch);
+  state.macWorkerLastHeartbeat = new Date().toISOString();
+  await saveRunState(paths.root, state);
+}
+
+function workerPathsRoot(paths) {
+  return paths.root;
 }
 
 export async function enqueuePilotJobs(options = {}) {
@@ -518,17 +696,98 @@ export async function runWorkerOnce(options = {}) {
   }
 }
 
+export async function reconcileRunStateFromJobs(paths, runId) {
+  const state = await loadRunState(paths.root, runId);
+  if (!state) return null;
+  for (const dir of ["done", "failed"]) {
+    const names = existsSync(paths[dir]) ? await readdir(paths[dir]) : [];
+    for (const name of names) {
+      if (!name.endsWith(".json")) continue;
+      const job = JSON.parse(await readFile(path.join(paths[dir], name), "utf8"));
+      if (!job.relativePath) continue;
+      const row = state.sheets[job.relativePath];
+      if (!row) continue;
+      if (dir === "done") {
+        row.status = "completed";
+        row.packStatus = job.packStatus || row.packStatus;
+        row.cacheKey = job.cacheKey || row.cacheKey;
+        row.sheetJobId = job.sheetJobId || row.sheetJobId;
+      } else if (job.status === "failed") {
+        row.status = "failed";
+        row.lastError = job.lastError || row.lastError;
+      }
+    }
+  }
+  state.macWorkerLastHeartbeat = new Date().toISOString();
+  await saveRunState(paths.root, state);
+  return summarizeRunState(state);
+}
+
 export async function runWorkerLoop(options = {}) {
   const paths = resolveWorkerPaths(options.rootDir);
   await ensureWorkerDirs(paths);
   const maxJobs = options.maxJobs ?? 10;
+  const concurrency = Math.max(1, Math.min(options.concurrency ?? 1, DEFAULT_WORKER_CONCURRENCY));
+  if (concurrency === 1) {
+    const results = [];
+    for (let index = 0; index < maxJobs; index += 1) {
+      const result = await runWorkerOnce(options);
+      results.push(result);
+      if (result.status === "idle") break;
+    }
+    if (options.reconcileRunId) {
+      await reconcileRunStateFromJobs(paths, options.reconcileRunId);
+    }
+    return results;
+  }
+
   const results = [];
-  for (let index = 0; index < maxJobs; index += 1) {
-    const result = await runWorkerOnce(options);
-    results.push(result);
-    if (result.status === "idle") break;
+  let idle = false;
+  const workers = Array.from({ length: concurrency }, async () => {
+    for (let index = 0; index < maxJobs; index += 1) {
+      if (idle) return;
+      const result = await runWorkerOnce(options);
+      results.push(result);
+      if (result.status === "idle") {
+        idle = true;
+        return;
+      }
+    }
+  });
+  await Promise.all(workers);
+  if (options.reconcileRunId) {
+    await reconcileRunStateFromJobs(paths, options.reconcileRunId);
   }
   return results;
+}
+
+export async function reportFullSetCoverage(options = {}) {
+  const manifest = await loadAuthoritativeDrawingManifest(options.datasetOut);
+  const paths = resolveWorkerPaths(options.rootDir);
+  const runState = options.runId ? await loadRunState(options.rootDir, options.runId) : null;
+  const outcomes = [];
+  for (const sheet of manifest.sheets) {
+    const cached = await readCachePack(paths, sheet.sha256);
+    const packPath = path.join(paths.packs, `${sheet.id}.${sheet.sha256}.json`);
+    outcomes.push({
+      sheetId: sheet.id,
+      relativePath: sheet.relativePath,
+      sha256: sheet.sha256,
+      cacheHit: Boolean(cached),
+      packFile: existsSync(packPath),
+      runStatus: runState?.sheets?.[sheet.relativePath]?.status || null,
+      packStatus: runState?.sheets?.[sheet.relativePath]?.packStatus || cached?.status || null,
+    });
+  }
+  return {
+    manifest: {
+      pdfSheetCount: manifest.pdfSheetCount,
+      discrepancyNote: manifest.discrepancyNote,
+    },
+    run: runState ? summarizeRunState(runState) : null,
+    outcomes,
+    recorded: outcomes.filter((row) => row.cacheHit || row.packFile).length,
+  };
 }
 
 export { PILOT_SHEETS, cacheKey, workerId };

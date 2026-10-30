@@ -11,6 +11,7 @@
  * verify_jwt is false so the worker token can authenticate; in-code auth is mandatory.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import {
   STAGE3_EVIDENCE_BUCKET,
   STAGE3_PACK_MAX_BYTES,
@@ -135,17 +136,165 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json() as {
+      action?: string;
       projectId?: string;
       runId?: string;
       sheetJobId?: string;
       contentSha256?: string;
       pack?: Stage3EvidencePack;
+      preprocess?: Record<string, unknown>;
       /** Ignored — path is always server-derived. */
       objectPath?: string;
     };
 
     const projectId = String(body.projectId || "").trim();
     const runId = String(body.runId || "").trim();
+    const action = String(body.action || "upload_pack").trim();
+
+    const auth = await authorizeCaller(req, projectId);
+    if (!auth.ok) return auth.response;
+    const { admin, mode } = auth;
+
+    if (action === "sync_run_preprocess") {
+      if (!runId) return json({ error: "runId is required" }, 400);
+      const { data: run, error: runError } = await admin
+        .from("supabase_analyzer_runs")
+        .select("id, project_id, analysis_scope")
+        .eq("id", runId)
+        .maybeSingle();
+      if (runError || !run || String(run.project_id) !== projectId) {
+        return json({ error: "Run not found for project" }, 404);
+      }
+      const scope = (run.analysis_scope && typeof run.analysis_scope === "object" && !Array.isArray(run.analysis_scope))
+        ? { ...(run.analysis_scope as Record<string, unknown>) }
+        : {};
+      scope.stage3FullCoverageOcr = true;
+      scope.stage3VisualEvidence = true;
+      scope.stage3OcrPreprocess = {
+        ...(body.preprocess || {}),
+        updatedAt: new Date().toISOString(),
+      };
+      const { error: updateError } = await admin
+        .from("supabase_analyzer_runs")
+        .update({ analysis_scope: scope, updated_at: new Date().toISOString() })
+        .eq("id", runId);
+      if (updateError) {
+        return json({ error: updateError.message || "Run update failed" }, 500);
+      }
+      return json({ ok: true, action, runId, authMode: mode });
+    }
+
+    if (action === "list_sheet_jobs") {
+      if (!runId) return json({ error: "runId is required" }, 400);
+      const { data: jobs, error: jobsError } = await admin
+        .from("supabase_analyzer_sheet_jobs")
+        .select("id, original_file_name, object_path, detected_sheet_number, discipline, status")
+        .eq("run_id", runId)
+        .eq("project_id", projectId)
+        .order("ordinal", { ascending: true });
+      if (jobsError) return json({ error: jobsError.message }, 500);
+      return json({ ok: true, jobs: jobs || [], authMode: mode });
+    }
+
+    if (action === "download_drawing") {
+      const sheetJobId = String(body.sheetJobId || "").trim();
+      const contentSha256 = String(body.contentSha256 || "").trim().toLowerCase();
+      if (!sheetJobId) return json({ error: "sheetJobId is required" }, 400);
+      const { data: job, error: jobError } = await admin
+        .from("supabase_analyzer_sheet_jobs")
+        .select("id, project_id, run_id, object_path")
+        .eq("id", sheetJobId)
+        .maybeSingle();
+      if (jobError || !job) return json({ error: "Sheet job not found" }, 404);
+      if (String(job.project_id) !== projectId || String(job.run_id) !== runId) {
+        return json({ error: "Sheet job does not match project/run" }, 403);
+      }
+      const { data: drawingBlob, error: drawingError } = await admin.storage
+        .from("supabase-analyzer-drawings")
+        .download(String(job.object_path));
+      if (drawingError || !drawingBlob) {
+        return json({ error: drawingError?.message || "Drawing download failed" }, 500);
+      }
+      const drawingBytes = new Uint8Array(await drawingBlob.arrayBuffer());
+      const actualSha = await sha256Hex(drawingBytes);
+      if (contentSha256 && actualSha !== contentSha256) {
+        return json({ error: "contentSha256 does not match stored drawing" }, 409);
+      }
+      const base64 = encodeBase64(drawingBytes);
+      return json({
+        ok: true,
+        bytes: drawingBytes.byteLength,
+        sha256: actualSha,
+        base64,
+        authMode: mode,
+      });
+    }
+
+    if (action === "verify_pack") {
+      const sheetJobId = String(body.sheetJobId || "").trim();
+      const contentSha256 = String(body.contentSha256 || "").trim().toLowerCase();
+      if (!runId || !sheetJobId || !contentSha256 || !/^[a-f0-9]{64}$/.test(contentSha256)) {
+        return json({ error: "runId, sheetJobId, and contentSha256 are required" }, 400);
+      }
+      const { data: job, error: jobError } = await admin
+        .from("supabase_analyzer_sheet_jobs")
+        .select("id, project_id, run_id")
+        .eq("id", sheetJobId)
+        .maybeSingle();
+      if (jobError || !job) return json({ error: "Sheet job not found" }, 404);
+      if (String(job.project_id) !== projectId || String(job.run_id) !== runId) {
+        return json({ error: "Sheet job does not match project/run" }, 403);
+      }
+      const objectPath = buildStage3EvidenceObjectPath({
+        projectId,
+        runId,
+        sheetJobId,
+        contentSha256,
+      });
+      const { data: packBlob, error: packError } = await admin.storage
+        .from(STAGE3_EVIDENCE_BUCKET)
+        .download(objectPath);
+      if (packError || !packBlob) {
+        return json({
+          ok: false,
+          found: false,
+          objectPath,
+          error: packError?.message || "Pack not found in Storage",
+          authMode: mode,
+        }, 404);
+      }
+      const packBytes = new Uint8Array(await packBlob.arrayBuffer());
+      const validated = parseStage3PackBytes(packBytes, {
+        contentSha256,
+        extractionVersion: STAGE3_VISUAL_EVIDENCE_VERSION,
+      });
+      if (!validated.ok) {
+        return json({
+          ok: false,
+          found: true,
+          objectPath,
+          bytes: packBytes.byteLength,
+          issue: validated.issue,
+          detail: validated.detail,
+          authMode: mode,
+        }, 409);
+      }
+      const promptReady = Boolean(String(validated.pack.promptBlock || "").trim());
+      return json({
+        ok: true,
+        found: true,
+        objectPath,
+        bytes: packBytes.byteLength,
+        packStatus: validated.pack.status,
+        sheetId: validated.pack.sheetId,
+        topic: validated.pack.topic,
+        independentlyVerified: false,
+        promptReady,
+        extractionVersion: validated.pack.extractionVersion || STAGE3_VISUAL_EVIDENCE_VERSION,
+        authMode: mode,
+      });
+    }
+
     const sheetJobId = String(body.sheetJobId || "").trim();
     const contentSha256 = String(body.contentSha256 || "").trim().toLowerCase();
     if (!projectId || !runId || !sheetJobId || !contentSha256 || !/^[a-f0-9]{64}$/.test(contentSha256)) {
@@ -154,10 +303,6 @@ Deno.serve(async (req) => {
     if (!body.pack || typeof body.pack !== "object") {
       return json({ error: "pack object is required" }, 400);
     }
-
-    const auth = await authorizeCaller(req, projectId);
-    if (!auth.ok) return auth.response;
-    const { admin, mode } = auth;
 
     // Ownership: sheet job must belong to project + run.
     const { data: job, error: jobError } = await admin
