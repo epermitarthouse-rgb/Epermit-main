@@ -14,6 +14,7 @@ import { NotificationsProvider } from "@/components/notifications/NotificationsP
 import { AccountMenu } from "@/components/layout/AccountMenu";
 import { HeaderOverflowMenu } from "@/components/layout/HeaderOverflowMenu";
 import { useAuth } from "@/hooks/useAuth";
+import { useDemoModePreference } from "@/hooks/useDemoModePreference";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 import {
@@ -65,9 +66,10 @@ function AppHeader({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { flags } = useFeatureFlags();
+  const { enabled: demoModeEnabled } = useDemoModePreference();
   const isHome = pathname === "/dashboard";
   const showFiling = isModuleHrefVisible("/permit-wizard-filing", flags);
-  const showDemo = isModuleHrefVisible("/demo/mcdonalds", flags);
+  const showDemo = demoModeEnabled && isModuleHrefVisible("/demo/mcdonalds", flags);
 
   return (
     <header

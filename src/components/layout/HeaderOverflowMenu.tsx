@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { MoreHorizontal, Plus, Rocket, Search, Sparkles } from "lucide-react";
 import { AuthGatedLink } from "@/components/layout/AuthGatedLink";
+import { useDemoModePreference } from "@/hooks/useDemoModePreference";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,9 @@ interface HeaderOverflowMenuProps {
  */
 export function HeaderOverflowMenu({ onOpenCommand }: HeaderOverflowMenuProps) {
   const { flags } = useFeatureFlags();
+  const { enabled: demoModeEnabled } = useDemoModePreference();
   const showFiling = isModuleHrefVisible("/permit-wizard-filing", flags);
-  const showDemo = isModuleHrefVisible("/demo/mcdonalds", flags);
+  const showDemo = demoModeEnabled && isModuleHrefVisible("/demo/mcdonalds", flags);
 
   return (
     <DropdownMenu>

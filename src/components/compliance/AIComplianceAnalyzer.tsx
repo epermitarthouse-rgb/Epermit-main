@@ -331,7 +331,8 @@ const severityConfig = {
     icon: AlertCircle,
     color: "text-destructive",
     bg: "bg-muted/30 dark:bg-muted/40",
-    border: "border-destructive",
+    // Left accent only — full-perimeter severity color reads as an oversized frame.
+    border: "border-l-destructive",
     stripe: "bg-destructive",
     iconBg: "bg-destructive/15",
     label: "Critical",
@@ -340,7 +341,7 @@ const severityConfig = {
     icon: AlertTriangle,
     color: "text-amber-600 dark:text-amber-400",
     bg: "bg-muted/30 dark:bg-muted/40",
-    border: "border-amber-500 dark:border-amber-400",
+    border: "border-l-amber-500 dark:border-l-amber-400",
     stripe: "bg-amber-500 dark:bg-amber-400",
     iconBg: "bg-amber-500/15",
     label: "Warning",
@@ -349,7 +350,7 @@ const severityConfig = {
     icon: Info,
     color: "text-blue-600 dark:text-blue-400",
     bg: "bg-muted/30 dark:bg-muted/40",
-    border: "border-blue-500 dark:border-blue-400",
+    border: "border-l-blue-500 dark:border-l-blue-400",
     stripe: "bg-blue-500 dark:bg-blue-400",
     iconBg: "bg-blue-500/15",
     label: "Advisory",
@@ -3788,20 +3789,20 @@ export function AIComplianceAnalyzer() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03, duration: 0.2 }}
-                            className={`group relative rounded-xl border-l-4 border shadow-sm transition-all duration-200 ${
+                            className={`group relative rounded-lg border border-border/60 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-[hsl(var(--border-obsidian-strong)/0.28)] ${
                               response
-                                ? "border-l-teal/25 border-border/40 bg-muted/20 opacity-70 dark:border-[hsl(var(--border-obsidian-strong)/0.28)] dark:bg-muted/20"
-                                : `${config.border} border-l-4 ${config.bg} hover:shadow-lg`
+                                ? "border-l-2 border-l-teal/40 bg-muted/20 opacity-70 dark:bg-muted/20"
+                                : `border-l-2 ${config.border} ${config.bg}`
                             }`}
                           >
-                            <div className="p-4">
+                            <div className="p-3">
                               {/* Header row */}
-                              <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start justify-between gap-2.5">
                                 <div className="flex-1 min-w-0">
                                   {/* Title and badges */}
-                                  <div className="flex items-start gap-3 mb-2">
-                                    <div className={`p-2.5 rounded-lg ${config.iconBg} shrink-0`}>
-                                      <Icon className={`h-5 w-5 ${config.color}`} />
+                                  <div className="flex items-start gap-2.5 mb-2">
+                                    <div className={`p-1.5 rounded-md ${config.iconBg} shrink-0`}>
+                                      <Icon className={`h-4 w-4 ${config.color}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <h4 className="font-semibold text-foreground leading-tight">{issue.title}</h4>

@@ -40,7 +40,9 @@ import { ProjectHealthCard } from "@/components/dashboard/ProjectHealthCard";
 import { RecentChecklistsWidget } from "@/components/dashboard/RecentChecklistsWidget";
 import { GettingStartedChecklist } from "@/components/onboarding/GettingStartedChecklist";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { DemoModeToggle } from "@/components/permitpilot/DemoModeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useDemoModePreference } from "@/hooks/useDemoModePreference";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { usePortalHarvestEvidence } from "@/hooks/usePortalHarvestEvidence";
@@ -210,10 +212,18 @@ export default function Dashboard() {
     return SUBSCRIPTION_TIERS[subscription.tier]?.name || subscription.tier;
   };
 
+  const { enabled: demoModeEnabled } = useDemoModePreference();
   const welcomeFirstName = String(profile?.full_name ?? "")
     .trim()
     .split(/\s+/)
     .filter(Boolean)[0];
+  // Demo mode uses an explicit “Dashboard · Demo” label. When off, avoid showing a
+  // literal first name of “Demo” (reads as mode chrome) and fall back to “Dashboard”.
+  const dashboardTitle = demoModeEnabled
+    ? "Dashboard · Demo"
+    : welcomeFirstName && welcomeFirstName.toLowerCase() !== "demo"
+      ? `Dashboard · ${welcomeFirstName}`
+      : "Dashboard";
 
   const kpis = useMemo(() => {
     const active = projects.filter((p) => p.status !== "approved");
@@ -281,10 +291,11 @@ export default function Dashboard() {
       <div className="space-y-6">
         <PageHeader
           eyebrow="PermitPilot Command"
-          title={welcomeFirstName ? `Dashboard · ${welcomeFirstName}` : "Dashboard"}
+          title={dashboardTitle}
           body="Overview of active permit expediting and utility coordination work across your portfolio."
           action={
             <>
+              <DemoModeToggle id="dashboard-demo-mode-toggle" />
               <button
                 type="button"
                 className="pilot-button-ghost"

@@ -13,7 +13,13 @@ import {
   syncRunPreprocessSummary,
   verifyStoredPack,
 } from "./stage3WorkerSupabase.mjs";
-import { loadRunState, saveRunState, setSheetStatus, toAnalysisScopePreprocessSummary } from "./stage3OcrRunState.mjs";
+import {
+  defaultRunState,
+  loadRunState,
+  saveRunState,
+  setSheetStatus,
+  toAnalysisScopePreprocessSummary,
+} from "./stage3OcrRunState.mjs";
 
 function normalizeBaseName(value) {
   return String(value || "").trim().toLowerCase();
@@ -151,23 +157,36 @@ export async function uploadAndVerifyFullSetPacks(options = {}) {
     });
   }
 
-  const state = (await loadRunState(workerRoot, runId)) || null;
-  if (state) {
-    for (const row of results) {
-      if (!row.relativePath) continue;
-      setSheetStatus(state, row.relativePath, {
-        sheetJobId: row.sheetJobId,
-        status: row.packRetrieved ? "completed" : (row.status === "pack_missing_local" ? "failed" : "completed"),
-        packStatus: row.packStatus || (row.packRetrieved ? "evidence_recovered" : null),
-        contentSha256: row.contentSha256,
-      });
-    }
-    state.projectId = projectId;
-    state.macWorkerLastHeartbeat = new Date().toISOString();
-    await saveRunState(workerRoot, state);
-    if (live && syncSupabase && !dryRun) {
-      await syncRunPreprocessSummary(state, options);
-    }
+  // Always materialize run state so --sync-supabase can release the GPT gate even when
+  // sync-full-set runs before enqueue-full (common after UI creates a Stage 3 run).
+  let state = await loadRunState(workerRoot, runId);
+  if (!state) {
+    state = defaultRunState({
+      projectId,
+      runId,
+      requiredSheetCount: manifest.pdfSheetCount || results.length || 0,
+    });
+  }
+  for (const row of results) {
+    if (!row.relativePath) continue;
+    setSheetStatus(state, row.relativePath, {
+      sheetJobId: row.sheetJobId,
+      status: row.packRetrieved ? "completed" : (row.status === "pack_missing_local" ? "failed" : "completed"),
+      packStatus: row.packStatus || (row.packRetrieved ? "evidence_recovered" : null),
+      contentSha256: row.contentSha256,
+    });
+  }
+  state.projectId = projectId;
+  state.runId = runId;
+  state.requiredSheetCount = Math.max(
+    Number(state.requiredSheetCount || 0),
+    Number(manifest.pdfSheetCount || 0),
+    results.length,
+  );
+  state.macWorkerLastHeartbeat = new Date().toISOString();
+  await saveRunState(workerRoot, state);
+  if (live && syncSupabase && !dryRun) {
+    await syncRunPreprocessSummary(state, options);
   }
 
   const summary = {
@@ -180,7 +199,7 @@ export async function uploadAndVerifyFullSetPacks(options = {}) {
     packRetrieved: results.filter((row) => row.packRetrieved).length,
     promptReady: results.filter((row) => row.promptReady).length,
     failed: results.filter((row) => !row.packRetrieved && row.status !== "dry_run_mapped").length,
-    preprocess: state ? toAnalysisScopePreprocessSummary(state) : null,
+    preprocess: toAnalysisScopePreprocessSummary(state),
     results,
   };
   return summary;

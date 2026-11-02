@@ -43,7 +43,10 @@ import {
 import { hybridNavGroups, type HybridNavItem } from "@/components/layout/hybridNav";
 import { AdminAccessControlSidebarNav } from "@/components/admin/AdminAccessControlSidebarNav";
 import { UciSidebarNav } from "@/components/layout/UciSidebarNav";
+import { DemoModeToggle } from "@/components/permitpilot/DemoModeToggle";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useDemoModePreference } from "@/hooks/useDemoModePreference";
+import { isDemoNavHref } from "@/lib/demoModePreference";
 import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 
 export function AppSidebar() {
@@ -52,9 +55,13 @@ export function AppSidebar() {
   const { isAdmin } = useRequireAdmin();
   const { state } = useSidebar();
   const { flags } = useFeatureFlags();
+  const { enabled: demoModeEnabled } = useDemoModePreference();
   const { recentPages, favorites, toggleFavorite, isFavorite } =
     useNavigationHistory();
-  const navVisible = (href: string) => isModuleHrefVisible(href, flags);
+  const navVisible = (href: string) => {
+    if (!demoModeEnabled && isDemoNavHref(href)) return false;
+    return isModuleHrefVisible(href, flags);
+  };
   const selectedProject = useSelectedProjectOptional();
   const { projects, loading, fetchProjects } = useProjects();
   const isCollapsed = state === "collapsed";
@@ -364,22 +371,25 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
+      <SidebarFooter className="border-t border-sidebar-border p-3 space-y-2">
         {!isCollapsed ? (
-          <div className="rounded-md border border-sidebar-border bg-sidebar-accent p-3">
-            <div className="pilot-kicker">Workspace</div>
-            <div className="mt-1 font-tight text-sm font-semibold text-sidebar-foreground">
-              {user ? user.email ?? "Signed in" : "Guest"}
+          <>
+            <DemoModeToggle compact id="sidebar-demo-mode-toggle" />
+            <div className="rounded-md border border-sidebar-border bg-sidebar-accent p-3">
+              <div className="pilot-kicker">Workspace</div>
+              <div className="mt-1 font-tight text-sm font-semibold text-sidebar-foreground">
+                {user ? user.email ?? "Signed in" : "Guest"}
+              </div>
+              {!user && (
+                <Button asChild size="sm" className="mt-3 w-full" variant="outline">
+                  <Link to="/auth">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Sign In
+                  </Link>
+                </Button>
+              )}
             </div>
-            {!user && (
-              <Button asChild size="sm" className="mt-3 w-full" variant="outline">
-                <Link to="/auth">
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Sign In
-                </Link>
-              </Button>
-            )}
-          </div>
+          </>
         ) : (
           <Menu className="mx-auto h-4 w-4 text-sidebar-foreground" />
         )}

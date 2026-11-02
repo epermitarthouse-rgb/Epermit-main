@@ -35,8 +35,10 @@ import {
   Network,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useDemoModePreference } from "@/hooks/useDemoModePreference";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isPublicShellHref } from "@/lib/authGatedNav";
+import { isDemoNavHref } from "@/lib/demoModePreference";
 import { isModuleHrefVisible } from "@/lib/moduleFeatureFlags";
 
 interface CommandPaletteProps {
@@ -151,7 +153,11 @@ export function CommandPalette({ open, onOpenChange, onOpenHelp }: CommandPalett
   const navigate = useNavigate();
   const { user } = useAuth();
   const { flags } = useFeatureFlags();
-  const navVisible = (href: string) => isModuleHrefVisible(href, flags);
+  const { enabled: demoModeEnabled } = useDemoModePreference();
+  const navVisible = (href: string) => {
+    if (!demoModeEnabled && isDemoNavHref(href)) return false;
+    return isModuleHrefVisible(href, flags);
+  };
 
   const runCommand = useCallback((command: () => void) => {
     onOpenChange(false);
