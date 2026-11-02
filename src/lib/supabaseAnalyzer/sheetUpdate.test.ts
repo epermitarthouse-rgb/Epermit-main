@@ -6,7 +6,9 @@ import {
   applyCancellation,
   applySheetMutations,
   countPersistedSheets,
+  countStalledAnalyzerJobs,
   isClaimableAnalyzerJob,
+  isOcrGateDeferralErrorCode,
   planSheetUpdate,
   retryWouldRestart,
   sheetMutations,
@@ -253,6 +255,44 @@ describe("Supabase analyzer cancellation", () => {
     assert.equal(retryWouldRestart({ status: "failed", error_code: "run_cancelled" }), false);
     assert.equal(retryWouldRestart({ status: "failed", error_code: "openai_http_500" }), true);
     assert.equal(retryWouldRestart({ status: "cancelled", error_code: "run_cancelled" }), false);
+    assert.equal(retryWouldRestart({
+      status: "processing",
+      attempt_count: 3,
+      max_attempts: 3,
+      lease_expires_at: "2026-11-02T00:00:00.000Z",
+      nowMs: Date.parse("2026-11-02T01:00:00.000Z"),
+    }), true);
+    assert.equal(retryWouldRestart({
+      status: "processing",
+      attempt_count: 1,
+      max_attempts: 3,
+      lease_expires_at: "2026-11-02T02:00:00.000Z",
+      nowMs: Date.parse("2026-11-02T01:00:00.000Z"),
+    }), false);
+  });
+
+  it("counts stalled processing leases and shows retry while zombies remain", () => {
+    assert.equal(isOcrGateDeferralErrorCode("stage3_ocr_preprocessing_incomplete"), true);
+    assert.equal(isOcrGateDeferralErrorCode("openai_http_500"), false);
+    const nowMs = Date.parse("2026-11-02T01:00:00.000Z");
+    const stalled = countStalledAnalyzerJobs([
+      { status: "processing", attempt_count: 3, max_attempts: 3, lease_expires_at: "2026-11-02T00:20:00.000Z" },
+      { status: "processing", attempt_count: 1, max_attempts: 3, lease_expires_at: "2026-11-02T02:00:00.000Z" },
+      { status: "completed", attempt_count: 1, max_attempts: 3, lease_expires_at: null },
+    ], nowMs);
+    assert.equal(stalled, 1);
+    const presentation = analyzerActionPresentation({
+      hasProject: true,
+      hasRun: true,
+      runStatus: "processing",
+      fileCount: 0,
+      failedSheets: 0,
+      stalledSheets: 3,
+      submitting: false,
+      cancelling: false,
+    });
+    assert.equal(presentation.showRetry, true);
+    assert.equal(presentation.retryDisabled, false);
   });
 
   it("keeps concurrent active jobs from being claimable once the run is cancelled", () => {

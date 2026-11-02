@@ -122,6 +122,7 @@ import {
 import {
   analyzerActionPresentation,
   analyzerFileIdentity,
+  countStalledAnalyzerJobs,
   planSheetUpdate,
   runIsWorkerActive,
   updateConfirmationCopy,
@@ -618,10 +619,15 @@ export function SupabaseCodeAnalyzer() {
 
   const retryFailed = async (jobIds?: string[]) => {
     if (!projectId || !activeRun || submittingRef.current || cancellingRef.current) return;
-    if (activeRun.status === "cancelled" || ["uploading", "queued", "processing"].includes(activeRun.status)) return;
+    if (activeRun.status === "cancelled") return;
+    const stalledNow = countStalledAnalyzerJobs(dataset?.jobs || []);
+    const hasRetryTargets = (activeRun.failed_sheets || 0) > 0 || stalledNow > 0;
+    // Healthy in-flight runs stay locked; stalled processing leases may be retried.
+    if (["uploading", "queued", "processing"].includes(activeRun.status) && stalledNow === 0) return;
+    if (!hasRetryTargets && !jobIds?.length) return;
     try {
       const result = await retrySupabaseAnalyzerJobs(projectId, activeRun.id, jobIds);
-      toast.success(result.retried ? `Retrying ${result.retried} sheet(s)` : "No failed sheets to retry");
+      toast.success(result.retried ? `Retrying ${result.retried} sheet(s)` : "No failed or stalled sheets to retry");
       await loadDataset(activeRun.id);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not retry sheets");
@@ -820,6 +826,8 @@ export function SupabaseCodeAnalyzer() {
   const finishedSheets = activeRun ? activeRun.completed_sheets + activeRun.failed_sheets : 0;
   const runInProgress = Boolean(activeRun && ACTIVE_STATUSES.has(activeRun.status));
   const cancelledSheets = dataset?.jobs.filter((job) => job.status === "cancelled").length || 0;
+  const stalledSheets = countStalledAnalyzerJobs(dataset?.jobs || []);
+  const retryableSheetCount = (activeRun?.failed_sheets || 0) + stalledSheets;
   const actionPresentation = analyzerActionPresentation({
     hasProject: Boolean(projectId),
     hasRun: Boolean(activeRun),
@@ -827,6 +835,7 @@ export function SupabaseCodeAnalyzer() {
     fileCount: files.length,
     selectedSheetCount: selectedDrawingIds.size,
     failedSheets: activeRun?.failed_sheets || 0,
+    stalledSheets,
     submitting,
     cancelling,
   });
@@ -1382,9 +1391,14 @@ export function SupabaseCodeAnalyzer() {
                 size="lg"
                 onClick={() => void retryFailed()}
                 disabled={actionPresentation.retryDisabled}
+                data-testid="button-retry-failed-or-stalled-sheets"
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
-                Retry failed sheets ({activeRun?.failed_sheets || 0})
+                {stalledSheets > 0 && (activeRun?.failed_sheets || 0) === 0
+                  ? `Retry stalled sheets (${stalledSheets})`
+                  : stalledSheets > 0
+                    ? `Retry failed/stalled sheets (${retryableSheetCount})`
+                    : `Retry failed sheets (${activeRun?.failed_sheets || 0})`}
               </Button>
             ) : null}
           </div>

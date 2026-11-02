@@ -77,6 +77,7 @@ export interface SupabaseAnalyzerSheetJob {
   max_attempts: number;
   last_error: string | null;
   error_code: string | null;
+  lease_expires_at?: string | null;
   input_tokens: number;
   output_tokens: number;
   estimated_cost_usd: number;

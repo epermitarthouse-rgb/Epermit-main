@@ -982,17 +982,23 @@ Deno.serve(async (req) => {
       const requestedIds = Array.isArray(body.jobIds)
         ? body.jobIds.map(String).filter(Boolean).slice(0, MAX_SHEETS)
         : [];
-      const { data: failedJobs, error: failedError } = await admin
+      // Failed sheets + stalled processing leases (expired / attempts exhausted).
+      const { data: candidateJobs, error: candidateError } = await admin
         .from("supabase_analyzer_sheet_jobs")
-        .select("id, status, error_code")
+        .select("id, status, error_code, attempt_count, max_attempts, lease_expires_at")
         .eq("run_id", runId)
         .eq("project_id", projectId)
-        .eq("status", "failed");
-      if (failedError) throw failedError;
-      const retryIds = (failedJobs || [])
+        .in("status", ["failed", "processing"]);
+      if (candidateError) throw candidateError;
+      const nowMs = Date.now();
+      const retryIds = (candidateJobs || [])
         .filter((job) => retryWouldRestart({
           status: String(job.status),
           error_code: job.error_code ? String(job.error_code) : null,
+          attempt_count: typeof job.attempt_count === "number" ? job.attempt_count : null,
+          max_attempts: typeof job.max_attempts === "number" ? job.max_attempts : null,
+          lease_expires_at: job.lease_expires_at ? String(job.lease_expires_at) : null,
+          nowMs,
         }))
         .map((job) => String(job.id))
         .filter((id) => requestedIds.length === 0 || requestedIds.includes(id));
@@ -1005,6 +1011,7 @@ Deno.serve(async (req) => {
           attempt_count: 0,
           available_at: new Date().toISOString(),
           completed_at: null,
+          started_at: null,
           last_error: null,
           error_code: null,
           lease_owner: null,
@@ -1013,7 +1020,7 @@ Deno.serve(async (req) => {
         })
         .eq("run_id", runId)
         .eq("project_id", projectId)
-        .eq("status", "failed")
+        .in("status", ["failed", "processing"])
         .in("id", retryIds)
         .select("id");
       if (retryError) throw retryError;
@@ -1036,7 +1043,10 @@ Deno.serve(async (req) => {
         project_id: projectId,
         actor_id: user.id,
         event_type: "failed_jobs_retried",
-        metadata: { count: retriedIds.length },
+        metadata: {
+          count: retriedIds.length,
+          includes_stalled_processing: true,
+        },
       });
       if (retriedIds.length) await triggerProcessor(supabaseUrl, serviceRoleKey);
       return json({ retried: retriedIds.length });

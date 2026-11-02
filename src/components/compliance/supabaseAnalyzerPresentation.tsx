@@ -55,7 +55,8 @@ const severityConfig = {
     icon: AlertCircle,
     color: "text-destructive",
     bg: "bg-muted/30 dark:bg-muted/40",
-    border: "border-destructive",
+    // Left accent only — never color the full card perimeter (reads as a thick frame).
+    border: "border-l-destructive",
     iconBg: "bg-destructive/15",
     label: "Critical",
   },
@@ -63,7 +64,7 @@ const severityConfig = {
     icon: AlertTriangle,
     color: "text-amber-600 dark:text-amber-400",
     bg: "bg-muted/30 dark:bg-muted/40",
-    border: "border-amber-500 dark:border-amber-400",
+    border: "border-l-amber-500 dark:border-l-amber-400",
     iconBg: "bg-amber-500/15",
     label: "Warning",
   },
@@ -71,7 +72,7 @@ const severityConfig = {
     icon: Info,
     color: "text-blue-600 dark:text-blue-400",
     bg: "bg-muted/30 dark:bg-muted/40",
-    border: "border-blue-500 dark:border-blue-400",
+    border: "border-l-blue-500 dark:border-l-blue-400",
     iconBg: "bg-blue-500/15",
     label: "Advisory",
   },
@@ -452,10 +453,10 @@ export function SupabaseFindingCard({
   return (
     <div
       className={cn(
-        "group relative rounded-xl border shadow-sm transition-all duration-200",
+        "group relative rounded-lg border border-border/60 bg-card shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-[hsl(var(--border-obsidian-strong)/0.28)]",
         review
-          ? "border-l-4 border-l-teal/25 border-border/40 bg-muted/20 dark:border-[hsl(var(--border-obsidian-strong)/0.28)] dark:bg-muted/20"
-          : cn("border-l-4 hover:shadow-lg", config.border, config.bg),
+          ? "border-l-2 border-l-teal/40 bg-muted/20 dark:bg-muted/20"
+          : cn("border-l-2", config.border, config.bg),
       )}
       data-testid="supabase-finding-card"
       data-severity={severity}
@@ -464,17 +465,17 @@ export function SupabaseFindingCard({
       data-report-id={reportId || undefined}
       data-expanded={expanded ? "true" : "false"}
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2.5">
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-w-0 flex-1 items-start gap-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-expanded={expanded}
             aria-controls={panelId}
             onClick={onToggle}
           >
-            <div className={cn("shrink-0 rounded-lg p-2.5", config.iconBg)}>
-              <Icon className={cn("h-5 w-5", config.color)} />
+            <div className={cn("shrink-0 rounded-md p-1.5", config.iconBg)}>
+              <Icon className={cn("h-4 w-4", config.color)} />
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="font-semibold leading-tight text-foreground">
@@ -764,6 +765,19 @@ export function DrawingReviewList({
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
                               <span>{sheetErrorMessage(job.error_code)}</span>
+                              <Button size="sm" variant="outlineGold" onClick={() => onRetry(job.id)} disabled={retryDisabled}>
+                                Retry
+                              </Button>
+                            </AlertDescription>
+                          </Alert>
+                        ) : null}
+                        {job.status === "processing"
+                          && typeof job.lease_expires_at === "string"
+                          && Date.parse(job.lease_expires_at) < Date.now() ? (
+                          <Alert>
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                              <span>Sheet lease expired — analysis stalled. Retry to continue.</span>
                               <Button size="sm" variant="outlineGold" onClick={() => onRetry(job.id)} disabled={retryDisabled}>
                                 Retry
                               </Button>

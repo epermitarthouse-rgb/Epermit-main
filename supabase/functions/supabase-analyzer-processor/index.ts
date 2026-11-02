@@ -40,6 +40,7 @@ import {
   parseAnalyzerDrawingObjectPath,
   sha256Hex,
 } from "../_shared/analyzerStage3StorageBridge.ts";
+import { isOcrGateDeferralErrorCode } from "../_shared/analyzerSheetUpdate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -731,6 +732,46 @@ async function processJob(
     );
     if (processorError.code === "run_cancelled") {
       await stopCancelledJob(admin, job, workerId);
+      return;
+    }
+    // OCR readiness waits are not GPT failures — refund the claim increment and requeue.
+    if (isOcrGateDeferralErrorCode(processorError.code)) {
+      const refundedAttempts = Math.max(0, Number(job.attempt_count || 1) - 1);
+      const deferAt = new Date(Date.now() + 30_000).toISOString();
+      const { error: deferError } = await admin
+        .from("supabase_analyzer_sheet_jobs")
+        .update({
+          status: "queued",
+          attempt_count: refundedAttempts,
+          available_at: deferAt,
+          lease_owner: null,
+          lease_expires_at: null,
+          last_error: processorError.message.slice(0, 2000),
+          error_code: processorError.code,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.id)
+        .eq("status", "processing")
+        .eq("lease_owner", workerId);
+      if (deferError) {
+        console.error("[supabase-analyzer] OCR defer requeue failed", job.id, deferError);
+        await completeJob(admin, job, workerId, shouldRetry ? "retry" : "failed", processorError);
+      } else {
+        await admin.rpc("refresh_supabase_analyzer_run", { p_run_id: job.run_id });
+      }
+      await admin.from("supabase_analyzer_audit_events").insert({
+        run_id: job.run_id,
+        sheet_job_id: job.id,
+        project_id: job.project_id,
+        event_type: "sheet_analysis_retry_scheduled",
+        metadata: {
+          attempt: refundedAttempts,
+          max_attempts: job.max_attempts,
+          error_code: processorError.code,
+          error: processorError.message.slice(0, 1000),
+          ocr_gate_attempt_refunded: true,
+        },
+      });
       return;
     }
     await admin.from("supabase_analyzer_audit_events").insert({

@@ -517,6 +517,8 @@ export function analyzerActionPresentation(input: {
   /** Saved sheets chosen for reanalysis. Zero keeps the previous file-only rule. */
   selectedSheetCount?: number;
   failedSheets: number;
+  /** Processing jobs with expired leases (or exhausted attempts) that need operator retry. */
+  stalledSheets?: number;
   submitting: boolean;
   cancelling: boolean;
 }): AnalyzerActionPresentation {
@@ -526,10 +528,15 @@ export function analyzerActionPresentation(input: {
   const cancelled = input.runStatus === "cancelled";
   const canUpdate = input.hasRun && runAllowsSheetUpdate(input.runStatus) && !workerActive;
   const selectedSheetCount = input.selectedSheetCount ?? 0;
+  const stalledSheets = Math.max(0, Number(input.stalledSheets || 0));
+  const retryableSheets = Math.max(0, Number(input.failedSheets || 0)) + stalledSheets;
   let primaryLabel: AnalyzerActionPresentation["primaryLabel"] = "Analyze for Compliance";
   if (input.cancelling || workerActive) primaryLabel = "Processing";
   else if (input.submitting) primaryLabel = "Uploading";
   else if (canUpdate) primaryLabel = "Update Analysis";
+
+  // Allow retry while a run still looks "processing" when only zombie/stalled leases remain.
+  const retryWhileStalled = stalledSheets > 0 && workerActive;
 
   return {
     primaryLabel,
@@ -541,12 +548,12 @@ export function analyzerActionPresentation(input: {
     showCancel: runActive || input.cancelling,
     cancelLabel: input.cancelling ? "Cancelling…" : "Cancel Analysis",
     cancelDisabled: input.cancelling || input.submitting,
-    showRetry: input.failedSheets > 0
-      && !runActive
+    showRetry: retryableSheets > 0
       && !cancelled
       && !input.submitting
-      && !input.cancelling,
-    retryDisabled: input.submitting || input.cancelling || workerActive,
+      && !input.cancelling
+      && (!runActive || retryWhileStalled),
+    retryDisabled: input.submitting || input.cancelling || (workerActive && stalledSheets === 0),
     statusText: workerActive || input.cancelling
       ? "Processing"
       : cancelled
@@ -611,6 +618,53 @@ export function isClaimableAnalyzerJob(
     && run.estimatedCostUsd < run.budgetLimitUsd;
 }
 
-export function retryWouldRestart(job: { status: string; error_code?: string | null }): boolean {
-  return job.status === "failed" && job.error_code !== "run_cancelled";
+/** True when a processing job can no longer make progress without operator retry. */
+export function isStalledAnalyzerJob(job: {
+  status: string;
+  attempt_count?: number | null;
+  max_attempts?: number | null;
+  lease_expires_at?: string | null;
+  nowMs?: number;
+}): boolean {
+  if (job.status !== "processing") return false;
+  const attempts = Number(job.attempt_count ?? 0);
+  const maxAttempts = Number(job.max_attempts ?? 3);
+  if (attempts >= maxAttempts) return true;
+  const lease = job.lease_expires_at ? Date.parse(String(job.lease_expires_at)) : NaN;
+  if (!Number.isFinite(lease)) return false;
+  const nowMs = typeof job.nowMs === "number" ? job.nowMs : Date.now();
+  return lease < nowMs;
+}
+
+export function countStalledAnalyzerJobs(
+  jobs: ReadonlyArray<{
+    status: string;
+    attempt_count?: number | null;
+    max_attempts?: number | null;
+    lease_expires_at?: string | null;
+  }>,
+  nowMs: number = Date.now(),
+): number {
+  return jobs.reduce((count, job) => count + (isStalledAnalyzerJob({ ...job, nowMs }) ? 1 : 0), 0);
+}
+
+/**
+ * Jobs eligible for operator Retry: failed (except cancel) or stalled processing leases.
+ */
+export function retryWouldRestart(job: {
+  status: string;
+  error_code?: string | null;
+  attempt_count?: number | null;
+  max_attempts?: number | null;
+  lease_expires_at?: string | null;
+  nowMs?: number;
+}): boolean {
+  if (job.error_code === "run_cancelled") return false;
+  if (job.status === "failed") return true;
+  return isStalledAnalyzerJob(job);
+}
+
+/** Stage 3 OCR gate deferrals must not consume GPT attempt budget. */
+export function isOcrGateDeferralErrorCode(code: string | null | undefined): boolean {
+  return code === "stage3_ocr_preprocessing_incomplete";
 }
