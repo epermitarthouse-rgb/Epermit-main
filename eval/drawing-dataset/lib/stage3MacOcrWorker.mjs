@@ -228,7 +228,7 @@ export async function readCachePack(paths, sha256) {
   return JSON.parse(await readFile(cachePath, "utf8"));
 }
 
-function rebuildAssociationsFromFreshOcr(cachedLayout, recovered) {
+export function rebuildAssociationsFromFreshOcr(cachedLayout, recovered) {
   const regions = cachedLayout.regions || [];
   const textBlocks = (cachedLayout.associations || [])
     .filter((item) => item.origin !== "visual_interpretation" && item.blockKind !== "ocr_line")
@@ -275,7 +275,7 @@ function normalizePilotSheetId(sheetId) {
   return null;
 }
 
-function extractForSheet(sheetId, layout) {
+export function extractForSheet(sheetId, layout) {
   const pilotKey = normalizePilotSheetId(sheetId);
   if (pilotKey === "A-3.06") return extractGuardrailDetailEvidence(layout, { mode: "stage3_visual" });
   if (pilotKey === "A-6.00") return extractDoorScheduleEvidence(layout, { mode: "stage3_visual" });
