@@ -80,6 +80,7 @@ export async function uploadStage3PackToStorage(options) {
     runId,
     sheetJobId,
     contentSha256: String(contentSha256).toLowerCase(),
+    extractionVersion: pack.extractionVersion || STAGE3_VISUAL_EVIDENCE_VERSION,
   });
   const bytes = serializePackForUpload(pack);
   await storage.upload(STAGE3_EVIDENCE_BUCKET, objectPath, bytes, {

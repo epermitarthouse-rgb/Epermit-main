@@ -118,6 +118,7 @@ export async function verifyStoredPack({
   runId,
   sheetJobId,
   contentSha256,
+  extractionVersion,
 }, options = {}) {
   const url = baseUrl();
   if (!url) throw new Error("supabase_url_required");
@@ -132,6 +133,7 @@ export async function verifyStoredPack({
       runId,
       sheetJobId,
       contentSha256: String(contentSha256 || "").toLowerCase(),
+      ...(extractionVersion ? { extractionVersion } : {}),
     }),
   });
   const payload = await response.json().catch(() => ({}));

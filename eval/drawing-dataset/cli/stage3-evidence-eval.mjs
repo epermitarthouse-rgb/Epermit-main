@@ -15,6 +15,8 @@ import path from "node:path";
 import { dedupeOcrWords } from "../lib/ocrRecover.mjs";
 import { extractForSheet, rebuildAssociationsFromFreshOcr } from "../lib/stage3MacOcrWorker.mjs";
 import { formatStage3PromptBlock } from "../lib/stage3VisualExtractionSpike.mjs";
+import { buildStage3V2PackFromRecovery } from "../lib/stage3EvidenceV2.mjs";
+import { renderAnnotation } from "../lib/stage3TechnicalDigest.mjs";
 import {
   STAGE3_EVIDENCE_EVAL_VERSION,
   evaluateItems,
@@ -23,6 +25,9 @@ import {
   summarize,
   v1AnalyzerBlock,
   v1DeliveredItems,
+  v2AnalyzerBlock,
+  v2DeliveredItems,
+  v2RenderedIds,
   wordsAsItems,
 } from "../lib/stage3EvidenceEval.mjs";
 
@@ -78,6 +83,19 @@ for (const d of manifest.drawings) {
   run("v1 analyzer Stage 3 block", delivered, {
     units: delivered.length, packChars: pack.promptBlock.length, blockChars: block.length,
     truncatedAtPackBound: pack.promptBlock.length > 1200, packId: pack.id, topic: pack.topic,
+    ...(detail ? { block } : {}),
+  });
+
+  const v2 = buildStage3V2PackFromRecovery({ sheetId: d.sheetId, layout: rebuilt, recovery, source: "4x3" });
+  const v2Block = v2AnalyzerBlock([v2]);
+  const rowById = new Map(v2.evidenceModel.rows.map((r) => [r.rid, r]));
+  const annById = new Map(v2.evidenceModel.annotations.map((a) => [a.aid, a]));
+  const rendered = new Set(v2RenderedIds(v2, v2Block, (aid) => renderAnnotation(annById.get(aid), rowById)));
+  const v2Items = v2DeliveredItems(v2).filter((item) => rendered.has(item.id));
+  run("v2 analyzer Stage 3 block", v2Items, {
+    units: v2Items.length, packChars: v2.promptBlock.length, blockChars: v2Block.length,
+    shownNotRendered: v2.digest.shown.length - rendered.size, digest: { ...v2.digest, shown: undefined, omitted: undefined },
+    ...(detail ? { block: v2Block } : {}),
   });
 
   let parity = null;
@@ -98,6 +116,6 @@ for (const r of results) {
   console.log(`\n## ${r.sheetId} (${r.scope}) GT rows=${r.groundTruth.rows} tech=${r.groundTruth.technicalRows} ann=${r.groundTruth.annotations} techAnn=${r.groundTruth.technicalAnnotations}${r.parity ? ` parity=${JSON.stringify(r.parity)}` : ""}`);
   for (const [name, s] of Object.entries(r.stages)) {
     const m = s.summary;
-    console.log(`${name.padEnd(30)} units=${String(s.units).padEnd(5)} techRows exact=${m.techRowsExact} clean=${m.techRowsClean} contra=${m.techRowsContradicted} merge=${m.techRowsInMerge} partial=${m.techRowsPartial} wrong=${m.techRowsWrong} none=${m.techRowsNone} | techAnn complete=${m.techAnnComplete} clean=${m.techAnnClean} context=${m.techAnnContext} | mixed=${m.mixedSegments} wrongTechUnmarked=${m.wrongTechUnmarked} wrongDim=${m.wrongDimUnmarked} outOfScope=${m.segmentsOutOfScope}${s.blockChars ? ` | chars pack=${s.packChars} block=${s.blockChars}` : ""}`);
+    console.log(`${name.padEnd(30)} units=${String(s.units).padEnd(5)} techRows exact=${m.techRowsExact} clean=${m.techRowsClean} contra=${m.techRowsContradicted} marked=${m.techRowsMarked} merge=${m.techRowsInMerge} partial=${m.techRowsPartial} wrong=${m.techRowsWrong} none=${m.techRowsNone} | techAnn complete=${m.techAnnComplete} clean=${m.techAnnClean} context=${m.techAnnContext} | mixed=${m.mixedSegments} wrongTechUnmarked=${m.wrongTechUnmarked} wrongDim=${m.wrongDimUnmarked} outOfScope=${m.segmentsOutOfScope}${s.blockChars ? ` | chars pack=${s.packChars} block=${s.blockChars}` : ""}`);
   }
 }

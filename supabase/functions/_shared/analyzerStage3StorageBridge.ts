@@ -8,10 +8,20 @@
  * Failures return null/empty — callers must fail open.
  */
 import {
+  STAGE3_EVIDENCE_VERSION_REGISTRY,
+  STAGE3_VISUAL_EVIDENCE_V2_VERSION,
   STAGE3_VISUAL_EVIDENCE_VERSION,
   stage3CacheKey,
   type Stage3EvidencePack,
 } from "./analyzerStage3VisualEvidence.ts";
+
+/** Extraction versions the upload bridge accepts. Anything else → v1 (never trusted from the client). */
+export function resolveStage3UploadVersion(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  return (Object.values(STAGE3_EVIDENCE_VERSION_REGISTRY) as string[]).includes(raw)
+    ? raw
+    : STAGE3_VISUAL_EVIDENCE_VERSION;
+}
 
 export const STAGE3_EVIDENCE_BUCKET = "supabase-analyzer-stage3-evidence";
 export const STAGE3_EXTRACTION_METHOD = "macos-vision";
@@ -207,6 +217,14 @@ export function validateAndNormalizeStage3Pack(
     extractionVersion: version,
     independentlyVerified: false,
   };
+  if (version === STAGE3_VISUAL_EVIDENCE_V2_VERSION) {
+    if (body.digest && typeof body.digest === "object" && !Array.isArray(body.digest)) {
+      pack.digest = body.digest as Record<string, unknown>;
+    }
+    if (body.evidenceModel && typeof body.evidenceModel === "object" && !Array.isArray(body.evidenceModel)) {
+      pack.evidenceModel = body.evidenceModel as Record<string, unknown>;
+    }
+  }
   return { ok: true, pack };
 }
 

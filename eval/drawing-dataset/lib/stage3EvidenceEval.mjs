@@ -34,6 +34,19 @@ export const isTechnicalRow = (text) => TECHNICAL_ROW.test(String(text || ""));
 export const DIMENSION_OR_ELEVATION = /\d\s*['"]|\d+\s*\/\s*\d+|\bELEV\.?|\bEL\.|A\.F\.F|\bMIN\b|V\.I\.F/i;
 export const isDimensionOrElevation = (text) => DIMENSION_OR_ELEVATION.test(norm(text));
 
+const DIMENSION_TOKEN = /\d+\s*'\s*-?\s*\d+(?:\s+\d+\s*\/\s*\d+)?\s*["']?|\d+(?:[\s-]+\d+\s*\/\s*\d+)?\s*"|\d+\s*\/\s*\d+\s*"?/g;
+/** Dimension and elevation values of a text (feet-inches, inches, fractions), spaces removed. */
+export function dimensionTokens(text) {
+  return (norm(text).match(DIMENSION_TOKEN) || []).map((t) => t.replace(/\s+/g, ""));
+}
+/** True when a delivered reading changes, drops or adds a dimension value of the printed row. */
+export function changesDimensionValue(deliveredText, truthText, merged = false) {
+  const d = dimensionTokens(deliveredText), t = dimensionTokens(truthText);
+  if (!t.length && !d.length) return false;
+  if (merged) return !t.every((x) => d.includes(x));
+  return d.length !== t.length || [...d].sort().join("|") !== [...t].sort().join("|");
+}
+
 /** E exact, F fragment of the truth, S truth plus extra text, V wrong. */
 export function quality(text, truth) {
   const k = textKey(text), t = textKey(truth);
@@ -158,7 +171,7 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
   const gt = groundTruthInput.rowById ? groundTruthInput : prepareGroundTruth(groundTruthInput);
   const mapper = createRowMapper(gt);
   const classified = items.map((item) => ({ ...item, segments: item.segments.map((s) => classifySegment(s, gt, mapper)) }));
-  const perRow = new Map(gt.rows.map((r) => [r.gid, { exact: 0, exactInMerge: 0, partial: 0, wrongUnmarked: 0, wrongMarked: 0, items: new Set() }]));
+  const perRow = new Map(gt.rows.map((r) => [r.gid, { exact: 0, exactMarked: 0, exactInMerge: 0, partial: 0, wrongUnmarked: 0, wrongMarked: 0, items: new Set() }]));
   const segmentLog = [];
   for (const item of classified) {
     for (const seg of item.segments) {
@@ -166,7 +179,8 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
       for (const r of seg.rows) {
         const p = perRow.get(r.gid);
         p.items.add(item.id);
-        if (r.state === "exact") p.exact++;
+        if (r.state === "exact" && seg.marker) p.exactMarked++;
+        else if (r.state === "exact") p.exact++;
         else if (r.state === "exact_in_merge") p.exactInMerge++;
         else if (r.state === "partial") p.partial++;
         else if (seg.marker) p.wrongMarked++;
@@ -177,7 +191,8 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
   const rows = gt.rows.map((r) => {
     const p = perRow.get(r.gid);
     const state = p.exact ? (p.wrongUnmarked ? "exact_contradicted" : "exact")
-      : p.exactInMerge ? "exact_in_merge" : p.partial ? "partial" : (p.wrongUnmarked || p.wrongMarked) ? "wrong" : "none";
+      : p.exactMarked ? (p.wrongUnmarked ? "exact_contradicted" : "exact_marked")
+        : p.exactInMerge ? "exact_in_merge" : p.partial ? "partial" : (p.wrongUnmarked || p.wrongMarked) ? "wrong" : "none";
     return { gid: r.gid, aid: r.aid, text: r.text, technical: r.technical, state, wrongUnmarked: p.wrongUnmarked, wrongMarked: p.wrongMarked };
   });
   const rowState = new Map(rows.map((r) => [r.gid, r.state]));
@@ -190,7 +205,7 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
   });
   const annotations = gt.annotations.map((a) => {
     const states = a.rows.map((g) => rowState.get(g));
-    const complete = states.every((s) => s === "exact" || s === "exact_contradicted");
+    const complete = states.every((s) => s === "exact" || s === "exact_contradicted" || s === "exact_marked");
     const completeClean = states.every((s) => s === "exact");
     const contextPreserved = complete && itemRows.some((it) => a.rows.every((g) => it.exact.has(g)) && [...it.all].every((g) => gt.rowById.get(g).aid === a.aid));
     return { aid: a.aid, technical: a.technical, rows: a.rows.length, complete, completeClean, contextPreserved, states };
@@ -203,13 +218,13 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
   });
   const wrongSegments = classified.flatMap((item) => item.segments.filter((s) => s.rows.some((r) => r.state === "wrong")));
   const wrongTechUnmarked = wrongSegments.filter((s) => !s.marker && s.rows.some((r) => r.state === "wrong" && gt.rowById.get(r.gid).technical));
-  const wrongDimUnmarked = wrongTechUnmarked.filter((s) => s.rows.some((r) => r.state === "wrong" && isDimensionOrElevation(gt.rowById.get(r.gid).text)));
+  const wrongDimUnmarked = wrongTechUnmarked.filter((s) => s.rows.some((r) => r.state === "wrong" && changesDimensionValue(s.text, gt.rowById.get(r.gid).text, s.gids.length > 1)));
   const tally = (subset) => {
     const rs = rows.filter(subset);
     const c = (s) => rs.filter((r) => r.state === s).length;
     return {
       rows: rs.length, exact: c("exact") + c("exact_contradicted"), exactClean: c("exact"), exactContradicted: c("exact_contradicted"),
-      exactInMerge: c("exact_in_merge"), partial: c("partial"), wrong: c("wrong"), none: c("none"),
+      exactMarked: c("exact_marked"), exactInMerge: c("exact_in_merge"), partial: c("partial"), wrong: c("wrong"), none: c("none"),
     };
   };
   const annTally = (subset) => {
@@ -318,6 +333,27 @@ export function v1DeliveredItems(pack, analyzerBlock, layout, recovery) {
   return items;
 }
 
+/**
+ * Delivered v2 items from a v2 pack: every shown annotation is one item; each printed row is a
+ * segment with its source words. Conflicting readings are one segment per reading, marked
+ * "conflict"; rows with a format doubt are marked "uncertain". Shown ids must also be rendered
+ * in the analyzer block (checked by the caller with v2RenderedIds).
+ */
+export function v2DeliveredItems(pack) {
+  const model = pack.evidenceModel;
+  const rowById = new Map(model.rows.map((r) => [r.rid, r]));
+  const annById = new Map(model.annotations.map((a) => [a.aid, a]));
+  return (pack.digest?.shown || []).map((aid) => {
+    const a = annById.get(aid);
+    const segments = a.rows.flatMap((rid) => {
+      const r = rowById.get(rid);
+      if (r.alternatives?.length) return [r, ...r.alternatives].map((x) => ({ text: x.text, words: x.words, marker: "conflict" }));
+      return [{ text: r.text, words: r.words, ...(r.uncertain?.length ? { marker: "uncertain" } : {}) }];
+    });
+    return { id: aid, contextUncertain: Boolean(a.contextUncertain), segments };
+  });
+}
+
 /** Mirror of the analyzer Stage 3 block for one pack (analyzerStage3VisualEvidence.ts, v1 bounds). */
 export const V1_ANALYZER_BOUNDS = { maxPacks: 3, maxCharsPerPack: 1200, maxTotalChars: 3200 };
 export function v1AnalyzerBlock(packs, status = "recovered", bounds = V1_ANALYZER_BOUNDS) {
@@ -341,11 +377,56 @@ export function v1AnalyzerBlock(packs, status = "recovered", bounds = V1_ANALYZE
   return lines.join("\n");
 }
 
+/**
+ * Mirror of the analyzer v2 Stage 3 block (analyzerStage3VisualEvidence.ts formatStage3VisualEvidencePrompt
+ * for version v2). A pack longer than the room left is cut at its last complete line, never mid-annotation.
+ */
+export const V2_ANALYZER_BOUNDS = { maxPacks: 1, maxCharsPerPack: 2600, maxTotalChars: 3200 };
+export const V2_ANALYZER_HEADER = [
+  "Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.",
+  "Reading rules: each \"- \" line is one printed annotation; \" / \" separates its rows. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.",
+];
+export function v2AnalyzerBlock(packs, status = "recovered", notes = [], bounds = V2_ANALYZER_BOUNDS) {
+  const lines = [...V2_ANALYZER_HEADER, `stage3_status=${status} version=phase3.stage3-visual-evidence.v2`];
+  const notesLine = notes.length ? `stage3_notes: ${notes.map((n) => oneLine(n, 160)).join(" | ")}` : "";
+  let total = lines.join("\n").length + (notesLine ? notesLine.length + 1 : 0);
+  let used = 0;
+  for (const pack of packs) {
+    if (used >= bounds.maxPacks) break;
+    const room = Math.min(bounds.maxCharsPerPack, bounds.maxTotalChars - total - 1);
+    const raw = String(pack.promptBlock || "").trim();
+    if (!raw || room <= 0) continue;
+    let block = raw;
+    if (block.length > room) {
+      const kept = [];
+      let len = 0;
+      for (const line of raw.split("\n")) {
+        if (len + line.length + (kept.length ? 1 : 0) > room) break;
+        kept.push(line);
+        len += line.length + (kept.length > 1 ? 1 : 0);
+      }
+      block = kept.join("\n");
+    }
+    if (!block) continue;
+    lines.push(block);
+    total += block.length + 1;
+    used += 1;
+  }
+  if (notesLine) lines.push(notesLine);
+  return lines.join("\n");
+}
+
+/** Ids of v2 shown annotations whose rendered line is present in the analyzer block. */
+export function v2RenderedIds(pack, analyzerBlock, renderLine) {
+  const present = new Set(analyzerBlock.split("\n"));
+  return (pack.digest?.shown || []).filter((aid) => present.has(renderLine(aid)));
+}
+
 /** Compact one-line summary of an evaluation for console tables. */
 export function summarize(e) {
   const t = e.rowsTechnical, a = e.annotationsTechnical;
   return {
-    techRowsExact: t.exact, techRowsClean: t.exactClean, techRowsContradicted: t.exactContradicted, techRowsInMerge: t.exactInMerge,
+    techRowsExact: t.exact, techRowsClean: t.exactClean, techRowsContradicted: t.exactContradicted, techRowsMarked: t.exactMarked, techRowsInMerge: t.exactInMerge,
     techRowsPartial: t.partial, techRowsWrong: t.wrong, techRowsNone: t.none, techRows: t.rows,
     techAnnComplete: a.complete, techAnnClean: a.completeClean, techAnnContext: a.contextPreserved, techAnn: a.annotations,
     mixedSegments: e.mixedSegments, wrongTechUnmarked: e.wrongTechnicalSegmentsUnmarked, wrongDimUnmarked: e.wrongDimensionOrElevationUnmarked,

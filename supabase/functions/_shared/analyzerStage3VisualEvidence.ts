@@ -11,6 +11,18 @@
  * Failures / missing packs never block baseline PDF→GPT analysis.
  */
 export const STAGE3_VISUAL_EVIDENCE_VERSION = "phase3.stage3-visual-evidence.v1";
+/**
+ * Annotation-level technical digest. Opt-in per run via
+ * `analysis_scope.stage3EvidenceVersion === "v2"`; falls back v2 → v1 → PDF-only.
+ */
+export const STAGE3_VISUAL_EVIDENCE_V2_VERSION = "phase3.stage3-visual-evidence.v2";
+export type Stage3EvidenceVersion =
+  | typeof STAGE3_VISUAL_EVIDENCE_VERSION
+  | typeof STAGE3_VISUAL_EVIDENCE_V2_VERSION;
+export const STAGE3_EVIDENCE_VERSION_REGISTRY: Record<string, Stage3EvidenceVersion> = {
+  v1: STAGE3_VISUAL_EVIDENCE_VERSION,
+  v2: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+};
 
 export const STAGE3_VISUAL_EVIDENCE_BOUNDS = {
   maxPacks: 3,
@@ -19,6 +31,19 @@ export const STAGE3_VISUAL_EVIDENCE_BOUNDS = {
   /** Analyzer must not wait for a Mac worker — pack load is sync/near-sync only. */
   loadTimeoutMs: 50,
 } as const;
+
+export const STAGE3_VISUAL_EVIDENCE_V2_BOUNDS = {
+  maxPacks: 1,
+  maxCharsPerPack: 2600,
+  maxTotalChars: 3200,
+  loadTimeoutMs: 50,
+} as const;
+
+/** Must match eval/drawing-dataset/lib/stage3EvidenceEval.mjs V2_ANALYZER_HEADER (fixture-tested). */
+export const STAGE3_V2_PROMPT_HEADER = [
+  "Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.",
+  "Reading rules: each \"- \" line is one printed annotation; \" / \" separates its rows. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.",
+] as const;
 
 export type Stage3PackStatus =
   | "evidence_recovered"
@@ -58,10 +83,14 @@ export interface Stage3EvidencePack {
   sourceFileSha256?: string;
   extractionVersion?: string;
   independentlyVerified?: false;
+  /** v2 only: budget/omission report of the technical digest. */
+  digest?: Record<string, unknown>;
+  /** v2 only: annotation-level evidence model (rows, boxes, confidence, alternatives). */
+  evidenceModel?: Record<string, unknown>;
 }
 
 export interface Stage3VisualEvidenceResult {
-  version: typeof STAGE3_VISUAL_EVIDENCE_VERSION;
+  version: Stage3EvidenceVersion;
   enabled: boolean;
   status: Stage3RunStatus;
   latencyMs: number;
@@ -71,18 +100,26 @@ export interface Stage3VisualEvidenceResult {
   notes: string[];
   cacheKey: string | null;
   workerOfflineOrMissing: boolean;
+  /** Set only for runs that requested v2. */
+  requestedVersion?: Stage3EvidenceVersion;
+  /** Set only for v2 runs that did not deliver v2 (why v1 or PDF-only was used). */
+  fallbackReason?: string | null;
 }
+
+type Stage3PackLoader = (ctx: {
+  fileName: string;
+  contentSha256?: string | null;
+  objectPath?: string | null;
+  projectId?: string | null;
+  runId?: string | null;
+  sheetJobId?: string | null;
+}) => Promise<Stage3EvidencePack[] | null>;
 
 export interface Stage3VisualEvidenceDeps {
   /** Load completed packs for this sheet. Must not block on OCR / Mac availability. */
-  loadCompletedPacks?: (ctx: {
-    fileName: string;
-    contentSha256?: string | null;
-    objectPath?: string | null;
-    projectId?: string | null;
-    runId?: string | null;
-    sheetJobId?: string | null;
-  }) => Promise<Stage3EvidencePack[] | null>;
+  loadCompletedPacks?: Stage3PackLoader;
+  /** v2 runs only: load the v2 technical-digest pack. */
+  loadCompletedV2Packs?: Stage3PackLoader;
   now?: () => number;
 }
 
@@ -127,6 +164,27 @@ export function isStage3VisualEvidenceRunAuthorized(run: Stage3RunActivationSour
   const scope = run?.analysis_scope;
   if (!scope || typeof scope !== "object" || Array.isArray(scope)) return false;
   return (scope as Record<string, unknown>).stage3VisualEvidence === true;
+}
+
+/**
+ * Run-scoped evidence version (`analysis_scope.stage3EvidenceVersion`). Absent → v1.
+ * Unknown values resolve to v1 and are reported, never silently promoted.
+ */
+export function resolveStage3EvidenceVersion(run: Stage3RunActivationSource): {
+  version: Stage3EvidenceVersion;
+  requested: string | null;
+  invalid: boolean;
+} {
+  const scope = run?.analysis_scope;
+  const raw = scope && typeof scope === "object" && !Array.isArray(scope)
+    ? (scope as Record<string, unknown>).stage3EvidenceVersion
+    : undefined;
+  if (raw == null || raw === "") return { version: STAGE3_VISUAL_EVIDENCE_VERSION, requested: null, invalid: false };
+  const requested = String(raw);
+  const version = STAGE3_EVIDENCE_VERSION_REGISTRY[requested]
+    || (Object.values(STAGE3_EVIDENCE_VERSION_REGISTRY) as string[]).find((v) => v === requested) as Stage3EvidenceVersion | undefined;
+  if (!version) return { version: STAGE3_VISUAL_EVIDENCE_VERSION, requested, invalid: true };
+  return { version, requested, invalid: false };
 }
 
 /**
@@ -241,6 +299,7 @@ function truncatePackPrompt(pack: Stage3EvidencePack): string {
  */
 export function formatStage3VisualEvidencePrompt(result: Stage3VisualEvidenceResult): string {
   if (!result.enabled || !result.packs.length) return "";
+  if (result.version === STAGE3_VISUAL_EVIDENCE_V2_VERSION) return formatStage3V2Prompt(result);
   const lines: string[] = [
     "Stage 3 Apple Vision OCR evidence (machine-extracted; independentlyVerified=false):",
     "Not professionally verified. Quote before Critical absence. Do not treat OCR recovery as verified compliance. Empty/missing packs mean not recovered — not proof of absence.",
@@ -260,6 +319,46 @@ export function formatStage3VisualEvidencePrompt(result: Stage3VisualEvidenceRes
   if (result.notes.length) {
     lines.push(`stage3_notes: ${result.notes.map((note) => oneLine(note, 160)).join(" | ")}`);
   }
+  return lines.join("\n");
+}
+
+/**
+ * v2 block: reading rules header, then the digest. A digest longer than the room left is cut
+ * at its last complete line — never inside an annotation. Room for the notes line is reserved.
+ */
+function formatStage3V2Prompt(result: Stage3VisualEvidenceResult): string {
+  const bounds = STAGE3_VISUAL_EVIDENCE_V2_BOUNDS;
+  const lines: string[] = [
+    ...STAGE3_V2_PROMPT_HEADER,
+    `stage3_status=${result.status} version=${STAGE3_VISUAL_EVIDENCE_V2_VERSION}`,
+  ];
+  const notesLine = result.notes.length
+    ? `stage3_notes: ${result.notes.map((note) => oneLine(note, 160)).join(" | ")}`
+    : "";
+  let total = lines.join("\n").length + (notesLine ? notesLine.length + 1 : 0);
+  let used = 0;
+  for (const pack of result.packs) {
+    if (used >= bounds.maxPacks) break;
+    const room = Math.min(bounds.maxCharsPerPack, bounds.maxTotalChars - total - 1);
+    const raw = String(pack.promptBlock || "").trim();
+    if (!raw || room <= 0) continue;
+    let block = raw;
+    if (block.length > room) {
+      const kept: string[] = [];
+      let length = 0;
+      for (const line of raw.split("\n")) {
+        if (length + line.length + (kept.length ? 1 : 0) > room) break;
+        kept.push(line);
+        length += line.length + (kept.length > 1 ? 1 : 0);
+      }
+      block = kept.join("\n");
+    }
+    if (!block) continue;
+    lines.push(block);
+    total += block.length + 1;
+    used += 1;
+  }
+  if (notesLine) lines.push(notesLine);
   return lines.join("\n");
 }
 
@@ -287,7 +386,12 @@ export async function retrieveStage3VisualEvidence(input: {
   runId?: string | null;
   sheetJobId?: string | null;
   deps?: Stage3VisualEvidenceDeps;
+  /** Omitted or v1 → unchanged v1 behaviour. v2 → v2 pack, else v1 pack, else PDF-only. */
+  evidenceVersion?: Stage3EvidenceVersion;
 }): Promise<Stage3VisualEvidenceResult> {
+  if (input.enabled && input.evidenceVersion === STAGE3_VISUAL_EVIDENCE_V2_VERSION) {
+    return retrieveStage3V2WithFallback(input);
+  }
   const started = (input.deps?.now || Date.now)();
   if (!input.enabled) {
     return emptyResult({
@@ -382,6 +486,77 @@ export async function retrieveStage3VisualEvidence(input: {
   }
 }
 
+async function retrieveStage3V2WithFallback(
+  input: Parameters<typeof retrieveStage3VisualEvidence>[0],
+): Promise<Stage3VisualEvidenceResult> {
+  const now = input.deps?.now || Date.now;
+  const started = now();
+  const ctx = {
+    fileName: input.fileName,
+    contentSha256: input.contentSha256 ?? null,
+    objectPath: input.objectPath ?? null,
+    projectId: input.projectId ?? null,
+    runId: input.runId ?? null,
+    sheetJobId: input.sheetJobId ?? null,
+  };
+  let reason: string;
+  const loader = input.deps?.loadCompletedV2Packs;
+  if (!loader) {
+    reason = "v2_loader_missing";
+  } else {
+    try {
+      const packs = (await loader(ctx) || []).map((pack) => ({
+        ...pack,
+        independentlyVerified: false as const,
+        provenance: { ...(pack.provenance || {}), independentlyVerified: false },
+      }));
+      const status = classifyPacks(packs);
+      const usable = status === "stale"
+        ? []
+        : packs.filter((pack) => {
+          const packStatus = String(pack.status || "");
+          return pack.extractionVersion === STAGE3_VISUAL_EVIDENCE_V2_VERSION
+            && (packStatus.includes("recovered") || packStatus.includes("partial"));
+        });
+      if (usable.length) {
+        const result: Stage3VisualEvidenceResult = {
+          version: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+          enabled: true,
+          status: status === "partial" ? "partial" : "recovered",
+          latencyMs: now() - started,
+          sheetFileName: input.fileName,
+          packs: usable,
+          promptBlock: "",
+          notes: [],
+          cacheKey: input.contentSha256
+            ? stage3CacheKey({ contentSha256: input.contentSha256, extractionVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION })
+            : null,
+          workerOfflineOrMissing: false,
+          requestedVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+          fallbackReason: null,
+        };
+        result.promptBlock = formatStage3VisualEvidencePrompt(result);
+        return result;
+      }
+      reason = packs.length ? `v2_pack_${status}` : "v2_pack_missing";
+    } catch (error) {
+      reason = `v2_load_failed:${error instanceof Error ? oneLine(error.message, 120) : "unknown"}`;
+    }
+  }
+
+  const v1 = await retrieveStage3VisualEvidence({ ...input, evidenceVersion: STAGE3_VISUAL_EVIDENCE_VERSION });
+  const fallback = v1.packs.length ? "v1" : "pdf_only";
+  const result: Stage3VisualEvidenceResult = {
+    ...v1,
+    latencyMs: now() - started,
+    notes: [`Stage 3 v2 evidence unavailable (${reason}); using ${fallback === "v1" ? "v1 pack" : "PDF only"}.`, ...v1.notes],
+    requestedVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+    fallbackReason: `${reason}->${fallback}`,
+  };
+  result.promptBlock = formatStage3VisualEvidencePrompt(result);
+  return result;
+}
+
 /** Merge Stage 1–2 and Stage 3 prompt blocks for buildAnalyzerUserPrompt. */
 export function mergeVisualEvidencePromptBlocks(
   stage12: string | null | undefined,
@@ -417,5 +592,21 @@ export function stage3VisualEvidenceAuditMetadata(
       source_sha256: pack.sourceFileSha256 || null,
     })),
     stage3_visual_evidence_notes: result.notes,
+    ...(result.requestedVersion
+      ? {
+        stage3_evidence_requested_version: result.requestedVersion,
+        stage3_evidence_fallback_reason: result.fallbackReason ?? null,
+        stage3_evidence_prompt_chars: result.promptBlock.length,
+        stage3_evidence_digest: result.packs
+          .map((pack) => pack.digest)
+          .filter((digest): digest is Record<string, unknown> => Boolean(digest))
+          .map((digest) => ({
+            shown: Array.isArray(digest.shown) ? digest.shown.length : null,
+            omitted: Array.isArray(digest.omitted) ? digest.omitted.length : null,
+            chars: digest.chars ?? null,
+            max_chars: digest.maxChars ?? null,
+          })),
+      }
+      : {}),
   };
 }

@@ -7,6 +7,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { loadAuthoritativeDrawingManifest } from "./stage3DrawingManifest.mjs";
 import { resolvePackPath, uploadLocalPackFile, buildStage3EvidenceObjectPath } from "./stage3StorageUpload.mjs";
+import { STAGE3_EVIDENCE_V2 } from "./stage3EvidenceConfig.mjs";
 import {
   listRunSheetJobs,
   mapManifestSheetsToJobs,
@@ -157,6 +158,54 @@ export async function uploadAndVerifyFullSetPacks(options = {}) {
     });
   }
 
+  // v2 packs (run opted in): uploaded after v1 and never counted as v1 failures — the analyzer
+  // falls back to v1 for any sheet whose v2 pack is missing.
+  const v2Results = [];
+  if (options.evidenceVersion === "v2") {
+    for (const row of targets) {
+      const v2Path = path.join(workerRoot, "packs-v2", `${row.sheetId}.${row.contentSha256}.json`);
+      if (!existsSync(v2Path)) {
+        v2Results.push({ sheetId: row.sheetId, status: "v2_pack_missing_local" });
+        continue;
+      }
+      if (dryRun || !live) {
+        v2Results.push({
+          sheetId: row.sheetId,
+          status: "dry_run_mapped",
+          expectedPath: buildStage3EvidenceObjectPath({
+            projectId,
+            runId,
+            sheetJobId: row.sheetJobId,
+            contentSha256: row.contentSha256,
+            extractionVersion: STAGE3_EVIDENCE_V2,
+          }),
+        });
+        continue;
+      }
+      const identity = { projectId, runId, sheetJobId: row.sheetJobId, contentSha256: row.contentSha256, extractionVersion: STAGE3_EVIDENCE_V2 };
+      try {
+        if (resume) {
+          const existing = await verifyStoredPack(identity, options);
+          if (existing.ok) {
+            v2Results.push({ sheetId: row.sheetId, status: "already_stored_verified", objectPath: existing.objectPath });
+            continue;
+          }
+        }
+        const uploaded = await uploadLocalPackFile({ viaEdge: true, packPath: v2Path, projectId, runId, sheetJobId: row.sheetJobId, contentSha256: row.contentSha256 });
+        const verified = await verifyStoredPack(identity, options);
+        v2Results.push({
+          sheetId: row.sheetId,
+          status: verified.ok ? "uploaded_and_verified" : "uploaded_verify_failed",
+          objectPath: uploaded.objectPath || verified.objectPath,
+          bytes: uploaded.bytes,
+          verifyError: verified.ok ? null : (verified.error || verified.issue || "verify_failed"),
+        });
+      } catch (error) {
+        v2Results.push({ sheetId: row.sheetId, status: "v2_upload_failed", error: String(error?.message || error).slice(0, 240) });
+      }
+    }
+  }
+
   // Always materialize run state so --sync-supabase can release the GPT gate even when
   // sync-full-set runs before enqueue-full (common after UI creates a Stage 3 run).
   let state = await loadRunState(workerRoot, runId);
@@ -202,6 +251,15 @@ export async function uploadAndVerifyFullSetPacks(options = {}) {
     preprocess: toAnalysisScopePreprocessSummary(state),
     results,
   };
+  if (options.evidenceVersion === "v2") {
+    summary.v2 = {
+      attempted: v2Results.length,
+      verified: v2Results.filter((r) => r.status === "uploaded_and_verified" || r.status === "already_stored_verified").length,
+      missingLocal: v2Results.filter((r) => r.status === "v2_pack_missing_local").length,
+      failed: v2Results.filter((r) => r.status === "v2_upload_failed" || r.status === "uploaded_verify_failed").length,
+      results: v2Results,
+    };
+  }
   return summary;
 }
 

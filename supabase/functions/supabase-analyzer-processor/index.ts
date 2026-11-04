@@ -26,7 +26,9 @@ import {
 import {
   isStage3VisualEvidenceEnabledForRun,
   mergeVisualEvidencePromptBlocks,
+  resolveStage3EvidenceVersion,
   retrieveStage3VisualEvidence,
+  STAGE3_VISUAL_EVIDENCE_V2_VERSION,
   stage3VisualEvidenceAuditMetadata,
   type Stage3VisualEvidenceResult,
 } from "../_shared/analyzerStage3VisualEvidence.ts";
@@ -81,6 +83,8 @@ type AnalyzerRun = {
     stage3VisualEvidence?: boolean;
     stage3FullCoverageOcr?: boolean;
     stage3OcrPreprocess?: Record<string, unknown>;
+    /** "v2" opts this run into the annotation-level digest; absent → v1. */
+    stage3EvidenceVersion?: string;
   } | null;
   source_coverage: string;
   ai_provider: string;
@@ -329,6 +333,8 @@ async function processJob(
       });
       let contentSha256: string | null = null;
       let stage3Deps: Parameters<typeof retrieveStage3VisualEvidence>[0]["deps"] = {};
+      const stage3Version = resolveStage3EvidenceVersion({ analysis_scope: run.analysis_scope });
+      const stage3V2 = stage3Version.version === STAGE3_VISUAL_EVIDENCE_V2_VERSION;
       if (stage3Enabled) {
         contentSha256 = await sha256Hex(bytes);
         const parsedPath = parseAnalyzerDrawingObjectPath(job.object_path);
@@ -336,6 +342,15 @@ async function processJob(
         const runId = String(job.run_id || parsedPath?.runId || "");
         const sheetJobId = String(job.id || parsedPath?.sheetJobId || "");
         if (projectId && runId && sheetJobId && contentSha256) {
+          const storage = {
+            download: async (bucket: string, objectPath: string) => {
+              // Private evidence bucket only — never drawings bucket, never public URLs.
+              if (bucket !== STAGE3_EVIDENCE_BUCKET) return null;
+              const { data, error } = await admin.storage.from(bucket).download(objectPath);
+              if (error || !data) return null;
+              return new Uint8Array(await data.arrayBuffer());
+            },
+          };
           stage3Deps = {
             loadCompletedPacks: createStage3StoragePackLoader({
               identity: {
@@ -344,16 +359,22 @@ async function processJob(
                 sheetJobId,
                 contentSha256,
               },
-              storage: {
-                download: async (bucket, objectPath) => {
-                  // Private evidence bucket only — never drawings bucket, never public URLs.
-                  if (bucket !== STAGE3_EVIDENCE_BUCKET) return null;
-                  const { data, error } = await admin.storage.from(bucket).download(objectPath);
-                  if (error || !data) return null;
-                  return new Uint8Array(await data.arrayBuffer());
-                },
-              },
+              storage,
             }),
+            ...(stage3V2
+              ? {
+                loadCompletedV2Packs: createStage3StoragePackLoader({
+                  identity: {
+                    projectId,
+                    runId,
+                    sheetJobId,
+                    contentSha256,
+                    extractionVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+                  },
+                  storage,
+                }),
+              }
+              : {}),
           };
         }
       }
@@ -366,7 +387,11 @@ async function processJob(
         runId: job.run_id ? String(job.run_id) : null,
         sheetJobId: job.id ? String(job.id) : null,
         deps: stage3Deps,
+        ...(stage3V2 ? { evidenceVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION } : {}),
       });
+      if (stage3Evidence && stage3Version.invalid) {
+        stage3Evidence.notes.push(`Unknown stage3EvidenceVersion "${stage3Version.requested}"; v1 used.`);
+      }
     } catch (stage3Error) {
       console.error(
         "[supabase-analyzer] stage3 visual evidence failed open",

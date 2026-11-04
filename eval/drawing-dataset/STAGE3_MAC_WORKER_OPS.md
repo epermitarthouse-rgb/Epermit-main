@@ -53,6 +53,35 @@ set analysis_scope = coalesce(analysis_scope, '{}'::jsonb)
 where id = '<run-uuid>';
 ```
 
+### Evidence version v2 (annotation-level technical digest) — not approved for general traffic
+
+v2 is opt-in per run, on top of the Stage 3 opt-in above. Without the key, the run uses v1 unchanged. Before any run uses v2, the processor and the `supabase-analyzer-stage3-evidence` Edge function must be deployed with v2 support; that requires approval.
+
+```sql
+update public.supabase_analyzer_runs
+set analysis_scope = coalesce(analysis_scope, '{}'::jsonb) || '{"stage3EvidenceVersion": "v2"}'::jsonb,
+    updated_at = now()
+where id = '<run-uuid>';
+```
+
+Worker side:
+
+1. `build-v2-packs` writes `stage3-mac-worker/packs-v2/` from the cached recovery, with no OCR.
+2. `sync-full-set ... --evidence-version v2` uploads and verifies the v2 packs after the v1 packs.
+
+The daemon does both when the run's scope has `"stage3EvidenceVersion": "v2"`.
+
+The analyzer uses the v2 pack when it is available. Otherwise it uses the v1 pack, and otherwise the PDF only. Audit metadata records the reason in `stage3_evidence_fallback_reason`.
+
+Roll back one run to v1:
+
+```sql
+update public.supabase_analyzer_runs
+set analysis_scope = coalesce(analysis_scope, '{}'::jsonb) - 'stage3EvidenceVersion',
+    updated_at = now()
+where id = '<run-uuid>';
+```
+
 **Emergency kill-switch** (all runs):
 
 ```bash

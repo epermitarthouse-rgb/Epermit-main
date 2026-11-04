@@ -17,11 +17,15 @@ import {
   STAGE3_PACK_MAX_BYTES,
   buildStage3EvidenceObjectPath,
   parseStage3PackBytes,
+  resolveStage3UploadVersion,
   serializeStage3PackForUpload,
   sha256Hex,
   type Stage3EvidencePack,
 } from "../_shared/analyzerStage3StorageBridge.ts";
-import { STAGE3_VISUAL_EVIDENCE_VERSION } from "../_shared/analyzerStage3VisualEvidence.ts";
+import {
+  STAGE3_EVIDENCE_VERSION_REGISTRY,
+  STAGE3_VISUAL_EVIDENCE_VERSION,
+} from "../_shared/analyzerStage3VisualEvidence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -120,6 +124,7 @@ Deno.serve(async (req) => {
         ok: true,
         bucket: STAGE3_EVIDENCE_BUCKET,
         extractionVersion: STAGE3_VISUAL_EVIDENCE_VERSION,
+        extractionVersions: Object.values(STAGE3_EVIDENCE_VERSION_REGISTRY),
         maxBytes: STAGE3_PACK_MAX_BYTES,
         workerTokenConfigured: Boolean(Deno.env.get("STAGE3_WORKER_UPLOAD_TOKEN")?.trim()),
         acceptsServiceRoleUpload: false,
@@ -142,6 +147,8 @@ Deno.serve(async (req) => {
       sheetJobId?: string;
       contentSha256?: string;
       pack?: Stage3EvidencePack;
+      /** verify_pack only; allowlisted, defaults to v1. */
+      extractionVersion?: string;
       preprocess?: Record<string, unknown>;
       /** Ignored — path is always server-derived. */
       objectPath?: string;
@@ -245,11 +252,13 @@ Deno.serve(async (req) => {
       if (String(job.project_id) !== projectId || String(job.run_id) !== runId) {
         return json({ error: "Sheet job does not match project/run" }, 403);
       }
+      const verifyVersion = resolveStage3UploadVersion(body.extractionVersion);
       const objectPath = buildStage3EvidenceObjectPath({
         projectId,
         runId,
         sheetJobId,
         contentSha256,
+        extractionVersion: verifyVersion,
       });
       const { data: packBlob, error: packError } = await admin.storage
         .from(STAGE3_EVIDENCE_BUCKET)
@@ -266,7 +275,7 @@ Deno.serve(async (req) => {
       const packBytes = new Uint8Array(await packBlob.arrayBuffer());
       const validated = parseStage3PackBytes(packBytes, {
         contentSha256,
-        extractionVersion: STAGE3_VISUAL_EVIDENCE_VERSION,
+        extractionVersion: verifyVersion,
       });
       if (!validated.ok) {
         return json({
@@ -343,6 +352,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    const uploadVersion = resolveStage3UploadVersion(body.pack.extractionVersion);
     const validated = parseStage3PackBytes(
       serializeStage3PackForUpload({
         ...body.pack,
@@ -351,7 +361,7 @@ Deno.serve(async (req) => {
       }),
       {
         contentSha256,
-        extractionVersion: STAGE3_VISUAL_EVIDENCE_VERSION,
+        extractionVersion: uploadVersion,
       },
     );
     if (!validated.ok) {
@@ -364,6 +374,7 @@ Deno.serve(async (req) => {
       runId,
       sheetJobId,
       contentSha256,
+      extractionVersion: uploadVersion,
     });
     const bytes = serializeStage3PackForUpload(validated.pack);
     if (bytes.byteLength > STAGE3_PACK_MAX_BYTES) {
@@ -389,7 +400,7 @@ Deno.serve(async (req) => {
         object_path: objectPath,
         bucket: STAGE3_EVIDENCE_BUCKET,
         content_sha256: contentSha256,
-        extraction_version: STAGE3_VISUAL_EVIDENCE_VERSION,
+        extraction_version: uploadVersion,
         auth_mode: mode,
         pack_id: validated.pack.id,
         pack_status: validated.pack.status,

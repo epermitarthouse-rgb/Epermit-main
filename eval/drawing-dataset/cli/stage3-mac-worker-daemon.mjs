@@ -120,8 +120,18 @@ function runCli(args) {
   });
 }
 
-async function syncRun(projectId, runId) {
-  log("sync_start", { projectId, runId });
+/** Run-scoped evidence version flag. Only "v2" changes behaviour; unknown values are logged and ignored. */
+function evidenceVersionArgs(scope, runId) {
+  const value = scope?.stage3EvidenceVersion;
+  if (value == null || value === "" || value === "v1") return [];
+  if (value === "v2") return ["--evidence-version", "v2"];
+  log("evidence_version_ignored", { runId, value: String(value).slice(0, 40) });
+  return [];
+}
+
+async function syncRun(projectId, runId, scope = {}) {
+  const versionArgs = evidenceVersionArgs(scope, runId);
+  log("sync_start", { projectId, runId, evidenceVersion: versionArgs[1] || "v1" });
   const enqueue = await runCli([
     "enqueue-full",
     "--run", runId,
@@ -130,12 +140,19 @@ async function syncRun(projectId, runId) {
   if (enqueue.code !== 0) {
     log("enqueue_failed", { runId, code: enqueue.code, stderr: enqueue.stderr.slice(-500) });
   }
+  if (versionArgs.length) {
+    const built = await runCli(["build-v2-packs"]);
+    if (built.code !== 0) {
+      log("v2_build_incomplete", { runId, code: built.code, tail: (built.stdout || built.stderr || "").slice(-500) });
+    }
+  }
   const sync = await runCli([
     "sync-full-set",
     "--project", projectId,
     "--run", runId,
     "--live",
     "--sync-supabase",
+    ...versionArgs,
   ]);
   const tail = (sync.stdout || sync.stderr || "").slice(-1200);
   log("sync_done", { runId, code: sync.code, tail });
@@ -154,7 +171,7 @@ async function tick() {
   }
   for (const run of blocked) {
     try {
-      await syncRun(run.project_id, run.id);
+      await syncRun(run.project_id, run.id, run.analysis_scope || {});
     } catch (error) {
       log("sync_error", { runId: run.id, error: String(error?.message || error) });
     }

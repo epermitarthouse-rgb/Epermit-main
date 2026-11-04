@@ -15,6 +15,10 @@
  *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs approve-partial [--run <uuid>]
  *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs upload-packs --project <uuid> --run <uuid> [--full-set] [--live]
  *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs sync-full-set --project <uuid> --run <uuid> [--live]
+ *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs build-v2-packs [--force]
+ *
+ * --evidence-version v2 (enqueue-full, sync-full-set): also build/upload the v2 technical digest.
+ * Default v1; v1 packs are unchanged either way.
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,7 +37,9 @@ import {
   ensureWorkerDirs,
   PILOT_SHEETS,
   DEFAULT_WORKER_CONCURRENCY,
+  buildV2PacksForFullSet,
 } from "../lib/stage3MacOcrWorker.mjs";
+import { resolveStage3EvidenceOptions } from "../lib/stage3EvidenceConfig.mjs";
 import {
   uploadLocalPackFile,
   buildStage3EvidenceObjectPath,
@@ -69,8 +75,20 @@ function argValue(flag) {
 
 const runId = argValue("--run") || process.env.STAGE3_RUN_ID || null;
 const projectId = argValue("--project") || process.env.STAGE3_PROJECT_ID || null;
+const { evidenceVersion } = resolveStage3EvidenceOptions({ evidenceVersion: argValue("--evidence-version") });
 
 const paths = resolveWorkerPaths(workerRoot);
+
+if (command === "build-v2-packs") {
+  const result = await buildV2PacksForFullSet({ rootDir: workerRoot, datasetOut, force });
+  console.log(JSON.stringify({
+    workerRoot,
+    sheets: result.sheets,
+    built: result.built,
+    unavailable: result.unavailable.map((o) => ({ sheetId: o.sheetId, status: o.status, fallbackReason: o.fallbackReason })),
+  }, null, 2));
+  process.exit(result.built === result.sheets ? 0 : 1);
+}
 
 if (command === "enqueue") {
   const result = await enqueuePilotJobs({
@@ -90,6 +108,7 @@ if (command === "enqueue-full") {
     projectId,
     runId: runId || "local-fullset-eval",
     syncSupabase,
+    ...(evidenceVersion === "v2" ? { evidenceVersion } : {}),
   });
   console.log(JSON.stringify({
     workerRoot,
@@ -274,6 +293,7 @@ if (command === "upload-packs" || command === "sync-full-set") {
       dryRun: dryRun || !live,
       resume: !process.argv.includes("--no-resume"),
       syncSupabase: syncSupabase || live,
+      ...(evidenceVersion === "v2" ? { evidenceVersion } : {}),
     });
     console.log(JSON.stringify({
       mode: live && !dryRun ? "edge_live_full_set" : "dry_run_or_association",

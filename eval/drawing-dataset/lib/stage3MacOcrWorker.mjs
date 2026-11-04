@@ -43,6 +43,8 @@ import {
   updateRunState,
 } from "./stage3OcrRunState.mjs";
 import { syncRunPreprocessSummary } from "./stage3WorkerSupabase.mjs";
+import { STAGE3_EVIDENCE_V2 } from "./stage3EvidenceConfig.mjs";
+import { buildStage3V2PackFromRecovery } from "./stage3EvidenceV2.mjs";
 
 async function maybeUploadPack(storage, job, pack) {
   if (!storage || !job.projectId || !job.runId || !job.sheetJobId) return null;
@@ -126,9 +128,11 @@ async function appendAudit(paths, event) {
 }
 
 export function buildJobRecord(sheet, options = {}) {
+  const v2 = options.evidenceVersion === "v2" || options.evidenceVersion === STAGE3_EVIDENCE_V2;
   const id = options.jobId
-    || createHash("sha1").update(`${sheet.sha256}|${sheet.id}|${STAGE3_EXTRACTION_VERSION}`).digest("hex").slice(0, 16);
+    || createHash("sha1").update(`${sheet.sha256}|${sheet.id}|${STAGE3_EXTRACTION_VERSION}${v2 ? `|${STAGE3_EVIDENCE_V2}` : ""}`).digest("hex").slice(0, 16);
   return {
+    ...(v2 ? { evidenceVersion: STAGE3_EVIDENCE_V2, recoveryPath: options.recoveryPath || null } : {}),
     id,
     sheetId: sheet.id,
     relativePath: sheet.relativePath,
@@ -275,6 +279,87 @@ function normalizePilotSheetId(sheetId) {
   return null;
 }
 
+export function v2PackPath(paths, sheetId, contentSha256) {
+  return path.join(paths.root, "packs-v2", `${sheetId}.${contentSha256}.json`);
+}
+
+/** v2 envelope: technical digest pack plus the job identity and provenance the bridge validates. */
+export function buildV2Envelope(job, { layout, recovery }) {
+  const key = cacheKey(job.contentSha256, STAGE3_EXTRACTION_METHOD, STAGE3_EVIDENCE_V2);
+  const pack = buildStage3V2PackFromRecovery({ sheetId: job.sheetId, layout, recovery, source: "4x3" });
+  return {
+    ...pack,
+    relativePath: job.relativePath,
+    sourceFileSha256: job.contentSha256,
+    extractionMethod: STAGE3_EXTRACTION_METHOD,
+    extractionVersion: STAGE3_EVIDENCE_V2,
+    cacheKey: key,
+    provenance: { ...pack.provenance, extractionMethod: STAGE3_EXTRACTION_METHOD, cacheKey: key },
+    generatedAt: new Date().toISOString(),
+    workerVersion: STAGE3_WORKER_VERSION,
+  };
+}
+
+/**
+ * v2 step for a job that asked for it. Runs after the v1 pack is written and never affects it:
+ * any failure is recorded on the job (fallbackReason) and the analyzer falls back to v1.
+ */
+async function produceV2Pack(paths, job, sources, options) {
+  const key = cacheKey(job.contentSha256, STAGE3_EXTRACTION_METHOD, STAGE3_EVIDENCE_V2);
+  const cachePath = path.join(paths.cache, `${key}.json`);
+  try {
+    let envelope = null;
+    let cacheHit = false;
+    if (!options.force && !job.forceRetry && existsSync(cachePath)) {
+      envelope = JSON.parse(await readFile(cachePath, "utf8"));
+      cacheHit = true;
+    } else {
+      let recovery = sources.recovery || null;
+      if (!recovery && job.recoveryPath && existsSync(job.recoveryPath)) {
+        recovery = JSON.parse(await readFile(job.recoveryPath, "utf8"));
+      }
+      if (!recovery) return { status: "unavailable", fallbackReason: "v2_recovery_missing" };
+      if (recovery.sha256 && String(recovery.sha256).toLowerCase() !== String(job.contentSha256).toLowerCase()) {
+        return { status: "unavailable", fallbackReason: "v2_recovery_sha_mismatch" };
+      }
+      let layout = sources.layout || null;
+      if (!layout && job.layoutPagePath && existsSync(job.layoutPagePath)) {
+        layout = JSON.parse(await readFile(job.layoutPagePath, "utf8"));
+      }
+      if (!layout) return { status: "unavailable", fallbackReason: "v2_layout_missing" };
+      envelope = buildV2Envelope(job, { layout: sources.rebuilt ? layout : rebuildAssociationsFromFreshOcr(layout, recovery), recovery });
+      await writeFile(cachePath, JSON.stringify(envelope, null, 2));
+    }
+    const packPath = v2PackPath(paths, job.sheetId, job.contentSha256);
+    await mkdir(path.dirname(packPath), { recursive: true });
+    await writeFile(packPath, JSON.stringify(envelope, null, 2));
+    let storageUpload = null;
+    if (options.storage && job.projectId && job.runId && job.sheetJobId) {
+      try {
+        storageUpload = await maybeUploadPack(options.storage, job, envelope);
+      } catch (uploadError) {
+        storageUpload = { status: "failed", error: uploadError instanceof Error ? uploadError.message : String(uploadError) };
+      }
+    }
+    await appendAudit(paths, {
+      event: "v2_pack",
+      jobId: job.id,
+      cacheKey: key,
+      cacheHit,
+      packStatus: envelope.status,
+      promptChars: envelope.promptBlock.length,
+      shown: envelope.digest?.shown?.length ?? null,
+      omitted: envelope.digest?.omitted?.length ?? null,
+      storageUploaded: Boolean(storageUpload && !storageUpload.error),
+    });
+    return { status: "built", cacheHit, cacheKey: key, packPath, packStatus: envelope.status, storageUpload, fallbackReason: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await appendAudit(paths, { event: "v2_pack_failed", jobId: job.id, error: message.slice(0, 240) });
+    return { status: "failed", fallbackReason: `v2_build_failed:${message.slice(0, 120)}` };
+  }
+}
+
 export function extractForSheet(sheetId, layout) {
   const pilotKey = normalizePilotSheetId(sheetId);
   if (pilotKey === "A-3.06") return extractGuardrailDetailEvidence(layout, { mode: "stage3_visual" });
@@ -309,6 +394,9 @@ export async function processClaimedJob(paths, job, options = {}) {
         };
       }
     }
+    const evidenceV2 = job.evidenceVersion === STAGE3_EVIDENCE_V2
+      ? await produceV2Pack(paths, job, {}, options)
+      : null;
     const doneJob = {
       ...job,
       status: "done",
@@ -317,6 +405,7 @@ export async function processClaimedJob(paths, job, options = {}) {
       packPath,
       latencyMs: Date.now() - started,
       storageUpload,
+      ...(evidenceV2 ? { evidenceV2 } : {}),
     };
     await writeFile(path.join(paths.done, `${job.id}.json`), JSON.stringify(doneJob, null, 2));
     try {
@@ -345,8 +434,9 @@ export async function processClaimedJob(paths, job, options = {}) {
   }
 
   let ocrMeta = { engine: null, freshOcr: false, ocrChars: 0 };
+  let recovered = null;
   if (job.pdfPath && existsSync(job.pdfPath) && options.freshOcr !== false) {
-    const recovered = await recoverPdfFile(job.pdfPath, {});
+    recovered = await recoverPdfFile(job.pdfPath, {});
     ocrMeta = {
       engine: recovered.pages?.[0]?.engine || STAGE3_EXTRACTION_METHOD,
       freshOcr: true,
@@ -438,6 +528,9 @@ export async function processClaimedJob(paths, job, options = {}) {
     }
   }
 
+  const evidenceV2 = job.evidenceVersion === STAGE3_EVIDENCE_V2
+    ? await produceV2Pack(paths, job, recovered ? { recovery: recovered, layout, rebuilt: true } : {}, options)
+    : null;
   const doneJob = {
     ...job,
     status: "done",
@@ -448,6 +541,7 @@ export async function processClaimedJob(paths, job, options = {}) {
     latencyMs: Date.now() - started,
     packStatus: envelope.status,
     storageUpload,
+    ...(evidenceV2 ? { evidenceV2 } : {}),
   };
   await writeFile(path.join(paths.done, `${job.id}.json`), JSON.stringify(doneJob, null, 2));
   try {
@@ -557,6 +651,9 @@ export async function enqueueFullSetJobs(options = {}) {
       projectId: options.projectId || null,
       runId: options.runId || null,
       sheetJobId: options.sheetJobMap?.[sheet.relativePath] || null,
+      ...(options.evidenceVersion === "v2"
+        ? { evidenceVersion: "v2", recoveryPath: path.join(options.datasetOut, "recovery", `${sheet.sha256}.json`) }
+        : {}),
     }));
   }
 
@@ -592,6 +689,32 @@ export async function enqueueFullSetJobs(options = {}) {
     runId: options.runId || null,
   });
   return { manifest, enqueued, runState: runState ? summarizeRunState(runState) : null };
+}
+
+/**
+ * Build v2 packs for every manifest sheet from cached production recovery + layout (no OCR).
+ * v1 packs and caches are not touched.
+ */
+export async function buildV2PacksForFullSet(options = {}) {
+  const paths = resolveWorkerPaths(options.rootDir);
+  await ensureWorkerDirs(paths);
+  const manifest = await loadAuthoritativeDrawingManifest(options.datasetOut);
+  const outcomes = [];
+  for (const sheet of manifest.sheets) {
+    const job = buildJobRecord(sheet, {
+      layoutPagePath: sheet.layoutPagePath,
+      evidenceVersion: "v2",
+      recoveryPath: path.join(options.datasetOut, "recovery", `${sheet.sha256}.json`),
+    });
+    const result = await produceV2Pack(paths, job, {}, { force: options.force });
+    outcomes.push({ sheetId: sheet.id, relativePath: sheet.relativePath, ...result });
+  }
+  return {
+    sheets: outcomes.length,
+    built: outcomes.filter((o) => o.status === "built").length,
+    unavailable: outcomes.filter((o) => o.status !== "built"),
+    outcomes,
+  };
 }
 
 export async function cancelPendingJobs(paths, options = {}) {
