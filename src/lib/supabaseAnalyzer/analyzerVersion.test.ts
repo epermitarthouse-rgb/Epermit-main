@@ -24,8 +24,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const env = (values: Record<string, string>) => ({ get: (key: string) => values[key] });
 
 describe("Supabase Analyzer version", () => {
-  it("defaults to V1 and accepts only v1 or v2", () => {
-    assert.equal(DEFAULT_ANALYZER_VERSION, "v1");
+  it("defaults new UI runs to V2, reads a missing server value as V1, and accepts only v1 or v2", () => {
+    assert.equal(DEFAULT_ANALYZER_VERSION, "v2");
     assert.equal(parseAnalyzerVersion(undefined), "v1");
     assert.equal(parseAnalyzerVersion(""), "v1");
     assert.equal(parseAnalyzerVersion("v1"), "v1");
@@ -118,6 +118,6 @@ describe("Supabase Analyzer version", () => {
     assert.equal([...runs.matchAll(/analyzer_version: analyzerVersion/g)].length, 2);
     assert.match(runs, /analyzerV2Unavailable\(Deno\.env\)/);
     const client = readFileSync(join(__dirname, "client.ts"), "utf8");
-    assert.equal([...client.matchAll(/analyzerVersion: input\.analyzerVersion === "v2" \? "v2" : "v1"/g)].length, 2);
+    assert.equal([...client.matchAll(/analyzerVersion: input\.analyzerVersion === "v1" \? "v1" : "v2"/g)].length, 2);
   });
 });

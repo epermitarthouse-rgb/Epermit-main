@@ -146,7 +146,7 @@ export async function createSupabaseAnalyzerRun(input: {
   analysisMode?: StoredAnalysisMode;
   /** Operator opt-in: run-scoped Stage 3 full-coverage OCR gate (default off). */
   stage3FullCoverageOcr?: boolean;
-  /** Supabase Analyzer version for this run; V1 unless the user selects V2. */
+  /** Supabase Analyzer version for this run; V2 unless V1 is passed explicitly. */
   analyzerVersion?: AnalyzerVersion;
   budgetLimitUsd?: number;
 }) {
@@ -170,7 +170,7 @@ export async function createSupabaseAnalyzerRun(input: {
     codeContext: input.codeContext,
     analysisMode: input.analysisMode ?? "both",
     stage3FullCoverageOcr: input.stage3FullCoverageOcr === true,
-    analyzerVersion: input.analyzerVersion === "v2" ? "v2" : "v1",
+    analyzerVersion: input.analyzerVersion === "v1" ? "v1" : "v2",
     budgetLimitUsd: input.budgetLimitUsd ?? 20,
     files: input.files.map((file) => ({
       name: file.name,
@@ -291,7 +291,7 @@ export function reanalyzeSupabaseAnalyzerRun(input: {
   analysisMode?: StoredAnalysisMode;
   /** Operator opt-in: persist full-coverage Stage 3 OCR gate on the new reanalysis run. */
   stage3FullCoverageOcr?: boolean;
-  /** Supabase Analyzer version for the new run; V1 unless the user selects V2. */
+  /** Supabase Analyzer version for the new run; V2 unless V1 is passed explicitly. */
   analyzerVersion?: AnalyzerVersion;
   jurisdictionKey: string;
   jurisdictionLabel: string;
@@ -323,7 +323,7 @@ export function reanalyzeSupabaseAnalyzerRun(input: {
     confirmed: input.confirmed,
     analysisMode: input.analysisMode ?? "both",
     stage3FullCoverageOcr: input.stage3FullCoverageOcr === true,
-    analyzerVersion: input.analyzerVersion === "v2" ? "v2" : "v1",
+    analyzerVersion: input.analyzerVersion === "v1" ? "v1" : "v2",
     jurisdictionKey: input.jurisdictionKey,
     jurisdictionLabel: input.jurisdictionLabel,
     projectType: input.projectType,

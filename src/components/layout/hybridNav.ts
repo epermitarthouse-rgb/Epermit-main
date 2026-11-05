@@ -154,14 +154,13 @@ export const hybridNavGroups: HybridNavGroup[] = [
             description: "Analyze permit drawing sets",
             requiresAuth: true,
           }]
-        : []),
-      {
-        title: "Code Analyzer V2",
-        href: "/code-compliance",
-        icon: ShieldCheck,
-        description: "Evidence-grounded six-layer review",
-        requiresAuth: true,
-      },
+        : [{
+            title: "Code Analyzer V2",
+            href: "/code-compliance",
+            icon: ShieldCheck,
+            description: "Evidence-grounded six-layer review",
+            requiresAuth: true,
+          }]),
       {
         // Rendered as expandable UciSidebarNav (Lovable UCI children + Soon badges).
         title: "Utility Coordination",

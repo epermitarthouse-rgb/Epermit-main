@@ -7,8 +7,11 @@ export {
 } from "../../../supabase/functions/_shared/analyzerVersion.ts";
 import { analyzerVersionOf, type AnalyzerVersion } from "../../../supabase/functions/_shared/analyzerVersion.ts";
 
-/** V1 stays the default; V2 runs only when the user selects it for a run. */
-export const DEFAULT_ANALYZER_VERSION: AnalyzerVersion = "v1";
+/**
+ * Every new run and rerun from the UI uses V2 (4×3 OCR); there is no version picker.
+ * Existing runs keep the version stored on their `analysis_scope`.
+ */
+export const DEFAULT_ANALYZER_VERSION: AnalyzerVersion = "v2";
 
 export const analyzerVersionOptions = [
   {

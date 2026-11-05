@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import {
   Building2,
   Calendar,
-  Cpu,
   Download,
   FileText,
   FolderKanban,
@@ -35,7 +34,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -95,10 +93,8 @@ import {
   type StoredAnalysisMode,
 } from "@/lib/supabaseAnalyzer/analysisMode";
 import {
-  analyzerVersionOptions,
   analyzerVersionShortLabel,
   DEFAULT_ANALYZER_VERSION,
-  isAnalyzerVersion,
   type AnalyzerVersion,
 } from "@/lib/supabaseAnalyzer/analyzerVersion";
 import { countSeverity, downloadSupabaseAnalyzerJson } from "@/lib/supabaseAnalyzer/exportDataset";
@@ -163,7 +159,7 @@ export function SupabaseCodeAnalyzer() {
   const [codeYear, setCodeYear] = useState(DC_CODE_EDITION);
   const [analysisMode, setAnalysisMode] = useState<StoredAnalysisMode>("both");
   const [stage3FullCoverageOcr, setStage3FullCoverageOcr] = useState(false);
-  const [analyzerVersion, setAnalyzerVersion] = useState<AnalyzerVersion>(DEFAULT_ANALYZER_VERSION);
+  const analyzerVersion: AnalyzerVersion = DEFAULT_ANALYZER_VERSION;
   const analyzerV2 = analyzerVersion === "v2";
   const [files, setFiles] = useState<File[]>([]);
   const [runs, setRuns] = useState<SupabaseAnalyzerRun[]>([]);
@@ -1221,43 +1217,6 @@ export function SupabaseCodeAnalyzer() {
               </Select>
             </div>
           </div>
-          <Card className="pilot-card border-border bg-card border-teal/20 shadow-sm" data-testid="analyzer-version-control">
-            <CardContent className="space-y-3 pt-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <Cpu className="h-5 w-5 shrink-0 text-teal" />
-                <div className="min-w-0">
-                  <p className="font-medium text-foreground">Analyzer Version</p>
-                  <p className="text-sm text-muted-foreground">
-                    Choose the analyzer for this run. Findings publish for Accept / Reject / Modify review either way.
-                  </p>
-                </div>
-              </div>
-              <ToggleGroup
-                type="single"
-                value={analyzerVersion}
-                disabled={submitting}
-                onValueChange={(value) => {
-                  if (isAnalyzerVersion(value)) setAnalyzerVersion(value);
-                }}
-                className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
-                aria-label="Supabase Analyzer version"
-              >
-                {analyzerVersionOptions.map((option) => (
-                  <ToggleGroupItem
-                    key={option.value}
-                    value={option.value}
-                    variant="outline"
-                    className="h-auto flex-col items-start justify-start gap-1 whitespace-normal px-3 py-2 text-left data-[state=on]:border-teal data-[state=on]:bg-teal/10"
-                    data-testid={`analyzer-version-${option.value}`}
-                    aria-label={option.label}
-                  >
-                    <span className="text-sm font-medium text-foreground">{option.label}</span>
-                    <span className="text-xs font-normal text-muted-foreground">{option.description}</span>
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </CardContent>
-          </Card>
           <Card className="pilot-card border-border bg-card border-teal/20 shadow-sm" data-testid="analysis-mode-control">
             <CardContent className="pt-4">
               <div className="flex flex-wrap items-center justify-between gap-3">

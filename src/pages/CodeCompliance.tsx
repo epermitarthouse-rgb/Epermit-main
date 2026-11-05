@@ -1,13 +1,27 @@
 import { useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import { AIComplianceAnalyzer } from "@/components/compliance/AIComplianceAnalyzer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageHeader, ServicePill } from "@/components/design/ProductPrimitives";
 import { motion } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import { useGettingStarted } from "@/hooks/useGettingStarted";
+import { isSupabaseAnalyzerEnabled } from "@/lib/supabaseAnalyzer/featureFlag";
 import { Shield } from "lucide-react";
 
+/**
+ * Code Analyzer V2 (six-layer) is hidden while Supabase Analyzer V2 is the only analyzer users see.
+ * The page stays reachable only when the Supabase analyzer is switched off, which is also where
+ * /code-analyzer sends users in that case.
+ */
 export default function CodeCompliance() {
+  if (isSupabaseAnalyzerEnabled()) {
+    return <Navigate to="/code-analyzer" replace />;
+  }
+  return <CodeAnalyzerV2Page />;
+}
+
+function CodeAnalyzerV2Page() {
   const { completeItem } = useGettingStarted();
 
   useEffect(() => {

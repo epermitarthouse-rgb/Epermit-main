@@ -64,7 +64,6 @@ const toolItems = [
     requiresAuth: true,
   },
   { name: "Code Analyzer", href: "/code-analyzer", icon: Shield, keywords: ["compliance", "check", "ai", "code", "analyzer"] },
-  { name: "Code Analyzer V2", href: "/code-compliance", icon: Shield, keywords: ["evidence", "rag", "verified", "code", "analyzer", "v2"] },
   {
     name: "Response Matrix",
     href: "/response-matrix",
