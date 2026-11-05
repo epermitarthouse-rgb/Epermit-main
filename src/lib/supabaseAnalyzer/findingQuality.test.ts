@@ -14,6 +14,7 @@ import {
 } from "./analysisMode.ts";
 import {
   buildAnalyzerUserPrompt,
+  mergeProjectSheetIndex,
   sheetIdentityKeys,
   validateAnalyzerFindings,
   type AnalyzerValidationContext,
@@ -93,6 +94,58 @@ describe("sheet index", () => {
     assert.equal(fileInputCount, 1);
     assert.match(processor, /retrieveCrossSheetEvidence\(/);
     assert.match(processor, /select\("id, original_file_name, detected_sheet_number, detected_sheet_title, discipline, object_path"\)/);
+  });
+});
+
+describe("project-level sheet index", () => {
+  const run: SubmittedSheetRef[] = [
+    { fileName: "A-1.02-00.pdf", detectedSheetNumber: "A-1.02" },
+    { fileName: "A-3.06-00.pdf", detectedSheetNumber: "A-3.06" },
+  ];
+  const project: SubmittedSheetRef[] = [
+    { fileName: "A-6.01.00.pdf", detectedSheetNumber: "A-6.01" },
+    { fileName: "A-3.06-00.pdf", detectedSheetNumber: "A-3.06" },
+    { fileName: "A-3.06-00 (rev).pdf", detectedSheetNumber: "A-3.06" },
+  ];
+
+  it("adds other runs' sheets after the run's sheets, once per sheet, marked as project scope", () => {
+    const merged = mergeProjectSheetIndex(run, project);
+    assert.deepEqual(merged.map((s) => [s.fileName, s.scope ?? "run"]), [
+      ["A-1.02-00.pdf", "run"], ["A-3.06-00.pdf", "run"], ["A-6.01.00.pdf", "project"],
+    ]);
+    const prompt = buildAnalyzerUserPrompt("A-1.02-00.pdf", merged);
+    assert.match(prompt, /A-6\.01\.00\.pdf \| in project, not in this analysis/);
+    assert.match(prompt, /A-1\.02-00\.pdf \| current sheet/);
+    assert.doesNotMatch(prompt, /A-3\.06-00\.pdf \| in project/);
+  });
+
+  it("leaves the prompt unchanged when the project has no other sheets", () => {
+    assert.equal(buildAnalyzerUserPrompt("A-1.02-00.pdf", mergeProjectSheetIndex(run, [])), buildAnalyzerUserPrompt("A-1.02-00.pdf", run));
+  });
+
+  it("resolves a reference to a sheet uploaded in another run of the project", () => {
+    const finding = draft({
+      severity: "warning",
+      title: "Reference to Unresolved Sheet",
+      observation: "The note states 'SEE SHEET A-6.01 FOR CEILING FINISHES.' This reference does not resolve to the submitted sheet index.",
+      drawing_evidence: "Note: 'SEE SHEET A-6.01 FOR CEILING FINISHES.'",
+      recommendation: "Ensure the ceiling finish details are added to this sheet or a listed sheet in the current set.",
+    });
+    const runOnly = validateAnalyzerFindings([finding], context({ sheetIndex: run, currentFileName: "A-1.02-00.pdf" }));
+    assert.equal(runOnly.published[0]?.severity, "warning");
+    const withProject = validateAnalyzerFindings([finding], context({ sheetIndex: mergeProjectSheetIndex(run, project), currentFileName: "A-1.02-00.pdf" }));
+    assert.equal(withProject.published.length, 0);
+    assert.deepEqual(withProject.withheld[0]?.referencedSheets, ["A-6.01"]);
+  });
+
+  it("is built by the processor from the project's other uploaded sheet jobs and audited by scope", () => {
+    const processor = readFileSync(join(__dirname, "../../../supabase/functions/supabase-analyzer-processor/index.ts"), "utf8");
+    assert.match(processor, /\.eq\("project_id", job\.project_id\)\s*\.neq\("run_id", job\.run_id\)\s*\.neq\("status", "upload_pending"\)/);
+    assert.match(processor, /mergeProjectSheetIndex\(sheetIndex,/);
+    assert.match(processor, /currentFileName: job\.original_file_name/);
+    assert.match(processor, /sheet_index_project_sheets/);
+    assert.match(processor, /referenced_sheets: item\.referencedSheets/);
+    assert.match(processor, /sheetJobs: retrievableJobs/);
   });
 });
 
@@ -183,6 +236,75 @@ describe("cross-sheet references", () => {
     assert.match(finding.validation.coverageLimitation || "", /Severity was not changed solely/);
     assert.equal(finding.validation.independentlyVerified, false);
     assert.notEqual(finding.verification_status, "verified");
+  });
+});
+
+describe("reference-only cross-sheet claims (saved drafts)", () => {
+  const fixture = JSON.parse(readFileSync(
+    join(__dirname, "../../../eval/drawing-dataset/fixtures/cross-sheet-reference-only.json"),
+    "utf8",
+  )) as {
+    projectIndex: string[];
+    cases: Array<{ id: string; label: string; sheetFile: string; draft: DraftAnalyzerFinding; expect: { oneSheet: string; project: string; projectRule: string | null } }>;
+  };
+  const projectIndex: SubmittedSheetRef[] = fixture.projectIndex.map((fileName) => ({ fileName, scope: "project" }));
+  const run = (c: (typeof fixture.cases)[number], sheets: SubmittedSheetRef[]) =>
+    validateAnalyzerFindings([c.draft], context({ sheetIndex: sheets, currentFileName: c.sheetFile, analysisDate: "2026-11-05T00:00:00.000Z" }));
+
+  it("withholds a reference-only claim when every referenced sheet is in the project, keeping the sheets for audit", () => {
+    const targets = fixture.cases.filter((c) => c.expect.project === "withheld");
+    assert.ok(targets.length >= 14);
+    for (const c of targets) {
+      const result = run(c, projectIndex);
+      assert.equal(result.published.length, 0, c.id);
+      assert.deepEqual(result.withheld[0]?.rules, ["cross_sheet_reference_only"], c.id);
+      assert.ok((result.withheld[0]?.referencedSheets || []).length > 0, c.id);
+    }
+  });
+
+  it("keeps the same claims published, severity unchanged, when the referenced sheet is not on the index", () => {
+    for (const c of fixture.cases.filter((x) => x.expect.project === "withheld")) {
+      const result = run(c, [{ fileName: c.sheetFile }]);
+      assert.equal(result.published.length, 1, c.id);
+      assert.equal(result.published[0].severity, c.draft.severity.toLowerCase(), c.id);
+      assert.ok(result.published[0].validation.rules.includes("cross_sheet_reference_unresolved"), c.id);
+    }
+  });
+
+  it("does not treat misread pointers, code-requirement claims, value conflicts or true gaps as reference-only", () => {
+    for (const id of ["F013", "F016", "F022", "F088", "F127"]) {
+      const c = fixture.cases.find((x) => x.id === id)!;
+      const result = run(c, projectIndex);
+      assert.equal(result.published.length, 1, id);
+      assert.equal(result.withheld.length, 0, id);
+    }
+  });
+
+  it("keeps an unresolvable reference (A-600) published", () => {
+    const c = fixture.cases.find((x) => x.id === "F004")!;
+    const result = run(c, projectIndex);
+    assert.equal(result.published.length, 1);
+    assert.ok(result.published[0].validation.rules.includes("cross_sheet_reference_unresolved"));
+  });
+
+  it("covers the production A-1.02 'Reference to Unresolved Sheet' warning", () => {
+    const c = fixture.cases.find((x) => x.label === "production" && x.draft.title === "Reference to Unresolved Sheet")!;
+    assert.equal(c.draft.severity, "warning");
+    assert.equal(run(c, projectIndex).withheld[0]?.rules[0], "cross_sheet_reference_only");
+    assert.equal(run(c, [{ fileName: c.sheetFile }]).published[0]?.severity, "warning");
+  });
+
+  it("does not count the current sheet's own number as a cross-sheet reference", () => {
+    const result = validateAnalyzerFindings([draft({
+      severity: "warning",
+      title: "Door schedule reference",
+      observation: "The note says 'SEE SHEET A-6.00 FOR DOOR SCHEDULE' but no door schedule is present on this sheet.",
+      drawing_evidence: "SEE SHEET A-6.00 FOR DOOR SCHEDULE.",
+      recommendation: "Confirm the schedule on A-6.00.",
+    })], context({ sheetIndex: [{ fileName: "A-6.00-00.pdf" }], currentFileName: "A-6.00-00.pdf" }));
+    const rules = [...result.withheld.flatMap((w) => w.rules), ...result.published.flatMap((p) => p.validation.rules)];
+    assert.equal(rules.includes("cross_sheet_reference_only"), false);
+    assert.equal(rules.includes("cross_sheet_reference_unresolved"), false);
   });
 });
 

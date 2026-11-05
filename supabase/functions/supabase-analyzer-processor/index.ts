@@ -7,6 +7,7 @@ import {
 import { processorReviewPrompt } from "../_shared/analyzerReviewScope.ts";
 import {
   buildAnalyzerUserPrompt,
+  mergeProjectSheetIndex,
   validateAnalyzerFindings,
   type SubmittedSheetRef,
 } from "../_shared/analyzerFindingQuality.ts";
@@ -295,6 +296,25 @@ async function processJob(
         objectPath: row.object_path ? String(row.object_path) : null,
         sheetJobId: row.id ? String(row.id) : null,
       }));
+    }
+    const runSheetCount = sheetIndex.length;
+    const { data: projectRows, error: projectIndexError } = await admin
+      .from("supabase_analyzer_sheet_jobs")
+      .select("original_file_name, detected_sheet_number, detected_sheet_title, discipline")
+      .eq("project_id", job.project_id)
+      .neq("run_id", job.run_id)
+      .neq("status", "upload_pending")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (projectIndexError) {
+      console.error("[supabase-analyzer] project sheet index unavailable", job.run_id, projectIndexError.message);
+    } else if (sheetIndex.length) {
+      sheetIndex = mergeProjectSheetIndex(sheetIndex, (projectRows || []).map((row) => ({
+        fileName: String(row.original_file_name || ""),
+        detectedSheetNumber: row.detected_sheet_number,
+        detectedSheetTitle: row.detected_sheet_title,
+        discipline: row.discipline,
+      })));
     }
 
     // Phase 3 Stage 1–2: optional sheet-local visual evidence. Failures never block baseline analysis.
@@ -589,6 +609,7 @@ async function processJob(
       codeEdition: run.code_edition,
       codeContext: run.code_context,
       sheetIndex,
+      currentFileName: job.original_file_name,
       sheetDiscipline: analysis.discipline,
       analysisDate,
     });
@@ -717,7 +738,10 @@ async function processJob(
           original_severity: item.originalSeverity,
           original_code_reference: item.originalCodeReference,
           rules: item.rules,
+          ...(item.referencedSheets ? { referenced_sheets: item.referencedSheets } : {}),
         })),
+        sheet_index_run_sheets: runSheetCount,
+        sheet_index_project_sheets: sheetIndex.length - runSheetCount,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         estimated_cost_usd: estimatedCost,

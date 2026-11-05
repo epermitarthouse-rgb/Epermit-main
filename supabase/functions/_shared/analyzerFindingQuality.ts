@@ -14,6 +14,8 @@ export interface SubmittedSheetRef {
   detectedSheetNumber?: string | null;
   detectedSheetTitle?: string | null;
   discipline?: string | null;
+  /** "project": uploaded to the same project in another analysis run; absent means this run. */
+  scope?: "run" | "project";
 }
 
 export interface DraftAnalyzerFinding {
@@ -54,6 +56,8 @@ export interface WithheldAnalyzerFinding {
   originalSeverity: string;
   originalCodeReference: string;
   rules: string[];
+  /** Coverage context kept for audit when a reference-only claim is withheld. */
+  referencedSheets?: string[];
 }
 
 export interface AnalyzerValidationContext {
@@ -63,6 +67,8 @@ export interface AnalyzerValidationContext {
   codeEdition: string;
   codeContext: string;
   sheetIndex: SubmittedSheetRef[];
+  /** File name of the sheet under review; its own number is not a cross-sheet reference. */
+  currentFileName?: string | null;
   sheetDiscipline?: string | null;
   /** UTC instant for "future date" checks. Prefer run started_at / created_at. */
   analysisDate?: string | Date | null;
@@ -179,6 +185,26 @@ function keysForSheet(sheet: SubmittedSheetRef): string[] {
   ];
 }
 
+/**
+ * Sheet index for one request: the run's sheets first, then sheets uploaded to the same project in
+ * other analysis runs that the run does not contain (same file name or sheet number), marked
+ * scope "project". A sheet in the project is not part of this analysis and was not reviewed here.
+ */
+export function mergeProjectSheetIndex(runSheets: SubmittedSheetRef[], projectSheets: SubmittedSheetRef[]): SubmittedSheetRef[] {
+  const seenNames = new Set(runSheets.map((sheet) => sheet.fileName.trim().toLowerCase()));
+  const seenKeys = new Set(runSheets.flatMap(keysForSheet));
+  const merged = [...runSheets];
+  for (const sheet of projectSheets) {
+    const name = sheet.fileName.trim().toLowerCase();
+    const keys = keysForSheet(sheet);
+    if (!name || seenNames.has(name) || keys.some((key) => seenKeys.has(key))) continue;
+    seenNames.add(name);
+    for (const key of keys) seenKeys.add(key);
+    merged.push({ ...sheet, scope: "project" });
+  }
+  return merged;
+}
+
 export function formatSubmittedSheetIndex(sheets: SubmittedSheetRef[], currentFileName: string): string {
   if (!sheets.length) {
     return "Submitted sheet index: unavailable. Do not claim that a referenced sheet is absent from the project.";
@@ -188,7 +214,9 @@ export function formatSubmittedSheetIndex(sheets: SubmittedSheetRef[], currentFi
     const name = oneLine(sheet.fileName, 120);
     const number = oneLine(sheet.detectedSheetNumber || "", 40);
     const title = oneLine(sheet.detectedSheetTitle || "", 80);
-    const marker = name.toLowerCase() === current ? " | current sheet" : "";
+    const marker = name.toLowerCase() === current
+      ? " | current sheet"
+      : sheet.scope === "project" ? " | in project, not in this analysis" : "";
     return `- ${number || "number not detected"} | ${name}${title ? ` | ${title}` : ""}${marker}`;
   });
   return [
@@ -307,6 +335,36 @@ function adjustCrossSheet(finding: DraftAnalyzerFinding, sheets: SubmittedSheetR
     rule: "cross_sheet_reference_unresolved",
     finding,
   };
+}
+
+const REFERENCE_POINTER = /\b(?:see|refer(?:s|red)?(?:\s+to)?|referenc\w*|directs?\s+to)\b/i;
+const REFERENCE_STATUS_CLAIM = /\b(?:not (?:listed|resolved|included|provided|reviewed|submitted|available|part of)|unresolved|does not resolve|not (?:in|on) the (?:submitted |provided |current )?(?:sheet )?index|not (?:been )?(?:included|provided) in (?:this|the current) (?:review|request)|lacks? (?:clarity|a clear reference)|no\b[^.]{0,60}?\b(?:is|are) (?:present|shown|provided|included))\b/i;
+const REFERENCE_RESTATEMENT = /\b(?:references?|refers? to|directs? to|points? to)\b/i;
+const INTERPRETIVE_CLAIM = /\b(?:conflict\w*|contradict\w*|inconsisten\w*|discrepanc\w*|mismatch\w*|does not match|incorrect\w*|confusion|exceed\w*|less than|greater than|insufficient|non-?complian\w*|violat\w*|deficien\w*)\b/i;
+
+/**
+ * A finding whose only claim is about a sheet reference: the referenced sheet is said to be missing,
+ * unresolved or unreviewed, the content the pointer delegates is said to be absent from this sheet,
+ * or the pointer is merely restated. The referenced sheet is named in the title or observation (a
+ * pointer quoted only as evidence for some other gap does not qualify, e.g. Phase 2B C-001). It
+ * cites no code requirement and makes no conflict or value claim. Findings with a code requirement
+ * keep the cross-sheet limitation path instead.
+ * Returns the other sheets it names, or null when it is not reference-only.
+ */
+function referenceOnlyRefs(finding: DraftAnalyzerFinding, currentFileName: string | null | undefined): string[] | null {
+  if ((finding.suggested_code_reference || "").trim()) return null;
+  const claim = `${finding.title} ${finding.observation}`;
+  if (INTERPRETIVE_CLAIM.test(claim)) return null;
+  const all = `${claim} ${finding.drawing_evidence} ${finding.recommendation}`;
+  if (!REFERENCE_POINTER.test(all)) return null;
+  const own = new Set(sheetIdentityKeys(currentFileName));
+  const refs = sheetRefs(all).filter((ref) => !own.has(ref.key));
+  if (!refs.length) return null;
+  const claimed = new Set(sheetRefs(claim).map((ref) => ref.key));
+  if (!refs.some((ref) => claimed.has(ref.key))) return null;
+  const aboutReference = REFERENCE_STATUS_CLAIM.test(claim) || PROJECT_ABSENCE.test(claim)
+    || SHEET_LOCAL_ABSENCE.test(claim) || REFERENCE_RESTATEMENT.test(finding.observation);
+  return aboutReference ? refs.map((ref) => ref.display) : null;
 }
 
 function crossSheetCoverageNote(rules: string[]): string | null {
@@ -880,12 +938,13 @@ export function validateAnalyzerFindings(
   for (const input of findings) {
     const originalSeverity = input.severity || "";
     const originalReference = input.suggested_code_reference || "";
-    const withhold = (rules: string[]) => {
+    const withhold = (rules: string[], referencedSheets?: string[]) => {
       withheld.push({
         title: clip(input.title || "Untitled observation", 240),
         originalSeverity,
         originalCodeReference: clip(originalReference, 500),
         rules,
+        ...(referencedSheets?.length ? { referencedSheets } : {}),
       });
     };
 
@@ -910,9 +969,18 @@ export function validateAnalyzerFindings(
     }
 
     const rules: string[] = [];
+    const referenced = referenceOnlyRefs(current, context.currentFileName);
+    if (referenced) {
+      const { unresolved } = resolveSheetReferences(referenced.join(" "), context.sheetIndex);
+      if (!unresolved.length) {
+        withhold(["cross_sheet_reference_only"], referenced);
+        continue;
+      }
+      rules.push("cross_sheet_reference_unresolved");
+    }
     const crossSheet = adjustCrossSheet(current, context.sheetIndex);
     current = crossSheet.finding;
-    if (crossSheet.rule) rules.push(crossSheet.rule);
+    if (crossSheet.rule && !rules.includes(crossSheet.rule)) rules.push(crossSheet.rule);
 
     if (isUnsupportedFlowAllegation(current)) {
       current = neutralizeFlowAllegation(current);

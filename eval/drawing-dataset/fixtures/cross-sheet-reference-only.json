@@ -1,0 +1,510 @@
+{
+ "version": "cross-sheet-reference-only.v1",
+ "source": "Saved drafts: 60 Phase 6 analyzer runs (A-1.01, A-4.00, A-6.00) and production run 3364698b. Labels from 07-finding-root-cause/data/finding-inventory.csv.",
+ "projectIndex": [
+  "A-1.00-00.pdf",
+  "A-1.01-00.pdf",
+  "A-1.02-00.pdf",
+  "A-1.03-00.pdf",
+  "A-1.04.00.pdf",
+  "A-1.05.00.pdf",
+  "A-1.06-00.pdf",
+  "A-2.00-00.pdf",
+  "A-2.01-00.pdf",
+  "A-2.02.00.pdf",
+  "A-3.00-00.pdf",
+  "A-3.01-00.pdf",
+  "A-3.02-00.pdf",
+  "A-3.03-00.pdf",
+  "A-3.04-00.pdf",
+  "A-3.05-00.pdf",
+  "A-3.06-00.pdf",
+  "A-4.00-00.pdf",
+  "A-4.01-00.pdf",
+  "A-4.02-00.pdf",
+  "A-6.00-00.pdf",
+  "A-6.01.00.pdf",
+  "CV-1.00-00.pdf",
+  "DM-1.00-00.pdf",
+  "DM-1.01-00.pdf",
+  "DM-1.02-00.pdf",
+  "DM-2.00-00.pdf",
+  "DM-2.01-00.pdf",
+  "E-1.0-00.pdf",
+  "E-1.1-00.pdf",
+  "E-1.2-00.pdf",
+  "E-1.3-00.pdf",
+  "E-2.1-00.pdf",
+  "E-2.2-00.pdf",
+  "E-3.0-00.pdf",
+  "E-3.1-00.pdf",
+  "E-3.2-00.pdf",
+  "E-4.0-00.pdf",
+  "E-4.1-00.pdf",
+  "E-4.2-00.pdf",
+  "E-4.3-00.pdf",
+  "EN-1.00-0.pdf",
+  "EQ-1.00-0.pdf",
+  "EQ-2.00-0.pdf",
+  "EQ-3.00-0.pdf",
+  "FP100.pdf",
+  "FP200 .pdf",
+  "FP201.pdf",
+  "FP300.pdf",
+  "G-0.00-0.pdf",
+  "M-1.1.pdf",
+  "M-1.2.pdf",
+  "M-1.3.pdf",
+  "M-1.4.pdf",
+  "M-2.0.pdf",
+  "M-3.0.pdf",
+  "M-4.0.pdf",
+  "M-4.1.pdf",
+  "MD-1.1.pdf",
+  "MD-1.2.pdf",
+  "MD-1.3.pdf",
+  "P-1.0-00.pdf",
+  "P-1.1-00.pdf",
+  "P-1.2-00.pdf",
+  "P-1.3-00.pdf",
+  "P-1.4-00.pdf",
+  "P-1.5-00.pdf",
+  "P-1.6-00.pdf",
+  "P-1.7-00.pdf",
+  "P-1.8-00.pdf",
+  "P-2.0-00.pdf",
+  "P-2.1-00.pdf",
+  "P-3.0-00.pdf",
+  "P-4.0-00.pdf",
+  "P-4.1-00.pdf",
+  "S-001.00.pdf",
+  "S-002.00.pdf",
+  "S-201.00.pdf",
+  "S-202.00.pdf",
+  "S-203.00.pdf",
+  "S-204.00.pdf",
+  "S-300.00.pdf"
+ ],
+ "cases": [
+  {
+   "id": "F004",
+   "label": "E/FABRICATED",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Incomplete Column Reference",
+    "observation": "General Note 3 references 'SEE SHEET 3/A-600 FOR DOOR AND FINISH DOOR FRAME TYPES' but A-600 is not listed in the submitted sheet index.",
+    "drawing_evidence": "General Note 3: 'SEE SHEET 3/A-600 FOR...'",
+    "drawing_location": "General Notes section, lower left corner.",
+    "suggested_code_reference": "",
+    "recommendation": "Verify that the A-600 sheet exists and contains the required information about door and finish door frame types."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": "cross_sheet_reference_unresolved"
+   }
+  },
+  {
+   "id": "F009",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "actual discrepancy",
+    "severity": "advisory",
+    "title": "Missing specific sheet references",
+    "observation": "References to additional details or notes (e.g., 'SEE A-3.01 FOR ASSEMBLY NOTES') lack clarity as those sheets are not provided in the index.",
+    "drawing_evidence": "ALUMINUM BATTENS - SEE A-3.01 FOR ASSEMBLY NOTES",
+    "drawing_location": "Plan Keyed Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure referenced sheets are part of the drawing set for cross-verification."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F010",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "warning",
+    "title": "Missing Sheet Reference",
+    "observation": "The note referring to a different sheet (SEE A-3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS) is not resolved in the submitted sheet index.",
+    "drawing_evidence": "ALUMINUM BATTENS - SEE A-3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS",
+    "drawing_location": "Second Floor Plan, above textual elements near legend box",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure A-3.01 and elevation details are provided and coordinated in the final submission to verify compliance and completeness."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F013",
+   "label": "E/MISINTERP",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "conflicting information",
+    "severity": "advisory",
+    "title": "Exterior Wall and Partition Type Reference",
+    "observation": "General Note 2 references exterior wall assembly on Sheet A-3.01 and partition types on Detail 6/A-1.00. The current sheet is A-1.01-00, which introduces potential confusion for partition type verification.",
+    "drawing_evidence": "2. SEE A-3.01 FOR EXTERIOR WALL ASSEMBLY TYPES. SEE 6/A-1.00 FOR INTERIOR PARTITION TYPES.",
+    "drawing_location": "General Notes, Item 2",
+    "suggested_code_reference": "",
+    "recommendation": "Verify correct sheet references are maintained across documents for consistency and clarity."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": null
+   }
+  },
+  {
+   "id": "F015",
+   "label": "U/XREF-POINTER",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "warning",
+    "title": "Missing Door Schedule on Current Sheet",
+    "observation": "The floor plan includes door tags with instructions to see 'SHEET A-6.00 FOR DOOR AND A-6.01 FOR ROOM FINISH'. However, no door schedule is present on this sheet.",
+    "drawing_evidence": "Keyed notes section states: 'SEE SHEET A-6.00 FOR DOOR AND A-6.01 FOR ROOM FINISH'.",
+    "drawing_location": "General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Verify that door schedule and room finish details are present and accurately referenced on sheets A-6.00 and A-6.01."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F016",
+   "label": "E/XREF-POINTER",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "conflicting information",
+    "severity": "advisory",
+    "title": "Inconsistent Annotation on Exterior Wall Assembly",
+    "observation": "The note instructs to 'SEE A-3.01 FOR EXTERIOR WALL ASSEMBLY TYPES. SEE 6/A-1.00 FOR INTERIOR PARTITION TYPES'. However, there is no detail 6/A-1.00 found on this sheet.",
+    "drawing_evidence": "Keyed notes section states: 'SEE A-3.01 FOR EXTERIOR WALL ASSEMBLY TYPES. SEE 6/A-1.00 FOR INTERIOR PARTITION TYPES'.",
+    "drawing_location": "General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Verify completeness and accuracy of referenced detail 6/A-1.00 on sheet A-3.01 to ensure coordination."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": null
+   }
+  },
+  {
+   "id": "F019",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "warning",
+    "title": "Unresolved Reference to A-1.03 for ADA Hardware Schedule",
+    "observation": "The sheet references a detailed door hardware schedule on 'SHEET A-1.03', which is not included in the provided index or current review.",
+    "drawing_evidence": "Note 5 states 'SEE SHEET A-1.03 FOR SCHEDULE.'",
+    "drawing_location": "General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Confirm that the hardware schedule on A-1.03 is accurate and accessible for verification of compliance."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F020",
+   "label": "U/XREF-POINTER",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Missing Interior Partition Type Details",
+    "observation": "Notes state to see 6/A-1.00 for interior partition types but do not provide details directly on this sheet, and the referenced sheet was not reviewed.",
+    "drawing_evidence": "Note 2: 'SEE... 6/A-1.00 for INTERIOR PARTITION TYPES.'",
+    "drawing_location": "General notes section, bottom left corner.",
+    "suggested_code_reference": "",
+    "recommendation": "Verify details on sheet 6/A-1.00 and confirm partition types are reflected accurately."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F021",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Referenced Sheets Missing from Index",
+    "observation": "The sheet references other drawings for details, such as door schedule on sheet A-6.00 and partition types on sheet A-3.01, which are not included in the submitted sheet index.",
+    "drawing_evidence": "SEE SHEET A-6.00 FOR DOOR AND A-6.01 FOR ROOM FINISH. SEE INTERIOR PARTITION TYPES ON A-3.01.",
+    "drawing_location": "General notes section, items 2 and 4.",
+    "suggested_code_reference": "",
+    "recommendation": "Verify that referenced sheets are included in the complete project documentation."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F022",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "ADA Compliance Note for Hardware Not Detailed",
+    "observation": "The drawing mentions replacing or adding ADA compliant hardware but does not specify which hardware or how it will comply.",
+    "drawing_evidence": "REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.",
+    "drawing_location": "General notes section, item 5.",
+    "suggested_code_reference": "2015 IBC, Chapter 11 (Accessibility) as adopted by DC.",
+    "recommendation": "Ensure detailed specifications for ADA hardware are provided on the referenced sheet."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": "cross_sheet_detail_not_reviewed"
+   }
+  },
+  {
+   "id": "F026",
+   "label": "U/XREF-POINTER",
+   "sheetFile": "A-1.01-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Absence of partition detail on current sheet",
+    "observation": "The drawing refers to partition specifications in a different part of the plan (A-3.01, A-1.00), but these details are not directly included on this sheet.",
+    "drawing_evidence": "6/A-1.00 FOR INTERIOR PARTITION TYPES.",
+    "drawing_location": "General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure that relevant partition details are present and accessible on the referenced sheets within the project documentation."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F043",
+   "label": "U/XREF-POINTER",
+   "sheetFile": "A-3.06-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Structural Information Reference",
+    "observation": "Details refer to structural drawings for metal stud spacing: '4\" METAL STUDS @ 16\" O.C.SEE STRUCTURAL DRAWINGS.'",
+    "drawing_evidence": "4\" METAL STUDS @ 16\" O.C.SEE STRUCTURAL DRAWINGS.",
+    "drawing_location": "Wall Section @ High Roof, Detail 4",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure that the referenced structural drawings are included in the complete submission, and accessible for review."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": null
+   }
+  },
+  {
+   "id": "F061",
+   "label": "U/XREF-POINTER",
+   "sheetFile": "A-4.00-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Door Schedule Reference",
+    "observation": "The sheet references a door schedule on 'See Sheet A-6.00'.",
+    "drawing_evidence": "SEE SHEET A-6.00 FOR DOOR SCHEDULE.",
+    "drawing_location": "General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure that the door schedule on Sheet A-6.00 is reviewed for complete compliance with ADA and IBC requirements for door hardware and signage."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F062",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-4.00-00.pdf",
+   "draft": {
+    "category": "Missing Required Information",
+    "severity": "warning",
+    "title": "Incomplete Reference to Door Schedule",
+    "observation": "The note specifies 'SEE SHEET A-6.00 FOR DOOR SCHEDULE' but the content of sheet A-6.00 is not included in this review.",
+    "drawing_evidence": "Note in General Notes section: 'SEE SHEET A-6.00 FOR DOOR SCHEDULE.'",
+    "drawing_location": "General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Verify the door schedule on sheet A-6.00 to ensure it meets accessibility and specification requirements."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F071",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-4.00-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Door schedule reference",
+    "observation": "The sheet references a door schedule on sheet A-6.00, which was not part of the submitted set.",
+    "drawing_evidence": "Note says 'SEE SHEET A-6.00 FOR DOOR SCHEDULE.'",
+    "drawing_location": "General notes, sheet A-4.00-00.",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure the door schedule on A-6.00 is reviewed for compliance."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F073",
+   "label": "H/XREF-INDEX",
+   "sheetFile": "A-4.00-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "advisory",
+    "title": "Missing door schedule on-sheet reference",
+    "observation": "The sheet notes, 'SEE SHEET A-6.00 FOR DOOR SCHEDULE,' but this sheet is not provided in the current request.",
+    "drawing_evidence": "Note present on the top left detail of the sheet.",
+    "drawing_location": "Detail 1, Toilet Room Plan",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure the door schedule on sheet A-6.00 is reviewed for compatibility with accessibility requirements."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F075",
+   "label": "U/XREF-POINTER",
+   "sheetFile": "A-4.00-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "warning",
+    "title": "Door Schedule Reference Missing",
+    "observation": "The note on the sheet directs to \"SEE SHEET A-6.00 FOR DOOR SCHEDULE,\" but no door schedule details are provided on this sheet.",
+    "drawing_evidence": "5. SEE SHEET A-6.00 FOR DOOR SCHEDULE.",
+    "drawing_location": "Bottom left of the sheet near the General Notes",
+    "suggested_code_reference": "",
+    "recommendation": "Verify that Sheet A-6.00 contains the necessary door schedule information or include it in this sheet."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "F088",
+   "label": "E/OCR-VARIANT",
+   "sheetFile": "A-6.00-00.pdf",
+   "draft": {
+    "category": "conflicting information",
+    "severity": "warning",
+    "title": "Discrepancy in Panic Hardware Specification",
+    "observation": "The door schedule includes items '1 EA PANIC 9975EO-LD 36\" SP28 V.DUPRIN' and '1 EA PANIC 9975E0-LD 36\" SP28 V.DUPRIN', which may represent a typo or formatting inconsistency.",
+    "drawing_evidence": "\"1 EA PANIC 9975EO-LD 36\" SP28 V.DUPRIN\" vs. \"1 EA PANIC 9975E0-LD 36\" SP28 V.DUPRIN\"",
+    "drawing_location": "Door Schedule",
+    "suggested_code_reference": "",
+    "recommendation": "Verify the correct specification of panic hardware to ensure consistent purchasing and installation."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": null
+   }
+  },
+  {
+   "id": "F127",
+   "label": "OK/TRUE-GAP",
+   "sheetFile": "S-201.00.pdf",
+   "draft": {
+    "category": "Missing required information",
+    "severity": "warning",
+    "title": "Seismic Design Criteria Clarification",
+    "observation": "The sheet notes 'SEISMIC DESIGN CATEGORY: ORD. PLAIN REINF MASONRY', but it does not explicitly state the seismic design category (e.g., A, B, C).",
+    "drawing_evidence": "SEISMIC IMPORTANCE FACTOR 1.0 / SEISMIC DESIGN CATEGORY / ORD. PLAIN REINF MASONRY / Cs= 0.095",
+    "drawing_location": "Structural notes section",
+    "suggested_code_reference": "",
+    "recommendation": "Clarify the specific seismic design category in accordance with 2015 IBC or local amendments for seismic compliance."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "published",
+    "projectRule": null
+   }
+  },
+  {
+   "id": "P-2-9694990d",
+   "label": "production",
+   "sheetFile": "A-1.00-00.pdf",
+   "draft": {
+    "category": "general coordination note",
+    "severity": "advisory",
+    "title": "Partition type references external sheets",
+    "observation": "Drawing notes reference partition type details on other sheets, like 'SEE SCHEDULE SHEET A-6.00-00'.",
+    "drawing_evidence": "'SEE SHEET A-6.00-00 FOR SCHEDULE' appears in partition details.",
+    "drawing_location": "Typical interior partition section at the bottom of the sheet.",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure referenced sheets are reviewed together for complete compliance."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  },
+  {
+   "id": "P-0-7f987eef",
+   "label": "production",
+   "sheetFile": "A-1.02-00.pdf",
+   "draft": {
+    "category": "missing required information",
+    "severity": "warning",
+    "title": "Reference to Unresolved Sheet",
+    "observation": "The note states 'SEE SHEET A-6.01 FOR CEILING FINISHES.' This reference does not resolve to the submitted sheet index.",
+    "drawing_evidence": "Note: 'SEE SHEET A-6.01 FOR CEILING FINISHES.'",
+    "drawing_location": "General Notes section, top center of sheet",
+    "suggested_code_reference": "",
+    "recommendation": "Ensure the ceiling finish details are added to this sheet or a listed sheet in the current set."
+   },
+   "expect": {
+    "oneSheet": "published",
+    "project": "withheld",
+    "projectRule": "cross_sheet_reference_only"
+   }
+  }
+ ]
+}
