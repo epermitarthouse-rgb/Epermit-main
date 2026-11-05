@@ -139,6 +139,8 @@ import {
 } from "../../../supabase/functions/_shared/analyzerSheetUpdate.ts";
 import {
   deriveAnalyzerWorkflowView,
+  formatUploadingDrawingsLabel,
+  isAnalyzerStatusLineVisible,
   type LiveUploadProgress,
 } from "@/lib/supabaseAnalyzer/workflowStatus";
 
@@ -837,7 +839,6 @@ export function SupabaseCodeAnalyzer() {
   };
   const finishedSheets = activeRun ? activeRun.completed_sheets + activeRun.failed_sheets : 0;
   const runInProgress = Boolean(activeRun && ACTIVE_STATUSES.has(activeRun.status));
-  const cancelledSheets = dataset?.jobs.filter((job) => job.status === "cancelled").length || 0;
   const stalledSheets = countStalledAnalyzerJobs(dataset?.jobs || []);
   const retryableSheetCount = (activeRun?.failed_sheets || 0) + stalledSheets;
   const actionPresentation = analyzerActionPresentation({
@@ -869,6 +870,29 @@ export function SupabaseCodeAnalyzer() {
     }),
     [activeRun, savedJobs, pendingMutates, uploadProgress, submitting],
   );
+  const receivedCountLabel = workflowView.upload && workflowView.upload.total > 0
+    ? formatUploadingDrawingsLabel(workflowView.upload.uploaded, workflowView.upload.total)
+    : null;
+  const showReceivedCount = Boolean(
+    receivedCountLabel
+    && receivedCountLabel !== workflowView.detail
+    && !workflowView.headline.includes(receivedCountLabel),
+  );
+  const statusLineVisible = isAnalyzerStatusLineVisible({
+    stage: workflowView.stage,
+    drawingSetOutdated: workflowView.drawingSetOutdated,
+    hasUpload: Boolean(workflowView.upload),
+    runInProgress,
+    totalSheets: activeRun?.total_sheets ?? 0,
+  });
+  const statusTestId = workflowView.stage === "uploading"
+    ? "drawing-upload-progress"
+    : workflowView.stage === "ocr_prep"
+      ? "analyzer-ocr-progress"
+      : "analyzer-sheet-progress";
+  const statusProgress = workflowView.stage === "uploading" || workflowView.stage === "ocr_prep"
+    ? (workflowView.progressPercent ?? 0)
+    : (workflowView.progressPercent ?? progress);
   const capacity = useMemo(
     () => selectionCapacity({ saved: savedJobs, pending: files }),
     [savedJobs, files],
@@ -1090,6 +1114,27 @@ export function SupabaseCodeAnalyzer() {
 
   return (
     <div className="space-y-6">
+      {statusLineVisible ? (
+        <div
+          className="sticky top-0 z-30 space-y-2 rounded-lg border border-border/70 bg-background/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80"
+          data-testid="analyzer-status-line"
+        >
+          <div className="space-y-2" data-testid={statusTestId}>
+            <Progress value={statusProgress} className="h-2" />
+            <p className="text-center text-sm text-foreground">
+              {workflowView.headline || (activeRun
+                ? `${finishedSheets} of ${activeRun.total_sheets} drawings have been reviewed.`
+                : "")}
+            </p>
+            {workflowView.detail ? (
+              <p className="text-center text-xs text-muted-foreground">{workflowView.detail}</p>
+            ) : null}
+            {showReceivedCount && workflowView.stage !== "uploading" && workflowView.stage !== "ocr_prep" ? (
+              <p className="text-center text-xs text-muted-foreground">{receivedCountLabel}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <Card className="pilot-card border-border bg-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground">
@@ -1402,8 +1447,8 @@ export function SupabaseCodeAnalyzer() {
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {uploadProgress
-                    ? `Uploading ${uploadProgress.completed}/${uploadProgress.total}`
-                    : "Uploading"}
+                    ? `Receiving ${uploadProgress.completed} of ${uploadProgress.total} drawings`
+                    : "Receiving drawings"}
                 </>
               ) : actionPresentation.primaryLabel === "Processing" ? (
                 <>
@@ -1475,52 +1520,6 @@ export function SupabaseCodeAnalyzer() {
             </p>
           ) : null}
 
-          {workflowView.stage === "uploading" && workflowView.upload ? (
-            <div className="space-y-2" data-testid="drawing-upload-progress">
-              <Progress
-                value={workflowView.progressPercent ?? 0}
-                className="h-2"
-              />
-              <p className="text-center text-sm text-foreground">
-                {workflowView.headline}
-              </p>
-              {workflowView.detail ? (
-                <p className="text-center text-xs text-muted-foreground">{workflowView.detail}</p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {!workflowView.drawingSetOutdated && workflowView.stage === "ocr_prep" ? (
-            <div className="space-y-2" data-testid="analyzer-ocr-progress">
-              <Progress value={workflowView.progressPercent ?? 0} className="h-2" />
-              <p className="text-center text-sm text-foreground">{workflowView.headline}</p>
-              {workflowView.detail ? (
-                <p className="text-center text-xs text-muted-foreground">{workflowView.detail}</p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {!workflowView.drawingSetOutdated
-            && activeRun
-            && activeRun.total_sheets > 0
-            && workflowView.stage !== "uploading"
-            && workflowView.stage !== "ocr_prep"
-            && workflowView.stage !== "ready" ? (
-            <div className="space-y-2" data-testid="analyzer-sheet-progress">
-              <Progress value={workflowView.progressPercent ?? progress} className="h-2" />
-              <p className="text-center text-sm text-foreground">
-                {workflowView.headline || `${finishedSheets} of ${activeRun.total_sheets} sheets finished`}
-              </p>
-              {workflowView.upload ? (
-                <p className="text-center text-xs text-muted-foreground">
-                  {workflowView.upload.uploaded}/{workflowView.upload.total} drawings uploaded
-                </p>
-              ) : null}
-              <p className="text-center text-xs text-muted-foreground">
-                Queued {activeRun.queued_sheets} · Processing {activeRun.processing_sheets} · Completed {activeRun.completed_sheets} · Failed {activeRun.failed_sheets}{cancelledSheets > 0 ? ` · Cancelled ${cancelledSheets}` : ""} · {workflowView.progressPercent ?? progress}%
-              </p>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
 

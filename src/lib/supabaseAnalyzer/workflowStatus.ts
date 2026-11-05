@@ -1,5 +1,5 @@
 /**
- * Client-facing upload / OCR / analysis status for the Supabase Code Analyzer.
+ * Client-facing upload and analysis status for the Supabase Code Analyzer.
  * Derives labels from persisted run + sheet jobs (not temporary counters alone).
  */
 
@@ -137,25 +137,48 @@ export function countPersistedUploadManifest(jobs: readonly AnalyzerJobStatusSli
   };
 }
 
-export function formatUploadingDrawingsLabel(uploaded: number, total: number, fileName?: string): string {
-  if (total <= 0) return "Uploading drawings";
-  const base = `Uploading drawings — ${uploaded}/${total} uploaded`;
-  if (fileName && uploaded < total) return `${base} · ${fileName}`;
-  return base;
+function drawingCountSentence(count: number, total: number, ending: string): string | null {
+  if (total <= 0) return null;
+  return `${count} of ${total} drawings ${ending}`;
+}
+
+function joinStatusSentences(parts: Array<string | null | undefined>): string | null {
+  const text = parts.filter((part): part is string => Boolean(part && part.trim())).join(" ");
+  return text || null;
+}
+
+export function formatUploadingDrawingsLabel(uploaded: number, total: number, _fileName?: string): string {
+  return drawingCountSentence(uploaded, total, "have been received.") || "Drawings are being received.";
 }
 
 export function formatUploadSuccessLabel(uploaded: number, total: number): string {
-  const n = Math.max(uploaded, total);
-  if (n <= 0) return "Drawings uploaded successfully";
-  return `${uploaded}/${Math.max(total, uploaded)} drawings uploaded successfully`;
+  return drawingCountSentence(uploaded, Math.max(total, uploaded), "were received.") || "Drawings were received.";
 }
 
 export function formatUploadFailureLabel(uploaded: number, total: number, failed: number): string {
   if (failed <= 0) return formatUploadSuccessLabel(uploaded, total);
-  if (uploaded <= 0) {
-    return `Upload failed — 0/${total} drawings uploaded`;
-  }
-  return `${uploaded}/${total} drawings uploaded — ${failed} failed`;
+  if (uploaded <= 0) return "Drawings could not be received.";
+  return "Some drawings could not be received.";
+}
+
+/**
+ * The status sentence stays mounted for an active run.
+ * Sheet selection, list page, and scroll position are not inputs, so paging
+ * through drawings cannot hide it. A queued run that has finished reading
+ * drawings stays visible too (`stage === "ready"` while the run is still active).
+ */
+export function isAnalyzerStatusLineVisible(input: {
+  stage: AnalyzerWorkflowStage;
+  drawingSetOutdated: boolean;
+  hasUpload: boolean;
+  runInProgress: boolean;
+  totalSheets: number;
+}): boolean {
+  if (input.drawingSetOutdated) return false;
+  if (input.stage === "uploading") return input.hasUpload;
+  if (input.stage === "ocr_prep" || input.stage === "analyzing") return true;
+  if (input.stage === "ready") return input.runInProgress;
+  return input.totalSheets > 0;
 }
 
 export function drawingSetNeedsFreshAnalysis(input: {
@@ -197,8 +220,8 @@ export function deriveAnalyzerWorkflowView(input: {
   if (outdated) {
     return {
       stage: "ready",
-      headline: "Ready for analysis",
-      detail: "Drawing set changed — previous analysis results are under Previous analyses.",
+      headline: "Ready for analysis.",
+      detail: "The drawing set changed, so earlier results are under Previous analyses.",
       progressPercent: null,
       drawingSetOutdated: true,
       treatFindingsAsPrevious: true,
@@ -225,7 +248,10 @@ export function deriveAnalyzerWorkflowView(input: {
       return {
         stage: "uploading",
         headline: formatUploadFailureLabel(uploaded, total, failed),
-        detail: "Failed drawings stay selected so you can retry.",
+        detail: joinStatusSentences([
+          uploaded > 0 ? formatUploadSuccessLabel(uploaded, total) : null,
+          "The drawings that did not arrive stay selected so you can retry.",
+        ]),
         progressPercent: total > 0 ? Math.round((uploaded / total) * 100) : 0,
         drawingSetOutdated: false,
         treatFindingsAsPrevious: false,
@@ -238,8 +264,8 @@ export function deriveAnalyzerWorkflowView(input: {
     if (phaseComplete && failed === 0 && uploaded >= total && total > 0) {
       return {
         stage: "uploading",
-        headline: formatUploadSuccessLabel(uploaded, total),
-        detail: null,
+        headline: "Drawings were received.",
+        detail: formatUploadSuccessLabel(uploaded, total),
         progressPercent: 100,
         drawingSetOutdated: false,
         treatFindingsAsPrevious: false,
@@ -249,10 +275,16 @@ export function deriveAnalyzerWorkflowView(input: {
       };
     }
 
+    const couldNotReceive = failed > 0
+      ? `${failed} ${failed === 1 ? "drawing" : "drawings"} could not be received.`
+      : null;
     return {
       stage: "uploading",
-      headline: formatUploadingDrawingsLabel(uploaded, total || Math.max(1, uploaded), liveUpload?.fileName),
-      detail: failed > 0 ? `${failed} upload${failed === 1 ? "" : "s"} failed` : null,
+      headline: "Drawings are being received.",
+      detail: joinStatusSentences([
+        total > 0 ? formatUploadingDrawingsLabel(uploaded, total) : null,
+        couldNotReceive,
+      ]),
       progressPercent: total > 0 ? Math.round((uploaded / Math.max(1, total)) * 100) : 0,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -276,19 +308,10 @@ export function deriveAnalyzerWorkflowView(input: {
     const total = Math.max(ocr.total, run?.total_sheets || 0, uploadManifest.total);
     const ready = Math.min(ocr.ready, total || ocr.ready);
     const incomplete = ocr.incompleteSheets || [];
-    const incompleteDetail = incomplete.length
-      ? `Incomplete: ${incomplete.slice(0, 8).join(", ")}${incomplete.length > 8 ? "…" : ""}`
-      : null;
     return {
       stage: "ocr_prep",
-      headline: total > 0
-        ? `OCR processed — ${ready}/${total} · evidence verification pending`
-        : "Preparing drawing evidence",
-      detail: [
-        `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded`,
-        incompleteDetail,
-        "Paid analysis stays blocked until every sheet has verified OCR evidence (or an explicit override).",
-      ].filter(Boolean).join(" · "),
+      headline: "Agents are extracting information from the drawings.",
+      detail: drawingCountSentence(ready, total, "are ready."),
       progressPercent: total > 0 ? Math.round((ready / total) * 100) : 0,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -311,10 +334,8 @@ export function deriveAnalyzerWorkflowView(input: {
     const total = Math.max(ocr.total, run?.total_sheets || 0, uploadManifest.total);
     return {
       stage: "ready",
-      headline: total > 0
-        ? `Evidence verified — ready for analysis (${ocr.ready}/${total})`
-        : "Evidence verified — ready for analysis",
-      detail: `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded · OCR injection is confirmed only after analysis starts`,
+      headline: "Ready for analysis.",
+      detail: drawingCountSentence(ocr.ready, total, "are ready."),
       progressPercent: 100,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -338,10 +359,8 @@ export function deriveAnalyzerWorkflowView(input: {
     const injectedConfirmed = finished > 0;
     return {
       stage: "analyzing",
-      headline: `Analyzing drawings — ${finished}/${total}`,
-      detail: ocr
-        ? `${uploadManifest.uploaded}/${uploadManifest.total || total} drawings uploaded · OCR packs available for this run (injection confirmed per completed sheet)`
-        : null,
+      headline: "Agents are reviewing the drawings.",
+      detail: drawingCountSentence(finished, total, "have been reviewed."),
       progressPercent: Math.round((finished / total) * 100),
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -368,11 +387,9 @@ export function deriveAnalyzerWorkflowView(input: {
     return {
       stage: withErrors ? "complete_with_errors" : "complete",
       headline: withErrors
-        ? `Analysis complete — ${finished}/${total} (with sheet errors)`
-        : `Analysis complete — ${finished}/${total}`,
-      detail: uploadManifest.total > 0
-        ? `${uploadManifest.uploaded}/${uploadManifest.total} drawings uploaded`
-        : null,
+        ? "The review is ready for Accept, Reject, or Modify, though some drawings could not be reviewed."
+        : "The review is ready for Accept, Reject, or Modify.",
+      detail: drawingCountSentence(finished, total, "have been reviewed."),
       progressPercent: 100,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -392,10 +409,8 @@ export function deriveAnalyzerWorkflowView(input: {
   if (runStatus === "cancelled") {
     return {
       stage: "cancelled",
-      headline: "Analysis cancelled",
-      detail: uploadManifest.total > 0
-        ? `${uploadManifest.uploaded}/${uploadManifest.total} drawings uploaded`
-        : null,
+      headline: "The review was cancelled.",
+      detail: null,
       progressPercent: null,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -408,7 +423,7 @@ export function deriveAnalyzerWorkflowView(input: {
   if (runStatus === "failed") {
     return {
       stage: "failed",
-      headline: "Analysis failed",
+      headline: "The review could not be finished.",
       detail: null,
       progressPercent: null,
       drawingSetOutdated: false,
@@ -423,8 +438,8 @@ export function deriveAnalyzerWorkflowView(input: {
   if (uploadManifest.total > 0 && uploadManifest.pending === 0) {
     return {
       stage: "ready",
-      headline: `${uploadManifest.uploaded}/${uploadManifest.total} drawings uploaded`,
-      detail: "Ready for analysis",
+      headline: "Ready for analysis.",
+      detail: drawingCountSentence(uploadManifest.uploaded, uploadManifest.total, "have been received."),
       progressPercent: null,
       drawingSetOutdated: false,
       treatFindingsAsPrevious: false,
@@ -436,7 +451,7 @@ export function deriveAnalyzerWorkflowView(input: {
 
   return {
     stage: "ready",
-    headline: "Ready for analysis",
+    headline: "Ready for analysis.",
     detail: null,
     progressPercent: null,
     drawingSetOutdated: false,
