@@ -145,17 +145,38 @@ export function reconstructRows(page, options = {}) {
   return { rows: kept, echoes };
 }
 
+const boxInside = (inner, outer, eps = 1) => inner.x >= outer.x - eps && inner.y >= outer.y - eps
+  && inner.x + inner.width <= outer.x + outer.width + eps && inner.y + inner.height <= outer.y + outer.height + eps;
+
+/**
+ * Words of one line that re-read part of another word of the line: box inside the other word's box
+ * and text contained in its text (A-6.00: `9.` inside `9. DOOR 5`, joined as `9. DOOR 5 9.`).
+ */
+export function duplicateWords(ws) {
+  const out = [];
+  for (const w of ws) {
+    const host = ws.find((o) => o !== w && clean(o.text).length > clean(w.text).length
+      && clean(o.text).includes(clean(w.text)) && boxInside(w.box, o.box));
+    if (host) out.push({ word: w, host });
+  }
+  return out;
+}
+
 /** Rows from a recovery page. Each row keeps its words (text, box, confidence) for provenance. */
 export function rowsFromRecoveryPage(page, options = {}) {
   const words = page?.words || [];
   const rows = [];
   for (const line of (page?.lines || []).filter((l) => clean(l.text) && l.box)) {
-    const matched = lineWords(line, words);
+    const found = lineWords(line, words);
+    const dupes = found ? duplicateWords(found) : [];
+    const matched = found && found.filter((w) => !dupes.some((d) => d.word === w));
     const parts = matched && matched.length > 1 ? splitLineWords(matched, line.vertical, options.geometry) : [matched || [{ text: line.text, box: line.box, confidence: line.confidence }]];
     for (const ws of parts) {
+      const own = dupes.filter((d) => ws.includes(d.host));
       rows.push({
         rid: `r${String(rows.length + 1).padStart(3, "0")}`,
-        text: parts.length > 1 ? clean(ws.map((w) => w.text).join(" ")) : clean(line.text),
+        text: parts.length > 1 || dupes.length ? clean(ws.map((w) => w.text).join(" ")) : clean(line.text),
+        ...(own.length ? { duplicateWords: own.map((d) => ({ text: clean(d.word.text), box: roundBox(d.word.box) })) } : {}),
         box: roundBox(parts.length > 1 ? unionBox(ws.map((w) => w.box)) : line.box),
         vertical: Boolean(line.vertical),
         confidence: Math.min(...ws.map((w) => Number(w.confidence ?? 1))),

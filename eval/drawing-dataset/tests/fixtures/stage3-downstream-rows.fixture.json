@@ -1,0 +1,1995 @@
+{
+ "source": "reconstructRows output (model.r6-downstream), regions of S-201.00 and A-6.00-00",
+ "cases": [
+  {
+   "name": "S-201 design data 4x3",
+   "sheetId": "S-201.00",
+   "input": "4x3",
+   "box": [
+    1400,
+    1220,
+    1840,
+    1460
+   ],
+   "rows": [
+    {
+     "rid": "r066",
+     "text": "SEISMIC LOADING (IBC 2015)",
+     "box": {
+      "x": 1647.7,
+      "y": 1422.9,
+      "width": 123.5,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC LOADING (IBC 2015)",
+       "box": {
+        "x": 1647.7,
+        "y": 1422.9,
+        "width": 123.5,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r067",
+     "text": "FLOOR LIVE LOAD: 100 PSF",
+     "box": {
+      "x": 1424.6,
+      "y": 1422.9,
+      "width": 129,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "FLOOR LIVE LOAD: 100 PSF",
+       "box": {
+        "x": 1424.6,
+        "y": 1422.9,
+        "width": 129,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r071",
+     "text": "ROOF LIVE LOAD: 30 PSF",
+     "box": {
+      "x": 1424.6,
+      "y": 1410,
+      "width": 127.2,
+      "height": 14.7
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ROOF LIVE LOAD:",
+       "box": {
+        "x": 1424.6,
+        "y": 1413.5,
+        "width": 79.3,
+        "height": 11.3
+       },
+       "confidence": 1
+      },
+      {
+       "text": "30 PSF",
+       "box": {
+        "x": 1516.8,
+        "y": 1410,
+        "width": 35,
+        "height": 14.7
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r072",
+     "text": "SEISMIC USE GROUP",
+     "box": {
+      "x": 1649.5,
+      "y": 1411.8,
+      "width": 83,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC USE GROUP",
+       "box": {
+        "x": 1649.5,
+        "y": 1411.8,
+        "width": 83,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r076",
+     "text": "0.133",
+     "box": {
+      "x": 1675.3,
+      "y": 1400.8,
+      "width": 24,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "0.133",
+       "box": {
+        "x": 1675.3,
+        "y": 1400.8,
+        "width": 24,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r077",
+     "text": "(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+     "box": {
+      "x": 1426.4,
+      "y": 1399,
+      "width": 210.2,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+       "box": {
+        "x": 1426.4,
+        "y": 1399,
+        "width": 210.2,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r081",
+     "text": "0.43",
+     "box": {
+      "x": 1675.3,
+      "y": 1389.8,
+      "width": 22.1,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "0.43",
+       "box": {
+        "x": 1675.3,
+        "y": 1389.8,
+        "width": 22.1,
+        "height": 11
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r082",
+     "text": "(GROUND SNOW LOAD:",
+     "box": {
+      "x": 1422.8,
+      "y": 1389.8,
+      "width": 94,
+      "height": 9.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "(GROUND SNOW LOAD:",
+       "box": {
+        "x": 1422.8,
+        "y": 1389.8,
+        "width": 94,
+        "height": 9.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r085",
+     "text": "Sds 0.142",
+     "box": {
+      "x": 1647.7,
+      "y": 1378.8,
+      "width": 51.6,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "Sds",
+       "box": {
+        "x": 1647.7,
+        "y": 1378.8,
+        "width": 20.3,
+        "height": 9.2
+       },
+       "confidence": 0.5
+      },
+      {
+       "text": "0.142",
+       "box": {
+        "x": 1673.5,
+        "y": 1378.8,
+        "width": 25.8,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r090",
+     "text": "Sdl 0.069",
+     "box": {
+      "x": 1647.7,
+      "y": 1367.8,
+      "width": 55.3,
+      "height": 9.2
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "Sdl",
+       "box": {
+        "x": 1647.7,
+        "y": 1367.8,
+        "width": 16.6,
+        "height": 9.2
+       },
+       "confidence": 0.5
+      },
+      {
+       "text": "0.069",
+       "box": {
+        "x": 1675.3,
+        "y": 1367.8,
+        "width": 27.7,
+        "height": 9.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r093",
+     "text": "SITE CLASS D. ASSUMED",
+     "box": {
+      "x": 1647.7,
+      "y": 1356.7,
+      "width": 118,
+      "height": 9.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SITE CLASS",
+       "box": {
+        "x": 1647.7,
+        "y": 1356.7,
+        "width": 51.6,
+        "height": 9.2
+       },
+       "confidence": 1
+      },
+      {
+       "text": "D. ASSUMED",
+       "box": {
+        "x": 1712.2,
+        "y": 1356.7,
+        "width": 53.5,
+        "height": 9.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r094",
+     "text": "SNOW EXPOSURE FACTOR:",
+     "box": {
+      "x": 1426.4,
+      "y": 1354.7,
+      "width": 110.6,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SNOW EXPOSURE FACTOR:",
+       "box": {
+        "x": 1426.4,
+        "y": 1354.7,
+        "width": 110.6,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r096",
+     "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+     "box": {
+      "x": 1426.4,
+      "y": 1343.9,
+      "width": 160.4,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+       "box": {
+        "x": 1426.4,
+        "y": 1343.9,
+        "width": 160.4,
+        "height": 11
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r097",
+     "text": "SEISMIC IMPORTANCE FACTOR 1.0",
+     "box": {
+      "x": 1647.7,
+      "y": 1343.9,
+      "width": 153,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC IMPORTANCE FACTOR 1.0",
+       "box": {
+        "x": 1647.7,
+        "y": 1343.9,
+        "width": 153,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r099",
+     "text": "SEISMIC DESIGN CATEGORY",
+     "box": {
+      "x": 1649.5,
+      "y": 1334.4,
+      "width": 118,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC DESIGN CATEGORY",
+       "box": {
+        "x": 1649.5,
+        "y": 1334.4,
+        "width": 118,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r100",
+     "text": "THERMAL FACTOR:",
+     "box": {
+      "x": 1426.4,
+      "y": 1332.8,
+      "width": 79.3,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "THERMAL FACTOR:",
+       "box": {
+        "x": 1426.4,
+        "y": 1332.8,
+        "width": 79.3,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r101",
+     "text": "BASIC SEISMIC FORCE RESISTING SYSTEM:",
+     "box": {
+      "x": 1647.7,
+      "y": 1321.6,
+      "width": 180.7,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "BASIC SEISMIC FORCE RESISTING SYSTEM:",
+       "box": {
+        "x": 1647.7,
+        "y": 1321.6,
+        "width": 180.7,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r102",
+     "text": "WIND LOADING (IBC 2015)",
+     "box": {
+      "x": 1426.4,
+      "y": 1320,
+      "width": 108.8,
+      "height": 9.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "WIND LOADING (IBC 2015)",
+       "box": {
+        "x": 1426.4,
+        "y": 1320,
+        "width": 108.8,
+        "height": 9.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r105",
+     "text": "ORD. PLAIN REINF MASONRY",
+     "box": {
+      "x": 1688.2,
+      "y": 1312.5,
+      "width": 119.8,
+      "height": 9.3
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ORD. PLAIN REINF MASONRY",
+       "box": {
+        "x": 1688.2,
+        "y": 1312.5,
+        "width": 119.8,
+        "height": 9.3
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r107",
+     "text": "Cs= 0.095",
+     "box": {
+      "x": 1677.1,
+      "y": 1303.4,
+      "width": 44.2,
+      "height": 9.2
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "Cs= 0.095",
+       "box": {
+        "x": 1677.1,
+        "y": 1303.4,
+        "width": 44.2,
+        "height": 9.2
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r108",
+     "text": "RISK CATEGORY",
+     "box": {
+      "x": 1426.4,
+      "y": 1296,
+      "width": 71.9,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "RISK CATEGORY",
+       "box": {
+        "x": 1426.4,
+        "y": 1296,
+        "width": 71.9,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r109",
+     "text": "DESIGN BASE SHEAR 15T KIPS3",
+     "box": {
+      "x": 1645.8,
+      "y": 1285.1,
+      "width": 143.8,
+      "height": 16.8
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "DESIGN BASE SHEAR 15T KIPS3",
+       "box": {
+        "x": 1645.8,
+        "y": 1285.1,
+        "width": 143.8,
+        "height": 16.8
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r111",
+     "text": "WIND EXPOSURE CATEGORY",
+     "box": {
+      "x": 1424.6,
+      "y": 1285.1,
+      "width": 121.7,
+      "height": 9.3
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "WIND EXPOSURE CATEGORY",
+       "box": {
+        "x": 1424.6,
+        "y": 1285.1,
+        "width": 121.7,
+        "height": 9.3
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r112",
+     "text": "ANALYSIS PROCEDURE:",
+     "box": {
+      "x": 1649.5,
+      "y": 1277.7,
+      "width": 97.7,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ANALYSIS PROCEDURE:",
+       "box": {
+        "x": 1649.5,
+        "y": 1277.7,
+        "width": 97.7,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r115",
+     "text": "INTERNAL PRESSURE COEFFICIENT",
+     "box": {
+      "x": 1424.6,
+      "y": 1274,
+      "width": 143.8,
+      "height": 11.3
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "INTERNAL PRESSURE COEFFICIENT",
+       "box": {
+        "x": 1424.6,
+        "y": 1274,
+        "width": 143.8,
+        "height": 11.3
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r117",
+     "text": "EQUIVALENT LATERAL FORCE PROCEDURE",
+     "box": {
+      "x": 1649.5,
+      "y": 1266.6,
+      "width": 178.8,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "EQUIVALENT LATERAL FORCE PROCEDURE",
+       "box": {
+        "x": 1649.5,
+        "y": 1266.6,
+        "width": 178.8,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r119",
+     "text": "RISK CATEGORY II",
+     "box": {
+      "x": 1647.7,
+      "y": 1255.6,
+      "width": 83,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "RISK CATEGORY II",
+       "box": {
+        "x": 1647.7,
+        "y": 1255.6,
+        "width": 83,
+        "height": 11
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r124",
+     "text": "STEEL NOTES",
+     "box": {
+      "x": 1411.7,
+      "y": 1224.4,
+      "width": 125.4,
+      "height": 18.4
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "STEEL NOTES",
+       "box": {
+        "x": 1411.7,
+        "y": 1224.4,
+        "width": 125.4,
+        "height": 18.4
+       },
+       "confidence": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "S-201 design data 12x9",
+   "sheetId": "S-201.00",
+   "input": "12x9",
+   "box": [
+    1400,
+    1220,
+    1840,
+    1460
+   ],
+   "rows": [
+    {
+     "rid": "r056",
+     "text": "SEISMIC LOADING (IBC 2015)",
+     "box": {
+      "x": 1646.7,
+      "y": 1421.3,
+      "width": 124,
+      "height": 12.8
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC LOADING (IBC 2015)",
+       "box": {
+        "x": 1646.7,
+        "y": 1421.3,
+        "width": 124,
+        "height": 12.8
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r057",
+     "text": "FLOOR LIVE LOAD: 100 PSF",
+     "box": {
+      "x": 1425.4,
+      "y": 1422.4,
+      "width": 127.2,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "FLOOR LIVE LOAD: 100 PSF",
+       "box": {
+        "x": 1425.4,
+        "y": 1422.4,
+        "width": 127.2,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r060",
+     "text": "SEISMIC USE GROUP",
+     "box": {
+      "x": 1646.7,
+      "y": 1410.6,
+      "width": 86.6,
+      "height": 12.8
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC USE GROUP",
+       "box": {
+        "x": 1646.7,
+        "y": 1410.6,
+        "width": 86.6,
+        "height": 12.8
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r061",
+     "text": "ROOF LIVE LOAD: 30 PSF",
+     "box": {
+      "x": 1425.4,
+      "y": 1410.6,
+      "width": 126.2,
+      "height": 10.7
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ROOF LIVE LOAD: 30 PSF",
+       "box": {
+        "x": 1425.4,
+        "y": 1410.6,
+        "width": 126.2,
+        "height": 10.7
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r065",
+     "text": "NQ REDUCTIONS IN ROOF LIVE LOAD PERMITTED) 5s 0.133",
+     "box": {
+      "x": 1425.4,
+      "y": 1397.8,
+      "width": 272.7,
+      "height": 12.8
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "NQ REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+       "box": {
+        "x": 1425.4,
+        "y": 1397.8,
+        "width": 209.5,
+        "height": 11.8
+       },
+       "confidence": 0.5
+      },
+      {
+       "text": "5s 0.133",
+       "box": {
+        "x": 1643.6,
+        "y": 1399.9,
+        "width": 54.5,
+        "height": 10.7
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r066",
+     "text": "NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+     "box": {
+      "x": 1425.4,
+      "y": 1398.2,
+      "width": 209.5,
+      "height": 10.7
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+       "box": {
+        "x": 1425.4,
+        "y": 1398.2,
+        "width": 209.5,
+        "height": 10.7
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r068",
+     "text": "SI 0.43",
+     "box": {
+      "x": 1646.7,
+      "y": 1389.1,
+      "width": 49.2,
+      "height": 10.9
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "SI 0.43",
+       "box": {
+        "x": 1646.7,
+        "y": 1389.1,
+        "width": 49.2,
+        "height": 10.9
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r070",
+     "text": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+     "box": {
+      "x": 1424.3,
+      "y": 1389.2,
+      "width": 170,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+       "box": {
+        "x": 1424.3,
+        "y": 1389.2,
+        "width": 170,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r072",
+     "text": "Sds 0.142",
+     "box": {
+      "x": 1646.7,
+      "y": 1377.3,
+      "width": 51.4,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "Sds 0.142",
+       "box": {
+        "x": 1646.7,
+        "y": 1377.3,
+        "width": 51.4,
+        "height": 11
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r073",
+     "text": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+     "box": {
+      "x": 1422,
+      "y": 1371.9,
+      "width": 171.3,
+      "height": 16.3
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+       "box": {
+        "x": 1422,
+        "y": 1371.9,
+        "width": 171.3,
+        "height": 16.3
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r075",
+     "text": "FLAT ROOF SNOWLOAD: 11.5 PSF",
+     "box": {
+      "x": 1425.4,
+      "y": 1365.7,
+      "width": 153.9,
+      "height": 13.9
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "FLAT ROOF SNOWLOAD: 11.5 PSF",
+       "box": {
+        "x": 1425.4,
+        "y": 1365.7,
+        "width": 153.9,
+        "height": 13.9
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r077",
+     "text": "Sdl 0.069",
+     "box": {
+      "x": 1647.8,
+      "y": 1365.5,
+      "width": 53.5,
+      "height": 11.1
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "Sdl 0.069",
+       "box": {
+        "x": 1647.8,
+        "y": 1365.5,
+        "width": 53.5,
+        "height": 11.1
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r080",
+     "text": "SITE CLASS D, ASSUMED",
+     "box": {
+      "x": 1648.9,
+      "y": 1352.9,
+      "width": 115.5,
+      "height": 15
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SITE CLASS D, ASSUMED",
+       "box": {
+        "x": 1648.9,
+        "y": 1352.9,
+        "width": 115.5,
+        "height": 15
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r082",
+     "text": "SNOW EXPOSURE FACTOR: 0.7",
+     "box": {
+      "x": 1425.4,
+      "y": 1354,
+      "width": 139,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SNOW EXPOSURE FACTOR: 0.7",
+       "box": {
+        "x": 1425.4,
+        "y": 1354,
+        "width": 139,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r084",
+     "text": "SEISMIC IMPORTANCE FACTOR 1.0",
+     "box": {
+      "x": 1647.8,
+      "y": 1344.3,
+      "width": 150.7,
+      "height": 10.7
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC IMPORTANCE FACTOR 1.0",
+       "box": {
+        "x": 1647.8,
+        "y": 1344.3,
+        "width": 150.7,
+        "height": 10.7
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r085",
+     "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+     "box": {
+      "x": 1425.4,
+      "y": 1343.3,
+      "width": 159.3,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+       "box": {
+        "x": 1425.4,
+        "y": 1343.3,
+        "width": 159.3,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r087",
+     "text": "SEISMIC DESIGN CATEGORY",
+     "box": {
+      "x": 1647.8,
+      "y": 1332.6,
+      "width": 118.7,
+      "height": 10.7
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "SEISMIC DESIGN CATEGORY",
+       "box": {
+        "x": 1647.8,
+        "y": 1332.6,
+        "width": 118.7,
+        "height": 10.7
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r088",
+     "text": "THERMAL FACTOR: 1",
+     "box": {
+      "x": 1425.4,
+      "y": 1331.9,
+      "width": 99.4,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "THERMAL FACTOR: 1",
+       "box": {
+        "x": 1425.4,
+        "y": 1331.9,
+        "width": 99.4,
+        "height": 9.6
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r089",
+     "text": "BASIC SEISMIC FORCE RESISTING SYSTEM:",
+     "box": {
+      "x": 1647.8,
+      "y": 1321.9,
+      "width": 179.6,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "BASIC SEISMIC FORCE RESISTING SYSTEM:",
+       "box": {
+        "x": 1647.8,
+        "y": 1321.9,
+        "width": 179.6,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r090",
+     "text": "WIND LOADING (IBC 2015)",
+     "box": {
+      "x": 1425.4,
+      "y": 1318.7,
+      "width": 109,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "WIND LOADING (IBC 2015)",
+       "box": {
+        "x": 1425.4,
+        "y": 1318.7,
+        "width": 109,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r093",
+     "text": "ORD. PLAIN REINF MASONRY",
+     "box": {
+      "x": 1687.4,
+      "y": 1310.1,
+      "width": 120.8,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ORD. PLAIN REINF MASONRY",
+       "box": {
+        "x": 1687.4,
+        "y": 1310.1,
+        "width": 120.8,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r094",
+     "text": "BASIC WIND SPEED (3 SECOND GUST){|15 MPH",
+     "box": {
+      "x": 1425.4,
+      "y": 1305.9,
+      "width": 190.3,
+      "height": 11.8
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "BASIC WIND SPEED (3 SECOND GUST){|15 MPH",
+       "box": {
+        "x": 1425.4,
+        "y": 1305.9,
+        "width": 190.3,
+        "height": 11.8
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r095",
+     "text": "Cs= 0.095",
+     "box": {
+      "x": 1676.6,
+      "y": 1300.3,
+      "width": 45,
+      "height": 10
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "Cs= 0.095",
+       "box": {
+        "x": 1676.6,
+        "y": 1300.3,
+        "width": 45,
+        "height": 10
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r096",
+     "text": "R= 1.5",
+     "box": {
+      "x": 1751.5,
+      "y": 1301.6,
+      "width": 25.7,
+      "height": 8.5
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "R= 1.5",
+       "box": {
+        "x": 1751.5,
+        "y": 1301.6,
+        "width": 25.7,
+        "height": 8.5
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r097",
+     "text": "RISK CATEGORY ii",
+     "box": {
+      "x": 1425.4,
+      "y": 1295.2,
+      "width": 90.9,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "RISK CATEGORY ii",
+       "box": {
+        "x": 1425.4,
+        "y": 1295.2,
+        "width": 90.9,
+        "height": 9.6
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r098",
+     "text": "DESIGN BASE SHEAR (5T KTPS}",
+     "box": {
+      "x": 1647.8,
+      "y": 1284.5,
+      "width": 140.1,
+      "height": 18.2
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "DESIGN BASE SHEAR (5T KTPS}",
+       "box": {
+        "x": 1647.8,
+        "y": 1284.5,
+        "width": 140.1,
+        "height": 18.2
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r100",
+     "text": "WIND EXPOSURE CATEGORY B",
+     "box": {
+      "x": 1426.5,
+      "y": 1283.8,
+      "width": 142.2,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "WIND EXPOSURE CATEGORY B",
+       "box": {
+        "x": 1426.5,
+        "y": 1283.8,
+        "width": 142.2,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r103",
+     "text": "ANALYSIS PROCEDURE:",
+     "box": {
+      "x": 1647.8,
+      "y": 1277,
+      "width": 99.4,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ANALYSIS PROCEDURE:",
+       "box": {
+        "x": 1647.8,
+        "y": 1277,
+        "width": 99.4,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r104",
+     "text": "INTERNAL PRESSURE COEFFICIENT",
+     "box": {
+      "x": 1424.3,
+      "y": 1272,
+      "width": 144.3,
+      "height": 10.7
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "INTERNAL PRESSURE COEFFICIENT",
+       "box": {
+        "x": 1424.3,
+        "y": 1272,
+        "width": 144.3,
+        "height": 10.7
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r105",
+     "text": "0.25",
+     "box": {
+      "x": 1587.9,
+      "y": 1272,
+      "width": 20.3,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "0.25",
+       "box": {
+        "x": 1587.9,
+        "y": 1272,
+        "width": 20.3,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r107",
+     "text": "COMPONENT AND CLADDING PRESSURE 30 PSF",
+     "box": {
+      "x": 1425.4,
+      "y": 1261.4,
+      "width": 203.1,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "COMPONENT AND CLADDING PRESSURE 30 PSF",
+       "box": {
+        "x": 1425.4,
+        "y": 1261.4,
+        "width": 203.1,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r108",
+     "text": "EQUIVALENT LATERAL FORCE PROCEDURE",
+     "box": {
+      "x": 1647.8,
+      "y": 1265.6,
+      "width": 179.6,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "EQUIVALENT LATERAL FORCE PROCEDURE",
+       "box": {
+        "x": 1647.8,
+        "y": 1265.6,
+        "width": 179.6,
+        "height": 9.6
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r110",
+     "text": "RISK CATEGORY ||",
+     "box": {
+      "x": 1647.8,
+      "y": 1253.9,
+      "width": 81.3,
+      "height": 9.6
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "RISK CATEGORY ||",
+       "box": {
+        "x": 1647.8,
+        "y": 1253.9,
+        "width": 81.3,
+        "height": 9.6
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r112",
+     "text": "STEEL NOTES",
+     "box": {
+      "x": 1411.5,
+      "y": 1224,
+      "width": 126.2,
+      "height": 18.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "STEEL NOTES",
+       "box": {
+        "x": 1411.5,
+        "y": 1224,
+        "width": 126.2,
+        "height": 18.2
+       },
+       "confidence": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "A-6.00 door notes 4x3",
+   "sheetId": "A-6.00-00",
+   "input": "4x3",
+   "box": [
+    120,
+    730,
+    560,
+    815
+   ],
+   "rows": [
+    {
+     "rid": "r070",
+     "text": "1. ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.",
+     "box": {
+      "x": 130.9,
+      "y": 795.7,
+      "width": 313.4,
+      "height": 14.9
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "1. ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.",
+       "box": {
+        "x": 130.9,
+        "y": 795.7,
+        "width": 313.4,
+        "height": 14.9
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r083",
+     "text": ".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB:",
+     "box": {
+      "x": 136.4,
+      "y": 782.9,
+      "width": 377.9,
+      "height": 13
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": ".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB:",
+       "box": {
+        "x": 136.4,
+        "y": 782.9,
+        "width": 377.9,
+        "height": 13
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r095",
+     "text": "HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB",
+     "box": {
+      "x": 154.8,
+      "y": 773.8,
+      "width": 355.8,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB",
+       "box": {
+        "x": 154.8,
+        "y": 773.8,
+        "width": 355.8,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r105",
+     "text": "PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+     "box": {
+      "x": 149.3,
+      "y": 758.8,
+      "width": 389,
+      "height": 11.3
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+       "box": {
+        "x": 149.3,
+        "y": 758.8,
+        "width": 389,
+        "height": 11.3
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r111",
+     "text": "ALL DOOR HARDWARE SHALL NOT REQUIRE TIGHT GRASPING, TIGHT PINCHING OR",
+     "box": {
+      "x": 149.3,
+      "y": 749.8,
+      "width": 341,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "ALL DOOR HARDWARE SHALL NOT REQUIRE TIGHT GRASPING, TIGHT PINCHING OR",
+       "box": {
+        "x": 149.3,
+        "y": 749.8,
+        "width": 341,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r123",
+     "text": "TWISTING OF THE WRIST TO OPERATE.",
+     "box": {
+      "x": 149.3,
+      "y": 737,
+      "width": 158.5,
+      "height": 11.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "TWISTING OF THE WRIST TO OPERATE.",
+       "box": {
+        "x": 149.3,
+        "y": 737,
+        "width": 158.5,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "A-6.00 door 5 note 4x3",
+   "sheetId": "A-6.00-00",
+   "input": "4x3",
+   "box": [
+    1870,
+    645,
+    2300,
+    685
+   ],
+   "rows": [
+    {
+     "rid": "r200",
+     "text": "DOOR 3, 4, & 4A TO HAVE",
+     "box": {
+      "x": 1896.5,
+      "y": 669.9,
+      "width": 149.3,
+      "height": 12
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "DOOR 3,",
+       "box": {
+        "x": 1896.5,
+        "y": 669.9,
+        "width": 53.5,
+        "height": 11.2
+       },
+       "confidence": 0.5
+      },
+      {
+       "text": "4, & 4A TO HAVE",
+       "box": {
+        "x": 1946.3,
+        "y": 670.7,
+        "width": 99.5,
+        "height": 11.3
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r205",
+     "text": "8. DOOR 3, 4. & 4A TO HAVE MAXIMUM U VALUE = 0.61",
+     "box": {
+      "x": 1884.1,
+      "y": 671.6,
+      "width": 309.4,
+      "height": 9.9
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "8.",
+       "box": {
+        "x": 1884.1,
+        "y": 671.7,
+        "width": 9.7,
+        "height": 9.7
+       },
+       "confidence": 1
+      },
+      {
+       "text": "DOOR 3, 4. & 4A TO HAVE MAXIMUM U VALUE = 0.61",
+       "box": {
+        "x": 1900.3,
+        "y": 671.6,
+        "width": 293.2,
+        "height": 9.9
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r207",
+     "text": "DOOR 3, 4, & 4A TO HAVE MAXIMUM U VALUE = 0.61",
+     "box": {
+      "x": 1898.6,
+      "y": 669,
+      "width": 294.8,
+      "height": 11.5
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "DOOR 3, 4, & 4A TO HAVE MAXIMUM U VALUE = 0.61",
+       "box": {
+        "x": 1898.6,
+        "y": 669,
+        "width": 294.8,
+        "height": 11.5
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r218",
+     "text": "DOOR 5 RESTROOM EXTERIOR, 7 - LAMINATED FINISH, PER DECOR",
+     "box": {
+      "x": 1898.6,
+      "y": 658.8,
+      "width": 356.4,
+      "height": 12.9
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "DOOR",
+       "box": {
+        "x": 1898.6,
+        "y": 660.4,
+        "width": 30.8,
+        "height": 9.7
+       },
+       "confidence": 1
+      },
+      {
+       "text": "5 RESTROOM EXTERIOR, 7 - LAMINATED FINISH, PER DECOR",
+       "box": {
+        "x": 1929.4,
+        "y": 658.8,
+        "width": 325.6,
+        "height": 12.9
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r219",
+     "text": "9. DOOR 5",
+     "box": {
+      "x": 1883.6,
+      "y": 657.7,
+      "width": 60.9,
+      "height": 13.1
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "9. DOOR 5",
+       "box": {
+        "x": 1883.6,
+        "y": 657.7,
+        "width": 60.9,
+        "height": 13.1
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r220",
+     "text": "DOOR 5 RESTROOM EXTERIC",
+     "box": {
+      "x": 1898.6,
+      "y": 659.2,
+      "width": 147.2,
+      "height": 11.6
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "DOOR 5",
+       "box": {
+        "x": 1898.6,
+        "y": 659.2,
+        "width": 45.4,
+        "height": 11.6
+       },
+       "confidence": 1
+      },
+      {
+       "text": "RESTROOM EXTERIC",
+       "box": {
+        "x": 1944.4,
+        "y": 659.6,
+        "width": 101.4,
+        "height": 11.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r221",
+     "text": "RESTROOM EXTERIOR, 7 - LAMINATED FINISH, PER DECOR",
+     "box": {
+      "x": 1942.4,
+      "y": 657.5,
+      "width": 312.7,
+      "height": 13.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "RESTROOM EXTERIOR, 7 - LAMINATED FINISH, PER DECOR",
+       "box": {
+        "x": 1942.4,
+        "y": 657.5,
+        "width": 312.7,
+        "height": 13.2
+       },
+       "confidence": 1
+      }
+     ]
+    },
+    {
+     "rid": "r222",
+     "text": "DOOR 5 RESTROOM EXTERIC",
+     "box": {
+      "x": 1896.5,
+      "y": 659,
+      "width": 149.3,
+      "height": 11
+     },
+     "vertical": false,
+     "confidence": 0.5,
+     "words": [
+      {
+       "text": "DOOR 5 RESTROOM EXTERIC",
+       "box": {
+        "x": 1896.5,
+        "y": 659,
+        "width": 149.3,
+        "height": 11
+       },
+       "confidence": 0.5
+      }
+     ]
+    },
+    {
+     "rid": "r230",
+     "text": "PORTFOLIO:",
+     "box": {
+      "x": 1900.2,
+      "y": 648.6,
+      "width": 59,
+      "height": 9.2
+     },
+     "vertical": false,
+     "confidence": 1,
+     "words": [
+      {
+       "text": "PORTFOLIO:",
+       "box": {
+        "x": 1900.2,
+        "y": 648.6,
+        "width": 59,
+        "height": 9.2
+       },
+       "confidence": 1
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

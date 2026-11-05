@@ -8,7 +8,9 @@
  *   (ctx?) marks an item whose relation to a neighbouring item is unconfirmed. The
  *   interpretation rules for these markers are stated by the analyzer v2 header.
  * - Selection is by technical priority within the character budget; what is left out is
- *   counted in an omission line.
+ *   counted in an omission line. The fields of a design-data list are selected together, at
+ *   the list's priority, and shown as consecutive lines; a list that does not fit is offered
+ *   field by field.
  */
 import { createHash } from "node:crypto";
 import { STAGE3_EVIDENCE_V2, STAGE3_V2_BUDGET } from "./stage3EvidenceConfig.mjs";
@@ -53,18 +55,46 @@ export function renderTechnicalDigest(model, options = {}) {
   const budget = maxChars - headerFor(model.annotations.length).length - 1 - OMISSION_RESERVE;
 
   const rank = options.rank || ((a) => a.priority);
-  const candidates = [...model.annotations].sort((a, b) => rank(b, lines.get(b.aid)) - rank(a, lines.get(a.aid)) || lines.get(a.aid).length - lines.get(b.aid).length
-    || (b.box.y + b.box.height) - (a.box.y + a.box.height) || a.box.x - b.box.x);
+  const top = (a) => a.box.y + a.box.height;
+  const units = new Map();
+  for (const a of model.annotations) {
+    const key = a.list && options.lists !== false ? a.list : a.aid;
+    if (!units.has(key)) units.set(key, []);
+    units.get(key).push(a);
+  }
+  const unitOf = (members) => ({
+    members,
+    rank: members.length > 1 && members[0].listPriority != null && !options.rank
+      ? members[0].listPriority : Math.max(...members.map((a) => rank(a, lines.get(a.aid)))),
+    len: members.reduce((n, a) => n + lines.get(a.aid).length + 1, 0),
+    top: Math.max(...members.map(top)),
+    x: Math.min(...members.map((a) => a.box.x)),
+  });
+  const byRank = (p, q) => q.rank - p.rank || p.len / p.members.length - q.len / q.members.length || q.top - p.top || p.x - q.x;
+  const candidates = [...units.values()].map(unitOf).sort(byRank);
   const shown = new Set();
   let used = 0;
-  for (const a of candidates) {
-    const len = lines.get(a.aid).length + 1;
-    if (used + len > budget) continue;
-    shown.add(a.aid);
-    used += len;
+  const take = (unit) => {
+    if (used + unit.len > budget) return false;
+    for (const a of unit.members) shown.add(a.aid);
+    used += unit.len;
+    return true;
+  };
+  for (const unit of candidates) {
+    if (take(unit) || unit.members.length === 1) continue;
+    for (const single of unit.members.map((a) => unitOf([a])).sort(byRank)) take(single);
+  }
+  const anchor = new Map();
+  for (const members of units.values()) {
+    const visible = members.filter((a) => shown.has(a.aid));
+    if (!visible.length) continue;
+    const at = { top: Math.max(...visible.map(top)), x: Math.min(...visible.map((a) => a.box.x)) };
+    for (const a of visible) anchor.set(a.aid, at);
   }
   const shownList = model.annotations.filter((a) => shown.has(a.aid))
-    .sort((a, b) => (REGION_ORDER[a.regionKind] ?? 0) - (REGION_ORDER[b.regionKind] ?? 0) || (b.box.y + b.box.height) - (a.box.y + a.box.height) || a.box.x - b.box.x);
+    .sort((a, b) => (REGION_ORDER[a.regionKind] ?? 0) - (REGION_ORDER[b.regionKind] ?? 0)
+      || anchor.get(b.aid).top - anchor.get(a.aid).top || anchor.get(a.aid).x - anchor.get(b.aid).x
+      || top(b) - top(a) || a.box.x - b.box.x);
   const omitted = model.annotations.filter((a) => !shown.has(a.aid));
   const omittedTech = omitted.filter((a) => a.technical);
   const byClass = {};
@@ -120,6 +150,8 @@ export function compactEvidenceModel(model, shownIds) {
     words: (r.words || []).map(wordRecord),
     alternatives: (r.alternatives || []).map((a) => ({ text: a.text, box: a.box, confidence: a.confidence, words: (a.words || []).map(wordRecord) })),
     absorbed: (r.absorbed || []).length,
+    ...(r.cutReadings?.length ? { cutReadings: r.cutReadings.map((c) => ({ kind: c.kind, text: c.text, box: c.box, confidence: c.confidence })) } : {}),
+    ...(r.duplicateWords?.length ? { duplicateWords: r.duplicateWords } : {}),
     ...(r.formatRejected?.length ? { formatRejected: r.formatRejected } : {}),
     ...(r.repeatedReadings?.length ? { repeatedReadings: r.repeatedReadings } : {}),
     ...(r.splitFrom ? { splitFrom: r.splitFrom } : {}),

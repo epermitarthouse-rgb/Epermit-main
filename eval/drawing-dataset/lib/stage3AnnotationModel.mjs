@@ -64,7 +64,8 @@ export function classifyText(text) {
  *          or numerator, a letter where the inches of a feet-inches value belong (7"-q"), a 7-digit
  *          cold-formed steel designation (600S162-43 read as 6005162-43), a short symbol ending
  *          in l, or a one-letter symbol ending in I, before a number (Sd1 read as Sdl, S1 as SI),
- *          or a | next to a digit;
+ *          a | next to a digit, a letter between a number and its unit or a digit glued to a
+ *          unit (57 KIPS read as 15T KIPS3);
  * inch_mark - a feet-inches value whose inch mark is missing or read as '.
  */
 export function uncertaintyReasons(text) {
@@ -73,7 +74,8 @@ export function uncertaintyReasons(text) {
   if (/\d[Il]|[Il]\d|(?:^|[\s(-])[Il][-/]\d|\d[-/][Il]\b|\b[Il]\/|\d\s*[°*]/.test(t) || /[A-Z]l\b|\bl[A-Z]/.test(t)
     || /(?:^|\s)\d+\/(?=\s|$)/.test(t) || /\b\d{7}-\d{2}\b/.test(t) || /\b[A-Za-z]{1,2}l\s+[\d.]/.test(t)
     || /\d\s*["']\s*-\s*[A-Za-z]{1,2}\s*["']/.test(t) || /(?:^|\s)\/\d/.test(t)
-    || /\b[A-Za-z]I\s+[\d.]/.test(t) || /\|\d|\d\|/.test(t)) reasons.add("glyph");
+    || /\b[A-Za-z]I\s+[\d.]/.test(t) || /\|\d|\d\|/.test(t)
+    || /\d[A-Za-z]\s+(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?)\b/.test(t) || /\b(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?)\d/.test(t)) reasons.add("glyph");
   if (/\d+\s*'\s*-?\s*\d+(?:\s+\d+\/\d+)?\s*'/.test(t) || /\d+\s*'\s*-\s*\d+(?:\s+\d+\/\d+)?(?![\d"/'°*])/.test(t)) reasons.add("inch_mark");
   return [...reasons];
 }
@@ -90,12 +92,42 @@ export function similarReadings(a, b) {
 const containKey = (s) => ` ${norm(s).replace(/(?<!\d)[.,;:]|[.,;:](?!\d)/g, " ").replace(/\s+/g, " ").trim()} `;
 const containedIn = (k, longer) => k.trim().length > 0 && containKey(longer).includes(k);
 
+/** Shortest cut word for cutReading: shorter stems match too many words. */
+export const CUT_STEM_MIN = 4;
+/**
+ * A reading cut at a tile edge inside a word whose last, partly seen glyph was misread
+ * (DOOR 5 RESTROOM EXTERIC for ... EXTERIOR, 7 - ...): without its last letter it is contained in the
+ * longer reading, where that word continues with other letters, and its box ends before the
+ * longer box. Only a cut word qualifies, never a number: a cut number may be a different value.
+ */
+export function cutReading(short, long) {
+  const s = containKey(short.text).trim(), l = containKey(long.text);
+  const last = s.split(" ").pop();
+  if (!/^[A-Z]+$/.test(last) || last.length - 1 < CUT_STEM_MIN) return false;
+  const stem = ` ${s.slice(0, -1)}`;
+  const at = l.indexOf(stem);
+  if (at < 0 || !/[A-Z]/.test(l[at + stem.length] || "") || l[at + stem.length] === s.at(-1)) return false;
+  return short.box.x + short.box.width < long.box.x + long.box.width;
+}
+
+/**
+ * A reading that also covers the list number left of a longer reading which starts after it
+ * (9. DOOR 5 against DOOR 5 RESTROOM EXTERIOR, ...): without the number it is contained in the
+ * longer reading. Both are partial reads of one note, not competing readings.
+ */
+export function listNumberReading(short, long) {
+  const m = clean(short.text).match(/^\(?\d{1,2}[.)]\s+(.+)$/);
+  if (!m || LIST_ITEM.test(clean(long.text))) return false;
+  return containedIn(containKey(m[1]), long.text) && short.box.x < long.box.x;
+}
+
 /**
  * Resolve rows that read the same place (same orientation, overlap >= 50% of the smaller box, similar
  * text): a reading contained in a longer one (the kept row or one of its alternatives, ignoring
- * separator punctuation) is absorbed, an identical one is a duplicate, and a different one becomes an
- * alternative of the kept row (a conflict). Dense line spacing makes boxes of neighbouring lines
- * overlap; with dissimilar text they remain separate rows.
+ * separator punctuation) is absorbed, an identical one is a duplicate, a partial reading (cutReading,
+ * listNumberReading) is absorbed and recorded in `cutReadings`, and a different one becomes an alternative of the kept row
+ * (a conflict). Dense line spacing makes boxes of neighbouring lines overlap; with dissimilar text
+ * they remain separate rows.
  */
 export function resolveOverlaps(rows) {
   const ordered = [...rows].sort((a, b) => textKey(b.text).length - textKey(a.text).length || b.confidence - a.confidence);
@@ -108,12 +140,16 @@ export function resolveOverlaps(rows) {
       const o = overlapSmaller(row.box, other.box);
       if (o >= 0.5 && o > bestOverlap) { best = other; bestOverlap = o; }
     }
-    if (!best) { kept.push({ ...row, alternatives: [], absorbed: [] }); continue; }
+    if (!best) { kept.push({ ...row, alternatives: [], absorbed: [], cutReadings: [] }); continue; }
     const bk = textKey(best.text);
     const ck = containKey(row.text);
     if (k === bk || bk.includes(k) || containedIn(ck, best.text)
       || best.alternatives.some((a) => containedIn(ck, a.text))) best.absorbed.push(row.rid);
-    else if (!best.alternatives.some((a) => textKey(a.text) === k)) best.alternatives.push({ rid: row.rid, text: row.text, box: row.box, confidence: row.confidence, words: row.words });
+    else if (cutReading(row, best) || listNumberReading(row, best)) {
+      best.absorbed.push(row.rid);
+      const kind = cutReading(row, best) ? "cut_word" : "list_number";
+      if (!best.cutReadings.some((c) => c.text === row.text)) best.cutReadings.push({ rid: row.rid, kind, text: row.text, box: row.box, confidence: row.confidence });
+    } else if (!best.alternatives.some((a) => textKey(a.text) === k)) best.alternatives.push({ rid: row.rid, text: row.text, box: row.box, confidence: row.confidence, words: row.words });
   }
   const order = new Map(rows.map((r, i) => [r.rid, i]));
   return kept.sort((a, b) => order.get(a.rid) - order.get(b.rid));
@@ -188,7 +224,7 @@ function hasRowMate(row, rows, f) {
 const LIST_ITEM = /^\(?\d{1,2}[.)]\s/;
 const ABBREVIATION_END = /\b(?:A\.F\.F|EXIST|NEW|ELEV|EQ|SIM|NO|EA|O\.C|DIA|TYP|MIN|MAX|V\.I\.F|REQ'D|CONT|CLR|NOM|GA|GYP|BD|T\.O|B\.O)\.\)?$/i;
 const CONNECTOR_END = /(?:\b(?:FROM|TO|AT|OF|WITH|AND|OR|FOR|IN|ON|BY|THE|A)|[@+&,\-/])\s*$/i;
-const VALUE_END = /(?:\d(?:\.\d+)?\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%|"|')?|\b[A-F][,.] ASSUMED)\s*\)?$/;
+const VALUE_END = /(?:\d(?:\.\d+)?\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%|"|')?|\b[A-F][,.] ASSUMED)\s*\)?[;:]?$/;
 const SYMBOL_VALUE = /^[A-Za-z][A-Za-z0-9]{0,3}=?\s+[\d.]+$/;
 const BUBBLE_NUMBER = /^\d{1,2}[A-Z]?$/;
 const SHEET_REFERENCE = /^[A-Z]{1,2}-?\d{1,2}\.\d{2}$/;
@@ -213,7 +249,7 @@ export function startsNewAnnotation(upper, lower) {
 }
 
 /** Design-data field: a label (no digits, or a short symbol) with one value at the end. */
-const FIELD_ROW = /^(?:[A-Za-z][A-Za-z0-9]{0,3}=?|[A-Z][A-Z .'/&()-]*[A-Z.):=])\s*[\d.]+\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%)?\s*\)?$|^[A-Z][A-Z .'/&-]* [A-F][,.] ASSUMED$/;
+const FIELD_ROW = /^(?:[A-Za-z][A-Za-z0-9]{0,3}=?|[A-Z][A-Z .'/&()-]*[A-Z.):=])\s*(?:\d[\d.]*|\.\d+)\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%)?\s*\)?$|^[A-Z][A-Z .'/&-]* [A-F][,.] ASSUMED$/;
 /** A caption without a value: capitals only, at least two words. */
 const BARE_LABEL = /^[A-Z][A-Z.'/&-]*(?: [A-Z.'/&-]+)+:?$/;
 
@@ -385,7 +421,8 @@ export function groupAnnotations(rows, options = {}) {
   if (options.fieldLists !== false) {
     for (const r of rows) if (FIELD_ROW.test(clean(r.text))) fieldRows.set(stackOf(r.rid), (fieldRows.get(stackOf(r.rid)) || 0) + 1);
   }
-  const inFieldList = (rid) => (fieldRows.get(stackOf(rid)) || 0) >= FIELD_LIST_MIN;
+  const listRows = options.listRows || new Set();
+  const inFieldList = (rid) => (fieldRows.get(stackOf(rid)) || 0) >= FIELD_LIST_MIN || listRows.has(rid);
   for (const [a, b] of below) {
     if (above.get(b) !== a) { contextUncertain.add(a); contextUncertain.add(b); continue; }
     if (tableCell.get(a) && tableCell.get(b)) continue;
@@ -430,22 +467,86 @@ export function groupAnnotations(rows, options = {}) {
 // ---------- model ----------
 const CLASS_ORDER = ["dimension", "elevation", "datum", "qualifier", "reference", "value", "numeric"];
 
+function classPriority(classes) {
+  const c = new Set(classes);
+  if ((c.has("dimension") || c.has("value")) && (c.has("datum") || c.has("elevation"))) return 6;
+  if (c.has("elevation")) return 6;
+  if (c.has("dimension") && c.has("qualifier")) return 5;
+  if (c.has("dimension") || c.has("value")) return 4;
+  if (c.has("reference")) return 3;
+  if (c.has("qualifier")) return 2;
+  if (c.has("numeric")) return 1;
+  return 0;
+}
+
 export function annotationPriority(a) {
   const c = new Set(a.classes);
-  let p = 0;
-  if ((c.has("dimension") || c.has("value")) && (c.has("datum") || c.has("elevation"))) p = 6;
-  else if (c.has("elevation")) p = 6;
-  else if (c.has("dimension") && c.has("qualifier")) p = 5;
-  else if (c.has("dimension") || c.has("value")) p = 4;
-  else if (c.has("reference")) p = 3;
-  else if (c.has("qualifier")) p = 2;
-  else if (c.has("numeric")) p = 1;
+  let p = classPriority(a.classes);
   if (p && a.rows.length > 1) p += 1;
   const chars = a.rows.reduce((n, r) => n + 3 + [r.text, ...(r.alternatives || []).map((x) => x.text)].reduce((m, t) => m + clean(t).length + 3, 0), 0);
   if (p && chars > 300) p = Math.max(1, p - 3);
   if (a.regionKind === "title_block") p = Math.max(0, p - 4);
   if (p && textKey(a.rows.map((r) => r.text).join("")).length <= 2 && !c.has("dimension")) p = Math.max(0, p - 1);
   return p;
+}
+
+// ---------- design-data lists ----------
+/** Longest row of a design-data list member: field lines are short; note sentences are not. */
+export const LIST_ROW_MAX = 60;
+
+/**
+ * Design-data lists: columns of short annotations (left edges within 1.2 row heights, vertical gaps
+ * up to 1.6) holding at least FIELD_LIST_MIN field rows, plus short annotations whose centre lies
+ * inside such a column (indented values, Cs= 0.095). Each field stays its own annotation; the list
+ * id lets the digest select and show the fields together, so a caption printed without a value
+ * (SEISMIC DESIGN CATEGORY) is shown in its list rather than dropped for having no number.
+ * Returns a map aid -> list id.
+ */
+export function designDataLists(annotations, rowById) {
+  const rowsOf = (a) => a.rows.map((rid) => rowById.get(rid));
+  const eligible = annotations.filter((a) => !a.vertical && a.layout !== "record" && a.regionKind !== "title_block"
+    && rowsOf(a).every((r) => clean(r.text).length <= LIST_ROW_MAX));
+  const rowH = new Map(eligible.map((a) => [a.aid, Math.max(...rowsOf(a).map((r) => r.box.height))]));
+  const parent = new Map(eligible.map((a) => [a.aid, a.aid]));
+  const find = (x) => (parent.get(x) === x ? x : (parent.set(x, find(parent.get(x))), parent.get(x)));
+  for (const a of eligible) {
+    let best = null, bestGap = Infinity;
+    for (const b of eligible) {
+      if (a === b) continue;
+      const h = Math.max(rowH.get(a.aid), rowH.get(b.aid));
+      const gap = a.box.y - (b.box.y + b.box.height);
+      if (gap < -0.3 * h || gap > 1.6 * h || Math.abs(a.box.x - b.box.x) > 1.2 * h) continue;
+      if (gap < bestGap) { best = b; bestGap = gap; }
+    }
+    if (best) parent.set(find(best.aid), find(a.aid));
+  }
+  const columns = new Map();
+  for (const a of eligible) {
+    const root = find(a.aid);
+    if (!columns.has(root)) columns.set(root, []);
+    columns.get(root).push(a);
+  }
+  const lists = [...columns.values()].filter((members) => members.length > 1
+    && members.flatMap(rowsOf).filter((r) => FIELD_ROW.test(clean(r.text))).length >= FIELD_LIST_MIN);
+  const listOf = new Map();
+  lists.forEach((members, i) => { for (const a of members) listOf.set(a.aid, `L${i + 1}`); });
+  const boxes = lists.map((members, i) => ({ id: `L${i + 1}`, box: union(members.map((a) => a.box)) }));
+  for (const a of eligible) {
+    if (listOf.has(a.aid)) continue;
+    const cx = a.box.x + a.box.width / 2, cy = a.box.y + a.box.height / 2;
+    const inside = boxes.filter(({ box }) => box.x <= a.box.x && cx <= box.x + box.width && cy >= box.y && cy <= box.y + box.height);
+    if (inside.length) listOf.set(a.aid, inside.sort((p, q) => q.box.x - p.box.x)[0].id);
+  }
+  return listOf;
+}
+
+/**
+ * Selection priority of a design-data list: that of one annotation holding all its fields (their
+ * classes, several rows), so splitting a list into fields does not lower its standing in the budget.
+ */
+export function listPriority(classes) {
+  const p = classPriority(classes);
+  return p ? p + 1 : 0;
 }
 
 /**
@@ -461,7 +562,30 @@ export function buildEvidenceModel(rawRows, options = {}) {
     const technical = cls.technical || altTechnical;
     return { ...r, technical, classes: cls.classes, uncertain: technical ? uncertaintyReasons(r.text) : [], regionKind: regionOf(r) };
   });
-  const groups = groupAnnotations(resolved, { geometry: options.geometry, fieldLists: options.fieldLists });
+  const formatDoubts = new Map(resolved.map((r) => [r.rid, r.uncertain]));
+  const rowById = new Map(resolved.map((r) => [r.rid, r]));
+  const lists = options.designLists !== false;
+  let annotations = annotate(groupAnnotations(resolved, { geometry: options.geometry, fieldLists: options.fieldLists }), formatDoubts);
+  let listOf = lists ? designDataLists(annotations, rowById) : new Map();
+  if (listOf.size && options.fieldLists !== false) {
+    const listRows = new Set(annotations.filter((a) => listOf.has(a.aid)).flatMap((a) => a.rows));
+    annotations = annotate(groupAnnotations(resolved, { geometry: options.geometry, listRows }), formatDoubts);
+    listOf = designDataLists(annotations, rowById);
+  }
+  const listClasses = new Map();
+  for (const a of annotations) {
+    if (!listOf.has(a.aid)) continue;
+    a.list = listOf.get(a.aid);
+    listClasses.set(a.list, [...(listClasses.get(a.list) || []), ...a.classes]);
+  }
+  for (const a of annotations) if (a.list) a.listPriority = listPriority(listClasses.get(a.list));
+  if (options.repeatedNotes !== false) markRepeatedReadings(resolved, annotations);
+  return { rows: resolved, annotations };
+}
+
+/** Annotations from row groups, in reading order with ids; marks rows of unbalanced parenthesised groups truncated. */
+function annotate(groups, formatDoubts) {
+  for (const g of groups) for (const r of g.rows) r.uncertain = formatDoubts.get(r.rid);
   for (const g of groups) {
     const parens = (s) => (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
     if (parens(g.rows.map((r) => r.text).join(" ")) === 0) continue;
@@ -488,8 +612,7 @@ export function buildEvidenceModel(rawRows, options = {}) {
   });
   annotations.sort((p, q) => (q.box.y + q.box.height) - (p.box.y + p.box.height) || p.box.x - q.box.x);
   annotations.forEach((a, i) => { a.aid = `a${String(i + 1).padStart(3, "0")}`; });
-  if (options.repeatedNotes !== false) markRepeatedReadings(resolved, annotations);
-  return { rows: resolved, annotations };
+  return annotations;
 }
 
 // ---------- repeated notes ----------
