@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import type { PersistedAnalysisScope, StoredAnalysisMode } from "@/lib/supabaseAnalyzer/analysisMode";
+import type { AnalyzerVersion } from "@/lib/supabaseAnalyzer/analyzerVersion";
 import {
   buildReviewDecisionRecord,
   isReviewDecisionStatus,
@@ -145,6 +146,8 @@ export async function createSupabaseAnalyzerRun(input: {
   analysisMode?: StoredAnalysisMode;
   /** Operator opt-in: run-scoped Stage 3 full-coverage OCR gate (default off). */
   stage3FullCoverageOcr?: boolean;
+  /** Supabase Analyzer version for this run; V1 unless the user selects V2. */
+  analyzerVersion?: AnalyzerVersion;
   budgetLimitUsd?: number;
 }) {
   return invokeRunAction<{
@@ -167,6 +170,7 @@ export async function createSupabaseAnalyzerRun(input: {
     codeContext: input.codeContext,
     analysisMode: input.analysisMode ?? "both",
     stage3FullCoverageOcr: input.stage3FullCoverageOcr === true,
+    analyzerVersion: input.analyzerVersion === "v2" ? "v2" : "v1",
     budgetLimitUsd: input.budgetLimitUsd ?? 20,
     files: input.files.map((file) => ({
       name: file.name,
@@ -287,6 +291,8 @@ export function reanalyzeSupabaseAnalyzerRun(input: {
   analysisMode?: StoredAnalysisMode;
   /** Operator opt-in: persist full-coverage Stage 3 OCR gate on the new reanalysis run. */
   stage3FullCoverageOcr?: boolean;
+  /** Supabase Analyzer version for the new run; V1 unless the user selects V2. */
+  analyzerVersion?: AnalyzerVersion;
   jurisdictionKey: string;
   jurisdictionLabel: string;
   projectType: string;
@@ -317,6 +323,7 @@ export function reanalyzeSupabaseAnalyzerRun(input: {
     confirmed: input.confirmed,
     analysisMode: input.analysisMode ?? "both",
     stage3FullCoverageOcr: input.stage3FullCoverageOcr === true,
+    analyzerVersion: input.analyzerVersion === "v2" ? "v2" : "v1",
     jurisdictionKey: input.jurisdictionKey,
     jurisdictionLabel: input.jurisdictionLabel,
     projectType: input.projectType,

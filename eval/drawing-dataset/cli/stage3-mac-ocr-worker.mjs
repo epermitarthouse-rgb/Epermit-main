@@ -16,6 +16,10 @@
  *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs upload-packs --project <uuid> --run <uuid> [--full-set] [--live]
  *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs sync-full-set --project <uuid> --run <uuid> [--live]
  *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs build-v2-packs [--force] [--source-dir <pdfs>] [--no-page-geometry] [--ocr-grid 12x9]
+ *   node eval/drawing-dataset/cli/stage3-mac-ocr-worker.mjs sync-run --project <uuid> --run <uuid> [--max-sheets N]
+ *
+ * sync-run (Supabase Analyzer V2 runs): v1 + v2 packs from 4x3 OCR for every sheet of the run,
+ * downloading each drawing and ingesting any drawing outside the prepared dataset.
  *
  * --evidence-version v2 (enqueue-full, sync-full-set): also build/upload the v2 technical digest.
  * Default v1; v1 packs are unchanged either way.
@@ -49,6 +53,7 @@ import {
 import { loadRunState, saveRunState } from "../lib/stage3OcrRunState.mjs";
 import { syncRunPreprocessSummary } from "../lib/stage3WorkerSupabase.mjs";
 import { uploadAndVerifyFullSetPacks } from "../lib/stage3FullSetUpload.mjs";
+import { syncAnalyzerV2Run } from "../lib/stage3RunSync.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../..");
@@ -100,6 +105,23 @@ if (command === "build-v2-packs") {
     ...(ocrGrid !== "4x3" ? { ocrFallbacks: ocrFallbacks.map((o) => ({ sheetId: o.sheetId, reason: o.ocrFallbackReason })) } : {}),
   }, null, 2));
   process.exit(result.built === result.sheets ? 0 : 1);
+}
+
+if (command === "sync-run") {
+  if (!projectId || !runId) {
+    console.error("sync-run requires --project <uuid> --run <uuid>");
+    process.exit(2);
+  }
+  const maxSheets = argValue("--max-sheets");
+  const result = await syncAnalyzerV2Run({
+    workerRoot,
+    datasetOut,
+    projectId,
+    runId,
+    maxSheets: maxSheets == null ? null : Number(maxSheets),
+  });
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(result.preprocess.terminal ? 0 : 3);
 }
 
 if (command === "enqueue") {

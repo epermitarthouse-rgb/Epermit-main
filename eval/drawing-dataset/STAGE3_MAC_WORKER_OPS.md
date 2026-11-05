@@ -53,7 +53,35 @@ set analysis_scope = coalesce(analysis_scope, '{}'::jsonb)
 where id = '<run-uuid>';
 ```
 
-### Evidence version v2 (annotation-level technical digest) — not approved for general traffic
+### Supabase Analyzer V2 (user toggle on the analyzer screen)
+
+The Supabase Analyzer screen has an **Analyzer Version** control. V1 (current analyzer) is the default. V2 (enhanced analyzer, 4×3 OCR) applies only to runs where the user selects it, on create or on Reanalyze. The runs function records it on `analysis_scope`:
+
+- `analyzerVersion: "v2"`, `stage3EvidenceVersion: "v2"`, `stage3OcrGrid: "4x3"`, `stage3V2ModelRevision: "model.r6-downstream"`.
+- The full-coverage gate (`stage3FullCoverageOcr`, `stage3OcrPreprocess`). GPT waits until every sheet has OCR evidence.
+- `run_created` / `run_reanalyzed` and `sheet_analysis_completed` audit events carry `analyzer_version`.
+
+Runs without the key, including all runs created before the toggle, are V1. V1 runs follow the production path unchanged. The project-level sheet index and the `cross_sheet_reference_only` withhold apply only to V2 runs.
+
+Worker side: the daemon also polls V2 runs in any project and runs `sync-run --project <id> --run <id>` for them. `sync-run` is driven by the run's own sheet jobs, not by the prepared manifest:
+
+1. It downloads each uploaded drawing through the evidence Edge function.
+2. It uses the prepared dataset's cached 4×3 OCR and layout when the SHA-256 matches. For any other drawing, it runs the text layer, 4×3 OCR and layout locally under `stage3-mac-worker/ingest/<sha256>/`.
+3. It builds v1 and v2 packs, uploads both, and reads both back. Only then does it mark the sheet complete.
+
+A sheet that fails three ticks is marked failed. Once every sheet is terminal, the worker releases the gate (`approved_partial`, `gateReleasedBy: "worker"`, with a reason naming the sheets), so those sheets run on the PDF alone and the processor audits the fallback. Adding drawings to a V2 run reopens the gate for the new sheets.
+
+12×9 is never used for V2 runs. It needs `STAGE3_ALLOW_12X9=true` on the daemon even for the manual path below.
+
+Roll back V2 (new V2 requests return 503; V1 is unaffected; runs already created keep their scope):
+
+```bash
+supabase secrets set SUPABASE_ANALYZER_V2_ENABLED=false --project-ref <ref>
+```
+
+Re-enable with `SUPABASE_ANALYZER_V2_ENABLED=true` (or unset it). To stop a V2 run already waiting for OCR, cancel it in the UI.
+
+### Evidence version v2 (annotation-level technical digest) — manual run opt-in
 
 v2 is opt-in per run, on top of the Stage 3 opt-in above. Without the key, the run uses v1 unchanged. Before any run uses v2, the processor and the `supabase-analyzer-stage3-evidence` Edge function must be deployed with v2 support; that requires approval.
 
@@ -75,7 +103,7 @@ The analyzer uses the v2 pack when it is available. Otherwise it uses the v1 pac
 
 v2 packs carry a model revision in their cache key, currently `model.r6-downstream`. A worker with a newer revision rebuilds v2 packs instead of reusing cached ones.
 
-**12×9 OCR for v2 (opt-in per run, v2 only; not approved for general traffic).** With `"stage3OcrGrid": "12x9"` next to `"stage3EvidenceVersion": "v2"`, the daemon runs `build-v2-packs --ocr-grid 12x9`. The v2 pack then reads 12×9 tiles resolved with S4 instead of the cached 4×3 recovery. v1 packs never change.
+**12×9 OCR for v2 (disabled; opt-in per run and per worker, v2 only; not approved for general traffic).** With `"stage3OcrGrid": "12x9"` next to `"stage3EvidenceVersion": "v2"`, and `STAGE3_ALLOW_12X9=true` in the daemon's environment, the daemon runs `build-v2-packs --ocr-grid 12x9`. The v2 pack then reads 12×9 tiles resolved with S4 instead of the cached 4×3 recovery. v1 packs never change.
 
 - The worker needs the source PDFs (`--source-dir` or `DRAWING_SOURCE_DIR`). Expect about 108 Vision calls per sheet; the 12×9 recovery is cached per drawing.
 - If a sheet's 12×9 OCR cannot run (no PDF, Vision unavailable, any tile failed), its v2 pack is built from the 4×3 recovery. `provenance.ocr.fallbackReason` and the `v2_pack` audit event record why.

@@ -55,16 +55,7 @@ async function loadBaselinePage(outDir, sha256) {
 async function loadOcrLines(outDir, sha256) {
   const recoveryPath = path.join(outDir, "recovery", `${sha256}.json`);
   if (existsSync(recoveryPath)) {
-    const recovered = JSON.parse(await readFile(recoveryPath, "utf8"));
-    const page = recovered.pages?.[0];
-    return (page?.lines || []).map((line) => ({
-      kind: "ocr_line",
-      text: line.text,
-      bbox: line.box,
-      origin: "visual_interpretation",
-      extractionMethod: page?.engine || "macos-vision",
-      independentlyVerified: false,
-    }));
+    return recoveryOcrBlocks(JSON.parse(await readFile(recoveryPath, "utf8")));
   }
   const hybridOcr = path.join(outDir, "hybrid-pilot", "ocr", `${sha256}.json`);
   if (existsSync(hybridOcr)) {
@@ -82,7 +73,58 @@ async function loadOcrLines(outDir, sha256) {
   return [];
 }
 
-function baselineBlocks(page) {
+/** OCR lines of a recovery as layout blocks (visual interpretation, never verified). */
+export function recoveryOcrBlocks(recovered) {
+  const page = recovered?.pages?.[0];
+  return (page?.lines || []).map((line) => ({
+    kind: "ocr_line",
+    text: line.text,
+    bbox: line.box,
+    origin: "visual_interpretation",
+    extractionMethod: page?.engine || "macos-vision",
+    independentlyVerified: false,
+  }));
+}
+
+/** Layout page record for one sheet: detected regions with the text-layer and OCR blocks associated to them. */
+export function buildLayoutPageRecord({ layoutVersion, relativePath, sha256, layout, baseline, textBlocks, ocrBlocks, overlayPath }) {
+  const blocks = [...textBlocks, ...ocrBlocks];
+  const regions = layout.regions || [];
+  const clusters = clusterTextBlocks(blocks);
+  const associations = associateBlocksToRegions(blocks, regions);
+  const relationships = proposeRelationships({ clusters, associations, regions, relativePath });
+  return {
+    layoutVersion,
+    pythonVersion: LAYOUT_PYTHON_VERSION,
+    relativePath,
+    sha256,
+    pageNumber: 1,
+    pageWidth: layout.pageWidth || baseline?.pageWidth || null,
+    pageHeight: layout.pageHeight || baseline?.pageHeight || null,
+    independentlyVerified: false,
+    provenancePolicy: "machine_detected candidates, visual_interpretation OCR, and professionally verified labels stay separate.",
+    regions,
+    clusters,
+    associations,
+    relationships,
+    counts: {
+      regions: regions.length,
+      scheduleCandidates: regions.filter((region) => region.kind === "schedule_candidate").length,
+      clusters: clusters.length,
+      associatedBlocks: associations.filter((item) => item.regionId).length,
+      unassignedBlocks: associations.filter((item) => !item.regionId).length,
+      relationshipCandidates: relationships.length,
+      ocrBlocks: ocrBlocks.length,
+      textBlocks: textBlocks.length,
+    },
+    overlayPath: overlayPath && existsSync(overlayPath) ? overlayPath : layout.overlayPath || null,
+    layoutTimingMs: layout.timingMs || null,
+    inkRatio: layout.inkRatio ?? null,
+    layoutStatus: layout.status || "ok",
+  };
+}
+
+export function baselineBlocks(page) {
   return (page?.items || []).map((item) => ({
     kind: "text_span",
     text: item.text,
@@ -100,7 +142,7 @@ function baselineBlocks(page) {
   }));
 }
 
-async function runLayoutPython(pdfPath, outPath, overlayPath, options = {}) {
+export async function runLayoutPython(pdfPath, outPath, overlayPath, options = {}) {
   if (typeof options.layoutFn === "function") {
     return options.layoutFn(pdfPath, outPath, overlayPath);
   }
@@ -298,49 +340,17 @@ export async function runLayoutPilot(options) {
       || await loadOcrLines(options.outDir, sha256);
     const textBlocks = hybrid?.blocks?.filter((block) => block.extractionMethod === "pdfjs-text-layer" || block.extractionMethod === "pymupdf-text")
       || baselineBlocks(baseline);
-    const blocks = [
-      ...textBlocks,
-      ...ocrBlocks,
-    ];
-    const regions = layout.regions || [];
-    const clusters = clusterTextBlocks(blocks);
-    const associations = associateBlocksToRegions(blocks, regions);
-    const relationships = proposeRelationships({
-      clusters,
-      associations,
-      regions,
-      relativePath: sheet.relativePath,
-    });
-
-    const pageRecord = {
+    const pageRecord = buildLayoutPageRecord({
       layoutVersion,
-      pythonVersion: LAYOUT_PYTHON_VERSION,
       relativePath: sheet.relativePath,
       sha256,
-      pageNumber: 1,
-      pageWidth: layout.pageWidth || baseline?.pageWidth || null,
-      pageHeight: layout.pageHeight || baseline?.pageHeight || null,
-      independentlyVerified: false,
-      provenancePolicy: "machine_detected candidates, visual_interpretation OCR, and professionally verified labels stay separate.",
-      regions,
-      clusters,
-      associations,
-      relationships,
-      counts: {
-        regions: regions.length,
-        scheduleCandidates: regions.filter((region) => region.kind === "schedule_candidate").length,
-        clusters: clusters.length,
-        associatedBlocks: associations.filter((item) => item.regionId).length,
-        unassignedBlocks: associations.filter((item) => !item.regionId).length,
-        relationshipCandidates: relationships.length,
-        ocrBlocks: ocrBlocks.length,
-        textBlocks: textBlocks.length,
-      },
-      overlayPath: existsSync(overlayPath) ? overlayPath : layout.overlayPath || null,
-      layoutTimingMs: layout.timingMs || null,
-      inkRatio: layout.inkRatio ?? null,
-      layoutStatus: layout.status || "ok",
-    };
+      layout,
+      baseline,
+      textBlocks,
+      ocrBlocks,
+      overlayPath,
+    });
+    const { relationships } = pageRecord;
     await writeFile(path.join(pagesDir, `${sha256}.json`), JSON.stringify(pageRecord));
     pageByPath.set(sheet.relativePath, pageRecord);
 

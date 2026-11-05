@@ -7,8 +7,10 @@
  * stops and Stage 3 blocking runs sit at 0/82 forever.
  *
  * This daemon:
- *  1. Polls Supabase for Stage 3 full-coverage runs that are not terminal
- *  2. Runs sync-full-set --live --sync-supabase (uses local OCR cache; no re-OCR)
+ *  1. Polls Supabase for Stage 3 full-coverage runs that are not terminal (configured projects, plus
+ *     Supabase Analyzer V2 runs in any project)
+ *  2. Runs sync-full-set --live --sync-supabase (uses local OCR cache; no re-OCR); Analyzer V2 runs
+ *     use sync-run instead (every sheet of the run, 4x3 OCR, drawings outside the cache ingested)
  *  3. Heartbeats forever so new opted-in runs get packs without a manual terminal
  *
  * Env (loaded from repo .env + worker token file when missing):
@@ -18,6 +20,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY (watch poll only — list incomplete Stage 3 runs)
  *   STAGE3_DAEMON_POLL_MS (default 60000)
  *   STAGE3_DAEMON_PROJECT_IDS (comma-separated; default McDonald's eval project)
+ *   STAGE3_ALLOW_12X9 ("true" lets non-Analyzer-V2 runs opt into 12x9; default off)
  */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
@@ -74,11 +77,13 @@ async function listBlockedStage3Runs(projectIds) {
   if (!url || !key) {
     throw new Error("watch_poll_requires_SUPABASE_URL_and_SUPABASE_SERVICE_ROLE_KEY");
   }
+  // Configured projects (existing full-coverage runs) plus Supabase Analyzer V2 runs in any project.
   const filter = projectIds.map((id) => `"${id}"`).join(",");
+  const scopeFilter = encodeURIComponent(`(project_id.in.(${filter}),analysis_scope->>analyzerVersion.eq.v2)`);
   const endpoint =
     `${url}/rest/v1/supabase_analyzer_runs`
     + `?select=id,project_id,status,analysis_scope,created_at`
-    + `&project_id=in.(${filter})`
+    + `&or=${scopeFilter}`
     + `&status=in.(queued,processing,uploading)`
     + `&order=created_at.desc`
     + `&limit=20`;
@@ -121,9 +126,20 @@ function runCli(args) {
   });
 }
 
+async function syncAnalyzerV2Run(projectId, runId) {
+  log("sync_start", { projectId, runId, analyzerVersion: "v2", evidenceVersion: "v2", ocrGrid: "4x3" });
+  const sync = await runCli(["sync-run", "--project", projectId, "--run", runId]);
+  const tail = (sync.stdout || sync.stderr || "").slice(-1200);
+  log("sync_done", { runId, analyzerVersion: "v2", code: sync.code, tail });
+  return sync.code === 0;
+}
+
 async function syncRun(projectId, runId, scope = {}) {
-  const { evidenceVersion, ocrGrid, syncArgs: versionArgs, buildArgs: gridArgs, ignored } = stage3ScopeArgs(scope);
+  const {
+    analyzerVersion, evidenceVersion, ocrGrid, syncArgs: versionArgs, buildArgs: gridArgs, ignored,
+  } = stage3ScopeArgs(scope, { allowFineGrid: process.env.STAGE3_ALLOW_12X9 === "true" });
   for (const { event, value } of ignored) log(event, { runId, value, evidenceVersion });
+  if (analyzerVersion === "v2") return syncAnalyzerV2Run(projectId, runId);
   log("sync_start", { projectId, runId, evidenceVersion, ocrGrid });
   const enqueue = await runCli([
     "enqueue-full",

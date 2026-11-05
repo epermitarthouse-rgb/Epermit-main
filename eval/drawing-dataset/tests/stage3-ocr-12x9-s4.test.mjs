@@ -38,14 +38,26 @@ describe("OCR grid configuration", () => {
   });
 
   it("maps a run's scope to worker arguments, ignoring 12x9 without v2 and unknown values", () => {
-    assert.deepEqual(stage3ScopeArgs({}), { evidenceVersion: "v1", ocrGrid: "4x3", syncArgs: [], buildArgs: [], ignored: [] });
-    assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v2", stage3OcrGrid: "12x9" }).buildArgs, ["--ocr-grid", "12x9"]);
-    assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v2" }).buildArgs, []);
-    const v1Fine = stage3ScopeArgs({ stage3OcrGrid: "12x9" });
+    const allow = { allowFineGrid: true };
+    assert.deepEqual(stage3ScopeArgs({}), { analyzerVersion: "v1", evidenceVersion: "v1", ocrGrid: "4x3", syncArgs: [], buildArgs: [], ignored: [] });
+    assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v2", stage3OcrGrid: "12x9" }, allow).buildArgs, ["--ocr-grid", "12x9"]);
+    assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v2" }, allow).buildArgs, []);
+    const v1Fine = stage3ScopeArgs({ stage3OcrGrid: "12x9" }, allow);
     assert.deepEqual([v1Fine.evidenceVersion, v1Fine.ocrGrid, v1Fine.syncArgs, v1Fine.buildArgs], ["v1", "4x3", [], []]);
-    assert.deepEqual(v1Fine.ignored, [{ event: "ocr_grid_ignored", value: "12x9" }]);
+    assert.deepEqual(v1Fine.ignored, [{ event: "ocr_grid_disabled", value: "12x9" }]);
     assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v3", stage3OcrGrid: "4x3" }).ignored, [{ event: "evidence_version_ignored", value: "v3" }]);
-    assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v2", stage3OcrGrid: "24x18" }).ocrGrid, "4x3");
+    assert.deepEqual(stage3ScopeArgs({ stage3EvidenceVersion: "v2", stage3OcrGrid: "24x18" }, allow).ocrGrid, "4x3");
+  });
+
+  it("keeps 12x9 off unless the worker allows it, and never for Supabase Analyzer V2 runs", () => {
+    const fineByDefault = stage3ScopeArgs({ stage3EvidenceVersion: "v2", stage3OcrGrid: "12x9" });
+    assert.deepEqual([fineByDefault.ocrGrid, fineByDefault.buildArgs], ["4x3", []]);
+    assert.deepEqual(fineByDefault.ignored, [{ event: "ocr_grid_disabled", value: "12x9" }]);
+    const analyzerV2 = stage3ScopeArgs({ analyzerVersion: "v2", stage3OcrGrid: "12x9" }, { allowFineGrid: true });
+    assert.deepEqual(
+      [analyzerV2.analyzerVersion, analyzerV2.evidenceVersion, analyzerV2.ocrGrid, analyzerV2.syncArgs, analyzerV2.buildArgs],
+      ["v2", "v2", "4x3", ["--evidence-version", "v2"], []],
+    );
   });
 
   it("renders 12x9 tiles at the scale of the 4x3 tile containing them", () => {

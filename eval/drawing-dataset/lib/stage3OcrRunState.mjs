@@ -208,5 +208,8 @@ export function toAnalysisScopePreprocessSummary(state) {
     macWorkerLastHeartbeat: state.macWorkerLastHeartbeat,
     updatedAt: state.updatedAt,
     cancelled: Boolean(state.cancelled),
+    ...(state.gateReleasedBy
+      ? { gateReleasedBy: state.gateReleasedBy, gateReleaseReason: String(state.gateReleaseReason || "").slice(0, 600) }
+      : {}),
   };
 }

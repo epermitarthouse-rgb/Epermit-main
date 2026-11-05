@@ -69,6 +69,8 @@ export interface AnalyzerValidationContext {
   sheetIndex: SubmittedSheetRef[];
   /** File name of the sheet under review; its own number is not a cross-sheet reference. */
   currentFileName?: string | null;
+  /** Withhold findings whose only claim is about a resolvable sheet reference (Analyzer V2 runs). */
+  withholdReferenceOnlyClaims?: boolean;
   sheetDiscipline?: string | null;
   /** UTC instant for "future date" checks. Prefer run started_at / created_at. */
   analysisDate?: string | Date | null;
@@ -969,7 +971,9 @@ export function validateAnalyzerFindings(
     }
 
     const rules: string[] = [];
-    const referenced = referenceOnlyRefs(current, context.currentFileName);
+    const referenced = context.withholdReferenceOnlyClaims
+      ? referenceOnlyRefs(current, context.currentFileName)
+      : null;
     if (referenced) {
       const { unresolved } = resolveSheetReferences(referenced.join(" "), context.sheetIndex);
       if (!unresolved.length) {

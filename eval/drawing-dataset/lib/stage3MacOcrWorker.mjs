@@ -536,7 +536,7 @@ export async function processClaimedJob(paths, job, options = {}) {
   let ocrMeta = { engine: null, freshOcr: false, ocrChars: 0 };
   let recovered = null;
   if (job.pdfPath && existsSync(job.pdfPath) && options.freshOcr !== false) {
-    recovered = await recoverPdfFile(job.pdfPath, {});
+    recovered = await (options.recoverPdf || recoverPdfFile)(job.pdfPath, {});
     ocrMeta = {
       engine: recovered.pages?.[0]?.engine || STAGE3_EXTRACTION_METHOD,
       freshOcr: true,

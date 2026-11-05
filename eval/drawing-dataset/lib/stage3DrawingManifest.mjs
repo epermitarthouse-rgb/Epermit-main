@@ -9,7 +9,7 @@ import { canonicalSheetKey } from "./identity.mjs";
 
 export const STAGE3_MANIFEST_VERSION = "phase3.stage3-drawing-manifest.v1";
 
-function sheetLabelFromPath(relativePath) {
+export function sheetLabelFromPath(relativePath) {
   const base = path.basename(String(relativePath || ""), ".pdf");
   return canonicalSheetKey(base).raw || base;
 }

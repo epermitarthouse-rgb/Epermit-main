@@ -20,24 +20,25 @@ const GRIDS = new Set(["4x3", "12x9"]);
 const RESOLUTIONS = new Set(["production", "s4"]);
 
 /**
- * Normalise worker evidence options. Unknown or unsafe values throw, so a bad run scope
- * fails the v2 build (v1 is unaffected) instead of silently running another configuration.
- */
-/**
  * Worker CLI arguments for a run's `analysis_scope` (daemon). `stage3EvidenceVersion: "v2"` adds the
- * v2 build and upload; `stage3OcrGrid: "12x9"` makes that build use 12x9 + S4, and only with v2.
- * Any other value is reported in `ignored` and the run continues on v1 / 4x3.
+ * v2 build and upload. `stage3OcrGrid: "12x9"` makes that build use 12x9 + S4 only when the worker
+ * allows it (`allowFineGrid`, off by default) and never for Supabase Analyzer V2 runs
+ * (`analyzerVersion: "v2"`), which are 4x3 only. Any other value is reported in `ignored` and the
+ * run continues on v1 / 4x3.
  */
-export function stage3ScopeArgs(scope = {}) {
+export function stage3ScopeArgs(scope = {}, { allowFineGrid = false } = {}) {
   const ignored = [];
   const blank = (v) => v == null || v === "";
-  const version = scope?.stage3EvidenceVersion;
+  const analyzerV2 = scope?.analyzerVersion === "v2";
+  const version = analyzerV2 ? "v2" : scope?.stage3EvidenceVersion;
   const v2 = version === "v2";
   if (!v2 && !blank(version) && version !== "v1") ignored.push({ event: "evidence_version_ignored", value: String(version).slice(0, 40) });
   const grid = scope?.stage3OcrGrid;
-  const fine = v2 && grid === "12x9";
-  if (!fine && !blank(grid) && grid !== "4x3") ignored.push({ event: "ocr_grid_ignored", value: String(grid).slice(0, 40) });
+  const fine = v2 && grid === "12x9" && allowFineGrid && !analyzerV2;
+  if (!fine && grid === "12x9") ignored.push({ event: "ocr_grid_disabled", value: "12x9" });
+  else if (!fine && !blank(grid) && grid !== "4x3") ignored.push({ event: "ocr_grid_ignored", value: String(grid).slice(0, 40) });
   return {
+    analyzerVersion: analyzerV2 ? "v2" : "v1",
     evidenceVersion: v2 ? "v2" : "v1",
     ocrGrid: fine ? "12x9" : "4x3",
     syncArgs: v2 ? ["--evidence-version", "v2"] : [],
@@ -46,6 +47,10 @@ export function stage3ScopeArgs(scope = {}) {
   };
 }
 
+/**
+ * Normalise worker evidence options. Unknown or unsafe values throw, so a bad run scope
+ * fails the v2 build (v1 is unaffected) instead of silently running another configuration.
+ */
 export function resolveStage3EvidenceOptions(input = {}) {
   const evidenceVersion = input.evidenceVersion == null || input.evidenceVersion === "" ? "v1" : String(input.evidenceVersion);
   if (!STAGE3_EVIDENCE_VERSIONS[evidenceVersion]) throw new Error(`stage3_evidence_version_unknown:${evidenceVersion}`);

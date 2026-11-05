@@ -33,6 +33,7 @@ import {
   stage3VisualEvidenceAuditMetadata,
   type Stage3VisualEvidenceResult,
 } from "../_shared/analyzerStage3VisualEvidence.ts";
+import { analyzerVersionOf } from "../_shared/analyzerVersion.ts";
 import {
   evaluateStage3OcrRunGate,
   stage3OcrGateAuditMetadata,
@@ -297,24 +298,27 @@ async function processJob(
         sheetJobId: row.id ? String(row.id) : null,
       }));
     }
+    const analyzerVersion = analyzerVersionOf(run.analysis_scope);
     const runSheetCount = sheetIndex.length;
-    const { data: projectRows, error: projectIndexError } = await admin
-      .from("supabase_analyzer_sheet_jobs")
-      .select("original_file_name, detected_sheet_number, detected_sheet_title, discipline")
-      .eq("project_id", job.project_id)
-      .neq("run_id", job.run_id)
-      .neq("status", "upload_pending")
-      .order("created_at", { ascending: false })
-      .limit(200);
-    if (projectIndexError) {
-      console.error("[supabase-analyzer] project sheet index unavailable", job.run_id, projectIndexError.message);
-    } else if (sheetIndex.length) {
-      sheetIndex = mergeProjectSheetIndex(sheetIndex, (projectRows || []).map((row) => ({
-        fileName: String(row.original_file_name || ""),
-        detectedSheetNumber: row.detected_sheet_number,
-        detectedSheetTitle: row.detected_sheet_title,
-        discipline: row.discipline,
-      })));
+    if (analyzerVersion === "v2") {
+      const { data: projectRows, error: projectIndexError } = await admin
+        .from("supabase_analyzer_sheet_jobs")
+        .select("original_file_name, detected_sheet_number, detected_sheet_title, discipline")
+        .eq("project_id", job.project_id)
+        .neq("run_id", job.run_id)
+        .neq("status", "upload_pending")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (projectIndexError) {
+        console.error("[supabase-analyzer] project sheet index unavailable", job.run_id, projectIndexError.message);
+      } else if (sheetIndex.length) {
+        sheetIndex = mergeProjectSheetIndex(sheetIndex, (projectRows || []).map((row) => ({
+          fileName: String(row.original_file_name || ""),
+          detectedSheetNumber: row.detected_sheet_number,
+          detectedSheetTitle: row.detected_sheet_title,
+          discipline: row.discipline,
+        })));
+      }
     }
 
     // Phase 3 Stage 1–2: optional sheet-local visual evidence. Failures never block baseline analysis.
@@ -610,6 +614,7 @@ async function processJob(
       codeContext: run.code_context,
       sheetIndex,
       currentFileName: job.original_file_name,
+      withholdReferenceOnlyClaims: analyzerVersion === "v2",
       sheetDiscipline: analysis.discipline,
       analysisDate,
     });
@@ -731,6 +736,7 @@ async function processJob(
       project_id: job.project_id,
       event_type: "sheet_analysis_completed",
       metadata: {
+        analyzer_version: analyzerVersion,
         finding_count: reviewed.published.length,
         withheld_count: reviewed.withheld.length,
         withheld: reviewed.withheld.map((item) => ({

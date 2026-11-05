@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   Building2,
   Calendar,
+  Cpu,
   Download,
   FileText,
   FolderKanban,
@@ -34,6 +35,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -92,6 +94,13 @@ import {
   resolveAnalyzerReviewScope,
   type StoredAnalysisMode,
 } from "@/lib/supabaseAnalyzer/analysisMode";
+import {
+  analyzerVersionOptions,
+  analyzerVersionShortLabel,
+  DEFAULT_ANALYZER_VERSION,
+  isAnalyzerVersion,
+  type AnalyzerVersion,
+} from "@/lib/supabaseAnalyzer/analyzerVersion";
 import { countSeverity, downloadSupabaseAnalyzerJson } from "@/lib/supabaseAnalyzer/exportDataset";
 import { exportSupabaseAnalyzerReport } from "@/lib/supabaseAnalyzer/report";
 import { buildArchitectReviewModel, fingerprintArchitectReview } from "@/lib/supabaseAnalyzer/architectReview";
@@ -152,6 +161,8 @@ export function SupabaseCodeAnalyzer() {
   const [codeYear, setCodeYear] = useState(DC_CODE_EDITION);
   const [analysisMode, setAnalysisMode] = useState<StoredAnalysisMode>("both");
   const [stage3FullCoverageOcr, setStage3FullCoverageOcr] = useState(false);
+  const [analyzerVersion, setAnalyzerVersion] = useState<AnalyzerVersion>(DEFAULT_ANALYZER_VERSION);
+  const analyzerV2 = analyzerVersion === "v2";
   const [files, setFiles] = useState<File[]>([]);
   const [runs, setRuns] = useState<SupabaseAnalyzerRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -471,7 +482,8 @@ export function SupabaseCodeAnalyzer() {
           codeEdition: codeYear,
           codeContext: codeContextForAnalyzer(jurisdiction, codeYear),
           analysisMode,
-          stage3FullCoverageOcr,
+          stage3FullCoverageOcr: !analyzerV2 && stage3FullCoverageOcr,
+          analyzerVersion,
         });
         runId = created.runId;
         uploads = created.uploads;
@@ -989,6 +1001,7 @@ export function SupabaseCodeAnalyzer() {
       jobIds: selectedIds,
       files: selectedFiles,
       analysisMode,
+      analyzerVersion,
     });
     const runId = reanalysisRequestRef.current?.key === requestKey
       ? reanalysisRequestRef.current.runId
@@ -1011,7 +1024,8 @@ export function SupabaseCodeAnalyzer() {
         files: selectedFiles,
         confirmed: true,
         analysisMode,
-        stage3FullCoverageOcr,
+        stage3FullCoverageOcr: !analyzerV2 && stage3FullCoverageOcr,
+        analyzerVersion,
         jurisdictionKey: jurisdictionKeyFor(jurisdiction),
         jurisdictionLabel: jurisdiction,
         projectType,
@@ -1162,6 +1176,43 @@ export function SupabaseCodeAnalyzer() {
               </Select>
             </div>
           </div>
+          <Card className="pilot-card border-border bg-card border-teal/20 shadow-sm" data-testid="analyzer-version-control">
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <Cpu className="h-5 w-5 shrink-0 text-teal" />
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">Analyzer Version</p>
+                  <p className="text-sm text-muted-foreground">
+                    Choose the analyzer for this run. Findings publish for Accept / Reject / Modify review either way.
+                  </p>
+                </div>
+              </div>
+              <ToggleGroup
+                type="single"
+                value={analyzerVersion}
+                disabled={submitting}
+                onValueChange={(value) => {
+                  if (isAnalyzerVersion(value)) setAnalyzerVersion(value);
+                }}
+                className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
+                aria-label="Supabase Analyzer version"
+              >
+                {analyzerVersionOptions.map((option) => (
+                  <ToggleGroupItem
+                    key={option.value}
+                    value={option.value}
+                    variant="outline"
+                    className="h-auto flex-col items-start justify-start gap-1 whitespace-normal px-3 py-2 text-left data-[state=on]:border-teal data-[state=on]:bg-teal/10"
+                    data-testid={`analyzer-version-${option.value}`}
+                    aria-label={option.label}
+                  >
+                    <span className="text-sm font-medium text-foreground">{option.label}</span>
+                    <span className="text-xs font-normal text-muted-foreground">{option.description}</span>
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </CardContent>
+          </Card>
           <Card className="pilot-card border-border bg-card border-teal/20 shadow-sm" data-testid="analysis-mode-control">
             <CardContent className="pt-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1211,12 +1262,14 @@ export function SupabaseCodeAnalyzer() {
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">Stage 3 full-coverage OCR</p>
               <p className="text-xs text-muted-foreground">
-                Optional for this run only. Defers paid GPT until Mac OCR packs are ready for every sheet. Off by default.
+                {analyzerV2
+                  ? "Included with V2: analysis waits until 4×3 OCR evidence is ready for every sheet."
+                  : "Optional for this run only. Defers paid GPT until Mac OCR packs are ready for every sheet. Off by default."}
               </p>
             </div>
             <Switch
-              checked={stage3FullCoverageOcr}
-              disabled={submitting}
+              checked={analyzerV2 || stage3FullCoverageOcr}
+              disabled={submitting || analyzerV2}
               onCheckedChange={setStage3FullCoverageOcr}
               data-testid="switch-stage3-full-coverage"
               aria-label="Enable Stage 3 full-coverage OCR for this run"
@@ -1511,7 +1564,7 @@ export function SupabaseCodeAnalyzer() {
                 <SelectContent>
                   {runs.map((run) => (
                     <SelectItem key={run.id} value={run.id}>
-                      {new Date(run.created_at).toLocaleString()} · {statusLabel(run.status)} · {analysisModeShortLabel(run.analysis_mode)} · {run.total_sheets} sheets
+                      {new Date(run.created_at).toLocaleString()} · {statusLabel(run.status)} · {analyzerVersionShortLabel(run.analysis_scope)} · {analysisModeShortLabel(run.analysis_mode)} · {run.total_sheets} sheets
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1520,6 +1573,9 @@ export function SupabaseCodeAnalyzer() {
             <div className="text-right">
               <p className="text-sm text-muted-foreground">
                 {activeRun.jurisdiction_label} · {activeRun.code_context} · {displayAnalysisMode(activeRun.analysis_mode)}
+              </p>
+              <p className="text-xs text-muted-foreground" data-testid="analyzer-run-version">
+                Supabase Analyzer {analyzerVersionShortLabel(activeRun.analysis_scope)}
               </p>
               {reportModel && reportVersion && reportVersion.runId === activeRun.id ? (
                 <p

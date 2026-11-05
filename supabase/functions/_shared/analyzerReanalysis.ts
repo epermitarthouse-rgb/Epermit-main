@@ -211,6 +211,7 @@ export function reanalysisRequestKey(input: {
   jobIds: readonly string[];
   files: readonly { name: string; size: number }[];
   analysisMode: string;
+  analyzerVersion?: string;
 }): string {
   const jobs = input.scope === "all"
     ? "all"
@@ -219,7 +220,8 @@ export function reanalysisRequestKey(input: {
     .map((file) => `${file.name}:${file.size}`)
     .sort()
     .join("|");
-  return [input.sourceRunId, input.scope, input.analysisMode, jobs, files].join("#");
+  const version = input.analyzerVersion === "v2" ? ["v2"] : [];
+  return [input.sourceRunId, input.scope, input.analysisMode, jobs, files, ...version].join("#");
 }
 
 export class ReanalysisSubmitLock {

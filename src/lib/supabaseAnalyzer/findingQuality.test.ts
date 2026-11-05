@@ -131,18 +131,22 @@ describe("project-level sheet index", () => {
       drawing_evidence: "Note: 'SEE SHEET A-6.01 FOR CEILING FINISHES.'",
       recommendation: "Ensure the ceiling finish details are added to this sheet or a listed sheet in the current set.",
     });
-    const runOnly = validateAnalyzerFindings([finding], context({ sheetIndex: run, currentFileName: "A-1.02-00.pdf" }));
+    const v2 = { currentFileName: "A-1.02-00.pdf", withholdReferenceOnlyClaims: true };
+    const runOnly = validateAnalyzerFindings([finding], context({ sheetIndex: run, ...v2 }));
     assert.equal(runOnly.published[0]?.severity, "warning");
-    const withProject = validateAnalyzerFindings([finding], context({ sheetIndex: mergeProjectSheetIndex(run, project), currentFileName: "A-1.02-00.pdf" }));
+    const withProject = validateAnalyzerFindings([finding], context({ sheetIndex: mergeProjectSheetIndex(run, project), ...v2 }));
     assert.equal(withProject.published.length, 0);
     assert.deepEqual(withProject.withheld[0]?.referencedSheets, ["A-6.01"]);
   });
 
-  it("is built by the processor from the project's other uploaded sheet jobs and audited by scope", () => {
+  it("is built by the processor for Analyzer V2 runs only, from the project's other uploaded sheet jobs, and audited by scope", () => {
     const processor = readFileSync(join(__dirname, "../../../supabase/functions/supabase-analyzer-processor/index.ts"), "utf8");
+    assert.match(processor, /if \(analyzerVersion === "v2"\) \{\s*const \{ data: projectRows/);
     assert.match(processor, /\.eq\("project_id", job\.project_id\)\s*\.neq\("run_id", job\.run_id\)\s*\.neq\("status", "upload_pending"\)/);
     assert.match(processor, /mergeProjectSheetIndex\(sheetIndex,/);
     assert.match(processor, /currentFileName: job\.original_file_name/);
+    assert.match(processor, /withholdReferenceOnlyClaims: analyzerVersion === "v2"/);
+    assert.match(processor, /analyzer_version: analyzerVersion/);
     assert.match(processor, /sheet_index_project_sheets/);
     assert.match(processor, /referenced_sheets: item\.referencedSheets/);
     assert.match(processor, /sheetJobs: retrievableJobs/);
@@ -248,8 +252,22 @@ describe("reference-only cross-sheet claims (saved drafts)", () => {
     cases: Array<{ id: string; label: string; sheetFile: string; draft: DraftAnalyzerFinding; expect: { oneSheet: string; project: string; projectRule: string | null } }>;
   };
   const projectIndex: SubmittedSheetRef[] = fixture.projectIndex.map((fileName) => ({ fileName, scope: "project" }));
-  const run = (c: (typeof fixture.cases)[number], sheets: SubmittedSheetRef[]) =>
-    validateAnalyzerFindings([c.draft], context({ sheetIndex: sheets, currentFileName: c.sheetFile, analysisDate: "2026-11-05T00:00:00.000Z" }));
+  const run = (c: (typeof fixture.cases)[number], sheets: SubmittedSheetRef[], withholdReferenceOnlyClaims = true) =>
+    validateAnalyzerFindings([c.draft], context({
+      sheetIndex: sheets,
+      currentFileName: c.sheetFile,
+      withholdReferenceOnlyClaims,
+      analysisDate: "2026-11-05T00:00:00.000Z",
+    }));
+
+  it("leaves V1 validation unchanged: no reference-only withholds or unresolved-reference rules", () => {
+    for (const c of fixture.cases) {
+      const v1 = run(c, projectIndex, false);
+      const rules = [...v1.withheld.flatMap((w) => w.rules), ...v1.published.flatMap((p) => p.validation.rules)];
+      assert.equal(rules.includes("cross_sheet_reference_only"), false, c.id);
+      assert.equal(rules.includes("cross_sheet_reference_unresolved"), false, c.id);
+    }
+  });
 
   it("withholds a reference-only claim when every referenced sheet is in the project, keeping the sheets for audit", () => {
     const targets = fixture.cases.filter((c) => c.expect.project === "withheld");
@@ -301,7 +319,7 @@ describe("reference-only cross-sheet claims (saved drafts)", () => {
       observation: "The note says 'SEE SHEET A-6.00 FOR DOOR SCHEDULE' but no door schedule is present on this sheet.",
       drawing_evidence: "SEE SHEET A-6.00 FOR DOOR SCHEDULE.",
       recommendation: "Confirm the schedule on A-6.00.",
-    })], context({ sheetIndex: [{ fileName: "A-6.00-00.pdf" }], currentFileName: "A-6.00-00.pdf" }));
+    })], context({ sheetIndex: [{ fileName: "A-6.00-00.pdf" }], currentFileName: "A-6.00-00.pdf", withholdReferenceOnlyClaims: true }));
     const rules = [...result.withheld.flatMap((w) => w.rules), ...result.published.flatMap((p) => p.validation.rules)];
     assert.equal(rules.includes("cross_sheet_reference_only"), false);
     assert.equal(rules.includes("cross_sheet_reference_unresolved"), false);

@@ -5,6 +5,12 @@ import {
 } from "../_shared/analyzerReviewScope.ts";
 import { mergeStage3FullCoverageRunOptIn } from "../_shared/analyzerStage3OcrReadiness.ts";
 import {
+  analyzerV2Unavailable,
+  parseAnalyzerVersion,
+  reopenAnalyzerV2Gate,
+  withAnalyzerVersion,
+} from "../_shared/analyzerVersion.ts";
+import {
   isObjectPathConflict,
   materializeReanalysis,
   planReanalysis,
@@ -132,7 +138,7 @@ async function handleSheetUpdate(
   admin: ReturnType<typeof createClient>,
   userId: string,
   projectId: string,
-  run: { id: string; status: string },
+  run: { id: string; status: string; analysis_scope?: unknown },
   body: Record<string, unknown>,
 ) {
   if (runIsWorkerActive(run.status)) {
@@ -301,9 +307,11 @@ async function handleSheetUpdate(
   const totalSheets = latest.filter((row) => row.status !== "cancelled").length;
   const hasPending = latest.some((row) => row.status === "upload_pending");
   if (hasPending) {
+    const reopenedScope = reopenAnalyzerV2Gate(run.analysis_scope, totalSheets);
     const { error: runUpdateError } = await admin
       .from("supabase_analyzer_runs")
       .update({
+        ...(reopenedScope ? { analysis_scope: reopenedScope } : {}),
         total_sheets: Math.max(1, Math.min(100, totalSheets)),
         status: "uploading",
         completed_at: null,
@@ -493,6 +501,10 @@ async function handleReanalysis(
 
   const requestedMode = normalizeNewRunAnalysisMode(body.analysisMode);
   if (typeof requestedMode !== "string") return json({ error: requestedMode.error }, 400);
+  const analyzerVersion = parseAnalyzerVersion(body.analyzerVersion);
+  if (typeof analyzerVersion !== "string") return json({ error: analyzerVersion.error }, 400);
+  const v2Unavailable = analyzerVersion === "v2" ? analyzerV2Unavailable(Deno.env) : null;
+  if (v2Unavailable) return json({ error: v2Unavailable }, 503);
 
   const { data: existingRows, error: existingError } = await admin
     .from("supabase_analyzer_runs")
@@ -612,11 +624,15 @@ async function handleReanalysis(
     codeContext,
   });
   // Same opt-in as create — Update Analysis / reanalyze must persist full-coverage flags or Stage 3 stays off.
-  const analysisScope = body.stage3FullCoverageOcr === true
-    ? mergeStage3FullCoverageRunOptIn(baseScope as Record<string, unknown>, true, {
-      requiredSheetCount: materialized.value.totalSheets,
-    })
-    : baseScope;
+  const analysisScope = withAnalyzerVersion(
+    body.stage3FullCoverageOcr === true
+      ? mergeStage3FullCoverageRunOptIn(baseScope as Record<string, unknown>, true, {
+        requiredSheetCount: materialized.value.totalSheets,
+      })
+      : baseScope,
+    analyzerVersion,
+    { requiredSheetCount: materialized.value.totalSheets },
+  );
   const budget = Math.max(1, Math.min(Number(body.budgetLimitUsd) || Number(source.budget_limit_usd) || 20, 100));
 
   const { error: runError } = await admin.from("supabase_analyzer_runs").insert({
@@ -685,6 +701,7 @@ async function handleReanalysis(
         source_run_id: sourceRunId,
         request_id: requestedRunId,
         analysis_mode: requestedMode,
+        analyzer_version: analyzerVersion,
         reused: plan.reuseCount,
         added: plan.added,
         replaced: plan.replaced,
@@ -801,6 +818,10 @@ Deno.serve(async (req) => {
       if (typeof requestedMode !== "string") {
         return json({ error: requestedMode.error }, 400);
       }
+      const analyzerVersion = parseAnalyzerVersion(body.analyzerVersion);
+      if (typeof analyzerVersion !== "string") return json({ error: analyzerVersion.error }, 400);
+      const v2Unavailable = analyzerVersion === "v2" ? analyzerV2Unavailable(Deno.env) : null;
+      if (v2Unavailable) return json({ error: v2Unavailable }, 503);
       const baseScope = resolveAnalyzerReviewScope({
         mode: requestedMode,
         jurisdictionKey,
@@ -809,11 +830,15 @@ Deno.serve(async (req) => {
         codeContext,
       });
       // Operator opt-in only — Stage 3 full-coverage OCR remains off unless requested.
-      const analysisScope = body.stage3FullCoverageOcr === true
-        ? mergeStage3FullCoverageRunOptIn(baseScope as Record<string, unknown>, true, {
-          requiredSheetCount: files.length,
-        })
-        : baseScope;
+      const analysisScope = withAnalyzerVersion(
+        body.stage3FullCoverageOcr === true
+          ? mergeStage3FullCoverageRunOptIn(baseScope as Record<string, unknown>, true, {
+            requiredSheetCount: files.length,
+          })
+          : baseScope,
+        analyzerVersion,
+        { requiredSheetCount: files.length },
+      );
       const budget = Math.max(1, Math.min(Number(body.budgetLimitUsd) || 20, 100));
 
       const { error: runError } = await admin.from("supabase_analyzer_runs").insert({
@@ -884,7 +909,12 @@ Deno.serve(async (req) => {
         project_id: projectId,
         actor_id: user.id,
         event_type: "run_created",
-        metadata: { sheet_count: files.length, total_bytes: totalBytes, analysis_mode: requestedMode },
+        metadata: {
+          sheet_count: files.length,
+          total_bytes: totalBytes,
+          analysis_mode: requestedMode,
+          analyzer_version: analyzerVersion,
+        },
       });
 
       return json({ runId, uploads }, 201);
