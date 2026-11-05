@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { renderCropViaPython } from "./adjudicateCrops.mjs";
+import { mergeSamePlaceReadings } from "./stage3ReadingVariants.mjs";
 import {
   assessGuardrailHeightAssociation,
   assessHydraulicRelationships,
@@ -182,7 +183,9 @@ export function extractGuardrailDetailEvidence(layout, options = {}) {
     ...heightExact.slice(0, 3),
     ...guardNotes.filter((item) => /GUARD\s*RAIL/i.test(item.text)).slice(0, 6),
   ];
-  const texts = [...new Set(packHits.map((item) => item.text))];
+  const excerpts = mergeSamePlaceReadings(packHits);
+  const texts = excerpts.hits.map((item) => item.text);
+  if (excerpts.merged.length) association.readingVariantsMerged = excerpts.merged;
   const status = heightExact.length
     ? (association.status.startsWith("associated") ? "evidence_recovered" : "partial_recovery")
     : (mode === "text_layer_only" ? "not_found_text_layer" : "not_found");
@@ -277,12 +280,12 @@ export function extractDoorScheduleEvidence(layout, options = {}) {
     scheduleCompleteness: "unresolved_needs_professional_review",
   };
 
-  const texts = [
-    ...scheduleHeaders.slice(0, 2).map((item) => item.text),
-    ...hardware.slice(0, 12).map((item) => item.text),
-    ...fire.slice(0, 6).map((item) => item.text),
-  ];
-  const uniqueTexts = [...new Set(texts)];
+  const excerpts = mergeSamePlaceReadings([
+    ...scheduleHeaders.slice(0, 2),
+    ...hardware.slice(0, 12),
+    ...fire.slice(0, 6),
+  ]);
+  const uniqueTexts = excerpts.hits.map((item) => item.text);
   const status = present.lockingHardware || present.fireRatingNotes
     ? "evidence_recovered"
     : (mode === "text_layer_only" ? "not_found_text_layer" : "not_found");
@@ -307,6 +310,7 @@ export function extractDoorScheduleEvidence(layout, options = {}) {
           : "unresolved_or_not_examined",
         note: "Presence of quoted hardware/fire notes contradicts blanket absence only. Full schedule completeness still needs professional review.",
       },
+      ...(excerpts.merged.length ? { readingVariantsMerged: excerpts.merged } : {}),
       independentlyVerified: false,
     },
     provenance: {

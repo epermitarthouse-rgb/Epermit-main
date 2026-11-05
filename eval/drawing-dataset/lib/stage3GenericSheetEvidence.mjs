@@ -3,6 +3,7 @@
  * Reuses layout-full associations; prefers Vision OCR lines when present.
  */
 import { createHash } from "node:crypto";
+import { mergeSamePlaceReadings } from "./stage3ReadingVariants.mjs";
 
 const MAX_REGION_SNIPPETS = 6;
 const MAX_LINES_PER_REGION = 4;
@@ -79,10 +80,14 @@ export function extractGenericSheetEvidence(layout, options = {}) {
 
   const regionSnippets = [];
   const extractedTexts = [];
+  const readingVariantsMerged = [];
   for (const group of regions.slice(0, MAX_REGION_SNIPPETS)) {
-    const lines = group.lines
-      .slice()
-      .sort((a, b) => rankAssociation(b) - rankAssociation(a))
+    const ranked = mergeSamePlaceReadings(
+      group.lines.slice().sort((a, b) => rankAssociation(b) - rankAssociation(a)),
+      { dropExactRepeats: false },
+    );
+    readingVariantsMerged.push(...ranked.merged);
+    const lines = ranked.hits
       .slice(0, MAX_LINES_PER_REGION)
       .map((item) => ({
         text: oneLine(item.text, 160),
@@ -120,6 +125,7 @@ export function extractGenericSheetEvidence(layout, options = {}) {
       regionSnippetCount: regionSnippets.length,
       structureFacts: { dimensions: dims, notes, schedules },
       visualOcrAssociations: visualLines,
+      ...(readingVariantsMerged.length ? { readingVariantsMerged } : {}),
       independentlyVerified: false,
     },
     limitations: [
