@@ -42,7 +42,7 @@ export const STAGE3_VISUAL_EVIDENCE_V2_BOUNDS = {
 /** Must match eval/drawing-dataset/lib/stage3EvidenceEval.mjs V2_ANALYZER_HEADER (fixture-tested). */
 export const STAGE3_V2_PROMPT_HEADER = [
   "Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.",
-  "Reading rules: each \"- \" line is one printed annotation; \" / \" separates its rows. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.",
+  "Reading rules: each \"- \" line is one printed annotation; \" / \" separates its rows; \" ; \" separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.",
 ] as const;
 
 export type Stage3PackStatus =

@@ -155,6 +155,46 @@ export function classifySegment(segment, gt, mapper) {
   return { ...segment, words, gids, category, rows };
 }
 
+const overlapArea = (a, b) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x))
+  * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+const coveredBy = (box, boxes) => boxes.reduce((s, b) => s + overlapArea(box, b), 0) / Math.max(1e-6, box.width * box.height);
+
+/**
+ * Echo filter outcome: excluded rows that are ground-truth text-layer echoes, excluded rows that
+ * are real ground-truth rows (must be 0), and echo rows still kept.
+ */
+export function evaluateEchoFilter(echoes, groundTruth, keptRows = []) {
+  const echoBoxes = groundTruth.noise?.textLayerEcho || [];
+  const gtBoxes = groundTruth.rows.map((r) => r.box);
+  const isEcho = (box) => coveredBy(box, echoBoxes) >= 0.5;
+  const isReal = (box) => coveredBy(box, gtBoxes) >= 0.3;
+  const removedEcho = echoes.filter((e) => isEcho(e.box)).length;
+  const realDropped = echoes.filter((e) => !isEcho(e.box) && isReal(e.box)).map((e) => e.text);
+  const keptEcho = keptRows.filter((r) => isEcho(r.box) && !isReal(r.box)).length;
+  return { excluded: echoes.length, removedEcho, keptEcho, realDropped: realDropped.length, realDroppedTexts: realDropped.slice(0, 5) };
+}
+
+/**
+ * Region labels of ground-truth technical rows under a region set (production association rule
+ * by centre point). Windowed ground truth lies in the drawing field. Mislabelled: a drawing row
+ * placed in the title block, or a title-block row placed outside it.
+ */
+export function evaluateRegionLabels(regions, groundTruth, associate) {
+  const tech = groundTruth.rows.filter((r) => r.technical);
+  const kinds = associate(tech.map((r) => ({ kind: "ocr_line", text: r.text, bbox: { ...r.box, unit: "pdf-point", origin: "bottom-left" } })), regions || []);
+  let mislabelled = 0;
+  const examples = [];
+  tech.forEach((r, i) => {
+    const expected = r.region || "drawing";
+    const got = kinds[i]?.regionKind || null;
+    if ((expected === "title_block") !== (got === "title_block")) {
+      mislabelled += 1;
+      if (examples.length < 3) examples.push(`${r.text} -> ${got}`);
+    }
+  });
+  return { technicalRows: tech.length, mislabelled, examples };
+}
+
 export function prepareGroundTruth(groundTruth) {
   const rowById = new Map(groundTruth.rows.map((r) => [r.gid, r]));
   const annById = new Map(groundTruth.annotations.map((a) => [a.aid, a]));
@@ -167,6 +207,18 @@ export function prepareGroundTruth(groundTruth) {
  * (exact plus an unmarked wrong reading of the same row), exact_in_merge (only inside a
  * cross-row merge), partial, wrong, none.
  */
+/** Two printed rows on one text line, side by side (separate columns or cells), in reading frame. */
+export function sideBySide(a, b) {
+  if (Boolean(a.vertical) !== Boolean(b.vertical)) return false;
+  const f = (r) => (r.vertical
+    ? { x: r.box.y, w: r.box.height, y: r.box.x, h: r.box.width }
+    : { x: r.box.x, w: r.box.width, y: r.box.y, h: r.box.height });
+  const p = f(a), q = f(b);
+  const yOverlap = Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y);
+  const xOverlap = Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x);
+  return yOverlap >= 0.5 * Math.min(p.h, q.h) && xOverlap <= 0.1 * Math.min(p.w, q.w);
+}
+
 export function evaluateItems(items, groundTruthInput, options = {}) {
   const gt = groundTruthInput.rowById ? groundTruthInput : prepareGroundTruth(groundTruthInput);
   const mapper = createRowMapper(gt);
@@ -212,6 +264,10 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
   });
 
   const mixedSegments = segmentLog.filter((s) => s.category === "merge_across_annotations");
+  const crossColumnSegments = segmentLog.filter((s) => {
+    const rs = [...new Set(s.gids)].map((g) => gt.rowById.get(g));
+    return rs.some((a, i) => rs.slice(i + 1).some((b) => sideBySide(a, b)));
+  });
   const mixedItems = classified.filter((item) => {
     const aids = new Set(item.segments.flatMap((s) => s.gids.map((g) => gt.rowById.get(g).aid)));
     return aids.size > 1 && !item.contextUncertain;
@@ -246,6 +302,7 @@ export function evaluateItems(items, groundTruthInput, options = {}) {
     annotationsAll: annTally(() => true),
     mixedSegments: mixedSegments.length,
     mixedItems: mixedItems.length,
+    crossColumnSegments: crossColumnSegments.length,
     wrongTechnicalSegmentsUnmarked: wrongTechUnmarked.length,
     wrongDimensionOrElevationUnmarked: wrongDimUnmarked.length,
     wrongTechnicalSegmentsMarked: wrongSegments.filter((s) => s.marker).length,
@@ -384,7 +441,7 @@ export function v1AnalyzerBlock(packs, status = "recovered", bounds = V1_ANALYZE
 export const V2_ANALYZER_BOUNDS = { maxPacks: 1, maxCharsPerPack: 2600, maxTotalChars: 3200 };
 export const V2_ANALYZER_HEADER = [
   "Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.",
-  "Reading rules: each \"- \" line is one printed annotation; \" / \" separates its rows. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.",
+  "Reading rules: each \"- \" line is one printed annotation; \" / \" separates its rows; \" ; \" separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.",
 ];
 export function v2AnalyzerBlock(packs, status = "recovered", notes = [], bounds = V2_ANALYZER_BOUNDS) {
   const lines = [...V2_ANALYZER_HEADER, `stage3_status=${status} version=phase3.stage3-visual-evidence.v2`];
@@ -429,7 +486,7 @@ export function summarize(e) {
     techRowsExact: t.exact, techRowsClean: t.exactClean, techRowsContradicted: t.exactContradicted, techRowsMarked: t.exactMarked, techRowsInMerge: t.exactInMerge,
     techRowsPartial: t.partial, techRowsWrong: t.wrong, techRowsNone: t.none, techRows: t.rows,
     techAnnComplete: a.complete, techAnnClean: a.completeClean, techAnnContext: a.contextPreserved, techAnn: a.annotations,
-    mixedSegments: e.mixedSegments, wrongTechUnmarked: e.wrongTechnicalSegmentsUnmarked, wrongDimUnmarked: e.wrongDimensionOrElevationUnmarked,
+    mixedSegments: e.mixedSegments, mixedItems: e.mixedItems, crossColumn: e.crossColumnSegments, wrongTechUnmarked: e.wrongTechnicalSegmentsUnmarked, wrongDimUnmarked: e.wrongDimensionOrElevationUnmarked,
     items: e.items, segmentsOutOfScope: e.segmentCategories.out_of_scope || 0,
   };
 }

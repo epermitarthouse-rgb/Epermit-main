@@ -12,14 +12,17 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { associateBlocksToRegions } from "../lib/layoutAssociate.mjs";
 import { dedupeOcrWords } from "../lib/ocrRecover.mjs";
 import { extractForSheet, rebuildAssociationsFromFreshOcr } from "../lib/stage3MacOcrWorker.mjs";
 import { formatStage3PromptBlock } from "../lib/stage3VisualExtractionSpike.mjs";
-import { buildStage3V2PackFromRecovery } from "../lib/stage3EvidenceV2.mjs";
+import { buildStage3V2Model, buildStage3V2PackFromRecovery } from "../lib/stage3EvidenceV2.mjs";
 import { renderAnnotation } from "../lib/stage3TechnicalDigest.mjs";
 import {
   STAGE3_EVIDENCE_EVAL_VERSION,
+  evaluateEchoFilter,
   evaluateItems,
+  evaluateRegionLabels,
   linesAsItems,
   prepareGroundTruth,
   summarize,
@@ -76,8 +79,19 @@ for (const d of manifest.drawings) {
   }
   run("4x3 deduplicated words", wordsAsItems(page.words, "w"), { units: page.words.length });
   run("4x3 reconstructed lines", linesAsItems(page.lines, page.words, "l"), { units: page.lines.length });
-
   const { pack, layout: rebuilt } = v1PackFor(d.sheetId, layout, recovery);
+  const geometry = d.geometry && existsSync(resolve(d.geometry)) ? readJson(resolve(d.geometry)) : null;
+  const v2Model = buildStage3V2Model({ layout: rebuilt, recovery, geometry });
+  run("v2 reconstructed rows", v2Model.rows.map((r) => ({ id: r.rid, segments: [{ text: r.text, words: r.words }] })), {
+    units: v2Model.rows.length,
+    layout: v2Model.layoutProvenance,
+    echoFilter: evaluateEchoFilter(v2Model.echoes, gt, v2Model.rows),
+    regionLabels: {
+      heuristic: evaluateRegionLabels(layout.regions, gt, associateBlocksToRegions),
+      v2: evaluateRegionLabels(v2Model.regions, gt, associateBlocksToRegions),
+    },
+  });
+
   const block = v1AnalyzerBlock([pack]);
   const delivered = v1DeliveredItems(pack, block, rebuilt, recovery);
   run("v1 analyzer Stage 3 block", delivered, {
@@ -86,7 +100,7 @@ for (const d of manifest.drawings) {
     ...(detail ? { block } : {}),
   });
 
-  const v2 = buildStage3V2PackFromRecovery({ sheetId: d.sheetId, layout: rebuilt, recovery, source: "4x3" });
+  const v2 = buildStage3V2PackFromRecovery({ sheetId: d.sheetId, layout: rebuilt, recovery, source: "4x3", geometry });
   const v2Block = v2AnalyzerBlock([v2]);
   const rowById = new Map(v2.evidenceModel.rows.map((r) => [r.rid, r]));
   const annById = new Map(v2.evidenceModel.annotations.map((a) => [a.aid, a]));
@@ -116,6 +130,7 @@ for (const r of results) {
   console.log(`\n## ${r.sheetId} (${r.scope}) GT rows=${r.groundTruth.rows} tech=${r.groundTruth.technicalRows} ann=${r.groundTruth.annotations} techAnn=${r.groundTruth.technicalAnnotations}${r.parity ? ` parity=${JSON.stringify(r.parity)}` : ""}`);
   for (const [name, s] of Object.entries(r.stages)) {
     const m = s.summary;
-    console.log(`${name.padEnd(30)} units=${String(s.units).padEnd(5)} techRows exact=${m.techRowsExact} clean=${m.techRowsClean} contra=${m.techRowsContradicted} marked=${m.techRowsMarked} merge=${m.techRowsInMerge} partial=${m.techRowsPartial} wrong=${m.techRowsWrong} none=${m.techRowsNone} | techAnn complete=${m.techAnnComplete} clean=${m.techAnnClean} context=${m.techAnnContext} | mixed=${m.mixedSegments} wrongTechUnmarked=${m.wrongTechUnmarked} wrongDim=${m.wrongDimUnmarked} outOfScope=${m.segmentsOutOfScope}${s.blockChars ? ` | chars pack=${s.packChars} block=${s.blockChars}` : ""}`);
+    if (s.echoFilter) console.log(`  echo filter: ${JSON.stringify(s.echoFilter)} | region labels heuristic ${JSON.stringify(s.regionLabels.heuristic)} v2 ${JSON.stringify(s.regionLabels.v2)} | layout ${JSON.stringify(s.layout)}`);
+    console.log(`${name.padEnd(30)} units=${String(s.units).padEnd(5)} techRows exact=${m.techRowsExact} clean=${m.techRowsClean} contra=${m.techRowsContradicted} marked=${m.techRowsMarked} merge=${m.techRowsInMerge} partial=${m.techRowsPartial} wrong=${m.techRowsWrong} none=${m.techRowsNone} | techAnn complete=${m.techAnnComplete} clean=${m.techAnnClean} context=${m.techAnnContext} | mixed=${m.mixedSegments}/${m.mixedItems} xcol=${m.crossColumn} wrongTechUnmarked=${m.wrongTechUnmarked} wrongDim=${m.wrongDimUnmarked} outOfScope=${m.segmentsOutOfScope}${s.blockChars ? ` | chars pack=${s.packChars} block=${s.blockChars}` : ""}`);
   }
 }

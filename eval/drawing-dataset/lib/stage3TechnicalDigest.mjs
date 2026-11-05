@@ -1,7 +1,8 @@
 /**
  * Stage 3 v2 technical digest: renders the evidence model into a bounded prompt block.
  *
- * - One line per annotation; " / " separates its printed rows. Annotations are never cut.
+ * - One line per annotation; " / " separates its printed rows, " ; " the cells of one ruled
+ *   table row (record, cells left to right). Annotations are never cut.
  * - {A | B} marks conflicting readings of one place; ?text marks a format or glyph doubt;
  *   (ctx?) marks an item whose relation to a neighbouring item is unconfirmed. The
  *   interpretation rules for these markers are stated by the analyzer v2 header.
@@ -22,7 +23,8 @@ export function renderRow(row) {
 }
 
 export function renderAnnotation(annotation, rowById) {
-  const body = annotation.rows.map((rid) => renderRow(rowById.get(rid))).join(" / ");
+  const lines = (rids) => rids.map((rid) => renderRow(rowById.get(rid))).join(" / ");
+  const body = annotation.layout === "record" ? annotation.cells.map(lines).join(" ; ") : lines(annotation.rows);
   return `- ${body}${annotation.contextUncertain ? " (ctx?)" : ""}`;
 }
 
@@ -41,7 +43,8 @@ export function renderTechnicalDigest(model, options = {}) {
   const headerFor = (shown) => `Stage3 OCR evidence v2 sheet=${sheetId} source=${source} annotations=${model.annotations.length} technical=${technicalCount} shown=${shown} independentlyVerified=false`;
   const budget = maxChars - headerFor(model.annotations.length).length - 1 - OMISSION_RESERVE;
 
-  const candidates = [...model.annotations].sort((a, b) => b.priority - a.priority || lines.get(a.aid).length - lines.get(b.aid).length
+  const rank = options.rank || ((a) => a.priority);
+  const candidates = [...model.annotations].sort((a, b) => rank(b, lines.get(b.aid)) - rank(a, lines.get(a.aid)) || lines.get(a.aid).length - lines.get(b.aid).length
     || (b.box.y + b.box.height) - (a.box.y + a.box.height) || a.box.x - b.box.x);
   const shown = new Set();
   let used = 0;
@@ -110,8 +113,8 @@ export function compactEvidenceModel(model, shownIds) {
 }
 
 /** v2 pack envelope fields shared by the worker and the harness (the worker adds job identity). */
-export function buildStage3V2Pack({ sheetId, model, source = "4x3", maxChars }) {
-  const { promptBlock, digest } = renderTechnicalDigest(model, { sheetId, source, maxChars });
+export function buildStage3V2Pack({ sheetId, model, source = "4x3", maxChars, layoutProvenance = null, rank }) {
+  const { promptBlock, digest } = renderTechnicalDigest(model, { sheetId, source, maxChars, rank });
   const shownLines = promptBlock.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2));
   const id = `${sheetId}.technical_digest.${createHash("sha1").update(`${sheetId}|${STAGE3_EVIDENCE_V2}|${promptBlock}`).digest("hex").slice(0, 12)}`;
   return {
@@ -127,6 +130,7 @@ export function buildStage3V2Pack({ sheetId, model, source = "4x3", maxChars }) 
     provenance: {
       origin: "visual_interpretation",
       method: "stage3_v2_annotation_digest",
+      ...(layoutProvenance ? { layout: layoutProvenance } : {}),
       independentlyVerified: false,
       uncertainty: "Machine OCR. Annotations are geometric groupings; markers flag conflicts and format doubts. Not professionally verified.",
     },

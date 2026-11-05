@@ -10,6 +10,8 @@
 export const STAGE3_EVIDENCE_V1 = "phase3.stage3-visual-evidence.v1";
 export const STAGE3_EVIDENCE_V2 = "phase3.stage3-visual-evidence.v2";
 export const STAGE3_EVIDENCE_VERSIONS = { v1: STAGE3_EVIDENCE_V1, v2: STAGE3_EVIDENCE_V2 };
+/** Revision of the v2 evidence model inside the v2 pack format; part of the v2 cache key. */
+export const STAGE3_V2_MODEL_REVISION = "model.r2-page-geometry";
 
 /** v2 pack bound (characters of promptBlock). The analyzer block total stays 3,200. */
 export const STAGE3_V2_BUDGET = { maxCharsPerPack: 2600, maxTotalChars: 3200 };

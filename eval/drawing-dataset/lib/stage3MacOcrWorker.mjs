@@ -43,8 +43,9 @@ import {
   updateRunState,
 } from "./stage3OcrRunState.mjs";
 import { syncRunPreprocessSummary } from "./stage3WorkerSupabase.mjs";
-import { STAGE3_EVIDENCE_V2 } from "./stage3EvidenceConfig.mjs";
+import { STAGE3_EVIDENCE_V2, STAGE3_V2_MODEL_REVISION } from "./stage3EvidenceConfig.mjs";
 import { buildStage3V2PackFromRecovery } from "./stage3EvidenceV2.mjs";
+import { PAGE_GEOMETRY_VERSION, renderPageGeometry } from "./stage3PageGeometry.mjs";
 
 async function maybeUploadPack(storage, job, pack) {
   if (!storage || !job.projectId || !job.runId || !job.sheetJobId) return null;
@@ -283,10 +284,35 @@ export function v2PackPath(paths, sheetId, contentSha256) {
   return path.join(paths.root, "packs-v2", `${sheetId}.${contentSha256}.json`);
 }
 
+/** v2 cache key: pack format, model revision, and whether page geometry was used. */
+export function v2CacheKey(contentSha256, withGeometry) {
+  return cacheKey(contentSha256, STAGE3_EXTRACTION_METHOD,
+    `${STAGE3_EVIDENCE_V2}.${STAGE3_V2_MODEL_REVISION}.${withGeometry ? PAGE_GEOMETRY_VERSION : "no-page-geometry"}`);
+}
+
+const v2GeometryWanted = (job, options = {}) => options.pageGeometry !== false && Boolean(job.pdfPath) && existsSync(job.pdfPath);
+
+/**
+ * Page geometry (printed rules) for the v2 layout. Fail-open: without it the v2 pack uses the
+ * cached layout bands and gap-only splitting, and records the reason.
+ */
+export async function pageGeometryForJob(job, options = {}) {
+  if (options.pageGeometry === false) return { geometry: null, reason: "disabled" };
+  if (!v2GeometryWanted(job, options)) return { geometry: null, reason: "pdf_unavailable" };
+  try {
+    return { geometry: await (options.renderPageGeometry || renderPageGeometry)(job.pdfPath), reason: null };
+  } catch (error) {
+    return { geometry: null, reason: `render_failed:${(error instanceof Error ? error.message : String(error)).slice(0, 120)}` };
+  }
+}
+
 /** v2 envelope: technical digest pack plus the job identity and provenance the bridge validates. */
-export function buildV2Envelope(job, { layout, recovery }) {
-  const key = cacheKey(job.contentSha256, STAGE3_EXTRACTION_METHOD, STAGE3_EVIDENCE_V2);
-  const pack = buildStage3V2PackFromRecovery({ sheetId: job.sheetId, layout, recovery, source: "4x3" });
+export function buildV2Envelope(job, { layout, recovery, geometry = null, geometryReason = null }) {
+  const key = v2CacheKey(job.contentSha256, Boolean(geometry));
+  const pack = buildStage3V2PackFromRecovery({ sheetId: job.sheetId, layout, recovery, source: "4x3", geometry });
+  const layoutProvenance = pack.provenance.layout && !geometry
+    ? { ...pack.provenance.layout, geometry: { status: "unavailable", reason: geometryReason || "not_provided" } }
+    : pack.provenance.layout;
   return {
     ...pack,
     relativePath: job.relativePath,
@@ -294,7 +320,7 @@ export function buildV2Envelope(job, { layout, recovery }) {
     extractionMethod: STAGE3_EXTRACTION_METHOD,
     extractionVersion: STAGE3_EVIDENCE_V2,
     cacheKey: key,
-    provenance: { ...pack.provenance, extractionMethod: STAGE3_EXTRACTION_METHOD, cacheKey: key },
+    provenance: { ...pack.provenance, layout: layoutProvenance, extractionMethod: STAGE3_EXTRACTION_METHOD, cacheKey: key },
     generatedAt: new Date().toISOString(),
     workerVersion: STAGE3_WORKER_VERSION,
   };
@@ -305,8 +331,8 @@ export function buildV2Envelope(job, { layout, recovery }) {
  * any failure is recorded on the job (fallbackReason) and the analyzer falls back to v1.
  */
 async function produceV2Pack(paths, job, sources, options) {
-  const key = cacheKey(job.contentSha256, STAGE3_EXTRACTION_METHOD, STAGE3_EVIDENCE_V2);
-  const cachePath = path.join(paths.cache, `${key}.json`);
+  let key = v2CacheKey(job.contentSha256, v2GeometryWanted(job, options));
+  let cachePath = path.join(paths.cache, `${key}.json`);
   try {
     let envelope = null;
     let cacheHit = false;
@@ -327,7 +353,12 @@ async function produceV2Pack(paths, job, sources, options) {
         layout = JSON.parse(await readFile(job.layoutPagePath, "utf8"));
       }
       if (!layout) return { status: "unavailable", fallbackReason: "v2_layout_missing" };
-      envelope = buildV2Envelope(job, { layout: sources.rebuilt ? layout : rebuildAssociationsFromFreshOcr(layout, recovery), recovery });
+      const { geometry, reason: geometryReason } = await pageGeometryForJob(job, options);
+      envelope = buildV2Envelope(job, {
+        layout: sources.rebuilt ? layout : rebuildAssociationsFromFreshOcr(layout, recovery), recovery, geometry, geometryReason,
+      });
+      key = envelope.cacheKey;
+      cachePath = path.join(paths.cache, `${key}.json`);
       await writeFile(cachePath, JSON.stringify(envelope, null, 2));
     }
     const packPath = v2PackPath(paths, job.sheetId, job.contentSha256);
@@ -350,6 +381,10 @@ async function produceV2Pack(paths, job, sources, options) {
       promptChars: envelope.promptBlock.length,
       shown: envelope.digest?.shown?.length ?? null,
       omitted: envelope.digest?.omitted?.length ?? null,
+      titleBlockMethod: envelope.provenance?.layout?.titleBlock?.method ?? null,
+      pageGeometry: envelope.provenance?.layout?.geometry?.version ?? envelope.provenance?.layout?.geometry?.reason ?? null,
+      records: envelope.provenance?.layout?.records ?? null,
+      textLayerEchoesExcluded: envelope.provenance?.layout?.textLayerEchoesExcluded ?? null,
       storageUploaded: Boolean(storageUpload && !storageUpload.error),
     });
     return { status: "built", cacheHit, cacheKey: key, packPath, packStatus: envelope.status, storageUpload, fallbackReason: null };
@@ -705,8 +740,9 @@ export async function buildV2PacksForFullSet(options = {}) {
       layoutPagePath: sheet.layoutPagePath,
       evidenceVersion: "v2",
       recoveryPath: path.join(options.datasetOut, "recovery", `${sheet.sha256}.json`),
+      pdfPath: options.sourceDir ? path.join(options.sourceDir, sheet.relativePath) : null,
     });
-    const result = await produceV2Pack(paths, job, {}, { force: options.force });
+    const result = await produceV2Pack(paths, job, {}, { force: options.force, pageGeometry: options.pageGeometry });
     outcomes.push({ sheetId: sheet.id, relativePath: sheet.relativePath, ...result });
   }
   return {

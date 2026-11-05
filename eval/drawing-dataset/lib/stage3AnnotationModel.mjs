@@ -7,12 +7,12 @@
  *   (similar text height, small gap, aligned edges, mutual nearest neighbours).
  *   Weaker relationships are never joined; both sides are flagged contextUncertain.
  * - Table cells (short rows with row-mates on the same baseline) are never stacked
- *   into column groups.
+ *   into column groups. With page geometry, the cells of one ruled table row form a
+ *   record; ruled rows take no stacking links to rows outside them.
  * - Overlapping readings with different text are kept as a conflict: the primary
  *   reading and its alternatives; none is promoted.
  * - Format and glyph doubts are recorded as uncertainty reasons, never corrected.
  */
-
 const clean = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const norm = (s) => clean(s).toUpperCase()
   .replace(/[″“”〃]/g, '"').replace(/[’‘`´]/g, "'").replace(/[—–]/g, "-")
@@ -159,19 +159,84 @@ function link(a, fa, b, fb) {
   return null;
 }
 
+// ---------- ruled table rows (records) ----------
+const BAND_OVERSHOOT = 0.25;
+const BAND_MAX_HEIGHTS = 5;
+const GRID_MIN_RULES = 4;
+const GRID_EXTENT_TOLERANCE = 2;
+const GRID_REACH_BANDS = 6;
+const spansBox = (rule, box) => rule.x0 <= box.x + 1 && rule.x1 >= box.x + box.width - 1;
+
+/**
+ * Row rules of the same table as `rule`: horizontal rules with the same extent within a few row
+ * pitches. Dimension lines and detail frames do not repeat like this; schedule row lines do.
+ */
+function gridRuleCount(rule, geometry, pitch) {
+  return geometry.horizontal.filter((r) => Math.abs(r.x0 - rule.x0) <= GRID_EXTENT_TOLERANCE
+    && Math.abs(r.x1 - rule.x1) <= GRID_EXTENT_TOLERANCE && Math.abs(r.y - rule.y) <= GRID_REACH_BANDS * pitch).length;
+}
+
+/**
+ * The table row band of a cell: the nearest horizontal rules above and below its centre that run
+ * across the whole cell. Null when either is missing, the band is far taller than the text, or the
+ * cell box crosses a band rule (an OCR box spanning two table rows).
+ */
+export function tableRowBand(cell, geometry) {
+  const cy = cell.box.y + cell.box.height / 2;
+  let above = null, below = null;
+  for (const r of geometry?.horizontal || []) {
+    if (!spansBox(r, cell.box)) continue;
+    if (r.y >= cy && (!above || r.y < above.y)) above = r;
+    if (r.y < cy && (!below || r.y > below.y)) below = r;
+  }
+  if (!above || !below) return null;
+  const height = above.y - below.y;
+  if (height > BAND_MAX_HEIGHTS * cell.box.height) return null;
+  if (gridRuleCount(above, geometry, height) < GRID_MIN_RULES || gridRuleCount(below, geometry, height) < GRID_MIN_RULES) return null;
+  const overshoot = Math.max(0, cell.box.y + cell.box.height - above.y) + Math.max(0, below.y - cell.box.y);
+  return overshoot > BAND_OVERSHOOT * height ? null : { top: above.y, bottom: below.y, x0: above.x0, x1: above.x1 };
+}
+
+const COLUMN_RULE_MIN_BANDS = 1.5;
+
+/**
+ * Table cells: rows inside a ruled table row band, with the band identity and the column index
+ * (count of the band's column rules left of the row centre). Column rules are vertical rules
+ * inside the table extent that cross the band and are longer than it.
+ */
+export function tableCells(rows, geometry) {
+  const cells = new Map();
+  if (!geometry?.horizontal?.length) return cells;
+  for (const r of rows) {
+    if (r.vertical || r.regionKind === "title_block") continue;
+    const band = tableRowBand(r, geometry);
+    if (!band) continue;
+    const pitch = band.top - band.bottom;
+    const columnRules = (geometry.vertical || []).filter((v) => v.x > band.x0 + 1 && v.x < band.x1 - 1
+      && v.y0 <= band.bottom + 0.25 * pitch && v.y1 >= band.top - 0.25 * pitch && v.y1 - v.y0 >= COLUMN_RULE_MIN_BANDS * pitch);
+    const cx = r.box.x + r.box.width / 2;
+    cells.set(r.rid, { key: `${band.top}|${band.bottom}|${band.x0}|${band.x1}`, column: columnRules.filter((v) => v.x < cx).length });
+  }
+  return cells;
+}
+
 /**
  * Group rows into annotations. Strong links are kept only between mutual nearest neighbours,
- * never between table cells, and never into a new numbered list item.
+ * never between table cells, and never into a new numbered list item. With page geometry, rows
+ * inside a ruled table row take no stacking links: each cell (lines between the same column
+ * rules) is read top to bottom, and a row with two or more occupied cells forms one record.
  */
-export function groupAnnotations(rows) {
+export function groupAnnotations(rows, options = {}) {
   const frames = new Map(rows.map((r) => [r.rid, frame(r)]));
   const tableCell = new Map(rows.map((r) => [r.rid, textKey(r.text).length <= 14 && hasRowMate(r, rows, frames.get(r.rid))]));
+  const cells = tableCells(rows, options.geometry);
   const below = new Map(), above = new Map(), weak = new Set();
   for (const a of rows) {
+    if (cells.has(a.rid)) continue;
     const fa = frames.get(a.rid);
     let best = null, bestGap = Infinity;
     for (const b of rows) {
-      if (a === b || a.vertical !== b.vertical) continue;
+      if (a === b || a.vertical !== b.vertical || cells.has(b.rid)) continue;
       const fb = frames.get(b.rid);
       if (fb.top > fa.top) continue;
       const kind = link(a, fa, b, fb);
@@ -201,17 +266,34 @@ export function groupAnnotations(rows) {
     const [a, b] = pair.split("|");
     if (find(a) !== find(b) && !(tableCell.get(a) && tableCell.get(b))) { contextUncertain.add(a); contextUncertain.add(b); }
   }
+  const readingOrder = (p, q) => frames.get(q.rid).top - frames.get(p.rid).top || frames.get(p.rid).left - frames.get(q.rid).left;
   const groups = new Map();
   for (const r of rows) {
+    if (cells.has(r.rid)) continue;
     const root = find(r.rid);
     if (!groups.has(root)) groups.set(root, []);
     groups.get(root).push(r);
   }
-  return [...groups.values()].map((members) => {
-    members.sort((p, q) => frames.get(q.rid).top - frames.get(p.rid).top || frames.get(p.rid).left - frames.get(q.rid).left);
-    return { rows: members, contextUncertain: members.some((m) => contextUncertain.has(m.rid)) };
-  });
+  const out = [...groups.values()].map((members) => ({
+    rows: members.sort(readingOrder), contextUncertain: members.some((m) => contextUncertain.has(m.rid)),
+  }));
+  const bands = new Map();
+  for (const r of rows) {
+    const c = cells.get(r.rid);
+    if (!c) continue;
+    if (!bands.has(c.key)) bands.set(c.key, new Map());
+    const band = bands.get(c.key);
+    if (!band.has(c.column)) band.set(c.column, []);
+    band.get(c.column).push(r);
+  }
+  for (const band of bands.values()) {
+    const columns = [...band.keys()].sort((p, q) => p - q).map((k) => band.get(k).sort(readingOrder));
+    if (columns.length === 1) out.push({ rows: columns[0], contextUncertain: false });
+    else out.push({ rows: columns.flat(), contextUncertain: false, layout: "record", cells: columns.map((c) => c.map((r) => r.rid)) });
+  }
+  return out;
 }
+
 
 // ---------- model ----------
 const CLASS_ORDER = ["dimension", "elevation", "datum", "qualifier", "reference", "value", "numeric"];
@@ -246,7 +328,7 @@ export function buildEvidenceModel(rawRows, options = {}) {
     const technical = cls.technical || altTechnical;
     return { ...r, technical, classes: cls.classes, uncertain: technical ? uncertaintyReasons(r.text) : [], regionKind: regionOf(r) };
   });
-  const groups = groupAnnotations(resolved);
+  const groups = groupAnnotations(resolved, { geometry: options.geometry });
   for (const g of groups) {
     const parens = (s) => (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
     if (parens(g.rows.map((r) => r.text).join(" ")) === 0) continue;
@@ -264,6 +346,7 @@ export function buildEvidenceModel(rawRows, options = {}) {
       classes,
       regionKind,
       contextUncertain: g.contextUncertain,
+      ...(g.layout ? { layout: g.layout, cells: g.cells } : {}),
       conflict: g.rows.some((r) => r.alternatives.length > 0),
       uncertain: [...new Set(g.rows.flatMap((r) => r.uncertain))],
     };
