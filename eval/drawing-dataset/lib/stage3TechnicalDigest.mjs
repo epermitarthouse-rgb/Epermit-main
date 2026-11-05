@@ -83,7 +83,11 @@ export function renderTechnicalDigest(model, options = {}) {
   };
 }
 
-const wordRecord = (w) => ({ text: w.text, box: w.box, confidence: w.confidence });
+const wordRecord = (w) => ({
+  text: w.text, box: w.box, confidence: w.confidence,
+  ...(w.support != null ? { support: w.support, tiles: w.tiles } : {}),
+  ...(w.continuedFrom ? { continuedFrom: w.continuedFrom } : {}),
+});
 
 /**
  * Provenance for what the pack shows: shown annotations and their rows (box, confidence, classes,

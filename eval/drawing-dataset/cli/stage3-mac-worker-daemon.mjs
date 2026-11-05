@@ -23,6 +23,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { stage3ScopeArgs } from "../lib/stage3EvidenceConfig.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../..");
@@ -120,18 +121,10 @@ function runCli(args) {
   });
 }
 
-/** Run-scoped evidence version flag. Only "v2" changes behaviour; unknown values are logged and ignored. */
-function evidenceVersionArgs(scope, runId) {
-  const value = scope?.stage3EvidenceVersion;
-  if (value == null || value === "" || value === "v1") return [];
-  if (value === "v2") return ["--evidence-version", "v2"];
-  log("evidence_version_ignored", { runId, value: String(value).slice(0, 40) });
-  return [];
-}
-
 async function syncRun(projectId, runId, scope = {}) {
-  const versionArgs = evidenceVersionArgs(scope, runId);
-  log("sync_start", { projectId, runId, evidenceVersion: versionArgs[1] || "v1" });
+  const { evidenceVersion, ocrGrid, syncArgs: versionArgs, buildArgs: gridArgs, ignored } = stage3ScopeArgs(scope);
+  for (const { event, value } of ignored) log(event, { runId, value, evidenceVersion });
+  log("sync_start", { projectId, runId, evidenceVersion, ocrGrid });
   const enqueue = await runCli([
     "enqueue-full",
     "--run", runId,
@@ -141,7 +134,7 @@ async function syncRun(projectId, runId, scope = {}) {
     log("enqueue_failed", { runId, code: enqueue.code, stderr: enqueue.stderr.slice(-500) });
   }
   if (versionArgs.length) {
-    const built = await runCli(["build-v2-packs"]);
+    const built = await runCli(["build-v2-packs", ...gridArgs]);
     if (built.code !== 0) {
       log("v2_build_incomplete", { runId, code: built.code, tail: (built.stdout || built.stderr || "").slice(-500) });
     }

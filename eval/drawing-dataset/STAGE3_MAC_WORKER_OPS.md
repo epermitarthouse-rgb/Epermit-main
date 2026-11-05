@@ -73,11 +73,26 @@ The daemon does both when the run's scope has `"stage3EvidenceVersion": "v2"`.
 
 The analyzer uses the v2 pack when it is available. Otherwise it uses the v1 pack, and otherwise the PDF only. Audit metadata records the reason in `stage3_evidence_fallback_reason`.
 
+**12×9 OCR for v2 (opt-in per run, v2 only; not approved for general traffic).** With `"stage3OcrGrid": "12x9"` next to `"stage3EvidenceVersion": "v2"`, the daemon runs `build-v2-packs --ocr-grid 12x9`. The v2 pack then reads 12×9 tiles resolved with S4 instead of the cached 4×3 recovery. v1 packs never change.
+
+- The worker needs the source PDFs (`--source-dir` or `DRAWING_SOURCE_DIR`). Expect about 108 Vision calls per sheet; the 12×9 recovery is cached per drawing.
+- If a sheet's 12×9 OCR cannot run (no PDF, Vision unavailable, any tile failed), its v2 pack is built from the 4×3 recovery. `provenance.ocr.fallbackReason` and the `v2_pack` audit event record why.
+- 12×9 is never used with production deduplication; the worker rejects that configuration, and the key is ignored (logged) on v1 runs.
+
+```sql
+update public.supabase_analyzer_runs
+set analysis_scope = coalesce(analysis_scope, '{}'::jsonb) || '{"stage3EvidenceVersion": "v2", "stage3OcrGrid": "12x9"}'::jsonb,
+    updated_at = now()
+where id = '<run-uuid>';
+```
+
+Roll back 12×9 only: remove `stage3OcrGrid` from the scope (v2 continues on 4×3 input).
+
 Roll back one run to v1:
 
 ```sql
 update public.supabase_analyzer_runs
-set analysis_scope = coalesce(analysis_scope, '{}'::jsonb) - 'stage3EvidenceVersion',
+set analysis_scope = coalesce(analysis_scope, '{}'::jsonb) - 'stage3EvidenceVersion' - 'stage3OcrGrid',
     updated_at = now()
 where id = '<run-uuid>';
 ```

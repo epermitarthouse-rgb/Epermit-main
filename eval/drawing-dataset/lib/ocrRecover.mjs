@@ -3,13 +3,18 @@
  * Words are visual interpretation, not professionally verified text.
  * Does not call a model.
  */
+import { spawnSync } from "node:child_process";
+import { rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { ensurePdfjsPolyfill, loadPdfjs } from "./pdfExtract.mjs";
 import { rasterFeatures, OCR_KEEP } from "./cellClassify.mjs";
+import { resolveObservationsS4 } from "./stage3ObservationResolve.mjs";
 
 const require = createRequire(import.meta.url);
 ensurePdfjsPolyfill();
-const { ocrEngine, recognizePng } = require("../../../code-analyzer-worker/lib/ocr.js");
+const { ensureVisionBinary, ocrEngine, recognizePng } = require("../../../code-analyzer-worker/lib/ocr.js");
 const { groupWordsIntoLines, correctedSheetToken } = require("../../../code-analyzer-worker/lib/ocrLines.js");
 
 export const RECOVERY_VERSION = "phase2a2.recover.1";
@@ -18,6 +23,25 @@ export const TILE_ROWS = 3;
 export const TILE_OVERLAP = 0.04;
 export const TILE_MAX_PX = 1600;
 export const RASTER_SCALE = 0.2;
+
+/**
+ * Opt-in OCR configuration (Stage 3 v2 only). The default (4x3, production deduplication) is the
+ * production recovery and is byte-identical to it. 12x9 renders each tile at the pixel density of
+ * the enclosing 4x3 tile and must use S4 resolution: production deduplication keeps every
+ * differently-read copy from the overlapping tiles as contradictory evidence.
+ */
+export const OCR_GRIDS = { "4x3": { cols: TILE_COLS, rows: TILE_ROWS }, "12x9": { cols: 12, rows: 9 } };
+export const OCR_RESOLUTIONS = new Set(["production", "s4"]);
+
+export function resolveRecoveryConfig(options = {}) {
+  const ocrGrid = options.ocrGrid || "4x3";
+  const resolution = options.resolution || "production";
+  if (!OCR_GRIDS[ocrGrid]) throw new Error(`ocr_grid_unknown:${ocrGrid}`);
+  if (!OCR_RESOLUTIONS.has(resolution)) throw new Error(`ocr_resolution_unknown:${resolution}`);
+  if (ocrGrid === "12x9" && resolution !== "s4") throw new Error("ocr_grid_12x9_requires_s4");
+  const isDefault = ocrGrid === "4x3" && resolution === "production";
+  return { ocrGrid, resolution, isDefault, recoveryVersion: isDefault ? RECOVERY_VERSION : `phase4.recover.${ocrGrid}-${resolution}.1` };
+}
 
 const TEXT_OPS = new Set([44, 45, 46, 47]);
 const PATH_OPS = new Set([13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]);
@@ -44,22 +68,65 @@ function round(value) {
   return Math.round(Number(value) * 10) / 10;
 }
 
-function tileBoxes(pageWidth, pageHeight) {
+function tileBoxes(pageWidth, pageHeight, cols = TILE_COLS, rows = TILE_ROWS, idPrefix = "t") {
   const tiles = [];
   const overlapX = pageWidth * TILE_OVERLAP;
   const overlapY = pageHeight * TILE_OVERLAP;
-  const width = pageWidth / TILE_COLS;
-  const height = pageHeight / TILE_ROWS;
-  for (let row = 0; row < TILE_ROWS; row += 1) {
-    for (let col = 0; col < TILE_COLS; col += 1) {
+  const width = pageWidth / cols;
+  const height = pageHeight / rows;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
       const x = Math.max(0, col * width - overlapX);
-      const yBottom = Math.max(0, (TILE_ROWS - 1 - row) * height - overlapY);
+      const yBottom = Math.max(0, (rows - 1 - row) * height - overlapY);
       const w = Math.min(pageWidth - x, width + overlapX * 2);
       const h = Math.min(pageHeight - yBottom, height + overlapY * 2);
-      tiles.push({ id: `t${row}c${col}`, row, col, x, y: yBottom, width: w, height: h });
+      tiles.push({ id: `${idPrefix}${row}c${col}`, row, col, x, y: yBottom, width: w, height: h });
     }
   }
   return tiles;
+}
+
+/** OCR tiles with their render scale; finer grids reuse the scale of the 4x3 tile containing their centre. */
+export function recoveryTiles(pageWidth, pageHeight, ocrGrid = "4x3") {
+  const base = tileBoxes(pageWidth, pageHeight).map((t) => ({ ...t, scale: Math.min(TILE_MAX_PX / t.width, TILE_MAX_PX / t.height) }));
+  if (ocrGrid === "4x3") return base;
+  const { cols, rows } = OCR_GRIDS[ocrGrid];
+  return tileBoxes(pageWidth, pageHeight, cols, rows, `g${ocrGrid}-r`).map((t) => {
+    const cx = t.x + t.width / 2, cy = t.y + t.height / 2;
+    const parent = base.find((p) => cx >= p.x && cx <= p.x + p.width && cy >= p.y && cy <= p.y + p.height) || base[0];
+    return { ...t, scale: parent.scale, parentTileId: parent.id };
+  });
+}
+
+/**
+ * Deduplicate raw tile reads with the configured resolution. S4 also returns its report; with
+ * `tiles` (the recovery tiles) and the page size it continues reads cut at interior tile edges.
+ */
+export function resolveRecoveryWords(rawWords, resolution = "production", { tiles = null, pageWidth = null, pageHeight = null } = {}) {
+  const deduped = dedupeOcrWords(rawWords);
+  if (resolution !== "s4") return { words: deduped, report: null };
+  const reads = rawWords.filter((w) => String(w.text || "").replace(/\s+/g, " ").trim() && Number(w.confidence) >= OCR_KEEP);
+  const geometry = tiles && pageWidth && pageHeight
+    ? { tiles: new Map(tiles.map((t) => [t.id, t])), page: { width: pageWidth, height: pageHeight } }
+    : {};
+  return resolveObservationsS4(deduped, reads, geometry);
+}
+
+/** Lines exactly as the production recovery groups them. */
+export function linesFromWords(words) {
+  return groupWordsIntoLines(words.map((word) => ({
+    text: word.text,
+    confidence: word.confidence,
+    box: word.box,
+  }))).map((line) => ({
+    text: line.text,
+    box: line.box,
+    confidence: line.confidence,
+    words: line.words,
+    vertical: line.vertical,
+    origin: "visual_interpretation",
+    independentlyVerified: false,
+  }));
 }
 
 function wordToPdfBox(tile, word) {
@@ -117,6 +184,24 @@ export function inkOccupancy(image, width, height, box, pageWidth, pageHeight) {
   return { sampled, ink, ratio: sampled ? Math.round((ink / sampled) * 1000) / 1000 : 0 };
 }
 
+/**
+ * The shared Vision wrapper reports a tile with no text like a failed one (empty output). Opt-in
+ * grids have blank margin tiles, so a failed Vision tile is run once more here: exit 0 with no output
+ * is a tile without text; anything else stays a failure.
+ */
+function visionFoundNoText(png) {
+  const bin = ensureVisionBinary();
+  if (!bin) return false;
+  const tmp = path.join(tmpdir(), `epermit-ocr-probe-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.png`);
+  writeFileSync(tmp, png);
+  try {
+    const result = spawnSync(bin, [tmp], { timeout: 45000, encoding: "utf8", maxBuffer: 5_000_000 });
+    return result.status === 0 && !String(result.stdout || "").trim();
+  } finally {
+    rmSync(tmp, { force: true });
+  }
+}
+
 async function renderClip(page, canvas, pageHeight, tile, scale) {
   const pixelW = Math.max(8, Math.ceil(tile.width * scale));
   const pixelH = Math.max(8, Math.ceil(tile.height * scale));
@@ -132,6 +217,7 @@ async function renderClip(page, canvas, pageHeight, tile, scale) {
 }
 
 export async function recoverPdfPage(page, pdfjs, options = {}) {
+  const config = resolveRecoveryConfig(options);
   const canvas = require("@napi-rs/canvas");
   const view = page.view || [0, 0, 0, 0];
   const pageWidth = view[2] - view[0];
@@ -151,7 +237,7 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
   const rasterCells = rasterFeatures(rasterImage, rasterW, rasterH);
 
   const engine = ocrEngine(options);
-  const tiles = tileBoxes(pageWidth, pageHeight);
+  const tiles = recoveryTiles(pageWidth, pageHeight, config.ocrGrid);
   const rawWords = [];
   const tileOutcomes = [];
   let ocrAttempted = false;
@@ -162,9 +248,8 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
   } else {
     ocrAttempted = true;
     for (const tile of tiles) {
-      const scale = Math.min(TILE_MAX_PX / tile.width, TILE_MAX_PX / tile.height);
       try {
-        const clip = await renderClip(page, canvas, pageHeight, tile, scale);
+        const clip = await renderClip(page, canvas, pageHeight, tile, tile.scale);
         const recognized = await recognizePng(clip.png, options);
         if (recognized.unavailable) {
           tileOutcomes.push({ id: tile.id, status: "ocr_unavailable", words: 0 });
@@ -172,7 +257,8 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
           break;
         }
         if (recognized.failed) {
-          tileOutcomes.push({ id: tile.id, status: "ocr_failed", words: 0 });
+          const noText = !config.isDefault && recognized.engine === "macos-vision" && visionFoundNoText(clip.png);
+          tileOutcomes.push({ id: tile.id, status: noText ? "ocr_no_text" : "ocr_failed", words: 0 });
           continue;
         }
         let added = 0;
@@ -190,6 +276,7 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
             engine: recognized.engine,
             origin: "visual_interpretation",
             independentlyVerified: false,
+            ...(config.isDefault ? {} : { tileId: tile.id }),
           });
           added += 1;
         }
@@ -206,7 +293,8 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
     }
   }
 
-  const words = dedupeOcrWords(rawWords).map((word) => {
+  const resolved = resolveRecoveryWords(rawWords, config.resolution, { tiles, pageWidth, pageHeight });
+  const words = resolved.words.map((word) => {
     const occupancy = inkOccupancy(rasterImage, rasterW, rasterH, word.box, pageWidth, pageHeight);
     return {
       ...word,
@@ -214,26 +302,18 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
       occupancyStatus: occupancy.ratio >= 0.02 ? "ink_under_box" : "low_ink_under_box",
     };
   });
-  const lines = groupWordsIntoLines(words.map((word) => ({
-    text: word.text,
-    confidence: word.confidence,
-    box: word.box,
-  }))).map((line) => ({
-    text: line.text,
-    box: line.box,
-    confidence: line.confidence,
-    words: line.words,
-    vertical: line.vertical,
-    origin: "visual_interpretation",
-    independentlyVerified: false,
-  }));
+  const lines = linesFromWords(words);
   const sheetTokens = [];
   for (const line of lines) {
     const token = correctedSheetToken(line.text.split(/\s+/)[0] || "") || correctedSheetToken(line.text);
     if (token && !sheetTokens.includes(token)) sheetTokens.push(token);
   }
   return {
-    recoveryVersion: RECOVERY_VERSION,
+    recoveryVersion: config.recoveryVersion,
+    ...(config.isDefault ? {} : {
+      ocrConfig: { ocrGrid: config.ocrGrid, resolution: config.resolution, tiles: tiles.length, rawWords: rawWords.length },
+      ...(resolved.report ? { resolutionReport: resolved.report } : {}),
+    }),
     pageWidth: round(pageWidth),
     pageHeight: round(pageHeight),
     operators,
@@ -250,6 +330,7 @@ export async function recoverPdfPage(page, pdfjs, options = {}) {
 }
 
 export async function recoverPdfFile(filePath, options = {}) {
+  const { recoveryVersion } = resolveRecoveryConfig(options);
   ensurePdfjsPolyfill();
   const pdfjs = await loadPdfjs();
   const { readFile } = await import("node:fs/promises");
@@ -271,7 +352,7 @@ export async function recoverPdfFile(filePath, options = {}) {
         page.cleanup?.();
       }
     }
-    return { recoveryVersion: RECOVERY_VERSION, pageCount: pdf.numPages, pages };
+    return { recoveryVersion, pageCount: pdf.numPages, pages };
   } finally {
     await pdf.destroy().catch(() => {});
   }

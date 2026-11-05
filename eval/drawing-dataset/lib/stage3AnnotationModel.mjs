@@ -9,10 +9,13 @@
  * - Table cells (short rows with row-mates on the same baseline) are never stacked
  *   into column groups. With page geometry, the cells of one ruled table row form a
  *   record; ruled rows take no stacking links to rows outside them.
- * - Overlapping readings with different text are kept as a conflict: the primary
- *   reading and its alternatives; none is promoted.
+ * - Overlapping readings of similar text are kept as a conflict: the primary
+ *   reading and its alternatives; none is promoted. Overlapping boxes with dissimilar
+ *   text are different printed lines and stay separate rows.
  * - Format and glyph doubts are recorded as uncertainty reasons, never corrected.
  */
+import { substringDistance } from "./stage3ObservationResolve.mjs";
+
 const clean = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const norm = (s) => clean(s).toUpperCase()
   .replace(/[″“”〃]/g, '"').replace(/[’‘`´]/g, "'").replace(/[—–]/g, "-")
@@ -57,26 +60,37 @@ export function classifyText(text) {
 /**
  * Reasons to doubt a technical reading, from its format only:
  * glyph  - I or l where a digit belongs (next to digits, fractions or dimension marks), a lowercase l
- *          inside capitals, or ° / * where an inch mark belongs;
- *          inside capitals, a fraction slash without a denominator, a 7-digit cold-formed steel
- *          designation (600S162-43 read as 6005162-43), or a short symbol ending in l before a
- *          number (Sd1 read as Sdl);
+ *          inside capitals, ° / * where an inch mark belongs, a fraction slash without a denominator
+ *          or numerator, a letter where the inches of a feet-inches value belong (7"-q"), a 7-digit
+ *          cold-formed steel designation (600S162-43 read as 6005162-43), a short symbol ending
+ *          in l, or a one-letter symbol ending in I, before a number (Sd1 read as Sdl, S1 as SI),
+ *          or a | next to a digit;
  * inch_mark - a feet-inches value whose inch mark is missing or read as '.
  */
 export function uncertaintyReasons(text) {
   const t = clean(text);
   const reasons = new Set();
   if (/\d[Il]|[Il]\d|(?:^|[\s(-])[Il][-/]\d|\d[-/][Il]\b|\b[Il]\/|\d\s*[°*]/.test(t) || /[A-Z]l\b|\bl[A-Z]/.test(t)
-    || /(?:^|\s)\d+\/(?=\s|$)/.test(t) || /\b\d{7}-\d{2}\b/.test(t) || /\b[A-Za-z]{1,2}l\s+[\d.]/.test(t)) reasons.add("glyph");
+    || /(?:^|\s)\d+\/(?=\s|$)/.test(t) || /\b\d{7}-\d{2}\b/.test(t) || /\b[A-Za-z]{1,2}l\s+[\d.]/.test(t)
+    || /\d\s*["']\s*-\s*[A-Za-z]{1,2}\s*["']/.test(t) || /(?:^|\s)\/\d/.test(t)
+    || /\b[A-Za-z]I\s+[\d.]/.test(t) || /\|\d|\d\|/.test(t)) reasons.add("glyph");
   if (/\d+\s*'\s*-?\s*\d+(?:\s+\d+\/\d+)?\s*'/.test(t) || /\d+\s*'\s*-\s*\d+(?:\s+\d+\/\d+)?(?![\d"/'°*])/.test(t)) reasons.add("inch_mark");
   return [...reasons];
 }
 
 // ---------- overlapping readings ----------
+/** Readings of the same text: the shorter is within half its length in edits of part of the longer. */
+export const SAME_TEXT_MAX_EDITS = 0.5;
+export function similarReadings(a, b) {
+  const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+  return s.length > 0 && substringDistance(s, l) <= SAME_TEXT_MAX_EDITS * s.length;
+}
+
 /**
- * Resolve rows that read the same place (same orientation, overlap >= 50% of the smaller box):
- * a reading contained in a longer one is absorbed, an identical one is a duplicate, and a different
- * one becomes an alternative of the kept row (a conflict).
+ * Resolve rows that read the same place (same orientation, overlap >= 50% of the smaller box, similar
+ * text): a reading contained in a longer one is absorbed, an identical one is a duplicate, and a
+ * different one becomes an alternative of the kept row (a conflict). Dense line spacing makes boxes
+ * of neighbouring lines overlap; with dissimilar text they remain separate rows.
  */
 export function resolveOverlaps(rows) {
   const ordered = [...rows].sort((a, b) => textKey(b.text).length - textKey(a.text).length || b.confidence - a.confidence);
@@ -85,7 +99,7 @@ export function resolveOverlaps(rows) {
     const k = textKey(row.text);
     let best = null, bestOverlap = 0;
     for (const other of kept) {
-      if (other.vertical !== row.vertical) continue;
+      if (other.vertical !== row.vertical || !similarReadings(k, textKey(other.text))) continue;
       const o = overlapSmaller(row.box, other.box);
       if (o >= 0.5 && o > bestOverlap) { best = other; bestOverlap = o; }
     }
@@ -141,6 +155,20 @@ export function startsNewAnnotation(upper, lower) {
   if (/[A-Z]:\s*\S/.test(a) && /[A-Z]:(\s|$)/.test(b)) return true;
   if (SYMBOL_VALUE.test(a) && SYMBOL_VALUE.test(b)) return true;
   return false;
+}
+
+const BARE_DIMENSION = /^\d+(?:\s*'\s*-?\s*\d+(?:\s+\d+\/\d+)?\s*"?|\s*(?:\d+\/\d+\s*)?"|\s*')$/;
+const QUALIFIER_ONLY = /^(?:MIN|MAX|TYP|CLR|CLEAR|EQ|NOM|V\.I\.F|A\.F\.F|O\.C)\.?$/i;
+const LABEL = (t) => !/\d/.test(t) && /[A-Z]{3}/i.test(t) && !QUALIFIER_ONLY.test(t);
+
+/**
+ * A bare dimension stacked against a descriptive label: next to a dimension line the label may name
+ * that dimension or a neighbouring element, which position alone cannot settle. Such a join is kept
+ * but marked context-uncertain. A dimension with its qualifier (12" / MIN.) is not affected.
+ */
+export function dimensionLabelPair(upper, lower) {
+  const a = clean(upper), b = clean(lower);
+  return (BARE_DIMENSION.test(a) && LABEL(b)) || (BARE_DIMENSION.test(b) && LABEL(a));
 }
 
 /** Link strength between an upper row a and a lower row b (in reading frame). */
@@ -199,10 +227,19 @@ export function tableRowBand(cell, geometry) {
 
 const COLUMN_RULE_MIN_BANDS = 1.5;
 
+/** Two horizontal rows on the same text line with a gap between them. */
+function sideBySideRows(a, b) {
+  const h = Math.max(a.box.height, b.box.height);
+  const sameLine = Math.abs((a.box.y + a.box.height / 2) - (b.box.y + b.box.height / 2)) <= 0.35 * h;
+  return sameLine && (a.box.x + a.box.width <= b.box.x || b.box.x + b.box.width <= a.box.x);
+}
+
 /**
  * Table cells: rows inside a ruled table row band, with the band identity and the column index
  * (count of the band's column rules left of the row centre). Column rules are vertical rules
- * inside the table extent that cross the band and are longer than it.
+ * inside the table extent that cross the band and are longer than it. A cell's lines stack; a cell
+ * holding rows side by side is not one cell (dimension linework, or a column rule that was not
+ * detected), and its rows are grouped as ordinary rows. The band's other cells stay a table row.
  */
 export function tableCells(rows, geometry) {
   const cells = new Map();
@@ -216,6 +253,16 @@ export function tableCells(rows, geometry) {
       && v.y0 <= band.bottom + 0.25 * pitch && v.y1 >= band.top - 0.25 * pitch && v.y1 - v.y0 >= COLUMN_RULE_MIN_BANDS * pitch);
     const cx = r.box.x + r.box.width / 2;
     cells.set(r.rid, { key: `${band.top}|${band.bottom}|${band.x0}|${band.x1}`, column: columnRules.filter((v) => v.x < cx).length });
+  }
+  const rowById = new Map(rows.map((r) => [r.rid, r]));
+  const byCell = new Map();
+  for (const [rid, c] of cells) {
+    const k = `${c.key}#${c.column}`;
+    if (!byCell.has(k)) byCell.set(k, []);
+    byCell.get(k).push(rowById.get(rid));
+  }
+  for (const members of byCell.values()) {
+    if (members.some((a, i) => members.slice(i + 1).some((b) => sideBySideRows(a, b)))) for (const r of members) cells.delete(r.rid);
   }
   return cells;
 }
@@ -260,6 +307,7 @@ export function groupAnnotations(rows, options = {}) {
     if (above.get(b) !== a) { contextUncertain.add(a); contextUncertain.add(b); continue; }
     if (tableCell.get(a) && tableCell.get(b)) continue;
     if (startsNewAnnotation(rowById.get(a).text, rowById.get(b).text)) continue;
+    if (dimensionLabelPair(rowById.get(a).text, rowById.get(b).text)) { contextUncertain.add(a); contextUncertain.add(b); }
     parent.set(find(b), find(a));
   }
   for (const pair of weak) {

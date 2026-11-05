@@ -12,7 +12,8 @@ import { createHash } from "node:crypto";
 import { existsSync, renameSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
-import { recoverPdfFile } from "./ocrRecover.mjs";
+import { recoverPdfFile, resolveRecoveryConfig } from "./ocrRecover.mjs";
+import { S4_CONTINUATION_VERSION } from "./stage3ObservationResolve.mjs";
 import { associateBlocksToRegions } from "./layoutAssociate.mjs";
 import {
   STAGE3_SPIKE_VERSION,
@@ -43,7 +44,7 @@ import {
   updateRunState,
 } from "./stage3OcrRunState.mjs";
 import { syncRunPreprocessSummary } from "./stage3WorkerSupabase.mjs";
-import { STAGE3_EVIDENCE_V2, STAGE3_V2_MODEL_REVISION } from "./stage3EvidenceConfig.mjs";
+import { STAGE3_EVIDENCE_V2, STAGE3_V2_MODEL_REVISION, resolveStage3EvidenceOptions } from "./stage3EvidenceConfig.mjs";
 import { buildStage3V2PackFromRecovery } from "./stage3EvidenceV2.mjs";
 import { PAGE_GEOMETRY_VERSION, renderPageGeometry } from "./stage3PageGeometry.mjs";
 
@@ -130,10 +131,15 @@ async function appendAudit(paths, event) {
 
 export function buildJobRecord(sheet, options = {}) {
   const v2 = options.evidenceVersion === "v2" || options.evidenceVersion === STAGE3_EVIDENCE_V2;
+  const { ocrGrid, resolution } = resolveStage3EvidenceOptions({
+    evidenceVersion: v2 ? "v2" : "v1", ocrGrid: options.ocrGrid, resolution: options.resolution,
+  });
+  const fine = ocrGrid === "12x9";
   const id = options.jobId
-    || createHash("sha1").update(`${sheet.sha256}|${sheet.id}|${STAGE3_EXTRACTION_VERSION}${v2 ? `|${STAGE3_EVIDENCE_V2}` : ""}`).digest("hex").slice(0, 16);
+    || createHash("sha1").update(`${sheet.sha256}|${sheet.id}|${STAGE3_EXTRACTION_VERSION}${v2 ? `|${STAGE3_EVIDENCE_V2}` : ""}${fine ? `|${ocrGrid}-${resolution}` : ""}`).digest("hex").slice(0, 16);
   return {
     ...(v2 ? { evidenceVersion: STAGE3_EVIDENCE_V2, recoveryPath: options.recoveryPath || null } : {}),
+    ...(fine ? { ocrGrid, resolution } : {}),
     id,
     sheetId: sheet.id,
     relativePath: sheet.relativePath,
@@ -284,10 +290,46 @@ export function v2PackPath(paths, sheetId, contentSha256) {
   return path.join(paths.root, "packs-v2", `${sheetId}.${contentSha256}.json`);
 }
 
-/** v2 cache key: pack format, model revision, and whether page geometry was used. */
-export function v2CacheKey(contentSha256, withGeometry) {
+/** v2 cache key: pack format, model revision, whether page geometry was used, and the OCR input. */
+export function v2CacheKey(contentSha256, withGeometry, ocrSource = "4x3") {
   return cacheKey(contentSha256, STAGE3_EXTRACTION_METHOD,
-    `${STAGE3_EVIDENCE_V2}.${STAGE3_V2_MODEL_REVISION}.${withGeometry ? PAGE_GEOMETRY_VERSION : "no-page-geometry"}`);
+    `${STAGE3_EVIDENCE_V2}.${STAGE3_V2_MODEL_REVISION}.${withGeometry ? PAGE_GEOMETRY_VERSION : "no-page-geometry"}`
+    + (ocrSource === FINE_OCR_SOURCE ? `.ocr-${FINE_OCR_SOURCE}.${S4_CONTINUATION_VERSION}` : ""));
+}
+
+/** Opt-in OCR input for v2 (run-scoped): 12x9 tiles resolved with S4. v1 always uses the 4x3 recovery. */
+export const FINE_OCR = { ocrGrid: "12x9", resolution: "s4" };
+export const FINE_OCR_SOURCE = "12x9-s4";
+
+export function fineRecoveryCachePath(paths, contentSha256) {
+  return path.join(paths.cache, `${contentSha256}.${STAGE3_EXTRACTION_METHOD}.${resolveRecoveryConfig(FINE_OCR).recoveryVersion}.${S4_CONTINUATION_VERSION}.recovery.json`);
+}
+
+/**
+ * 12x9 + S4 recovery for a v2 job, from cache or a Vision run on the PDF. Returns { recovery } or
+ * { recovery: null, reason } (pdf_unavailable, ocr_unavailable, ocr_tiles_failed:<n>, ocr_failed:<msg>);
+ * the caller then builds v2 from the 4x3 recovery and records the reason. A cached recovery is
+ * reused unless `forceOcr` (pack rebuilds with `force` do not repeat the Vision run).
+ */
+export async function fineRecoveryForJob(paths, job, options = {}) {
+  const cachePath = fineRecoveryCachePath(paths, job.contentSha256);
+  if (!options.forceOcr && existsSync(cachePath)) {
+    return { recovery: JSON.parse(await readFile(cachePath, "utf8")), cacheHit: true, reason: null };
+  }
+  if (!job.pdfPath || !existsSync(job.pdfPath)) return { recovery: null, reason: "pdf_unavailable" };
+  try {
+    const started = Date.now();
+    const recovery = await (options.recoverPdf || recoverPdfFile)(job.pdfPath, FINE_OCR);
+    const page = recovery?.pages?.[0];
+    if (!page?.ocrAttempted) return { recovery: null, reason: "ocr_unavailable" };
+    const failedTiles = (page.tileOutcomes || []).filter((t) => t.status !== "ocr_ok" && t.status !== "ocr_no_text").length;
+    if (failedTiles) return { recovery: null, reason: `ocr_tiles_failed:${failedTiles}` };
+    const stored = { ...recovery, sha256: job.contentSha256, wallMs: Date.now() - started };
+    await writeFile(cachePath, JSON.stringify(stored));
+    return { recovery: stored, cacheHit: false, reason: null };
+  } catch (error) {
+    return { recovery: null, reason: `ocr_failed:${(error instanceof Error ? error.message : String(error)).slice(0, 120)}` };
+  }
 }
 
 const v2GeometryWanted = (job, options = {}) => options.pageGeometry !== false && Boolean(job.pdfPath) && existsSync(job.pdfPath);
@@ -307,9 +349,10 @@ export async function pageGeometryForJob(job, options = {}) {
 }
 
 /** v2 envelope: technical digest pack plus the job identity and provenance the bridge validates. */
-export function buildV2Envelope(job, { layout, recovery, geometry = null, geometryReason = null }) {
-  const key = v2CacheKey(job.contentSha256, Boolean(geometry));
-  const pack = buildStage3V2PackFromRecovery({ sheetId: job.sheetId, layout, recovery, source: "4x3", geometry });
+export function buildV2Envelope(job, { layout, recovery, geometry = null, geometryReason = null, ocr = null }) {
+  const source = ocr?.used === FINE_OCR_SOURCE ? FINE_OCR_SOURCE : "4x3";
+  const key = v2CacheKey(job.contentSha256, Boolean(geometry), source);
+  const pack = buildStage3V2PackFromRecovery({ sheetId: job.sheetId, layout, recovery, source, geometry });
   const layoutProvenance = pack.provenance.layout && !geometry
     ? { ...pack.provenance.layout, geometry: { status: "unavailable", reason: geometryReason || "not_provided" } }
     : pack.provenance.layout;
@@ -320,7 +363,7 @@ export function buildV2Envelope(job, { layout, recovery, geometry = null, geomet
     extractionMethod: STAGE3_EXTRACTION_METHOD,
     extractionVersion: STAGE3_EVIDENCE_V2,
     cacheKey: key,
-    provenance: { ...pack.provenance, layout: layoutProvenance, extractionMethod: STAGE3_EXTRACTION_METHOD, cacheKey: key },
+    provenance: { ...pack.provenance, layout: layoutProvenance, ...(ocr ? { ocr } : {}), extractionMethod: STAGE3_EXTRACTION_METHOD, cacheKey: key },
     generatedAt: new Date().toISOString(),
     workerVersion: STAGE3_WORKER_VERSION,
   };
@@ -330,8 +373,9 @@ export function buildV2Envelope(job, { layout, recovery, geometry = null, geomet
  * v2 step for a job that asked for it. Runs after the v1 pack is written and never affects it:
  * any failure is recorded on the job (fallbackReason) and the analyzer falls back to v1.
  */
-async function produceV2Pack(paths, job, sources, options) {
-  let key = v2CacheKey(job.contentSha256, v2GeometryWanted(job, options));
+export async function produceV2Pack(paths, job, sources, options) {
+  const fineRequested = job.ocrGrid === FINE_OCR.ocrGrid;
+  let key = v2CacheKey(job.contentSha256, v2GeometryWanted(job, options), fineRequested ? FINE_OCR_SOURCE : "4x3");
   let cachePath = path.join(paths.cache, `${key}.json`);
   try {
     let envelope = null;
@@ -340,7 +384,24 @@ async function produceV2Pack(paths, job, sources, options) {
       envelope = JSON.parse(await readFile(cachePath, "utf8"));
       cacheHit = true;
     } else {
-      let recovery = sources.recovery || null;
+      let recovery = null;
+      let ocr = null;
+      if (fineRequested) {
+        const fine = await fineRecoveryForJob(paths, job, options);
+        const page = fine.recovery?.pages?.[0];
+        recovery = fine.recovery;
+        ocr = fine.recovery
+          ? {
+            requested: FINE_OCR_SOURCE, used: FINE_OCR_SOURCE, recoveryVersion: fine.recovery.recoveryVersion,
+            resolver: page?.resolutionReport?.resolver ?? null, tiles: page?.ocrConfig?.tiles ?? null,
+            rawWords: page?.ocrConfig?.rawWords ?? null, words: page?.words?.length ?? null,
+            continuations: page?.resolutionReport?.continuations?.length ?? null,
+            competingReadsKept: page?.resolutionReport?.competingReadsKept ?? null, recoveryCacheHit: fine.cacheHit,
+          }
+          : { requested: FINE_OCR_SOURCE, used: "4x3", fallbackReason: fine.reason };
+      }
+      const coarse = !recovery;
+      if (coarse) recovery = sources.recovery || null;
       if (!recovery && job.recoveryPath && existsSync(job.recoveryPath)) {
         recovery = JSON.parse(await readFile(job.recoveryPath, "utf8"));
       }
@@ -355,7 +416,7 @@ async function produceV2Pack(paths, job, sources, options) {
       if (!layout) return { status: "unavailable", fallbackReason: "v2_layout_missing" };
       const { geometry, reason: geometryReason } = await pageGeometryForJob(job, options);
       envelope = buildV2Envelope(job, {
-        layout: sources.rebuilt ? layout : rebuildAssociationsFromFreshOcr(layout, recovery), recovery, geometry, geometryReason,
+        layout: coarse && sources.rebuilt ? layout : rebuildAssociationsFromFreshOcr(layout, recovery), recovery, geometry, geometryReason, ocr,
       });
       key = envelope.cacheKey;
       cachePath = path.join(paths.cache, `${key}.json`);
@@ -385,9 +446,13 @@ async function produceV2Pack(paths, job, sources, options) {
       pageGeometry: envelope.provenance?.layout?.geometry?.version ?? envelope.provenance?.layout?.geometry?.reason ?? null,
       records: envelope.provenance?.layout?.records ?? null,
       textLayerEchoesExcluded: envelope.provenance?.layout?.textLayerEchoesExcluded ?? null,
+      ...(envelope.provenance?.ocr ? { ocrSource: envelope.provenance.ocr.used, ocrFallbackReason: envelope.provenance.ocr.fallbackReason ?? null } : {}),
       storageUploaded: Boolean(storageUpload && !storageUpload.error),
     });
-    return { status: "built", cacheHit, cacheKey: key, packPath, packStatus: envelope.status, storageUpload, fallbackReason: null };
+    return {
+      status: "built", cacheHit, cacheKey: key, packPath, packStatus: envelope.status, storageUpload, fallbackReason: null,
+      ...(envelope.provenance?.ocr ? { ocrSource: envelope.provenance.ocr.used, ocrFallbackReason: envelope.provenance.ocr.fallbackReason ?? null } : {}),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await appendAudit(paths, { event: "v2_pack_failed", jobId: job.id, error: message.slice(0, 240) });
@@ -687,7 +752,7 @@ export async function enqueueFullSetJobs(options = {}) {
       runId: options.runId || null,
       sheetJobId: options.sheetJobMap?.[sheet.relativePath] || null,
       ...(options.evidenceVersion === "v2"
-        ? { evidenceVersion: "v2", recoveryPath: path.join(options.datasetOut, "recovery", `${sheet.sha256}.json`) }
+        ? { evidenceVersion: "v2", recoveryPath: path.join(options.datasetOut, "recovery", `${sheet.sha256}.json`), ocrGrid: options.ocrGrid }
         : {}),
     }));
   }
@@ -727,8 +792,9 @@ export async function enqueueFullSetJobs(options = {}) {
 }
 
 /**
- * Build v2 packs for every manifest sheet from cached production recovery + layout (no OCR).
- * v1 packs and caches are not touched.
+ * Build v2 packs for every manifest sheet from cached production recovery + layout (no OCR), or,
+ * with ocrGrid "12x9", from a 12x9 + S4 recovery (cached, else Vision on the PDF; 4x3 fallback with
+ * the reason recorded). v1 packs and caches are not touched.
  */
 export async function buildV2PacksForFullSet(options = {}) {
   const paths = resolveWorkerPaths(options.rootDir);
@@ -741,8 +807,9 @@ export async function buildV2PacksForFullSet(options = {}) {
       evidenceVersion: "v2",
       recoveryPath: path.join(options.datasetOut, "recovery", `${sheet.sha256}.json`),
       pdfPath: options.sourceDir ? path.join(options.sourceDir, sheet.relativePath) : null,
+      ocrGrid: options.ocrGrid,
     });
-    const result = await produceV2Pack(paths, job, {}, { force: options.force, pageGeometry: options.pageGeometry });
+    const result = await produceV2Pack(paths, job, {}, { force: options.force, pageGeometry: options.pageGeometry, recoverPdf: options.recoverPdf });
     outcomes.push({ sheetId: sheet.id, relativePath: sheet.relativePath, ...result });
   }
   return {

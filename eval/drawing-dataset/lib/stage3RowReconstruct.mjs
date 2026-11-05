@@ -159,7 +159,11 @@ export function rowsFromRecoveryPage(page, options = {}) {
         box: roundBox(parts.length > 1 ? unionBox(ws.map((w) => w.box)) : line.box),
         vertical: Boolean(line.vertical),
         confidence: Math.min(...ws.map((w) => Number(w.confidence ?? 1))),
-        words: ws.map((w) => ({ text: clean(w.text), box: roundBox(w.box), confidence: Number(w.confidence ?? 1) })),
+        words: ws.map((w) => ({
+          text: clean(w.text), box: roundBox(w.box), confidence: Number(w.confidence ?? 1),
+          ...(w.support != null ? { support: w.support, tiles: (w.agreeingTiles || []).length } : {}),
+          ...(w.continuedFrom ? { continuedFrom: w.continuedFrom.map((s) => s.text) } : {}),
+        })),
         ...(parts.length > 1 ? { splitFrom: clean(line.text), splitBy: [...new Set(parts.reasons.filter(Boolean))].join("+") } : {}),
       });
     }

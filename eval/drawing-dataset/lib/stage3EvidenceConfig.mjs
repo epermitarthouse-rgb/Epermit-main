@@ -11,7 +11,7 @@ export const STAGE3_EVIDENCE_V1 = "phase3.stage3-visual-evidence.v1";
 export const STAGE3_EVIDENCE_V2 = "phase3.stage3-visual-evidence.v2";
 export const STAGE3_EVIDENCE_VERSIONS = { v1: STAGE3_EVIDENCE_V1, v2: STAGE3_EVIDENCE_V2 };
 /** Revision of the v2 evidence model inside the v2 pack format; part of the v2 cache key. */
-export const STAGE3_V2_MODEL_REVISION = "model.r2-page-geometry";
+export const STAGE3_V2_MODEL_REVISION = "model.r3-cell-stacking-dimension-context";
 
 /** v2 pack bound (characters of promptBlock). The analyzer block total stays 3,200. */
 export const STAGE3_V2_BUDGET = { maxCharsPerPack: 2600, maxTotalChars: 3200 };
@@ -23,6 +23,29 @@ const RESOLUTIONS = new Set(["production", "s4"]);
  * Normalise worker evidence options. Unknown or unsafe values throw, so a bad run scope
  * fails the v2 build (v1 is unaffected) instead of silently running another configuration.
  */
+/**
+ * Worker CLI arguments for a run's `analysis_scope` (daemon). `stage3EvidenceVersion: "v2"` adds the
+ * v2 build and upload; `stage3OcrGrid: "12x9"` makes that build use 12x9 + S4, and only with v2.
+ * Any other value is reported in `ignored` and the run continues on v1 / 4x3.
+ */
+export function stage3ScopeArgs(scope = {}) {
+  const ignored = [];
+  const blank = (v) => v == null || v === "";
+  const version = scope?.stage3EvidenceVersion;
+  const v2 = version === "v2";
+  if (!v2 && !blank(version) && version !== "v1") ignored.push({ event: "evidence_version_ignored", value: String(version).slice(0, 40) });
+  const grid = scope?.stage3OcrGrid;
+  const fine = v2 && grid === "12x9";
+  if (!fine && !blank(grid) && grid !== "4x3") ignored.push({ event: "ocr_grid_ignored", value: String(grid).slice(0, 40) });
+  return {
+    evidenceVersion: v2 ? "v2" : "v1",
+    ocrGrid: fine ? "12x9" : "4x3",
+    syncArgs: v2 ? ["--evidence-version", "v2"] : [],
+    buildArgs: fine ? ["--ocr-grid", "12x9"] : [],
+    ignored,
+  };
+}
+
 export function resolveStage3EvidenceOptions(input = {}) {
   const evidenceVersion = input.evidenceVersion == null || input.evidenceVersion === "" ? "v1" : String(input.evidenceVersion);
   if (!STAGE3_EVIDENCE_VERSIONS[evidenceVersion]) throw new Error(`stage3_evidence_version_unknown:${evidenceVersion}`);

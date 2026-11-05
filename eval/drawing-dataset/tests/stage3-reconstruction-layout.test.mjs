@@ -12,6 +12,7 @@ import { renderAnnotation } from "../lib/stage3TechnicalDigest.mjs";
 import { buildStage3V2Model } from "../lib/stage3EvidenceV2.mjs";
 import { buildV2Envelope, pageGeometryForJob, v2CacheKey } from "../lib/stage3MacOcrWorker.mjs";
 import { evaluateEchoFilter } from "../lib/stage3EvidenceEval.mjs";
+import { STAGE3_V2_MODEL_REVISION } from "../lib/stage3EvidenceConfig.mjs";
 
 const box = (x, y, width, height) => ({ x, y, width, height });
 const word = (text, x, y, width, height = 9) => ({ text, box: box(x, y, width, height), confidence: 1 });
@@ -166,7 +167,7 @@ describe("worker v2 page geometry step", () => {
   });
   it("keys the cache on the model revision and geometry use, and records the layout method", () => {
     assert.notEqual(v2CacheKey("abc", true), v2CacheKey("abc", false));
-    assert.match(v2CacheKey("abc", false), /^abc\.macos-vision\.phase3\.stage3-visual-evidence\.v2\.model\.r2-page-geometry\.no-page-geometry$/);
+    assert.equal(v2CacheKey("abc", false), `abc.macos-vision.phase3.stage3-visual-evidence.v2.${STAGE3_V2_MODEL_REVISION}.no-page-geometry`);
     const without = buildV2Envelope(job, { layout: { regions: [] }, recovery, geometryReason: "pdf_unavailable" });
     assert.equal(without.cacheKey, v2CacheKey("abc", false));
     assert.equal(without.extractionVersion, "phase3.stage3-visual-evidence.v2");

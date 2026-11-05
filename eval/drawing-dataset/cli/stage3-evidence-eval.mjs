@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { associateBlocksToRegions } from "../lib/layoutAssociate.mjs";
-import { dedupeOcrWords } from "../lib/ocrRecover.mjs";
+import { dedupeOcrWords, linesFromWords, recoveryTiles, resolveRecoveryWords } from "../lib/ocrRecover.mjs";
 import { extractForSheet, rebuildAssociationsFromFreshOcr } from "../lib/stage3MacOcrWorker.mjs";
 import { formatStage3PromptBlock } from "../lib/stage3VisualExtractionSpike.mjs";
 import { buildStage3V2Model, buildStage3V2PackFromRecovery } from "../lib/stage3EvidenceV2.mjs";
@@ -57,6 +57,15 @@ export function v1PackFor(sheetId, layout, recovery) {
   return { pack, layout: rebuilt };
 }
 
+/** Recovery page from saved 12x9 tile observations, resolved and grouped as the opt-in OCR path does. */
+export function recoveryFromObservations(capture, resolution) {
+  const raw = capture.observations.map((o) => ({ text: o.text, confidence: Number(o.confidence), box: o.box || o.pdfPointBox, tileId: o.tileId }));
+  const { pageWidth, pageHeight } = capture;
+  const tiles = pageWidth && pageHeight ? recoveryTiles(pageWidth, pageHeight, "12x9") : null;
+  const { words, report } = resolveRecoveryWords(raw, resolution, { tiles, pageWidth, pageHeight });
+  return { recovery: { pages: [{ words, lines: linesFromWords(words) }] }, report };
+}
+
 const results = [];
 for (const d of manifest.drawings) {
   const gt = prepareGroundTruth(readJson(resolve(d.groundTruth)));
@@ -69,29 +78,50 @@ for (const d of manifest.drawings) {
     stages[name] = { ...extra, summary: summarize(e), ...(detail ? { evaluation: e } : {}) };
   };
 
+  const geometry = d.geometry && existsSync(resolve(d.geometry)) ? readJson(resolve(d.geometry)) : null;
+  /** v2 rows and v2 analyzer block from one recovery (layout associations rebuilt from its lines). */
+  const runV2 = (rowsStage, blockStage, rec, source) => {
+    const relaid = rebuildAssociationsFromFreshOcr(layout, rec);
+    const v2Model = buildStage3V2Model({ layout: relaid, recovery: rec, geometry });
+    run(rowsStage, v2Model.rows.map((r) => ({ id: r.rid, segments: [{ text: r.text, words: r.words }] })), {
+      units: v2Model.rows.length,
+      layout: v2Model.layoutProvenance,
+      echoFilter: evaluateEchoFilter(v2Model.echoes, gt, v2Model.rows),
+      regionLabels: {
+        heuristic: evaluateRegionLabels(layout.regions, gt, associateBlocksToRegions),
+        v2: evaluateRegionLabels(v2Model.regions, gt, associateBlocksToRegions),
+      },
+    });
+    const v2 = buildStage3V2PackFromRecovery({ sheetId: d.sheetId, layout: relaid, recovery: rec, source, geometry });
+    const v2Block = v2AnalyzerBlock([v2]);
+    const rowById = new Map(v2.evidenceModel.rows.map((r) => [r.rid, r]));
+    const annById = new Map(v2.evidenceModel.annotations.map((a) => [a.aid, a]));
+    const rendered = new Set(v2RenderedIds(v2, v2Block, (aid) => renderAnnotation(annById.get(aid), rowById)));
+    const v2Items = v2DeliveredItems(v2).filter((item) => rendered.has(item.id));
+    run(blockStage, v2Items, {
+      units: v2Items.length, packChars: v2.promptBlock.length, blockChars: v2Block.length,
+      shownNotRendered: v2.digest.shown.length - rendered.size, digest: { ...v2.digest, shown: undefined, omitted: undefined },
+      ...(detail ? { block: v2Block } : {}),
+    });
+  };
+
+  let s4 = null;
   if (d.ocr12x9 && existsSync(resolve(d.ocr12x9))) {
-    const obs = readJson(resolve(d.ocr12x9)).observations;
+    const capture = readJson(resolve(d.ocr12x9));
+    const obs = capture.observations;
     const filtered = obs.filter((o) => String(o.text || "").trim() && o.confidence >= 0.45);
     run("12x9 raw observations", wordsAsItems(obs, "r"), { units: obs.length });
     run("12x9 after confidence filter", wordsAsItems(filtered, "f"), { units: filtered.length });
     const deduped = dedupeOcrWords(obs);
     run("12x9 after production dedupe", wordsAsItems(deduped, "d"), { units: deduped.length });
+    s4 = recoveryFromObservations(capture, "s4");
+    const s4Words = s4.recovery.pages[0].words;
+    run("12x9 after S4", wordsAsItems(s4Words, "s"), { units: s4Words.length, report: { ...s4.report, suppressed: s4.report.suppressed.length, continuations: s4.report.continuations.length } });
+    run("12x9+S4 reconstructed lines", linesAsItems(s4.recovery.pages[0].lines, s4Words, "m"), { units: s4.recovery.pages[0].lines.length });
   }
   run("4x3 deduplicated words", wordsAsItems(page.words, "w"), { units: page.words.length });
   run("4x3 reconstructed lines", linesAsItems(page.lines, page.words, "l"), { units: page.lines.length });
   const { pack, layout: rebuilt } = v1PackFor(d.sheetId, layout, recovery);
-  const geometry = d.geometry && existsSync(resolve(d.geometry)) ? readJson(resolve(d.geometry)) : null;
-  const v2Model = buildStage3V2Model({ layout: rebuilt, recovery, geometry });
-  run("v2 reconstructed rows", v2Model.rows.map((r) => ({ id: r.rid, segments: [{ text: r.text, words: r.words }] })), {
-    units: v2Model.rows.length,
-    layout: v2Model.layoutProvenance,
-    echoFilter: evaluateEchoFilter(v2Model.echoes, gt, v2Model.rows),
-    regionLabels: {
-      heuristic: evaluateRegionLabels(layout.regions, gt, associateBlocksToRegions),
-      v2: evaluateRegionLabels(v2Model.regions, gt, associateBlocksToRegions),
-    },
-  });
-
   const block = v1AnalyzerBlock([pack]);
   const delivered = v1DeliveredItems(pack, block, rebuilt, recovery);
   run("v1 analyzer Stage 3 block", delivered, {
@@ -99,18 +129,8 @@ for (const d of manifest.drawings) {
     truncatedAtPackBound: pack.promptBlock.length > 1200, packId: pack.id, topic: pack.topic,
     ...(detail ? { block } : {}),
   });
-
-  const v2 = buildStage3V2PackFromRecovery({ sheetId: d.sheetId, layout: rebuilt, recovery, source: "4x3", geometry });
-  const v2Block = v2AnalyzerBlock([v2]);
-  const rowById = new Map(v2.evidenceModel.rows.map((r) => [r.rid, r]));
-  const annById = new Map(v2.evidenceModel.annotations.map((a) => [a.aid, a]));
-  const rendered = new Set(v2RenderedIds(v2, v2Block, (aid) => renderAnnotation(annById.get(aid), rowById)));
-  const v2Items = v2DeliveredItems(v2).filter((item) => rendered.has(item.id));
-  run("v2 analyzer Stage 3 block", v2Items, {
-    units: v2Items.length, packChars: v2.promptBlock.length, blockChars: v2Block.length,
-    shownNotRendered: v2.digest.shown.length - rendered.size, digest: { ...v2.digest, shown: undefined, omitted: undefined },
-    ...(detail ? { block: v2Block } : {}),
-  });
+  runV2("v2 reconstructed rows", "v2 analyzer Stage 3 block", recovery, "4x3");
+  if (s4) runV2("v2 rows (12x9+S4)", "v2 block (12x9+S4)", s4.recovery, "12x9-s4");
 
   let parity = null;
   if (d.savedPack && existsSync(resolve(d.savedPack))) {
