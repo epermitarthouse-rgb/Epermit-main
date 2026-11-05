@@ -86,11 +86,16 @@ export function similarReadings(a, b) {
   return s.length > 0 && substringDistance(s, l) <= SAME_TEXT_MAX_EDITS * s.length;
 }
 
+/** Containment key: separators . , ; : become word breaks (a decimal point between digits stays). */
+const containKey = (s) => ` ${norm(s).replace(/(?<!\d)[.,;:]|[.,;:](?!\d)/g, " ").replace(/\s+/g, " ").trim()} `;
+const containedIn = (k, longer) => k.trim().length > 0 && containKey(longer).includes(k);
+
 /**
  * Resolve rows that read the same place (same orientation, overlap >= 50% of the smaller box, similar
- * text): a reading contained in a longer one is absorbed, an identical one is a duplicate, and a
- * different one becomes an alternative of the kept row (a conflict). Dense line spacing makes boxes
- * of neighbouring lines overlap; with dissimilar text they remain separate rows.
+ * text): a reading contained in a longer one (the kept row or one of its alternatives, ignoring
+ * separator punctuation) is absorbed, an identical one is a duplicate, and a different one becomes an
+ * alternative of the kept row (a conflict). Dense line spacing makes boxes of neighbouring lines
+ * overlap; with dissimilar text they remain separate rows.
  */
 export function resolveOverlaps(rows) {
   const ordered = [...rows].sort((a, b) => textKey(b.text).length - textKey(a.text).length || b.confidence - a.confidence);
@@ -105,7 +110,9 @@ export function resolveOverlaps(rows) {
     }
     if (!best) { kept.push({ ...row, alternatives: [], absorbed: [] }); continue; }
     const bk = textKey(best.text);
-    if (k === bk || bk.includes(k)) best.absorbed.push(row.rid);
+    const ck = containKey(row.text);
+    if (k === bk || bk.includes(k) || containedIn(ck, best.text)
+      || best.alternatives.some((a) => containedIn(ck, a.text))) best.absorbed.push(row.rid);
     else if (!best.alternatives.some((a) => textKey(a.text) === k)) best.alternatives.push({ rid: row.rid, text: row.text, box: row.box, confidence: row.confidence, words: row.words });
   }
   const order = new Map(rows.map((r, i) => [r.rid, i]));
@@ -181,7 +188,7 @@ function hasRowMate(row, rows, f) {
 const LIST_ITEM = /^\(?\d{1,2}[.)]\s/;
 const ABBREVIATION_END = /\b(?:A\.F\.F|EXIST|NEW|ELEV|EQ|SIM|NO|EA|O\.C|DIA|TYP|MIN|MAX|V\.I\.F|REQ'D|CONT|CLR|NOM|GA|GYP|BD|T\.O|B\.O)\.\)?$/i;
 const CONNECTOR_END = /(?:\b(?:FROM|TO|AT|OF|WITH|AND|OR|FOR|IN|ON|BY|THE|A)|[@+&,\-/])\s*$/i;
-const VALUE_END = /(?:\d(?:\.\d+)?\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%|"|')?|\bD, ASSUMED)\s*\)?$/;
+const VALUE_END = /(?:\d(?:\.\d+)?\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%|"|')?|\b[A-F][,.] ASSUMED)\s*\)?$/;
 const SYMBOL_VALUE = /^[A-Za-z][A-Za-z0-9]{0,3}=?\s+[\d.]+$/;
 const BUBBLE_NUMBER = /^\d{1,2}[A-Z]?$/;
 const SHEET_REFERENCE = /^[A-Z]{1,2}-?\d{1,2}\.\d{2}$/;
@@ -203,6 +210,26 @@ export function startsNewAnnotation(upper, lower) {
   if (/[A-Z]:\s*\S/.test(a) && /[A-Z]:(\s|$)/.test(b)) return true;
   if (SYMBOL_VALUE.test(a) && SYMBOL_VALUE.test(b)) return true;
   return false;
+}
+
+/** Design-data field: a label (no digits, or a short symbol) with one value at the end. */
+const FIELD_ROW = /^(?:[A-Za-z][A-Za-z0-9]{0,3}=?|[A-Z][A-Z .'/&()-]*[A-Z.):=])\s*[\d.]+\s*(?:PSF|PSI|KSI|MPH|KIPS?|GPM|PLF|LBS?|SF|%)?\s*\)?$|^[A-Z][A-Z .'/&-]* [A-F][,.] ASSUMED$/;
+/** A caption without a value: capitals only, at least two words. */
+const BARE_LABEL = /^[A-Z][A-Z.'/&-]*(?: [A-Z.'/&-]+)+:?$/;
+
+/**
+ * Inside a design-data list (a stack with at least FIELD_LIST_MIN field rows), each field and each
+ * bare caption is its own line: a value row never continues into the next caption. A caption
+ * ending in ':' keeps its continuation (BASIC SEISMIC FORCE RESISTING SYSTEM: / ORD. PLAIN ...).
+ * Counting captions towards the list as well split printed notes on A-3.06, so they do not count.
+ */
+export const FIELD_LIST_MIN = 3;
+export function fieldListBoundary(upper, lower) {
+  const a = clean(upper), b = clean(lower);
+  if (/:$/.test(a)) return false;
+  const fa = FIELD_ROW.test(a), fb = FIELD_ROW.test(b);
+  const la = BARE_LABEL.test(a), lb = BARE_LABEL.test(b);
+  return (fa && (fb || lb)) || (la && (fb || lb));
 }
 
 const BARE_DIMENSION = /^\d+(?:\s*'\s*-?\s*\d+(?:\s+\d+\/\d+)?\s*"?|\s*(?:\d+\/\d+\s*)?"|\s*')$/;
@@ -351,10 +378,19 @@ export function groupAnnotations(rows, options = {}) {
   const find = (x) => (parent.get(x) === x ? x : (parent.set(x, find(parent.get(x))), parent.get(x)));
   const rowById = new Map(rows.map((r) => [r.rid, r]));
   const contextUncertain = new Set();
+  const stack = new Map(rows.map((r) => [r.rid, r.rid]));
+  const stackOf = (x) => (stack.get(x) === x ? x : (stack.set(x, stackOf(stack.get(x))), stack.get(x)));
+  for (const [a, b] of below) if (above.get(b) === a) stack.set(stackOf(b), stackOf(a));
+  const fieldRows = new Map();
+  if (options.fieldLists !== false) {
+    for (const r of rows) if (FIELD_ROW.test(clean(r.text))) fieldRows.set(stackOf(r.rid), (fieldRows.get(stackOf(r.rid)) || 0) + 1);
+  }
+  const inFieldList = (rid) => (fieldRows.get(stackOf(rid)) || 0) >= FIELD_LIST_MIN;
   for (const [a, b] of below) {
     if (above.get(b) !== a) { contextUncertain.add(a); contextUncertain.add(b); continue; }
     if (tableCell.get(a) && tableCell.get(b)) continue;
     if (startsNewAnnotation(rowById.get(a).text, rowById.get(b).text)) continue;
+    if (inFieldList(a) && fieldListBoundary(rowById.get(a).text, rowById.get(b).text)) continue;
     if (dimensionLabelPair(rowById.get(a).text, rowById.get(b).text)) { contextUncertain.add(a); contextUncertain.add(b); }
     parent.set(find(b), find(a));
   }
@@ -425,7 +461,7 @@ export function buildEvidenceModel(rawRows, options = {}) {
     const technical = cls.technical || altTechnical;
     return { ...r, technical, classes: cls.classes, uncertain: technical ? uncertaintyReasons(r.text) : [], regionKind: regionOf(r) };
   });
-  const groups = groupAnnotations(resolved, { geometry: options.geometry });
+  const groups = groupAnnotations(resolved, { geometry: options.geometry, fieldLists: options.fieldLists });
   for (const g of groups) {
     const parens = (s) => (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
     if (parens(g.rows.map((r) => r.text).join(" ")) === 0) continue;
@@ -452,5 +488,88 @@ export function buildEvidenceModel(rawRows, options = {}) {
   });
   annotations.sort((p, q) => (q.box.y + q.box.height) - (p.box.y + p.box.height) || p.box.x - q.box.x);
   annotations.forEach((a, i) => { a.aid = `a${String(i + 1).padStart(3, "0")}`; });
+  if (options.repeatedNotes !== false) markRepeatedReadings(resolved, annotations);
   return { rows: resolved, annotations };
+}
+
+// ---------- repeated notes ----------
+/** Digit pairs Vision misreads for each other in a printed number. */
+const CONFUSABLE_DIGITS = new Set(["17", "08", "38", "56", "68", "89"]);
+const REPEAT_MIN_CONTEXT = 8;
+const numberCore = (tok) => tok.match(/^\(?(\d+(?:\.\d+)?)["']?[.,;:)]*$/)?.[1] ?? null;
+
+function confusableNumbers(a, b) {
+  if (a.length !== b.length || a === b) return false;
+  let diff = 0, pair = "";
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] === b[i]) continue;
+    diff += 1;
+    pair = [a[i], b[i]].sort().join("");
+  }
+  return diff === 1 && CONFUSABLE_DIGITS.has(pair);
+}
+
+/**
+ * The same note printed at several places can be read with a different digit in one copy (A-4.00:
+ * FROM 70 DEGREES at one place, FROM 10 DEGREES at two). A number whose surrounding words (at least
+ * REPEAT_MIN_CONTEXT, unbroken) match another technical annotation at a separate place, and which
+ * differs from it only by one confusable digit, gets `repeatedReadings` on its row: the readings of
+ * all copies and their sources. Row text is not changed and no copy is preferred (majority may be
+ * wrong). Numbers that differ otherwise are genuinely different notes and are not marked.
+ */
+export function markRepeatedReadings(rows, annotations) {
+  const rowById = new Map(rows.map((r) => [r.rid, r]));
+  const seqs = annotations
+    .filter((a) => a.technical && a.layout !== "record" && a.regionKind !== "title_block")
+    .map((a) => ({ a, toks: a.rows.flatMap((rid) => clean(rowById.get(rid).text).split(" ").map((t, i) => ({ rid, i, t, k: norm(t) }))) }));
+  const index = new Map();
+  const keysAt = (toks, i) => [
+    `R|${toks.slice(i + 1, i + 4).map((x) => x.k).join(" ")}`,
+    `L|${toks.slice(Math.max(0, i - 3), i).map((x) => x.k).join(" ")}`,
+  ];
+  for (const s of seqs) {
+    s.toks.forEach((tok, i) => {
+      if (!numberCore(tok.t)) return;
+      for (const key of keysAt(s.toks, i)) {
+        if (key.split(" ").length < 3) continue;
+        if (!index.has(key)) index.set(key, []);
+        index.get(key).push({ s, i });
+      }
+    });
+  }
+  const marks = new Map();
+  const mark = (s, i, other, j) => {
+    const tok = s.toks[i];
+    const row = rowById.get(tok.rid);
+    if (row.alternatives?.length) return;
+    const id = `${tok.rid}#${tok.i}`;
+    if (!marks.has(id)) marks.set(id, { row, index: tok.i, own: numberCore(tok.t), readings: new Set([numberCore(tok.t)]), sources: [] });
+    const m = marks.get(id);
+    m.readings.add(numberCore(other.toks[j].t));
+    if (!m.sources.some((x) => x.aid === other.a.aid && x.rid === other.toks[j].rid)) m.sources.push({ aid: other.a.aid, rid: other.toks[j].rid });
+  };
+  for (const s of seqs) {
+    s.toks.forEach((tok, i) => {
+      const own = numberCore(tok.t);
+      if (!own) return;
+      const seen = new Set();
+      for (const key of keysAt(s.toks, i)) {
+        for (const { s: o, i: j } of index.get(key) || []) {
+          if (o === s || seen.has(`${o.a.aid}#${j}`) || overlapSmaller(s.a.box, o.a.box) > 0) continue;
+          seen.add(`${o.a.aid}#${j}`);
+          if (!confusableNumbers(own, numberCore(o.toks[j].t) || "")) continue;
+          let left = 0, right = 0;
+          while (i - left - 1 >= 0 && j - left - 1 >= 0 && s.toks[i - left - 1].k === o.toks[j - left - 1].k) left += 1;
+          while (i + right + 1 < s.toks.length && j + right + 1 < o.toks.length && s.toks[i + right + 1].k === o.toks[j + right + 1].k) right += 1;
+          if (left + right >= REPEAT_MIN_CONTEXT) mark(s, i, o, j);
+        }
+      }
+    });
+  }
+  for (const m of marks.values()) {
+    m.row.repeatedReadings = [...(m.row.repeatedReadings || []), { index: m.index, own: m.own, readings: [...m.readings].sort(), sources: m.sources }];
+  }
+  for (const a of annotations) {
+    if (a.rows.some((rid) => rowById.get(rid).repeatedReadings?.length)) a.repeatedConflict = true;
+  }
 }

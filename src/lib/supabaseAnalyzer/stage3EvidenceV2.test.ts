@@ -220,7 +220,7 @@ describe("Stage 3 v2 storage bridge", () => {
   });
 });
 
-describe("Stage 3 v2 real worker packs (model r4: 4x3 and 12x9+S4)", () => {
+describe("Stage 3 v2 real worker packs (model r5: 4x3 and 12x9+S4)", () => {
   const fixture = JSON.parse(readFileSync(
     join(__dirname, "../../../eval/drawing-dataset/tests/fixtures/stage3-v2-real-packs.fixture.json"),
     "utf8",

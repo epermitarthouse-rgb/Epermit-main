@@ -3,7 +3,8 @@
  *
  * - One line per annotation; " / " separates its printed rows, " ; " the cells of one ruled
  *   table row (record, cells left to right). Annotations are never cut.
- * - {A | B} marks conflicting readings of one place; ?text marks a format or glyph doubt;
+ * - {A | B} marks conflicting readings of one place (a whole row, or one number that copies of
+ *   the same note read differently); ?text marks a format or glyph doubt;
  *   (ctx?) marks an item whose relation to a neighbouring item is unconfirmed. The
  *   interpretation rules for these markers are stated by the analyzer v2 header.
  * - Selection is by technical priority within the character budget; what is left out is
@@ -16,8 +17,16 @@ const clean = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const ROW_MAX = 160;
 const OMISSION_RESERVE = 200;
 
+/** Row text with each number that copies of the same note read differently shown as {A | B}. */
+function markedText(row) {
+  if (!row.repeatedReadings?.length) return clean(row.text);
+  const toks = clean(row.text).split(" ");
+  for (const r of row.repeatedReadings) toks[r.index] = toks[r.index].replace(r.own, `{${r.readings.join(" | ")}}`);
+  return toks.join(" ");
+}
+
 export function renderRow(row) {
-  const t = clean(row.text).slice(0, ROW_MAX);
+  const t = markedText(row).slice(0, ROW_MAX);
   if (row.alternatives?.length) return `{${[t, ...row.alternatives.map((a) => clean(a.text).slice(0, ROW_MAX))].join(" | ")}}`;
   return row.uncertain?.length ? `?${t}` : t;
 }
@@ -112,6 +121,7 @@ export function compactEvidenceModel(model, shownIds) {
     alternatives: (r.alternatives || []).map((a) => ({ text: a.text, box: a.box, confidence: a.confidence, words: (a.words || []).map(wordRecord) })),
     absorbed: (r.absorbed || []).length,
     ...(r.formatRejected?.length ? { formatRejected: r.formatRejected } : {}),
+    ...(r.repeatedReadings?.length ? { repeatedReadings: r.repeatedReadings } : {}),
     ...(r.splitFrom ? { splitFrom: r.splitFrom } : {}),
   }));
   return { scope: "shown", rowCount: model.rows.length, annotationCount: model.annotations.length, rows, annotations };

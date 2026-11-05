@@ -73,7 +73,7 @@ The daemon does both when the run's scope has `"stage3EvidenceVersion": "v2"`.
 
 The analyzer uses the v2 pack when it is available. Otherwise it uses the v1 pack, and otherwise the PDF only. Audit metadata records the reason in `stage3_evidence_fallback_reason`. For each delivered pack, `stage3_evidence_sources` lists the version, the worker cache key (which names the v2 model revision) and the OCR grid used, with the reason if 12×9 fell back to 4×3.
 
-v2 packs carry a model revision in their cache key, currently `model.r4-format-tiebreak`. A worker with a newer revision rebuilds v2 packs instead of reusing cached ones.
+v2 packs carry a model revision in their cache key, currently `model.r5-root-cause`. A worker with a newer revision rebuilds v2 packs instead of reusing cached ones.
 
 **12×9 OCR for v2 (opt-in per run, v2 only; not approved for general traffic).** With `"stage3OcrGrid": "12x9"` next to `"stage3EvidenceVersion": "v2"`, the daemon runs `build-v2-packs --ocr-grid 12x9`. The v2 pack then reads 12×9 tiles resolved with S4 instead of the cached 4×3 recovery. v1 packs never change.
 
