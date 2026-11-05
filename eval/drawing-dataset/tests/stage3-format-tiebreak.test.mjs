@@ -63,7 +63,7 @@ describe("format tie-break", () => {
     assert.ok(!pack.promptBlock.includes("12'-O\""));
   });
 
-  it("bumps the v2 model revision so cached r4 packs are rebuilt", () => {
-    assert.equal(STAGE3_V2_MODEL_REVISION, "model.r5-root-cause");
+  it("bumps the v2 model revision so cached r5 packs are rebuilt", () => {
+    assert.equal(STAGE3_V2_MODEL_REVISION, "model.r6-downstream");
   });
 });
