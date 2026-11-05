@@ -36,6 +36,7 @@ import InviteAcceptPage from "./pages/InviteAccept";
 import Analytics from "./pages/Analytics";
 import AdminAudit from "./pages/AdminAudit";
 import AdminOverview from "./pages/admin/AdminOverview";
+import AdminAiUsage from "./pages/admin/AdminAiUsage";
 import AdminAccessUsers from "./pages/admin/AdminAccessUsers";
 import AdminAccessUserDetail from "./pages/admin/AdminAccessUserDetail";
 import AdminPlatformNotifications from "./pages/admin/AdminPlatformNotifications";
@@ -195,6 +196,7 @@ const App = () => (
                     <Route path="access/users" element={<AdminAccessUsers />} />
                     <Route path="access/users/:userId" element={<AdminAccessUserDetail />} />
                     <Route path="audit" element={<AdminAudit />} />
+                    <Route path="ai-usage" element={<AdminAiUsage />} />
                     <Route
                       path="platform"
                       element={<Navigate to="/admin/platform/jurisdictions" replace />}

@@ -6,6 +6,7 @@ import {
   Briefcase,
   Building2,
   Calculator,
+  CircleDollarSign,
   ClipboardCheck,
   FileQuestion,
   FileSignature,
@@ -275,6 +276,12 @@ export const hybridNavGroups: HybridNavGroup[] = [
           pathname.startsWith("/admin/platform") || pathname === "/admin/feature-flags",
       },
       {
+        title: "AI usage",
+        href: "/admin/ai-usage",
+        icon: CircleDollarSign,
+        description: "Analyzer cost per run",
+      },
+      {
         title: "Shadow Mode",
         href: "/admin/shadow-mode",
         icon: Shield,
@@ -358,6 +365,7 @@ export const pageTitles: Record<string, string> = {
   "/admin": "Admin · Overview",
   "/admin/access/users": "Admin · Authorization",
   "/admin/audit": "Admin · Audit",
+  "/admin/ai-usage": "Admin · AI usage",
   "/admin/platform": "Admin · Platform Control",
   "/admin/platform/jurisdictions": "Admin · Jurisdictions",
   "/admin/platform/notifications": "Admin · Notifications",

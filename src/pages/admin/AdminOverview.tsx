@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { Building2, Loader2, ScrollText, Shield, Users } from "lucide-react";
+import { Building2, CircleDollarSign, Loader2, ScrollText, Shield, Users } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AlertBanner, MetricCard, Panel } from "@/components/design/ProductPrimitives";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +80,12 @@ export default function AdminOverview() {
             <Link to="/admin/audit">
               <ScrollText className="mr-2 h-4 w-4" />
               Audit
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/ai-usage">
+              <CircleDollarSign className="mr-2 h-4 w-4" />
+              AI usage
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
