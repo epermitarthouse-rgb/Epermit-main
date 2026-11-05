@@ -16,6 +16,7 @@ import {
   type Stage3VisualEvidenceResult,
 } from "../../../supabase/functions/_shared/analyzerStage3VisualEvidence.ts";
 import {
+  STAGE3_PACK_MAX_BYTES,
   buildStage3EvidenceObjectPath,
   createMemoryStage3Storage,
   createStage3StoragePackLoader,
@@ -216,6 +217,111 @@ describe("Stage 3 v2 storage bridge", () => {
     assert.equal(result.version, STAGE3_VISUAL_EVIDENCE_V2_VERSION);
     assert.equal(result.packs[0].id, v2Pack.id);
     assert.deepEqual(result.packs[0].digest, v2Pack.digest);
+  });
+});
+
+describe("Stage 3 v2 real worker packs (model r4: 4x3 and 12x9+S4)", () => {
+  const fixture = JSON.parse(readFileSync(
+    join(__dirname, "../../../eval/drawing-dataset/tests/fixtures/stage3-v2-real-packs.fixture.json"),
+    "utf8",
+  )) as { modelRevision: string; cases: Array<{ name: string; pack: Stage3EvidencePack; expectedBlock: string }> };
+  const sha = fixture.cases[0].pack.sourceFileSha256 as string;
+  const realIdentity = { ...identity, contentSha256: sha };
+  const v2Identity = { ...realIdentity, extractionVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION };
+  const realV1 = { ...v1Pack, sourceFileSha256: sha };
+  const realBase = { ...base, contentSha256: sha };
+  const stored = (v2: Stage3EvidencePack | null, v1: Stage3EvidencePack | null) => {
+    const storage = createMemoryStage3Storage();
+    if (v2) storage.upload(buildStage3EvidenceObjectPath(v2Identity), serializeStage3PackForUpload(v2));
+    if (v1) storage.upload(buildStage3EvidenceObjectPath(realIdentity), serializeStage3PackForUpload(v1));
+    return {
+      loadCompletedPacks: createStage3StoragePackLoader({ identity: realIdentity, storage }),
+      loadCompletedV2Packs: createStage3StoragePackLoader({ identity: v2Identity, storage }),
+      now: () => 0,
+    };
+  };
+
+  for (const c of fixture.cases) {
+    it(`${c.name}: validates, stays under the byte limit and keeps the stored model`, () => {
+      assert.ok(serializeStage3PackForUpload(c.pack).length < STAGE3_PACK_MAX_BYTES);
+      const v = validateAndNormalizeStage3Pack(c.pack, { contentSha256: sha, extractionVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION });
+      assert.ok(v.ok);
+      if (!v.ok) return;
+      assert.equal(v.pack.independentlyVerified, false);
+      assert.deepEqual(v.pack.evidenceModel, c.pack.evidenceModel);
+      assert.deepEqual(v.pack.digest, c.pack.digest);
+      assert.match(String(v.pack.provenance?.cacheKey), new RegExp(fixture.modelRevision.replace(/\./g, "\\.")));
+    });
+
+    it(`${c.name}: storage round trip delivers the harness block and audits the source`, async () => {
+      const result = await retrieveStage3VisualEvidence({
+        ...realBase,
+        evidenceVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+        deps: stored(c.pack, realV1),
+      });
+      assert.equal(result.version, STAGE3_VISUAL_EVIDENCE_V2_VERSION);
+      assert.equal(result.fallbackReason, null);
+      assert.equal(result.promptBlock, c.expectedBlock);
+      assert.ok(result.promptBlock.length <= STAGE3_VISUAL_EVIDENCE_V2_BOUNDS.maxTotalChars);
+      const audit = stage3VisualEvidenceAuditMetadata(result);
+      const source = (audit.stage3_evidence_sources as Array<Record<string, unknown>>)[0];
+      assert.equal(source.version, STAGE3_VISUAL_EVIDENCE_V2_VERSION);
+      assert.equal(source.cache_key, c.pack.provenance?.cacheKey);
+      assert.equal(source.ocr_used, c.pack.provenance?.ocr?.used ?? null);
+      assert.equal(source.ocr_fallback_reason, null);
+    });
+  }
+
+  it("records the 12x9 OCR source only for packs built from it", () => {
+    const [coarse, fine] = fixture.cases.map((c) => validateAndNormalizeStage3Pack(c.pack, { contentSha256: sha, extractionVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION }));
+    assert.ok(coarse.ok && fine.ok);
+    if (!coarse.ok || !fine.ok) return;
+    assert.equal(coarse.pack.provenance?.ocr, undefined);
+    assert.deepEqual(fine.pack.provenance?.ocr, { requested: "12x9-s4", used: "12x9-s4", fallbackReason: null, resolver: "stage3-s4.v1+tile-edge-continuation" });
+    const fellBack = { ...fixture.cases[0].pack, provenance: { ...fixture.cases[0].pack.provenance, ocr: { requested: "12x9-s4", used: "4x3", fallbackReason: "ocr_tiles_failed:2" } } };
+    const v = validateAndNormalizeStage3Pack(fellBack as Stage3EvidencePack, { contentSha256: sha, extractionVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION });
+    assert.ok(v.ok);
+    if (v.ok) assert.deepEqual(v.pack.provenance?.ocr, { requested: "12x9-s4", used: "4x3", fallbackReason: "ocr_tiles_failed:2", resolver: null });
+  });
+
+  it("falls back v2 → v1 → PDF only with real packs in storage", async () => {
+    const fine = fixture.cases[1].pack;
+    const noV2 = await retrieveStage3VisualEvidence({ ...realBase, evidenceVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION, deps: stored(null, realV1) });
+    assert.equal(noV2.version, STAGE3_VISUAL_EVIDENCE_VERSION);
+    assert.equal(noV2.fallbackReason, "v2_pack_missing->v1");
+    assert.match(noV2.promptBlock, /3'-6" MIN HEIGHT/);
+    const nothing = await retrieveStage3VisualEvidence({ ...realBase, evidenceVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION, deps: stored(null, null) });
+    assert.equal(nothing.fallbackReason, "v2_pack_missing->pdf_only");
+    assert.equal(nothing.promptBlock, "");
+    const storage = createMemoryStage3Storage();
+    const otherV2 = { ...v2Identity, contentSha256: SHA };
+    storage.upload(buildStage3EvidenceObjectPath(otherV2), serializeStage3PackForUpload(fine));
+    storage.upload(buildStage3EvidenceObjectPath(identity), serializeStage3PackForUpload(v1Pack));
+    const otherSheet = await retrieveStage3VisualEvidence({
+      ...base,
+      evidenceVersion: STAGE3_VISUAL_EVIDENCE_V2_VERSION,
+      deps: {
+        loadCompletedPacks: createStage3StoragePackLoader({ identity, storage }),
+        loadCompletedV2Packs: createStage3StoragePackLoader({ identity: otherV2, storage }),
+        now: () => 0,
+      },
+    });
+    assert.equal(otherSheet.version, STAGE3_VISUAL_EVIDENCE_VERSION);
+    assert.equal(otherSheet.fallbackReason, "v2_pack_stale->v1");
+    assert.doesNotMatch(otherSheet.promptBlock, /Stage3 OCR evidence v2/);
+  });
+
+  it("rolls back to v1 when the run scope drops v2, even with v2 packs stored", async () => {
+    let v2Calls = 0;
+    const deps = stored(fixture.cases[1].pack, realV1);
+    const result = await retrieveStage3VisualEvidence({
+      ...realBase,
+      deps: { ...deps, loadCompletedV2Packs: async (...args: Parameters<typeof deps.loadCompletedV2Packs>) => { v2Calls += 1; return deps.loadCompletedV2Packs(...args); } },
+    });
+    assert.equal(result.version, STAGE3_VISUAL_EVIDENCE_VERSION);
+    assert.equal(v2Calls, 0);
+    assert.match(result.promptBlock, /3'-6" MIN HEIGHT/);
+    assert.equal(Object.keys(stage3VisualEvidenceAuditMetadata(result)).some((key) => key.startsWith("stage3_evidence_")), false);
   });
 });
 

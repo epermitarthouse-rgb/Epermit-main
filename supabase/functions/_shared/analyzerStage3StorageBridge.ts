@@ -224,6 +224,19 @@ export function validateAndNormalizeStage3Pack(
     if (body.evidenceModel && typeof body.evidenceModel === "object" && !Array.isArray(body.evidenceModel)) {
       pack.evidenceModel = body.evidenceModel as Record<string, unknown>;
     }
+    const ocr = provenanceRaw.ocr;
+    if (ocr && typeof ocr === "object" && !Array.isArray(ocr)) {
+      const field = (key: string) => {
+        const value = (ocr as Record<string, unknown>)[key];
+        return value == null ? null : String(value).slice(0, 120);
+      };
+      pack.provenance!.ocr = {
+        requested: field("requested"),
+        used: field("used"),
+        fallbackReason: field("fallbackReason"),
+        resolver: field("resolver"),
+      };
+    }
   }
   return { ok: true, pack };
 }

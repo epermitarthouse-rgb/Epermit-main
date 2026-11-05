@@ -62,6 +62,13 @@ export type Stage3RunStatus =
   | "stale"
   | "failed";
 
+export interface Stage3OcrProvenance {
+  requested: string | null;
+  used: string | null;
+  fallbackReason: string | null;
+  resolver: string | null;
+}
+
 export interface Stage3EvidencePack {
   id: string;
   sheetId: string;
@@ -79,6 +86,8 @@ export interface Stage3EvidencePack {
     uncertainty?: string;
     extractionMethod?: string;
     cacheKey?: string;
+    /** v2 only: OCR grid requested and used by the worker, and why it fell back. */
+    ocr?: Stage3OcrProvenance;
   };
   sourceFileSha256?: string;
   extractionVersion?: string;
@@ -606,6 +615,13 @@ export function stage3VisualEvidenceAuditMetadata(
             chars: digest.chars ?? null,
             max_chars: digest.maxChars ?? null,
           })),
+        stage3_evidence_sources: result.packs.map((pack) => ({
+          sheet_id: pack.sheetId,
+          version: pack.extractionVersion || null,
+          cache_key: pack.provenance?.cacheKey || null,
+          ocr_used: pack.provenance?.ocr?.used ?? null,
+          ocr_fallback_reason: pack.provenance?.ocr?.fallbackReason ?? null,
+        })),
       }
       : {}),
   };

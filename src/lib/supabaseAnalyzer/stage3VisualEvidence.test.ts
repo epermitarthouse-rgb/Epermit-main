@@ -75,6 +75,10 @@ describe("Stage 3 run-scoped activation", () => {
       run: optedInRun,
       env: envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "false" }),
     }), false);
+    assert.equal(isStage3VisualEvidenceEnabledForRun({
+      run: { ...optedInRun, analysis_scope: { ...optedInRun.analysis_scope, stage3EvidenceVersion: "v2", stage3OcrGrid: "12x9" } },
+      env: envMap({ ANALYZER_STAGE3_VISUAL_EVIDENCE: "false" }),
+    }), false);
   });
 
   it("rejects mismatched job/run authorization", () => {

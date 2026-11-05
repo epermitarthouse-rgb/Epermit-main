@@ -248,10 +248,12 @@ describe("v2 full-set upload (stubbed Edge)", () => {
     const saved = { fetch: globalThis.fetch, env: { ...process.env } };
     const stored = new Map();
     const requests = [];
+    let rejectV2 = false;
     globalThis.fetch = async (_url, init) => {
       const body = JSON.parse(init.body);
       requests.push(body);
       const reply = (payload, status = 200) => ({ ok: status < 400, status, json: async () => payload, text: async () => JSON.stringify(payload) });
+      if (rejectV2 && body.pack?.extractionVersion === STAGE3_EVIDENCE_V2) return reply({ ok: false, error: "pack_oversized" }, 413);
       if (body.action === "list_sheet_jobs") return reply({ ok: true, jobs });
       if (body.action === "sync_run_preprocess") return reply({ ok: true });
       if (body.action === "verify_pack") {
@@ -285,6 +287,18 @@ describe("v2 full-set upload (stubbed Edge)", () => {
       assert.equal(missing.failed, 0);
       assert.equal(missing.packRetrieved, 1);
       assert.equal(missing.v2.missingLocal, 1);
+
+      stored.clear();
+      await writeFile(v2File, JSON.stringify({ ...common, extractionVersion: STAGE3_EVIDENCE_V2 }));
+      rejectV2 = true;
+      const rejected = await uploadAndVerifyFullSetPacks({ ...args, evidenceVersion: "v2" });
+      rejectV2 = false;
+      assert.equal(rejected.failed, 0);
+      assert.equal(rejected.packRetrieved, 1);
+      assert.equal(rejected.v2.failed, 1);
+      assert.equal(rejected.v2.results[0].status, "v2_upload_failed");
+      assert.ok(stored.has("job-0|phase3.stage3-visual-evidence.v1"));
+      assert.equal(stored.has(`job-0|${STAGE3_EVIDENCE_V2}`), false);
 
       stored.clear();
       requests.length = 0;
