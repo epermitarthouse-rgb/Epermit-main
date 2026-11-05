@@ -112,6 +112,54 @@ export function resolveOverlaps(rows) {
   return kept.sort((a, b) => order.get(a.rid) - order.get(b.rid));
 }
 
+// ---------- format tie-break ----------
+const GLYPH_DIGIT = { I: "1", l: "1", "|": "1", O: "0", o: "0" };
+const glyphKey = (t) => t.replace(/[Il|Oo]/g, (c) => GLYPH_DIGIT[c]).replace(/["'″]/g, "").replace(/[.,;:]+$/, "");
+const FEET_INCH_TOKEN = /^\(?\d+'-\d+(?:\s?\d+\/\d+)?"[.,;:)]?$/;
+const NUMBER_TOKEN = /^[-(#]?\d+(?:[-/.,x]\d+)*["']?[.,;:)]?$/;
+const SHEET_TOKEN = /^[A-Z]{1,2}-\d+(?:\.\d+)+[.,;:)]?$/;
+
+/** Which of two tokens is the well-formed reading of the same glyphs: "a", "b", "neutral" or null. */
+function tokenWinner(a, b) {
+  if (a === b) return "same";
+  if (glyphKey(a) !== glyphKey(b)) return null;
+  const fa = FEET_INCH_TOKEN.test(a), fb = FEET_INCH_TOKEN.test(b);
+  if (fa !== fb) return fa ? "a" : "b";
+  const wa = NUMBER_TOKEN.test(a) || SHEET_TOKEN.test(a), wb = NUMBER_TOKEN.test(b) || SHEET_TOKEN.test(b);
+  if (wa !== wb) return wa ? "a" : "b";
+  return a.replace(/[.,;:]+$/, "") === b.replace(/[.,;:]+$/, "") ? "neutral" : null;
+}
+
+/** Whether reading `a` is the well-formed one against `b`: every differing token is won or neutral, one is won. */
+function formatBeats(a, b) {
+  const ta = clean(a).split(" "), tb = clean(b).split(" ");
+  if (ta.length !== tb.length) return false;
+  let won = false;
+  for (let i = 0; i < ta.length; i += 1) {
+    const w = tokenWinner(ta[i], tb[i]);
+    if (w === null || w === "b") return false;
+    if (w === "a") won = true;
+  }
+  return won;
+}
+
+/**
+ * Resolve competing readings by format alone: readings that are identical except for glyphs Vision
+ * confuses (I, l, | for 1; O for 0) or inch and foot marks, where one reading is a well-formed number,
+ * dimension or sheet reference in every token where they differ. Any other difference keeps the
+ * conflict. The rejected readings stay in `formatRejected`.
+ */
+export function formatTieBreak(row) {
+  if (!row.alternatives?.length) return row;
+  const readings = [{ text: row.text, words: row.words, confidence: row.confidence }, ...row.alternatives];
+  const winner = readings.find((r) => readings.every((o) => o === r || formatBeats(r.text, o.text)));
+  if (!winner) return row;
+  return {
+    ...row, text: winner.text, words: winner.words, confidence: winner.confidence, alternatives: [],
+    formatRejected: readings.filter((r) => r !== winner).map((r) => r.text),
+  };
+}
+
 // ---------- grouping ----------
 /** Reading frame: horizontal rows as is; vertical rows (rotated, read bottom to top) turned upright. */
 function frame(row) {
@@ -370,7 +418,8 @@ export function annotationPriority(a) {
  */
 export function buildEvidenceModel(rawRows, options = {}) {
   const regionOf = options.regionOf || (() => null);
-  const resolved = resolveOverlaps(rawRows).map((r) => {
+  const overlaps = resolveOverlaps(rawRows);
+  const resolved = (options.formatTieBreak === false ? overlaps : overlaps.map(formatTieBreak)).map((r) => {
     const cls = classifyText(r.text);
     const altTechnical = r.alternatives.some((a) => classifyText(a.text).technical);
     const technical = cls.technical || altTechnical;

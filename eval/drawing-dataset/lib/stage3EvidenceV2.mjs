@@ -22,12 +22,12 @@ export function rowRegions(rows, regions) {
 }
 
 /** Rows, regions and model for one sheet (exported for the harness). */
-export function buildStage3V2Model({ layout, recovery, geometry = null, rows: givenRows }) {
+export function buildStage3V2Model({ layout, recovery, geometry = null, rows: givenRows, modelOptions = {} }) {
   const page = recovery?.pages?.[0] || { words: [], lines: [] };
   const grounded = groundLayoutRegions(layout?.regions || [], geometry);
   const { rows, echoes } = givenRows ? { rows: givenRows, echoes: [] } : reconstructRows(page, { geometry, textSpans: textLayerSpans(layout) });
   const regions = rowRegions(rows, grounded.regions);
-  const model = buildEvidenceModel(rows, { regionOf: (r) => regions.get(r.rid) || null, geometry });
+  const model = buildEvidenceModel(rows, { ...modelOptions, regionOf: (r) => regions.get(r.rid) || null, geometry });
   const layoutProvenance = {
     geometry: geometry ? { version: geometry.version, density: geometry.density } : { status: "unavailable" },
     titleBlock: grounded.titleBlock,

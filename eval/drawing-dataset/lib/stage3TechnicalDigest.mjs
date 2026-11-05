@@ -111,6 +111,7 @@ export function compactEvidenceModel(model, shownIds) {
     words: (r.words || []).map(wordRecord),
     alternatives: (r.alternatives || []).map((a) => ({ text: a.text, box: a.box, confidence: a.confidence, words: (a.words || []).map(wordRecord) })),
     absorbed: (r.absorbed || []).length,
+    ...(r.formatRejected?.length ? { formatRejected: r.formatRejected } : {}),
     ...(r.splitFrom ? { splitFrom: r.splitFrom } : {}),
   }));
   return { scope: "shown", rowCount: model.rows.length, annotationCount: model.annotations.length, rows, annotations };
