@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { serviceUserResponse } from "../_shared/serviceExecution.ts";
+import { resolveServiceExecution } from "../_shared/serviceExecutionDeno.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,11 +56,25 @@ serve(async (req) => {
       );
     }
 
+    const serviceAuth = await resolveServiceExecution(
+      req,
+      "auto-router-agent",
+      (b) => b.projectId ?? b.project_id,
+    );
+    if ("error" in serviceAuth) {
+      return new Response(
+        JSON.stringify({ code: serviceAuth.status, message: serviceAuth.error, routed_count: 0 }),
+        { status: serviceAuth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
       auth: { persistSession: false },
     });
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = serviceAuth.mode === "service"
+      ? serviceUserResponse(serviceAuth.actingUserId)
+      : await supabase.auth.getUser();
     if (userError || !user) {
       return new Response(
         JSON.stringify({ code: 401, message: "Invalid JWT", routed_count: 0 }),
