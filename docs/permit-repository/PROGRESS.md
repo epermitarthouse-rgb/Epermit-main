@@ -108,6 +108,10 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | 4 Link | Done | 1 project_permits row ff193644 ↔ 06fa082e; projects 88. |
 | 5 Deep job | Done | `7815af2b`, unclaimed after 5 s; claimed only by the local worker. |
 | 6 Run 1 (agents off) | **Stopped at safety rule** | 3 files stored (5,458,017 bytes, signed URL 206), 6 review comments; GET `/WebForms/ReportViewer.aspx?ReportID=4` ("All Uploaded Files…") hit deny `/Upload/i` → `safety_violation`. No report versions, no portal_data write, no pipeline run; 8 orphan report objects in storage. No retry, no idempotency rerun. |
+| Guard-safe report fix (D-079) | Done | `a6eb159`, `cf414d1`; deny patterns unchanged; permit-sync 188/188. |
+| 5–6 Rerun `70d2a366` (agents off) | **Passed** | Claimed only locally; 3 files stored; reports 12/14/15/16 v1 (PDF + XLSX); report 4 `guard_denied` (1 event), job continued; portal_data hash `31dba978358fcc6f` → `5a283b800b14d9b4`; 0 pipeline runs; parsed_comments unchanged. |
+| Idempotency `d36f9344` | **Passed** (one expected deviation) | 0 content changes, 0 report versions, hash unchanged, 0 pipeline runs, 0 guard events; 3 more capped files stored (pending per D-074, not re-downloads). |
+| Orphan cleanup | Done | 8 objects from job 7815af2b deleted (828,451 bytes); bucket 17 objects, all referenced. |
 
 ## One-permit live test readiness (2026-11-11, local only)
 | Item | Status | Level | Evidence / notes |
