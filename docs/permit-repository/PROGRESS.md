@@ -104,6 +104,10 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | 2 Migration `20261111120000` | Done, verified | History 24 → 25; pre-check all true; RLS on; two-argument claim hard-codes `'json'`; rollback-only DO block: old claim → NULL for a deep job, v2 deep → the job. Flag OFF, cron 3. |
 | 3a Edge diff | **Stopped** | No production-only edits, but prod is behind base for comment-parser (1 commit), context-reference-engine (4), intake-pipeline (1); deploy would ship those too. No secret, no deploy. |
 | 4–6 (attempt 2) | Not run | Awaiting user decision on the edge deploy. |
+| 3 (attempt 3) | Skipped by user | Agent trigger off; no secret, no deploy. |
+| 4 Link | Done | 1 project_permits row ff193644 ↔ 06fa082e; projects 88. |
+| 5 Deep job | Done | `7815af2b`, unclaimed after 5 s; claimed only by the local worker. |
+| 6 Run 1 (agents off) | **Stopped at safety rule** | 3 files stored (5,458,017 bytes, signed URL 206), 6 review comments; GET `/WebForms/ReportViewer.aspx?ReportID=4` ("All Uploaded Files…") hit deny `/Upload/i` → `safety_violation`. No report versions, no portal_data write, no pipeline run; 8 orphan report objects in storage. No retry, no idempotency rerun. |
 
 ## One-permit live test readiness (2026-11-11, local only)
 | Item | Status | Level | Evidence / notes |
