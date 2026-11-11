@@ -99,7 +99,11 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 |---|---|---|
 | 0 Pre-check | Pass | Rows 1–3 false, rest true; 24 migrations, `20261111120000` absent; baseline in HANDOFF.md. |
 | 1 Railway worker to 0 | **Failed, stopped** | `railway service scale … us-west2=0` triggered a redeploy (`29f0703c`, same image/env, 1 replica) instead of scaling to 0. Worker idle, 0 active jobs. |
-| 2–6 | Not run | No migration, secret, deploy, link, job or portal run. |
+| 2–6 (attempt 1) | Not run | Stopped after step 1. |
+| 1 (attempt 2) | Skipped by user | No further Railway changes; old worker `29f0703c` stays; safety relies on D-073. |
+| 2 Migration `20261111120000` | Done, verified | History 24 → 25; pre-check all true; RLS on; two-argument claim hard-codes `'json'`; rollback-only DO block: old claim → NULL for a deep job, v2 deep → the job. Flag OFF, cron 3. |
+| 3a Edge diff | **Stopped** | No production-only edits, but prod is behind base for comment-parser (1 commit), context-reference-engine (4), intake-pipeline (1); deploy would ship those too. No secret, no deploy. |
+| 4–6 (attempt 2) | Not run | Awaiting user decision on the edge deploy. |
 
 ## One-permit live test readiness (2026-11-11, local only)
 | Item | Status | Level | Evidence / notes |
