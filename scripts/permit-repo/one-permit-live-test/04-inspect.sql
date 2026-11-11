@@ -14,7 +14,7 @@ SELECT json_build_object(
               FROM public.permit_reports WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41'),
   'report_versions', (SELECT json_agg(json_build_object('key', report_key, 'version', version, 'pdf', pdf_storage_path,
                                                         'excel', excel_storage_path, 'text_chars', length(text_content),
-                                                        'rows', jsonb_array_length(coalesce(structured_rows, '[]'::jsonb))) ORDER BY report_key, version)
+                                                        'rows', CASE WHEN jsonb_typeof(structured_rows) = 'array' THEN jsonb_array_length(structured_rows) ELSE 0 END) ORDER BY report_key, version)
                       FROM public.permit_report_contents WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41'),
   'review_comments', (SELECT count(*) FROM public.permit_review_comments WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND removed_at IS NULL),
   'deep_state', (SELECT json_build_object('run', run_id, 'completed_at', completed_at) FROM public.permit_deep_state
