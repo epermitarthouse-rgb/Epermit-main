@@ -82,6 +82,9 @@ const {
   rearmSessionIdleTimeout,
 } = require("./session/in-memory-store.js");
 const scrapeEvents = require("../lib/scrape-events.js");
+const dcCredentialLock = require("../lib/dc-credential-lock.js");
+const dcDeepOptions = require("../lib/dc-deep-options.js");
+const { portalContentHash } = require("../lib/portal-content-hash.js");
 const { SCRAPE_STAGES } = require("../lib/scrape-stages.js");
 const scrapeFileResults = require("../lib/scrape-file-results.js");
 const pgcRetryArtifacts = require("../lib/pgc-retry-artifacts.js");
@@ -277,9 +280,68 @@ function buildDcPlanReviewTabUrl(sessionOrigin, projectId, tabParam) {
 
 /**
  * DC / generic non-Montgomery ProjectDox: table rows with launchRemote / ProjectID links.
+ * Default: the page currently shown (page 1 after login), exactly as before. `allPages` walks the
+ * dashboard's client-side pager (D-062) and tags each project with `dashboardPage`.
  * @param {import('playwright').Page} page
+ * @param {{ allPages?: boolean }} [opts]
  */
-async function collectDcPlanReviewDashboardProjects(page) {
+async function collectDcPlanReviewDashboardProjects(page, opts = {}) {
+  if (opts && opts.allPages) {
+    return (await collectDcPlanReviewDashboardAllPages(page)).projects;
+  }
+  return readDcPlanReviewDashboardRows(page);
+}
+
+const DC_DASHBOARD_MAX_PAGES = 20;
+
+/** "1 - 10 of 28 records" → 28 (same reading as permit-sync live-transport parseDashboardTotal). */
+function parseDcDashboardTotal(text) {
+  const m = String(text || "").match(/\bof\s+([\d,]+)\s+(records|items|projects|results)\b/i);
+  return m ? Number.parseInt(m[1].replace(/,/g, ""), 10) : null;
+}
+
+/**
+ * Every dashboard page via the numbered pager links (javascript: hrefs; read-only client-side paging).
+ * Leaves the dashboard on the last page read; openDcPlanReviewProjectPopup pages back by `dashboardPage`.
+ * @param {import('playwright').Page} page
+ * @returns {Promise<{ projects: object[], totalRecords: number|null, pagesRead: number }>}
+ */
+async function collectDcPlanReviewDashboardAllPages(page) {
+  const first = await readDcPlanReviewDashboardRows(page);
+  const totalRecords = parseDcDashboardTotal(
+    await page.evaluate(() => (document.body ? document.body.innerText : "")).catch(() => ""),
+  );
+  const pageSize = first.length || 10;
+  const pages = totalRecords ? Math.ceil(totalRecords / pageSize) : 1;
+  if (pages > DC_DASHBOARD_MAX_PAGES) {
+    throw new Error(`DC dashboard reports ${pages} pages`);
+  }
+  const seen = new Set();
+  const projects = [];
+  const add = (rows, n) => {
+    for (const r of rows) {
+      if (seen.has(r.projectNum)) continue;
+      seen.add(r.projectNum);
+      projects.push({ ...r, dashboardPage: n });
+    }
+  };
+  add(first, 1);
+  for (let n = 2; n <= pages; n += 1) {
+    await clickDcDashboardPager(page, n);
+    add(await readDcPlanReviewDashboardRows(page), n);
+  }
+  return { projects, totalRecords, pagesRead: pages };
+}
+
+async function clickDcDashboardPager(page, n) {
+  const pager = page.locator(`a[href^="javascript"]:text-is("${Number(n)}")`).first();
+  if ((await pager.count()) === 0) throw new Error(`DC dashboard pager has no page ${n}`);
+  await pager.click();
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(1000);
+}
+
+async function readDcPlanReviewDashboardRows(page) {
   return page.evaluate(() => {
     const results = [];
     const seen = new Set();
@@ -781,26 +843,36 @@ async function openDcPlanReviewProjectPopup(session, project) {
   const permit = String(project.projectNum || project.name || "").trim();
   if (!permit) throw new Error("DC project open requires projectNum");
 
-  const link = dashboard.locator(`a:has-text("${permit}")`).first();
+  let link = dashboard.locator(`a:has-text("${permit}")`).first();
+  if ((await link.count()) === 0 && Number.isInteger(project.dashboardPage)) {
+    // D-062: the permit is on another dashboard page; page there only when the link is missing.
+    await clickDcDashboardPager(dashboard, project.dashboardPage);
+    link = dashboard.locator(`a:has-text("${permit}")`).first();
+  }
   if ((await link.count()) === 0) {
     throw new Error(`DC dashboard has no link for permit ${permit}`);
   }
 
-  const popupPromise = context.waitForEvent("page", { timeout: 25000 });
-  await link.click();
-  const popup = await popupPromise;
-  console.log(`[DC][session] popup initial URL: ${popup.url()}`);
+  // Automated deep runs pass the SSO hop through their login-phase request policy (D-055); manual sessions have no hook.
+  const hop = typeof session.dcAuthHop === "function" ? session.dcAuthHop : (fn) => fn();
+  const popup = await hop(async () => {
+    const popupPromise = context.waitForEvent("page", { timeout: 25000 });
+    await link.click();
+    const opened = await popupPromise;
+    console.log(`[DC][session] popup initial URL: ${opened.url()}`);
 
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    await popup.waitForLoadState("domcontentloaded").catch(() => {});
-    const u = popup.url();
-    if (isDcPlanReviewSessionDeadUrl(u)) {
-      throw new Error(`DC project popup hit dead session URL: ${u}`);
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      await opened.waitForLoadState("domcontentloaded").catch(() => {});
+      const u = opened.url();
+      if (isDcPlanReviewSessionDeadUrl(u)) {
+        throw new Error(`DC project popup hit dead session URL: ${u}`);
+      }
+      if (isDcPlanReviewProjectIndexUrl(u)) break;
+      await opened.waitForTimeout(400).catch(() => {});
     }
-    if (isDcPlanReviewProjectIndexUrl(u)) break;
-    await popup.waitForTimeout(400).catch(() => {});
-  }
+    return opened;
+  });
 
   const finalUrl = popup.url();
   console.log(`[DC][session] popup final URL: ${finalUrl}`);
@@ -858,6 +930,10 @@ async function ensureDcPlanReviewExtractionPage(session, project) {
  * @param {{ projectNum?: string, projectId?: string }} project
  */
 async function rebuildDcPlanReviewProjectSession(session, project) {
+  if (session.dcReloginDisabled) {
+    // D-065: automated deep runs log in once per job; a lost session fails this permit's deep pass instead.
+    throw new Error("DC session lost; re-login is disabled for this session");
+  }
   console.log(
     `[DC][session] rebuilding project session for ${project.projectNum || project.projectId}…`,
   );
@@ -1302,6 +1378,16 @@ app.post("/api/login", async (req, res) => {
         "Unsupported portal type. Supported: ProjectDox (avolvecloud.com) and Accela (accela.com or Citizen Access URLs)",
     });
   }
+  if (
+    portalType === "projectdox" &&
+    dcCredentialLock.isDcPortalUrl(dashboardUrl) &&
+    (await dcCredentialLock.automatedDcSyncActive(supabase, { username }))
+  ) {
+    return res.status(409).json({
+      error: "automated_sync_in_progress",
+      message: "An automated permit sync is using this portal login. Try again in a few minutes.",
+    });
+  }
 
   let webUiBase =
     portalType === "projectdox" ? deriveWebUiBase(dashboardUrl) : null;
@@ -1623,13 +1709,17 @@ app.post("/api/login", async (req, res) => {
         );
       }
     } else if (isWashingtonDcPlanReviewDashboard(page.url())) {
-      // Washington DC ePlan (planreview.dob.dc.gov): table rows + launchRemote/ProjectID (page 1 only).
+      // Washington DC ePlan (planreview.dob.dc.gov): table rows + launchRemote/ProjectID (page 1 unless dashboardAllPages / DC_DASHBOARD_ALL_PAGES).
       // Project scrape must use the session.planreview popup — not legacy Avolve Frame.aspx.
       isDcPlanReviewPortal = true;
       console.log(
         `[ProjectDox][discovery] DC ePlan dashboard URL: ${page.url()}`,
       );
-      projects = await collectDcPlanReviewDashboardProjects(page);
+      projects = await collectDcPlanReviewDashboardProjects(page, {
+        allPages:
+          req.body?.dashboardAllPages === true ||
+          process.env.DC_DASHBOARD_ALL_PAGES === "true",
+      });
       console.log(
         `[ProjectDox][discovery] DC ePlan project rows: ${projects.length}`,
       );
@@ -2250,6 +2340,15 @@ app.post("/api/scrape", async (req, res) => {
   if (!session.browser) {
     console.log("[api/scrape] reject: Session expired (browser cleared — idle cleanup, cancel, or crash)");
     return res.status(400).json({ error: "Session expired." });
+  }
+  if (
+    session.dcPlanReview === true &&
+    (await dcCredentialLock.automatedDcSyncActive(supabase, { username: session.username }))
+  ) {
+    return res.status(409).json({
+      error: "automated_sync_in_progress",
+      message: "An automated permit sync is using this portal login. Try again in a few minutes.",
+    });
   }
   if (session._timeout) clearTimeout(session._timeout);
   session._timeout = setTimeout(
@@ -3550,6 +3649,15 @@ async function syncPortalDataToSupabase(
   syncOptions = {},
 ) {
   const preserveFilesTabFromDb = syncOptions.preserveFilesTabFromDb === true;
+  // D-060: automated deep runs write only to an existing linked project and never re-point credentials.
+  const forbidInsert = syncOptions.forbidInsert === true;
+  const skipCredentialRepoint = syncOptions.skipCredentialRepoint === true;
+  // D-072: deep runs hash permit content only, so volatile fields (scrapedAt, URLs, render stamps) never change the hash.
+  const contentHash = syncOptions.contentHash === true;
+  if (forbidInsert && !supabaseProjectId) {
+    console.error("    ❌ A sync that forbids inserts needs the linked project id");
+    return false;
+  }
   let syncOk = true;
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
@@ -3558,7 +3666,9 @@ async function syncPortalDataToSupabase(
     if (!currentData) continue;
     let actualProjectId = null;
 
-    const newHash = hashPortalData(stripPortalSyncTransientFields(currentData));
+    const newHash = contentHash
+      ? portalContentHash(currentData)
+      : hashPortalData(stripPortalSyncTransientFields(currentData));
 
     try {
       if (isMontgomeryPortalSubtypePayload(currentData)) {
@@ -3581,7 +3691,7 @@ async function syncPortalDataToSupabase(
           .eq("id", supabaseProjectId);
         existingRow = rows && rows.length > 0 ? rows[0] : null;
       }
-      if (!existingRow) {
+      if (!existingRow && !forbidInsert) {
         const { data: rows } = await supabase
           .from("projects")
           .select("id, portal_data_hash, portal_data, address, jurisdiction")
@@ -3590,7 +3700,7 @@ async function syncPortalDataToSupabase(
         existingRow = rows && rows.length > 0 ? rows[0] : null;
       }
 
-      if (existingRow && existingRow.portal_data_hash === newHash) {
+      if (existingRow && !contentHash && existingRow.portal_data_hash === newHash) {
         actualProjectId = existingRow.id;
         console.log(
           `    ⏭️  Data unchanged for ${projectNum} (hash match), skipping update for row ${actualProjectId}`,
@@ -3704,8 +3814,34 @@ async function syncPortalDataToSupabase(
             scrapedAt: new Date().toISOString(),
           },
         );
-        const mergedHash = hashPortalData(canonicalApply.portalData);
+        const mergedHash = contentHash
+          ? portalContentHash(canonicalApply.portalData)
+          : hashPortalData(canonicalApply.portalData);
         actualProjectId = existingRow.id;
+        if (
+          contentHash &&
+          (existingRow.portal_data_hash === mergedHash ||
+            portalContentHash(existingRow.portal_data) === mergedHash)
+        ) {
+          // Same permit content (also for rows hashed the old way): the hash and the content stay as they are,
+          // so neither the browser Realtime trigger nor the worker starts the pipeline. Only the deep-sync
+          // bookkeeping key is refreshed when it differs.
+          const bookkeeping = currentData.permitRepositorySync;
+          const touch = { last_checked_at: new Date().toISOString() };
+          if (
+            bookkeeping &&
+            stableStringify(bookkeeping) !== stableStringify(existingRow.portal_data?.permitRepositorySync ?? null)
+          ) {
+            touch.portal_data = { ...existingRow.portal_data, permitRepositorySync: bookkeeping };
+          }
+          console.log(`    ⏭️  Permit content unchanged for ${projectNum}; portal_data_hash kept`);
+          const { error: touchErr } = await supabase.from("projects").update(touch).eq("id", actualProjectId);
+          if (touchErr) {
+            console.error("    ❌ Supabase error (unchanged-content touch):", touchErr.message);
+            syncOk = false;
+          }
+          continue;
+        }
         const portalStatusResolved =
           currentData.portalFilesScrapeStatus === "in_progress"
             ? currentData.portalFilesScrapeLabel || "Partial"
@@ -3751,6 +3887,11 @@ async function syncPortalDataToSupabase(
           );
         }
       } else {
+        if (forbidInsert) {
+          console.error(`    ❌ No existing project row for ${projectNum}; insert is not allowed for this sync`);
+          syncOk = false;
+          continue;
+        }
         if (!userId) {
           console.error("    ❌ Cannot create project: userId not provided");
           syncOk = false;
@@ -3830,7 +3971,7 @@ async function syncPortalDataToSupabase(
         }
       }
 
-      if (actualProjectId) {
+      if (actualProjectId && !skipCredentialRepoint) {
         const { error: credErr } = await supabase
           .from("portal_credentials")
           .update({ project_id: actualProjectId, permit_number: projectNum })
@@ -6585,8 +6726,10 @@ async function scrapeAll(
   targetFolder = null,
   targetFolders = null,
   filesSyncTargetHint = null,
+  deepOptions = null,
 ) {
   const sid = String(sessionId || "");
+  const deep = dcDeepOptions.normalizeDeepOptions(deepOptions);
   session._scrapeActive = true;
   console.log(
     `[Session][scrape] active=true sid=${sid} flow=generic_projectdox`,
@@ -6962,6 +7105,7 @@ async function scrapeAll(
             { project, projects, userId },
             targetFolders,
             filesSyncTargetHint,
+            deep,
           );
           tabData.folders = filesResult.folders;
           if (filesResult.filesScrapeStatus) {
@@ -6982,6 +7126,7 @@ async function scrapeAll(
           const pdfs = await extractPDFsFromPage(page, context, {
             supabaseProjectId,
             project,
+            ...(deep && { deep }),
           });
           tabData.pdfs = pdfs;
           tabData.reportEntries = pdfs.map((p) => {
@@ -6997,9 +7142,12 @@ async function scrapeAll(
               viewerReady: !!viewerUrl,
               pdfUrl: p.pdfPublicUrl || null,
               excelUrl: p.excelPublicUrl || null,
-              excelDownloaded: !!p.excelPublicUrl,
-              pdfDownloaded: !!p.pdfPublicUrl,
-              exportUnavailable: !p.pdfPublicUrl && !p.excelPublicUrl,
+              excelDownloaded: !!(p.excelPublicUrl || p.excelStorageRef),
+              pdfDownloaded: !!(p.pdfPublicUrl || p.pdfStorageRef),
+              exportUnavailable:
+                !p.pdfPublicUrl && !p.excelPublicUrl && !p.pdfStorageRef && !p.excelStorageRef,
+              ...(p.pdfStorageRef && { pdfStorageRef: p.pdfStorageRef }),
+              ...(p.excelStorageRef && { excelStorageRef: p.excelStorageRef }),
               flags: {
                 viewerUrlResolved: !!(
                   viewerUrl && /^https?:\/\//i.test(String(viewerUrl))
@@ -7067,6 +7215,13 @@ async function scrapeAll(
     console.log("   🛑 Scrape was cancelled — skipping sync, not marking as done");
     session.status = "cancelled";
     return { cancelled: true };
+  }
+
+  if (deep && deep.skipPortalSync) {
+    // D-060: the deep runner writes portal_data itself, only to linked projects.
+    session.status = "done";
+    console.log(`\n✅ Done! Portal sync left to the caller (deep run)`);
+    return { deep: true };
   }
 
   mirrorSessionProgress(session, "Scraping complete! Syncing to database...", {
@@ -8698,7 +8853,9 @@ async function extractFilesTab(
   filesSyncContext = null,
   targetFolders = null,
   filesSyncTargetHint = null,
+  deepOptions = null,
 ) {
+  const deep = dcDeepOptions.normalizeDeepOptions(deepOptions);
   const syncHint =
     filesSyncTargetHint != null && String(filesSyncTargetHint).trim() !== ""
       ? String(filesSyncTargetHint).trim()
@@ -9141,6 +9298,13 @@ async function extractFilesTab(
           }
         }
 
+        // D-059: deep runs download only new or changed permitted files; decided before any download work.
+        const gate = dcDeepOptions.fileGateDecision(deep, file);
+        if (gate && !gate.download) {
+          folderFiles.push(dcDeepOptions.gatedFileEntry(file, folderName, gate));
+          continue;
+        }
+
         if (file.id) totalDownloadableCount++;
 
         if (totalDownloadableCount > 0 && totalDownloadableCount % MINI_RESET_INTERVAL === 0 && file.id) {
@@ -9182,6 +9346,7 @@ async function extractFilesTab(
           try {
             dlResult = await downloadProjectDoxFile(page, context, file.id, safeName, webUiBase, session, supabaseProjectId, {
               preferViewerRuntime: /drawing/i.test(folderName || ""),
+              ...(deep && { deep }),
             });
             if (dlResult.success) {
               viewUrl = dlResult.viewUrl || "";
@@ -9211,6 +9376,7 @@ async function extractFilesTab(
                 try {
                   const retryResult = await downloadProjectDoxFile(page, context, file.id, safeName, webUiBase, session, supabaseProjectId, {
                     preferViewerRuntime: /drawing/i.test(folderName || ""),
+                    ...(deep && { deep }),
                   });
                   if (retryResult.success) {
                     dlResult = retryResult;
@@ -9252,6 +9418,7 @@ async function extractFilesTab(
           ...(dlResult?.uploadStorageMessage && {
             uploadStorageMessage: dlResult.uploadStorageMessage,
           }),
+          ...(dlResult?.storageRef && { storageRef: dlResult.storageRef }),
         });
 
         try {
@@ -9458,9 +9625,10 @@ function ssrsExportUrlsFromViewerPageUrl(viewerPageUrl) {
 
 async function extractPDFsFromPage(page, context, uploadOpts = {}) {
   const pdfData = [];
-  const hasUploadContext = Boolean(
-    uploadOpts?.supabaseProjectId && uploadOpts?.project,
-  );
+  const deep = dcDeepOptions.normalizeDeepOptions(uploadOpts?.deep);
+  const deepReports = dcDeepOptions.storesReportsPrivately(deep);
+  const hasUploadContext =
+    Boolean(uploadOpts?.supabaseProjectId && uploadOpts?.project) || deepReports;
   const projectIdent = hasUploadContext
     ? String(
         uploadOpts.project?.projectNum ||
@@ -9473,6 +9641,19 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
   const storagePrefix = hasUploadContext
     ? `drawings/${uploadOpts.supabaseProjectId}/washington/${projectIdent}`
     : null;
+
+  /** Manual runs: public project-drawings URL. Deep runs (D-058): private bucket ref on the entry, no public URL. */
+  const uploadReportExport = async (localPath, kind, reportEntry, slug) => {
+    if (deepReports) {
+      const ref = await deep.storeReportArtifact({ localPath, kind, reportName: reportEntry.fileName });
+      if (ref) reportEntry[kind === "pdf" ? "pdfStorageRef" : "excelStorageRef"] = ref;
+      return null;
+    }
+    return uploadToSupabaseStorage(
+      localPath,
+      `${storagePrefix}/reports/${slug}.${kind === "pdf" ? "pdf" : "xlsx"}`,
+    );
+  };
 
   const hasPdfMagic = (localPath) => {
     try {
@@ -9787,10 +9968,7 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
             `         [Washington][reports] PDF magic-bytes mismatch for "${reportEntry.fileName}" - skipping upload`,
           );
         } else {
-          const publicUrl = await uploadToSupabaseStorage(
-            pdfPath,
-            `${storagePrefix}/reports/${slug}.pdf`,
-          );
+          const publicUrl = await uploadReportExport(pdfPath, "pdf", reportEntry, slug);
           if (publicUrl) {
             reportEntry.pdfPublicUrl = publicUrl;
             console.log(
@@ -9884,10 +10062,7 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
           );
         } else {
           logWashingtonExcelArtifactDiagnostics("before_upload", excelPath);
-          const publicUrl = await uploadToSupabaseStorage(
-            excelPath,
-            `${storagePrefix}/reports/${slug}.xlsx`,
-          );
+          const publicUrl = await uploadReportExport(excelPath, "excel", reportEntry, slug);
           if (publicUrl) {
             reportEntry.excelPublicUrl = publicUrl;
             console.log(
@@ -10478,6 +10653,28 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       meta.fileSizeKB != null
         ? meta.fileSizeKB
         : Math.max(1, Math.round(Number(sizeMB || 0) * 1024));
+    if (dcDeepOptions.storesPrivately(options?.deep)) {
+      // D-058: deep runs store every body in the private permit-documents bucket (no public URL, no aliasing).
+      let storageRef = null;
+      try {
+        storageRef = await options.deep.storeFile({ localPath: filePath, fileId: String(fileId), fileName });
+      } catch (err) {
+        console.log(`      ⚠️ Private storage failed for file ID ${fileId}: ${err?.message || err}`);
+      }
+      try { fs.unlinkSync(filePath); } catch (_) {}
+      return {
+        success: Boolean(storageRef),
+        ...(storageRef ? {} : { reason: "private_storage_failed" }),
+        path: filePath,
+        sizeMB,
+        viewUrl: "",
+        publicUrl: null,
+        downloadUrl: null,
+        fileSizeKB,
+        contentHash,
+        storageRef,
+      };
+    }
     const dupCheck = isDuplicate(contentHash);
     if (dupCheck.dup) {
       console.log(
@@ -10563,7 +10760,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
   if (!isMontgomeryAdapter) {
     const existingPages = context.pages();
     for (const p of existingPages) {
-      if (p !== page) {
+      if (p !== page && !dcDeepOptions.isProtectedPage(options?.deep, p)) {
         await p.close().catch(() => {});
       }
     }
@@ -13891,6 +14088,24 @@ app.post("/api/filing/reauth", async (req, res) => {
   return {
     PORT,
     runPlaywrightStartupDiagnostics,
+    /**
+     * The manual DC deep scraper, shared with the automated permit-sync deep runner (D-055). Additive:
+     * the HTTP routes above use the same functions and are unchanged.
+     */
+    dcDeep: {
+      supabase,
+      DEFAULT_DASHBOARD_URL,
+      deriveWebUiBase,
+      TAB_DEFS,
+      performLogin,
+      collectDcPlanReviewDashboardProjects,
+      collectDcPlanReviewDashboardAllPages,
+      openDcPlanReviewProjectPopup,
+      scrapeAll,
+      syncPortalDataToSupabase,
+      hashPortalData,
+      stripPortalSyncTransientFields,
+    },
     arlingtonWorker: startArlingtonDurableWorkerLoop({
     supabase,
     sessions,

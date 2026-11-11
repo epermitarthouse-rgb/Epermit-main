@@ -1,0 +1,9 @@
+{
+  "_fixture": "GetProjectFolders?folderID=&projectID=11105 (B2407514, Approved), observed 2026-11-05. Folder 0 fields as shown; FolderIDs for folders 1-3 and policy fields not recorded.",
+  "folders": [
+    { "FolderID": 15, "ProjectID": 11105, "Name": "Drawings", "FolderType": 2, "Depth": 2, "ParentFolderID": null, "DerivedFromFolderID": 0, "FilesCount": 44, "NewFilesCount": 0, "FilesWithMarkupsCount": 0, "FriendlyPath": "B2407514\\Drawings", "PublishPath": "PublishFiles/11105/15", "DateUpdated": "0001-01-01T00:00:00" },
+    { "FolderID": null, "ProjectID": 11105, "Name": "Supporting Documents", "FilesCount": 2, "NewFilesCount": 0 },
+    { "FolderID": null, "ProjectID": 11105, "Name": "Approved Drawings", "FilesCount": 44, "NewFilesCount": 0 },
+    { "FolderID": null, "ProjectID": 11105, "Name": "Approved Supporting Documents", "FilesCount": 2, "NewFilesCount": 0 }
+  ]
+}

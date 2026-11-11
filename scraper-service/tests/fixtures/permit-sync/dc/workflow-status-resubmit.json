@@ -1,0 +1,31 @@
+{
+  "_fixture": "GetWorkflowInstanceStatusData?wflowInstanceID=11975 for D2500488 (ProjectID 11854), observed 2026-11-05. Values as shown in DevTools Preview; fields not expanded there are omitted.",
+  "ReviewType": "BIC Building",
+  "CalendarType": "Business Days",
+  "ProjectStatus": "Resubmit",
+  "TotalNumberOfFiles": 40,
+  "UncompleteTaskCount": 1,
+  "TimeElapsed": { "Days": 309, "Hours": 16, "FormattedText": "309 days 16 hrs " },
+  "PrescreenStatus": [
+    { "SubWorkflow": "", "CompletionDuration": { "Days": 9, "Hours": 0.5, "FormattedText": "9 days 0.5 hrs " } }
+  ],
+  "SubWorkflows": [
+    {
+      "ActivityGroupingInstanceID": 0,
+      "SubWorkflow": "",
+      "StatusName": "Resubmit",
+      "ApplicationDuration": { "Days": 296, "Hours": 18, "FormattedText": "296 days 18 hrs " },
+      "JurisdictionDuration": { "Days": 12, "Hours": 21.5, "FormattedText": "12 days 21.5 hrs " },
+      "TotalDuration": { "Days": 293, "Hours": 21, "FormattedText": "293 days 21 hrs " },
+      "UncompletedTasks": [{ "WFlowTaskID": 423503, "GroupName": "Applicant" }],
+      "UnresolvedByGroup": [
+        { "GroupName": "DOEE AQ", "UnresolvedComments": 0 },
+        { "GroupName": "DOEE EV", "UnresolvedComments": 1 },
+        { "GroupName": "DOEE Review Supervisor", "UnresolvedComments": 0 },
+        { "GroupName": "Structural", "UnresolvedComments": 0 },
+        { "GroupName": "Structural Review Supervisor", "UnresolvedComments": 0 }
+      ],
+      "UnresolvedComments": 1
+    }
+  ]
+}

@@ -1,0 +1,517 @@
+<div id="correctionsTab" class="tab-content ui-tabs-panel ui-corner-bottom ui-widget-content" aria-labelledby="ui-id-6" role="tabpanel" aria-hidden="false" style=""><div class="tabContainer" style="height: 100%;">
+
+	<!-- script removed -->
+<!-- script removed -->
+
+    <!-- script removed -->
+    <!-- script removed -->
+    <!-- script removed -->
+    <!-- script removed -->
+    <!-- script removed -->
+    <!-- script removed -->
+    <!-- script removed -->
+
+
+
+    <style type="text/css">
+        .correction-highlight { background-color: yellow; }
+        #UpdateStatus, #selectedCorrectionCount, #btnApplyStatus { margin-right: 5px; }
+
+        #btnAddChecklist, #btnAddLibraryComment, #btnAddComment, #btnSearch { margin-left: 5px; }
+
+        .correction-header { 
+          display: inline-flex;
+          height: 26px;
+          position: relative;
+          vertical-align: middle;
+        }
+
+        #correctionsGrid {
+            width: 100% !important;
+            border-collapse: collapse !important;
+        }
+
+        #correctionsGrid .refColumn { min-width: 107px;}
+        
+        #correctionsGrid a:focus { border: 2px solid black !important; }
+
+        #correctionsGrid tr.lastRow td { border-bottom: 2px solid #b6b6b6 !important; }
+
+        #correctionsGrid thead tr td {
+            border-bottom: 1px solid #f5f5f5 !important;
+			height: 40px !important;		  
+        }
+
+        #correctionsGrid a.reviewLatest, #correctionsGrid td.delete a, span.downloadAsDoc a{ display: inline-block; height: 22px;} 
+        #correctionsGrid span.downloadAsDoc a{ display: inline-block; height: 25px;}
+
+        #correctionsGrid td.norecords {
+            border-top: 2px solid #b6b6b6 !important;
+            border-bottom: 2px solid #b6b6b6 !important;
+        }
+
+        #correctionsGrid tr.firstRow td:not(.commentResponse):not(.commentResponseIndicator) {
+            border-top: 2px solid #b6b6b6 !important;
+            border-bottom: 1px solid #D8D7D7 !important;
+        }
+
+        #correctionsGrid tr.firstRow td.datetime { width: 120px; }
+
+        #correctionsGrid tr.firstRow td:not(.noborder-left):not(.noborder-right) {
+            border-left: 1px solid #D8D7D7 !important;
+            border-right: 1px solid #D8D7D7 !important;
+        }
+
+        #correctionsGrid tr.firstRow td.noborder-left { border-left: none !important; }
+
+        #correctionsGrid tr.firstRow td.noborder-right {
+            border-right: none !important;
+        }
+
+        #correctionsGrid, #correctionsGrid > tbody > tr:not(.firstRow):not(.lastRow):not(.correction-select-all) > td:not(.norecords) {
+            border: 1px solid #D8D7D7 !important;
+        }
+
+        #correctionsGrid tr.firstRow > td, #correctionsGrid tr.lastRow > td {
+            border-left: 1px solid #D8D7D7 !important;
+            border-right: 1px solid #D8D7D7 !important;
+        }
+
+        #correctionsGrid tr.correction-select-all td.commentResponseHeader {
+            border-left: 1px solid #D8D7D7 !important;
+            background-color: #FFFFAA;
+            font-weight: bold;
+            font-style: italic;
+            text-align: center;
+            font-size: 15px;
+            width: 310px;
+            position: relative;
+            right: 0px;
+        }
+
+        #correctionsGrid thead tr th:last-child, #correctionsGrid tbody tr td.commentResponseIndicator { width: 3px; }
+
+        #correctionsGrid { background-color: transparent; }
+
+        #correctionsGrid tbody {
+            background-color: transparent;
+            overflow: auto;
+        }
+
+        .ico-downloadCorrectionsAsDoc {
+            background: url(../Media/img/icons/ico_download_as_doc.png) 0 0 no-repeat;
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            position: relative;
+            top: 3px;
+        }
+        
+        #correctionsGrid td.noborder { border: 0px !important; }
+
+        #correctionsGrid td.record-select {
+            width: 40px;
+            min-width: 25px;
+        }
+
+        #correctionsGrid td.record-select input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        #correctionsGrid td.record-select span, #correctionSelectAll {
+            height: 25px;
+            width: 25px;
+            background-color: #fff;
+            padding: 2px;
+            border: 1px solid #d3d3d3;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #correctionsGrid td.record-select span.selected, #correctionSelectAll.selected { color: #888; }        
+            
+        #correctionsGrid tbody td:not(.status):not(.markup-file):not(.markupCommentText):not(.markup-buttons):not(.correctionType)  { height: 24px !important; padding: 4px;word-break: break-word;}            
+        #correctionsGrid td.status, #correctionsGrid td.markup-file, #correctionsGrid td.markup-buttons { height: 40px !important; padding: 4px;}
+        #correctionsGrid td.correctionType, #correctionsGrid td.markupCommentText { height: calc(100% - 40px) !important; }
+
+        #correctionsGrid td {
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;            
+            vertical-align: middle !important;
+            font-size: 1em;
+        }
+
+        #correctionsGrid td.milestone, #correctionsGrid td.department, #correctionsGrid td.status, #correctionsGrid td.commentText, #correctionsGrid td.commentResponse {
+            padding: 0px !important;
+        }
+
+        #correctionsGrid td.commentText {
+            width: calc(100vw - 440px);
+        }
+
+        #correctionsGrid td:not(.milestone) div.correction-data { padding: 4px; word-break: break-word;}
+
+        #correctionsGrid td.cycle {
+            text-align: center;
+            width: 100px;
+        }
+
+        #correctionsGrid td.thumbnail {
+            text-align: center;
+            cursor: pointer;
+        }
+
+        #correctionsGrid td.thumbnail img {
+            margin: auto;
+            border: 1px solid grey;
+            max-height: 90px;
+        }
+
+        #correctionsGrid td.responseText { min-width: 100px; }
+
+        #correctionsGrid .editable-correction {
+            width: calc(100% - 6px);
+            height: 100%;
+        }
+
+        #correctionsGrid select.editable-correction {
+            width: 100% !important;
+        }
+
+        #correctionsGrid tr td.firstColumn { text-align: center; }
+
+        #correctionsGrid tr td.refColumn {
+            font-size: medium;
+            width: 98px !important;
+        }
+
+        #correctionsGrid td.colored { background-color: #f5f5f5; }
+
+        #correctionsGrid td.center { text-align: center; }
+
+        #correctionsGrid td.commentResponse {
+            width: 318px;
+            color: #606060;
+            border-top: 2px solid #b6b6b6 !important;
+            border-bottom: 2px solid #b6b6b6 !important;
+            vertical-align: top !important;
+        }
+
+        #correctionsGrid td.commentResponseIndicator {
+            border-top: 2px solid #b6b6b6 !important;
+            border-bottom: 2px solid #b6b6b6 !important;
+        }
+
+        #correctionsGrid td.commentText { width: calc(100vw - 440px); }
+
+        #correctionsGrid td.commentResponse.info-only { background-color: #F8F8FA; }
+
+        #correctionsGrid td.commentResponseIndicator.info-only { background-color: #7D7D7D; }
+
+        #correctionsGrid td.commentResponse.info-only div.correction-data:empty:before {
+            content: "No response required.";
+            color: grey;
+            font-style: italic;
+        }
+        
+        #correctionsGrid td.commentResponse.resolved { background-color: #F5F5F5; }
+
+        #correctionsGrid td.commentResponseIndicator.resolved, #correctionsGrid td.commentResponseIndicator.response-entered { background-color: #7D7D7D; word-break: break-word;}
+
+        #correctionsGrid td.commentResponse.response-required { color: black; }
+
+        #correctionsGrid td.commentResponseIndicator.response-required { background-color: #FFFFAA; }
+
+        #correctionsGrid td.commentResponse.response-required div.correction-data:empty:before {
+            content: "Type your response here.";
+            color: grey;
+            font-style: italic;
+        }
+
+        #correctionsGrid td.markup-name { width: 198px; }
+
+        #correctionsGrid td.commentText, #correctionsGrid td.responseText {
+            vertical-align: top !important
+        }
+
+        #correctionsGrid td.responseText span.correction-data { padding: 5px 0px 5px 0px; }
+
+        #correctionsGrid td.discussions {
+            vertical-align: top !important;
+            padding: 0px !important;
+        }
+
+        #correctionsGrid td.discussions .divider {
+            width: 97%;
+            border-bottom: 1px solid #E4E4E4 !important;
+            margin: auto;
+            padding: 5px 0px 5px 0px;
+        }
+
+        #correctionsGrid td.discussions .label { color: grey; }
+
+        #correctionsGrid td.discussions table, #correctionsGrid td.discussions table tr, #correctionsGrid td.discussions table tr td {
+            border: 0px !important;
+            width: 100%;
+        }
+
+        #correctionsGrid td.delete, #correctionsGrid td.record-sort { text-align: center; }        
+
+        #correctionsGrid td.markup-file { border-right: 0px !important; }
+
+        #correctionsGrid td.markup-buttons {
+            text-align: right;
+            border-left: 0px !important;
+        }
+
+        #correctionsGrid td.markup-buttons a { margin: 0px 5px 0px 5px; }
+
+        #correctionsGrid td.record-sort a { display: block; }
+
+        .correction-filters { padding: 0px 0px 3px 45px; }
+
+        .correction-filters table th {
+            text-align: right;
+            padding: 0px 5px 0px 10px;
+        }
+
+        .correction-filters table tr th:first-child { padding: 0px 5px 0px 35px; }
+
+        .correction-filters table td { padding: 2px 0px 2px 0px; }
+
+        .correction-filters input { padding: 3px 2px 3px 2px; }
+
+        .correction-filters select, #SearchWorkflowInstance, #UpdateStatus { padding: 4px 2px 4px 2px; }
+
+        #SearchCorrectionKeyword {
+            font-family: inherit;
+            font-size: 12px !important;
+        }
+
+        .correction-filters select { width: 180px; }
+
+        #SearchCycle, #SearchStatus { width: 110px; }
+
+        #SearchCorrectionKeyword { width: 172px; }
+
+        .correction-buttons {
+            padding-bottom: 5px;
+            padding-top: 5px;
+        }
+
+        .correction-buttons a { margin-left: 10px; }
+
+        div.editable-correction { position: absolute; }
+
+        .ico-move-up {
+            background-image: url(../Media/img/icons/ico_move_up.png);
+            display: inline-block;
+            width: 15px;
+            height: 20px;
+        }
+
+        .ico-move-down {
+            background-image: url(../Media/img/icons/ico_move_down.png);
+            display: inline-block;
+            width: 15px;
+            height: 20px;
+        }
+
+        .ico-move-top {
+            background-image: url(../Media/img/icons/ico_move_top.png);
+            display: inline-block;
+            width: 15px;
+            height: 20px;
+        }
+
+        .ico-move-bottom {
+            background-image: url(../Media/img/icons/ico_move_bottom.png);
+            display: inline-block;
+            width: 15px;
+            height: 20px;
+        }
+
+        .correction-select-all div {
+            display: inline-block;
+            vertical-align: middle;
+            padding-top: 5px;
+        }
+
+        .correction-select-all {
+            padding-bottom: 5px;
+            background-color: #f5f5f5;
+        }
+
+        .refColumn { font-size: 1.5em; }
+
+        .correctionTable .help-link {
+            float: right;
+            margin-right: 140px;
+            padding-left: 0;
+        }
+
+        .markup-thumbnail { border: 1px solid grey; }
+        .markupBluebeamEdit { padding-left: 10px;}
+    </style>
+
+
+
+
+
+
+<div id="dialogExportCorrectionAsDoc" class="dialog-border ui-igdialog ui-dialog ui-widget ui-widget-content ui-corner-all ui-draggable ui-resizable" style="display: none; z-index: 1000; outline: 0px; position: absolute;" tabindex="0"><div class="ui-igdialog-header ui-dialog-titlebar ui-widget-header ui-corner-top ui-helper-clearfix ui-draggable-handle" zindex="-1" unselectable="on" style="display: block; outline: 0px;"><span class="ui-igdialog-headertext ui-dialog-title">Download Review Comments to Word</span><a class="ui-igdialog-headerbutton ui-corner-all ui-state-default ui-igdialog-buttonclose" data-id="close" href="#" role="button" title="Close" longdesc="Close" data-localeid="closeButtonTitle" data-dialog-button="true" data-pdffiller-skip="1"><span class="ui-igdialog-close-icon ui-icon ui-icon-close"></span></a></div><div class="ui-igdialog-content ui-widget-content ui-dialog-content">
+    <div style="padding:10px; line-height: 15pt;">
+        Download selected review comments to Word DOCX file.<br>
+        Optional fields (all will appear in one line): <br> 
+        <div style="padding-left:20px;padding-bottom: 10px;">
+            <input type="checkbox" name="includeFields" value="referenceNumber" id="ckReferenceNumber"> <label for="ckReferenceNumber">Ref. #</label> <br>
+            <input type="checkbox" name="includeFields" value="department" id="ckDepartment"> <label for="ckDepartment">Department</label><br>
+            <input type="checkbox" name="includeFields" value="reviewerName" id="ckReviewerName"> <label for="ckReviewerName">Reviewer Name</label><br>
+            <input type="checkbox" name="includeFields" value="correctionType" id="ckCorrectionType"> <label for="ckCorrectionType">Type</label><br>
+            <input type="checkbox" name="includeFields" value="dateTime" id="ckDateTime"> <label for="ckDateTime">Date / Time</label><br>
+            <input type="checkbox" name="includeFields" value="status" id="ckStatus"> <label for="ckStatus">Status</label><br>
+            <input type="checkbox" name="includeFields" value="cycle" id="ckCycle"> <label for="ckCycle">Cycle</label>
+        </div>
+
+        <input type="checkbox" name="includeFields" value="responses"> Include Responses and Discussion<br>
+    </div>
+    <div class="dialogButtons">
+        <input type="button" value="Download" id="btnExportCorrectionsAsDoc" onclick="return false;">
+        <input type="button" value="Close" id="btnCloseExportCorrectionsAsDoc" onclick="return false;">
+    </div>
+</div><div class="ui-resizable-handle ui-resizable-n" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-e" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-s" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-w" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-se ui-icon ui-icon-gripsmall-diagonal-se ui-icon-grip-diagonal-se" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-sw" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-ne" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-nw" style="z-index: 90;"></div></div>
+
+<div id="spinnerCorrectionGrid" class="LoadingPlaceHolder" style="display: none;"></div>
+<div class="table correctionTable" style="width:100%;">
+    <form id="viewerForm" method="post" target="_blank">
+        <input type="hidden" id="ChangemarkInstanceIDs" name="ChangemarkInstanceIDs">
+    </form>
+    <div class="row" style="display: none;">
+        <div class="cell pad-bottom" style="padding-bottom:5px;padding-left: 55px;display:none;">
+                
+                    <label for="SearchWorkflowInstance"><strong>Workflow:</strong></label> 
+                    <select id="SearchWorkflowInstance" onchange="loadWorkflowCorrections($(this).find('option:selected'));">
+                                                        
+                                    <option value="11975" groupingid="" allowselect="true" selected="">
+                                        D2500488 - DOB Building Plan Review Template - 8/28/2025 2:56:11 PM
+                                    </option>
+                                
+                    </select>
+
+
+                
+
+        </div>
+    </div>
+    <div class="row">
+        <div class="cell pad-bottom correction-filters">
+            <table style="" role="presentation">
+                <tbody><tr>
+                    <th><label for="SearchDepartment">Dept:</label></th>
+                    <td style="white-space:nowrap">
+                        <select id="SearchDepartment"><option value="">Show All</option><option value="215">PRC</option><option value="177">DOEE AQ</option><option value="178">DOEE EV</option><option value="181">DOEE Review Supervisor</option><option value="216">QA Review</option><option value="217">Resubmit Review</option><option value="219">Structural</option><option value="220">Structural Review Supervisor</option></select>
+                    </td>
+                    <th><label for="SearchStatus">Status:</label></th>
+                    <td>
+                        <select id="SearchStatus" style="width: 110px;"><option value="">Show All</option><option value="3">Info Only</option><option value="4">Question</option><option value="2">Resolved</option><option value="1">Unresolved</option></select>
+                    </td>
+                    <th><label for="SearchResponse">Response:</label></th>
+                    <td>
+                        <select id="SearchResponse">
+                            <option value="">Show All</option>
+                            <option value="true">With Responses</option>
+                            <option value="false">Without Responses</option>
+                        </select>
+                    </td>
+                    <th><label for="SearchCorrectionKeyword">Search:</label></th>
+                    <td>
+                        <input id="SearchCorrectionKeyword" type="text" placeholder="Enter keyword" onkeydown="onSpecifyKeyword(this, event);">                        
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="SearchCorrectionType">Type:</label></th>
+                    <td>
+                        <select id="SearchCorrectionType">
+                            <option value="">Show All</option>
+                            <option value="Changemark">Markup</option>
+                            <option value="Checklist">Checklist Item</option>
+                            <option value="Comment">Comment</option>
+                            <option value="Inquiry">Inquiry</option>
+                        </select>
+                    </td>
+                    <th><label for="SearchCycle">Cycle:</label></th>
+                    <td>
+                        <select id="SearchCycle"><option value="">Show All</option><option value="0">Prescreen</option><option value="1">1</option><option value="2">2</option></select>
+                    </td>
+                    <th><label for="SortDateTime">Time:</label></th>
+                    <td>
+                        <select id="SortDateTime">
+                            <option value="">Show All</option>
+                            <option value="desc">Newest to Oldest</option>
+                            <option value="asc">Oldest to Newest</option>
+                        </select>
+                    </td>
+                    <th><label for="SearchMilestone"><span class="milestoneFilter" style="display:none;">Milestone:</span></label></th>
+                    <td>
+                        <span class="milestoneFilter" style="display:none;">
+                            <select id="SearchMilestone"><option value="">Show All</option></select> <a id="milestoneHelp" href="javascript:void(0);" class="button-link nav-help" title="" data-pdffiller-skip="1" style="display: none;">.</a> &nbsp;&nbsp;
+                        </span>
+                    </td>
+                </tr>
+            </tbody></table>
+        </div>
+    </div>
+    <div class="row">
+        <div class="cell" style="padding:2px 0px 10px 6px;">
+            <a class="correctionRefresh" style="" href="javascript:refreshCorrections(true);" data-pdffiller-skip="1">Refresh</a>
+            
+        </div>
+    </div>
+    <div style="position: relative;">
+        <table id="correctionsGrid" role="presentation">
+            <thead style="display: inline-block;">
+                <tr class="correction-select-all" style="">
+                    <td class="center record-select">
+                        <span class="ui-icon-check" id="correctionSelectAll" tabindex="0" style="visibility: hidden;"></span>
+                    </td>
+                    <td colspan="5" style="width: 631px;">
+                        <span class="correction-update-status correction-header" style="white-space: nowrap; width: calc(100% - 410px); visibility: hidden;">                            
+                            <select id="UpdateStatus" style="display: none; width: 106px; margin-left: 4px; margin-right: 4px;"><option value="">[Select One]</option><option value="3">Info Only</option><option value="4">Question</option><option value="2">Resolved</option><option value="1">Unresolved</option></select>
+
+                             <a id="btnApplyStatus" href="#" class="button-link" title="Apply" data-pdffiller-skip="1" style="display: none;"><span class="button ">Apply</span></a>
+                            <span class="downloadAsDoc" style="display:none; padding-right:5px; ">
+                                <div class="toolbar-separator" style="top: -4px; margin-left: 5px; display: none !important;"></div>
+                                <a href="javascript:downloadCorrectionsAsDoc()" data-pdffiller-skip="1"><span title="Download selected items as a Word document" class="ico-downloadCorrectionsAsDoc"></span></a>
+                                &nbsp;&nbsp;
+                            </span>
+
+                            <span id="selectedCorrectionCount" style="position: relative; top: 5px;">(0 selected)</span>
+
+                        </span>
+                        <span class="correction-header" style="width: 400px; flex-direction: row-reverse;">
+
+                             <a id="btnAddChecklist" href="#" class="button-link" title="Add Checklist Items" style="display:none" data-pdffiller-skip="1"><span class="button ">Add Checklist Items</span></a>
+
+                             <a id="btnAddLibraryComment" href="#" class="button-link" title="Add Library Comments" style="display:none" data-pdffiller-skip="1"><span class="button ">Add Library Comments</span></a>
+
+                             <a id="btnAddComment" href="#" class="button-link" title="Add Comment" style="display:none" data-pdffiller-skip="1"><span class="button ">Add Comment</span></a>
+
+                             <a id="btnAddInquiry" href="#" class="button-link" title="Add Comment / Ask Question" style="display:none" data-pdffiller-skip="1"><span class="button ">Add Comment / Ask Question</span></a>
+
+                        </span>
+                    </td>
+                    <td class="commentResponseHeader" style="width: 329px;">
+                        <span>Please enter your responses</span>
+                        <span class="formlet-tooltip btn-fixed"><span class="btn-ico ico-tooltip" data-value="When entering a response, pressing Alt + Enter keys together opens new line. Pressing the Enter key advances to next response. Save is automatic."></span></span>
+                    </td>
+                </tr>
+            </thead>
+            
+        <tbody style="display: inline-block; overflow: auto; height: 368px;"><tr correctionid="52728" correctiontype="Comment" class="firstRow">            <td class="center noborder record-select colored" tabindex="0" style="display: none;">                            </td>            <td class="colored firstColumn refColumn" tabindex="0">Ref.# 4</td>            <td colspan="2" class="colored department noborder-right" tabindex="0"><div class="correction-data">DOEE AQ</div></td>            <td class="colored noborder-right noborder-left" tabindex="0">[REVIEWER]</td>            <td class="colored noborder-left datetime" tabindex="0">9/15/25 8:37 AM</td>            <td class="colored cycle" tabindex="0">Cycle 1</td>            <td rowspan="4" class="commentResponse resolved" tabindex="0">                <div class="correction-data"></div>            </td>            <td rowspan="4" class="commentResponseIndicator resolved" tabindex="0"></td>        </tr><tr correctionid="52728" correctiontype="Comment">            <td rowspan="2" class="record-sort noborder colored" tabindex="0" style="display: none;"></td>            <td class="status firstColumn" tabindex="0" style="background-color:green; color:white;"><div class="correction-data">Resolved</div></td>            <td rowspan="2" colspan="5" class="commentText" tabindex="0">                <div class="correction-data">Please provide environmental survey conducted by an EPA AHERA asbestos inspector </div>            </td>        </tr><tr correctionid="52728" correctiontype="Comment">            <td class="firstColumn correctionType" tabindex="0">Comment</td>        </tr><tr correctionid="52728" correctiontype="Comment" class="lastRow">            <td class="noborder delete colored" tabindex="0" style="display: none;">                            </td>            <td class="firstColumn" tabindex="0">                <div class="correction-data"></div>            </td>            <td colspan="5" class="discussions" tabindex="0" style="width: 522px;"><table><tr><td><span style="font-style:italic;"><span class="label">Responded by:</span> [REVIEWER] - 1/7/26 4:43 PM</span><br>The Hazmat survey report and the Asbestos Abatement Notification Letter from Howard University have been uploaded to the Supporting Documents Folder.</td></tr></table></td>        </tr><tr correctionid="90352" correctiontype="Comment" class="firstRow">            <td class="center noborder record-select colored" tabindex="0" style="display: none;">                            </td>            <td class="colored firstColumn refColumn" tabindex="0">Ref.# 5</td>            <td colspan="2" class="colored department noborder-right" tabindex="0"><div class="correction-data">DOEE AQ</div></td>            <td class="colored noborder-right noborder-left" tabindex="0">[REVIEWER]</td>            <td class="colored noborder-left datetime" tabindex="0">1/8/26 10:00 AM</td>            <td class="colored cycle" tabindex="0">Cycle 2</td>            <td rowspan="4" class="commentResponse info-only" tabindex="0">                <div class="correction-data"></div>            </td>            <td rowspan="4" class="commentResponseIndicator info-only" tabindex="0"></td>        </tr><tr correctionid="90352" correctiontype="Comment">            <td rowspan="2" class="record-sort noborder colored" tabindex="0" style="display: none;"></td>            <td class="status firstColumn" tabindex="0" style="background-color:#0072C6; color:white;"><div class="correction-data">Info Only</div></td>            <td rowspan="2" colspan="5" class="commentText" tabindex="0">                <div class="correction-data">Survey on file determined that asbestos containing material is present. If material will be disturbed during renovation a licensed DC asbestos contractor should be hired for the removal and a permit should be obtained from DOEE.  </div>            </td>        </tr><tr correctionid="90352" correctiontype="Comment">            <td class="firstColumn correctionType" tabindex="0">Comment</td>        </tr><tr correctionid="90352" correctiontype="Comment" class="lastRow">            <td class="noborder delete colored" tabindex="0" style="display: none;">                            </td>            <td class="firstColumn" tabindex="0">                <div class="correction-data"></div>            </td>            <td colspan="5" class="discussions" tabindex="0"></td>        </tr><tr correctionid="51714" correctiontype="Comment" class="firstRow">            <td class="center noborder record-select colored" tabindex="0" style="display: none;">                            </td>            <td class="colored firstColumn refColumn" tabindex="0">Ref.# 3</td>            <td colspan="2" class="colored department noborder-right" tabindex="0"><div class="correction-data">DOEE EV</div></td>            <td class="colored noborder-right noborder-left" tabindex="0">[REVIEWER]</td>            <td class="colored noborder-left datetime" tabindex="0">9/11/25 8:38 AM</td>            <td class="colored cycle" tabindex="0">Cycle 1</td>            <td rowspan="4" class="commentResponse response-required" tabindex="0">                <div class="correction-data"></div>            </td>            <td rowspan="4" class="commentResponseIndicator response-required" tabindex="0"></td>        </tr><tr correctionid="51714" correctiontype="Comment">            <td rowspan="2" class="record-sort noborder colored" tabindex="0" style="display: none;"></td>            <td class="status firstColumn" tabindex="0" style="background-color:#740d0d; color:white;"><div class="correction-data">Unresolved</div></td>            <td rowspan="2" colspan="5" class="commentText" tabindex="0">                <div class="correction-data"><p><strong>Lead Abatement Requirement Notification</strong></p><br><p><strong>SUBJECT PROPERTY IS LOCATED WITHIN 100 FEET OF A CHILD-OCCUPIED FACILITY. </strong></p><br><p><strong>NO DEMO TO BE COMPLETED WITHOUT ISSUED DOEE LEAD ABATEMENT PERMIT. DO NOT PULL POSTCARD PERMIT.</strong><strong> </strong></p><br><p>ENGAGING IN DEMOLITION WITHOUT A PERMIT IS CONTRARY TO LOCAL AND FEDERAL LAW, REGARLDESS OF THE ISSUANCE OF A DOB POSTCARD PERMIT</p><br><p>Based on the information provided, this work proposed under this permit application will require a DOEE lead abatement permit.</p><br><p>The requirement to obtain a lead permit is based on property being located within 100 feet of a child occupied facility, and the legal presumption that all painted components in dwellings constructed prior to 1978 are coated in lead-based paint, and the demolition of components covered with such paint.</p><br><p>For a list of DC certified-lead-based paint abatement companies who can apply for the permit, please go to <a href="https://doee.dc.gov/node/55572" data-pdffiller-skip="1">https://doee.dc.gov/node/55572</a>.&nbsp; For more information about getting certified as a DC-certified business entity approved to conduct lead abatement projects, contact <a href="mailto:[EMAIL]" data-pdffiller-skip="1">[EMAIL]</a> or apply online <a href="https://doee.dc.gov/publication/professional-certification-lead-based-paint-activities" data-pdffiller-skip="1">https://doee.dc.gov/publication/professional-certification-lead-based-paint-activities</a>.</p><br><p>Applicant must upload issued DOEE permit prior to EV review approval. If you believe the components to be disturbed are not coated in lead-based paint, email <a href="mailto:[EMAIL]" data-pdffiller-skip="1">[EMAIL]</a> for guidance.</p></div>            </td>        </tr><tr correctionid="51714" correctiontype="Comment">            <td class="firstColumn correctionType" tabindex="0">Comment</td>        </tr><tr correctionid="51714" correctiontype="Comment" class="lastRow">            <td class="noborder delete colored" tabindex="0" style="display: none;">                            </td>            <td class="firstColumn" tabindex="0">                <div class="correction-data"></div>            </td>            <td colspan="5" class="discussions" tabindex="0"><table><tr><td><span style="font-style:italic;"><span class="label">Reviewer Response:</span> [REVIEWER] - 1/8/26 2:32 PM</span><br>Upload DOEE lead abatement permit when issued. Progress Environmental is a DOEE-certified firm, and applicant should coordinate with them about obtaining a copy of the permit after they received it. <div class="divider"></div></td></tr><tr><td><span style="font-style:italic;"><span class="label">Responded by:</span> [REVIEWER] - 1/7/26 4:42 PM</span><br>The Hazmat report and the Lead Abatement Notification Letter from Howard University have been uploaded to the Supporting Documents Folder.</td></tr></table></td>        </tr><tr correctionid="49211" correctiontype="Comment" class="firstRow">            <td class="center noborder record-select colored" tabindex="0" style="display: none;">                            </td>            <td class="colored firstColumn refColumn" tabindex="0">Ref.# 1</td>            <td colspan="2" class="colored department noborder-right" tabindex="0"><div class="correction-data">PRC</div></td>            <td class="colored noborder-right noborder-left" tabindex="0">[REVIEWER]</td>            <td class="colored noborder-left datetime" tabindex="0">9/4/25 11:55 AM</td>            <td class="colored cycle" tabindex="0"></td>            <td rowspan="4" class="commentResponse resolved" tabindex="0">                <div class="correction-data"></div>            </td>            <td rowspan="4" class="commentResponseIndicator resolved" tabindex="0"></td>        </tr><tr correctionid="49211" correctiontype="Comment">            <td rowspan="2" class="record-sort noborder colored" tabindex="0" style="display: none;"></td>            <td class="status firstColumn" tabindex="0" style="background-color:green; color:white;"><div class="correction-data">Resolved</div></td>            <td rowspan="2" colspan="5" class="commentText" tabindex="0">                <div class="correction-data">Cost Estimate: As part of the submission process for your project, we kindly ask you to upload the cost estimate to the appropriate folder. This estimate should include a detailed breakdown of the expected expenses and align with the scope of work described in the submission. Contractor Agreement - https://dob.dc.gov/sites/default/files/dc/sites/dob/Estimated%20Cost%20of%20Construction_4.25.24.pdf</div>            </td>        </tr><tr correctionid="49211" correctiontype="Comment">            <td class="firstColumn correctionType" tabindex="0">Comment</td>        </tr><tr correctionid="49211" correctiontype="Comment" class="lastRow">            <td class="noborder delete colored" tabindex="0" style="display: none;">                            </td>            <td class="firstColumn" tabindex="0">                <div class="correction-data"></div>            </td>            <td colspan="5" class="discussions" tabindex="0"><table><tr><td><span style="font-style:italic;"><span class="label">Responded by:</span> [REVIEWER] - 9/4/25 12:29 PM</span><br>The DOB Contract Agreement has been uploaded.</td></tr></table></td>        </tr><tr correctionid="49212" correctiontype="Comment" class="firstRow">            <td class="center noborder record-select colored" tabindex="0" style="display: none;">                            </td>            <td class="colored firstColumn refColumn" tabindex="0">Ref.# 2</td>            <td colspan="2" class="colored department noborder-right" tabindex="0"><div class="correction-data">PRC</div></td>            <td class="colored noborder-right noborder-left" tabindex="0">[REVIEWER]</td>            <td class="colored noborder-left datetime" tabindex="0">9/4/25 11:56 AM</td>            <td class="colored cycle" tabindex="0"></td>            <td rowspan="4" class="commentResponse resolved" tabindex="0">                <div class="correction-data"></div>            </td>            <td rowspan="4" class="commentResponseIndicator resolved" tabindex="0"></td>        </tr><tr correctionid="49212" correctiontype="Comment">            <td rowspan="2" class="record-sort noborder colored" tabindex="0" style="display: none;"></td>            <td class="status firstColumn" tabindex="0" style="background-color:green; color:white;"><div class="correction-data">Resolved</div></td>            <td rowspan="2" colspan="5" class="commentText" tabindex="0">                <div class="correction-data">Surveyors Plat: Surveyors Plat: 2017 DCMR 106.2.15.2 Certification of Plat.<br>Must be Signed by Applicant/Authorized Agent (if registered design professional, provide a license number and professional stamp).<br>Complete Certification Statement. DC Surveyor's Plat, issued no more than 6 months ago, signed by the DC Office of the Surveyor and property owner or authorized agent. Show all existing structures and any new construction or external equipment. Indicate the permit number on line 11 and complete items 2-3.  Upload the plat into the Supporting Documents folder. See the DC Office of the Surveyor for assistance. Plats can be ordered online, visit Get a Building Plat | dob - https://dob.dc.gov/node/1616551<br></div>            </td>        </tr><tr correctionid="49212" correctiontype="Comment">            <td class="firstColumn correctionType" tabindex="0">Comment</td>        </tr><tr correctionid="49212" correctiontype="Comment" class="lastRow">            <td class="noborder delete colored" tabindex="0" style="display: none;">                            </td>            <td class="firstColumn" tabindex="0">                <div class="correction-data"></div>            </td>            <td colspan="5" class="discussions" tabindex="0"><table><tr><td><span style="font-style:italic;"><span class="label">Responded by:</span> [REVIEWER] - 9/4/25 12:29 PM</span><br>The scope of this permit application is demolition only and also all the work is interior with no changes to the exterior of the building. A Plat is not required for a demolition only permit type and which is only for interior work.</td></tr></table></td>        </tr></tbody></table>
+    </div>
+    <!-- script removed -->
+</div></div></div>

@@ -1,0 +1,31 @@
+{
+  "_fixture": "GET ApiUrl/WorkflowAggregate/GetActiveWorkflowTaskList?projectID=9187&onlyActiveTaskStatus=true&showTasksForAllUsers=false, observed 2026-11-06. Response is an object; tasks are in Tasks[] (RecordCount 1). Only non-personal fields kept; user, email and group-member fields omitted.",
+  "RecordCount": 1,
+  "Tasks": [
+    {
+      "EntityName": "B2508295",
+      "EntityID": 9187,
+      "WFlowInstanceID": 9299,
+      "WFlowTaskID": 132768,
+      "WFlowActivityID": 341752,
+      "TaskName": "Upload and Submit",
+      "GroupName": "Applicant",
+      "TaskStatus": "Accepted",
+      "WFlowTaskStatusTypeID": 2,
+      "DateAccepted": "2025-07-30T14:59:12.237",
+      "DateAcceptedString": "7/30/2025 2:59:12 PM",
+      "DateCreated": "2025-07-30T14:29:08.68",
+      "DateCreatedString": "7/30/2025 2:29:08 PM",
+      "DateDue": "2025-08-08T14:29:08.68",
+      "DateDueString": "8/8/2025 2:29:08 PM",
+      "DateCompleted": null,
+      "DateCompletedString": null,
+      "DateUpdated": null,
+      "IsOverdue": null,
+      "CorrectionsRequired": false,
+      "IsOptional": false,
+      "PriorityID": 2,
+      "TaskAssignmentType": "FirstInGroup"
+    }
+  ]
+}

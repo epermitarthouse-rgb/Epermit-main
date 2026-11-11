@@ -1,0 +1,55 @@
+{
+  "_fixture": "GET ApiUrl/Report/GetReportList?assignedToProjectOnly=true&projectId=11854&reportTypes=1&reportTypes=10&reportTypes=11, observed 2026-11-06. Subset of fields (the rest were null or flags).",
+  "items": [
+    {
+      "QueryReportID": 4,
+      "QueryReportTitle": "Current Project - All Uploaded Files with Sheet Sizes",
+      "ReportType": "Project",
+      "ReportTypeID": 1,
+      "ReportPath": "/WashingtonDCProd/ProjectDox/Current Project - All Uploaded Files with Sheet Sizes",
+      "ReportDataSourceName": "DataSource1",
+      "ReportParamQueryString": "&ProjectID=11854&Timezone=",
+      "QueryReportPublic": true
+    },
+    {
+      "QueryReportID": 12,
+      "QueryReportTitle": "Plan Review - Department Review Status",
+      "ReportType": "ProjectFlow",
+      "ReportTypeID": 11,
+      "ReportPath": "/WashingtonDCProd/ProjectDox/Plan Review - Department Review Status",
+      "ReportDataSourceName": "DataSource1",
+      "ReportParamQueryString": "&ProjectID=11854&WFlowInstanceID=11975&Timezone=",
+      "QueryReportPublic": true
+    },
+    {
+      "QueryReportID": 14,
+      "QueryReportTitle": "Plan Review - Review Comments",
+      "ReportType": "ProjectFlow",
+      "ReportTypeID": 11,
+      "ReportPath": "/WashingtonDCProd/ProjectDox/Plan Review - Review Comments",
+      "ReportDataSourceName": "DataSource1",
+      "ReportParamQueryString": "&ProjectID=11854&WFlowInstanceID=11975&Timezone=",
+      "QueryReportPublic": true
+    },
+    {
+      "QueryReportID": 15,
+      "QueryReportTitle": "Plan Review - Review Details",
+      "ReportType": "ProjectFlow",
+      "ReportTypeID": 11,
+      "ReportPath": "/WashingtonDCProd/ProjectDox/Plan Review - Review Details",
+      "ReportDataSourceName": "DataSource1",
+      "ReportParamQueryString": "&ProjectID=11854&WFlowInstanceID=11975&Timezone=",
+      "QueryReportPublic": true
+    },
+    {
+      "QueryReportID": 16,
+      "QueryReportTitle": "Plan Review - Workflow Routing Slip",
+      "ReportType": "ProjectFlow",
+      "ReportTypeID": 11,
+      "ReportPath": "/WashingtonDCProd/ProjectDox/Plan Review - Workflow Routing Slip",
+      "ReportDataSourceName": "DataSource1",
+      "ReportParamQueryString": "&ProjectID=11854&WFlowInstanceID=11975&Timezone=",
+      "QueryReportPublic": true
+    }
+  ]
+}

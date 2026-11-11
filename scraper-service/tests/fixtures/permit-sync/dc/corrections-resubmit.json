@@ -1,0 +1,68 @@
+{
+  "_fixture": "Reviews tab rows (/Project/ProjectCorrections?projectID=11854) for D2500488, observed 2026-11-05. Personal names replaced with role labels; comment and response text verbatim for the refs listed; refs 1 and 2 are not in this fixture.",
+  "projectId": 11854,
+  "filters": [
+    "Dept",
+    "Status",
+    "Response",
+    "Type",
+    "Cycle",
+    "Time",
+    "Search"
+  ],
+  "rows": [
+    {
+      "ref": 4,
+      "department": "DOEE AQ",
+      "reviewer": "reviewer",
+      "reviewedAt": "2025-09-15T08:37:00",
+      "cycle": 1,
+      "status": "Resolved",
+      "type": "Comment",
+      "text": "Please provide environmental survey conducted by an EPA AHERA asbestos inspector",
+      "responses": [
+        {
+          "by": "applicant",
+          "at": "2026-01-07T16:43:00",
+          "text": "The Hazmat survey report and the Asbestos Abatement Notification Letter from Howard University have been uploaded to the Supporting Documents Folder."
+        }
+      ],
+      "responseColumn": "none"
+    },
+    {
+      "ref": 5,
+      "department": "DOEE AQ",
+      "reviewer": "reviewer",
+      "reviewedAt": "2026-01-08T10:00:00",
+      "cycle": 2,
+      "status": "Info Only",
+      "type": "Comment",
+      "text": "Survey on file determined that asbestos containing material is present. If material will be disturbed during renovation a licensed DC asbestos contractor should be hired for the removal and a permit should be obtained from DOEE.",
+      "responses": [],
+      "responseColumn": "No response required."
+    },
+    {
+      "ref": 3,
+      "department": "DOEE EV",
+      "reviewer": "reviewer",
+      "reviewedAt": "2025-09-11T08:38:00",
+      "cycle": 1,
+      "status": "Unresolved",
+      "type": "Comment",
+      "text": "Lead Abatement Requirement Notification SUBJECT PROPERTY IS LOCATED WITHIN 100 FEET OF A CHILD-OCCUPIED FACILITY.",
+      "responses": [
+        {
+          "by": "applicant",
+          "at": "2026-01-07T16:42:00",
+          "text": "The Hazmat report and the Lead Abatement Notification Letter from Howard University have been uploaded to the Supporting Documents Folder."
+        },
+        {
+          "by": "reviewer",
+          "at": "2026-01-08T14:32:00",
+          "text": "Upload DOEE lead abatement permit when issued. Progress Environmental is a DOEE-certified firm, and applicant should coordinate with them about obtaining a copy of the permit after they received it."
+        }
+      ],
+      "responseColumn": "editable-textarea (never touched)"
+    }
+  ]
+}
