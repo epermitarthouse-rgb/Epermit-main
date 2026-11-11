@@ -2,6 +2,12 @@
 
 Last updated: 2026-11-11 (one-permit live test prepared, local commits only). Read "One-permit live test" first, then "Unified DC deep automation"; the older sections below are history.
 
+## One-permit live test: execution attempt 1 (2026-11-11 07:19–07:23 UTC), STOPPED at step 1
+- Step 0 (pre-check) passed: rows 1–3 false, all others true. Baseline: 24 migration rows (latest `20261111100200`, `20261111120000` absent), 88 projects, 28 permits, 0 project_permits, 8 permit_sync_jobs (0 active), cron 3, flag OFF, 36 permitted / 0 stored files and 5 reports for 6364, 0 review comments for 06fa082e, 0 objects in `permit-documents`, ff193644 hash `31dba978358fcc6f`, 6 parsed_comments (all `raw_ref`, classified, code_reference and assigned_to set), 0 pipeline runs, 0 service-execution audit rows. Backups in `exports.local/ff193644-portal-data-before.json` and `exports.local/ff193644-parsed-comments-before.json` (git-ignored).
+- Step 1 FAILED. `railway scale --project … us-west2=0` was rejected by the CLI's argument parser (no change). `railway service scale --environment production --service permit-sync-worker us-west2=0` (CLI 5.71.0) returned `{"regions":{"us-west2":null}}`, and Railway then **redeployed** the service (deployment `29f0703c-8449-4f6f-b86e-1acf5ef65bd7`, reason `redeploy`, same image `sha256:2f0dda8f…`, same env, numReplicas 1). Old deployment `1347f14a` is REMOVED; the worker runs 1 instance of the same old JSON-only code, idle (0 active jobs). Net effect equals a restart, but it is an unapproved redeploy and the worker is not at 0.
+- Steps 2–6 not run: no migration, no secret, no edge deploy, no link, no job, no live portal run. Production DB unchanged.
+- To reach 0 replicas, the user should use the Railway dashboard (service → Settings → Replicas = 0, or remove the region, then Deploy changes) or approve a different command; `us-west2=0` via the CLI does not scale to 0.
+
 ## One-permit live test (prepared 2026-11-11; nothing below has been run)
 Target: permit `06fa082e-b942-4b54-b448-a1527f58df41` (BCIV2500152, DC ProjectID 6364), credential `de8592f9-69fc-4c71-8544-cb22bbbd5813`, project `ff193644-3e94-46d4-a1c0-4755fc65d0dd`, owner `f1f84c83-36f6-4664-b34b-614b2881f09d`, approving admin `3d2b4632-e3a3-4417-8a84-549cedbb6739`. 36 of 72 files are `download_permitted`; the job is capped at 3 files / 20 MiB. 5 reports. Decisions D-072 to D-075. SQL in `scripts/permit-repo/one-permit-live-test/` (tested on the replayed chain with these ids).
 

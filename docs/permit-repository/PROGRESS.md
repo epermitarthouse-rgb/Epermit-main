@@ -94,6 +94,13 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | R5 | Offline E2E + all suites | Done | Locally tested | permit-sync 164/164; closure-touching scraper tests 39/39; edge 28/28; frontend 163/163; `npm test` 158/159 (pre-existing Code Analyzer failure, untouched) |
 | R6 | pg_cron SQL + approvals | Prepared only | n/a | HANDOFF "Approvals, in order" |
 
+## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
+| Step | Status | Evidence |
+|---|---|---|
+| 0 Pre-check | Pass | Rows 1–3 false, rest true; 24 migrations, `20261111120000` absent; baseline in HANDOFF.md. |
+| 1 Railway worker to 0 | **Failed, stopped** | `railway service scale … us-west2=0` triggered a redeploy (`29f0703c`, same image/env, 1 replica) instead of scaling to 0. Worker idle, 0 active jobs. |
+| 2–6 | Not run | No migration, secret, deploy, link, job or portal run. |
+
 ## One-permit live test readiness (2026-11-11, local only)
 | Item | Status | Level | Evidence / notes |
 |---|---|---|---|
