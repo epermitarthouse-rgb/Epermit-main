@@ -187,6 +187,31 @@ function matchReport(reports, reportName) {
   return reports.find((r) => normName(r.name) === n) || null;
 }
 
+/**
+ * The ReportViewer.aspx URL the Reports tab opens for one report (EXTRACTION_SPEC_DC: ReportID, ReportPath,
+ * DataSourceName, then GetReportList's ReportParamQueryString). Without list metadata the report title stands in
+ * for ReportPath, so a deny-pattern word in the title is still caught.
+ * @param {{ reportId?: string, key?: string, name?: string, viewer?: { reportPath: string, dataSourceName: string, paramQuery: string } }} item
+ */
+function reportViewerUrl(item, origin, portalRecordId) {
+  const v = (item && item.viewer) || null;
+  const id = String((item && (item.reportId || item.key)) || "");
+  const params = v
+    ? `ReportID=${id}&ReportPath=${v.reportPath}&DataSourceName=${v.dataSourceName}${v.paramQuery}`
+    : `ReportID=${id}&ReportPath=${String((item && item.name) || "")}&ProjectID=${String(portalRecordId || "")}`;
+  return `${origin}/WebForms/ReportViewer.aspx?${encodeURI(params)}`;
+}
+
+/** Method, host and path of a request, for guard events (no query values). */
+function requestLocation(method, url) {
+  try {
+    const u = new URL(url);
+    return { method: String(method || "GET").toUpperCase(), host: u.hostname, path: u.pathname };
+  } catch (_) {
+    return { method: String(method || "GET").toUpperCase(), host: null, path: null };
+  }
+}
+
 module.exports = {
   BUCKET,
   ALL_TABS,
@@ -205,4 +230,7 @@ module.exports = {
   reportContent,
   reportCaptured,
   matchReport,
+  normName,
+  reportViewerUrl,
+  requestLocation,
 };

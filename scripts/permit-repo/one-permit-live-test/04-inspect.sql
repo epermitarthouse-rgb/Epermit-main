@@ -36,7 +36,18 @@ SELECT json_build_object(
                                                                 'function', after_json ->> 'function', 'reason', after_json ->> 'reason') ORDER BY created_at)
                               FROM public.platform_audit_events
                               WHERE action LIKE 'pipeline.service_execution%' AND target_id = 'ff193644-3e94-46d4-a1c0-4755fc65d0dd'),
-  'guard_events', (SELECT count(*) FROM public.permit_sync_events e JOIN public.permit_sync_jobs j ON j.id = e.job_id
+  -- Guard refusals: report pre-check denials (guard_denied events: method, host, path) and job-ending violations
+  -- (permit_sync_jobs.error_code / last_error; the URL in last_error is already redacted to ids).
+  'guard_events', (SELECT json_agg(json_build_object('job', left(e.job_id::text, 8), 'at', e.created_at, 'code', e.code,
+                                                     'method', e.data ->> 'method', 'host', e.data ->> 'host', 'path', e.data ->> 'path',
+                                                     'rule', e.data ->> 'rule', 'report_key', e.data ->> 'report_key') ORDER BY e.id)
+                   FROM public.permit_sync_events e JOIN public.permit_sync_jobs j ON j.id = e.job_id
                    WHERE j.credential_id = 'de8592f9-69fc-4c71-8544-cb22bbbd5813' AND j.worker_mode = 'deep'
-                     AND (e.code ILIKE '%violation%' OR e.message ILIKE '%refused%'))
+                     AND (e.code IN ('guard_denied', 'safety_violation') OR e.code ILIKE '%violation%' OR e.message ILIKE '%refused%'
+                          OR e.data ->> 'error_code' = 'safety_violation')),
+  'deep_jobs', (SELECT json_agg(json_build_object('job', id, 'status', status, 'error_code', error_code, 'last_error', left(last_error, 300),
+                                                  'created_at', created_at, 'completed_at', completed_at,
+                                                  'deep', metrics -> 'deep', 'changes', metrics -> 'changes') ORDER BY created_at)
+                FROM public.permit_sync_jobs
+                WHERE credential_id = 'de8592f9-69fc-4c71-8544-cb22bbbd5813' AND worker_mode = 'deep')
 ) AS inspect;

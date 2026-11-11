@@ -338,14 +338,23 @@ function correctionRowsFromJson(data) {
   });
 }
 
-/** GetReportList items → listReports shape. */
+/**
+ * GetReportList items → listReports shape. `viewer` holds the ReportViewer.aspx query parts the Reports tab
+ * opens, so the deep pass can check each report's URL against the guard before opening it (D-079).
+ */
 function reportListItems(list) {
-  return (Array.isArray(list) ? list : []).map((r) => ({
-    key: str(r.QueryReportID),
-    name: str(r.QueryReportTitle),
-    category: str(r.ReportType),
-    reportId: str(r.QueryReportID),
-  }));
+  return (Array.isArray(list) ? list : []).map((r) => {
+    const item = {
+      key: str(r.QueryReportID),
+      name: str(r.QueryReportTitle),
+      category: str(r.ReportType),
+      reportId: str(r.QueryReportID),
+    };
+    if (r.ReportPath) {
+      item.viewer = { reportPath: String(r.ReportPath), dataSourceName: String(r.ReportDataSourceName || ""), paramQuery: String(r.ReportParamQueryString || "") };
+    }
+    return item;
+  });
 }
 
 /** Reports tab listing → permit_reports items. */

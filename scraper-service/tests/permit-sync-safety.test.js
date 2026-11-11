@@ -306,3 +306,40 @@ function samplePathFor(name) {
   };
   return map[name];
 }
+
+describe("D-079 report pre-check leaves the guard unchanged", () => {
+  const safety = require("../permit-sync/core/safety");
+  const { routeReadRequest } = require("../permit-sync/adapters/dc-projectdox/live-transport");
+  const report4 = "https://session.planreview.dob.dc.gov/WebForms/ReportViewer.aspx?ReportID=4&ReportPath=/WashingtonDCProd/ProjectDox/Current%20Project%20-%20All%20Uploaded%20Files%20with%20Sheet%20Sizes&DataSourceName=DataSource1&ProjectID=6364&Timezone=";
+
+  it("deep mode lifts exactly viewFile, OpType=Export and rs:Format=; /Upload/i stays", () => {
+    const json = safety.MODES.json.deny.map(String);
+    const deep = safety.MODES.deep.deny.map(String);
+    assert.deepEqual(json.filter((p) => !deep.includes(p)).sort(), ["/OpType=Export/i", "/rs:Format=/i", "/viewFile/i"]);
+    assert.ok(deep.includes("/Upload/i"));
+    assert.equal(json.length, safety.DENY_PATTERNS.length);
+  });
+
+  it("a report viewer request the browser makes outside the pre-check is still a violation in deep mode", () => {
+    const guard = safety.createRunGuard({ mode: "deep" });
+    const d = routeReadRequest({ method: "GET", url: report4, resourceType: "document" }, guard);
+    assert.equal(d.action, "abort");
+    assert.equal(d.violation, true);
+    assert.equal(d.rule, "deny_pattern");
+    assert.equal(guard.shouldAbort(), true);
+  });
+
+  it("mutations still abort in deep mode", () => {
+    const guard = safety.createRunGuard({ mode: "deep" });
+    for (const url of [
+      "https://session.planreview.dob.dc.gov/Workflow/AcceptTask?taskId=1",
+      "https://washington-dc-us-projectdoxwebapi.avolvecloud.com/File/Upload",
+      "https://washington-dc-us-projectdoxwebapi.avolvecloud.com/File/ToggleViewed?fileId=1",
+      "https://session.planreview.dob.dc.gov/Project/Resubmit?ProjectID=6364",
+    ]) {
+      const d = routeReadRequest({ method: "GET", url, resourceType: "xhr" }, guard);
+      assert.equal(d.violation, true, url);
+    }
+    assert.equal(routeReadRequest({ method: "POST", url: "https://session.planreview.dob.dc.gov/Project/SaveSettings", resourceType: "xhr" }, guard).violation, true);
+  });
+});

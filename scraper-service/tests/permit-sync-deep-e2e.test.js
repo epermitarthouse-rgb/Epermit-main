@@ -23,6 +23,7 @@ const { runOnce } = require("../permit-sync/core/worker");
 const { createDeepPass } = require("../permit-sync/deep/runner");
 const { createPipelineDriver } = require("../permit-sync/deep/pipeline");
 const { LeaseLostError } = require("../permit-sync/core/errors");
+const { createRunGuard } = require("../permit-sync/core/safety");
 
 const OWNER = "30000000-0000-4000-8000-000000000001";
 const ADMIN = "30000000-0000-4000-8000-000000000002";
@@ -88,9 +89,10 @@ async function setup() {
   return { h, rpc, repo, storage, pipeline, fetchCalls, enqueue, job, PROJECT, OWNER, CRED };
 }
 
-function opener({ dcDeep, repo, storage, pipeline, env = {} }) {
+function opener({ dcDeep, repo, storage, pipeline, env = {}, onTransport = () => {} }) {
   return async (job) => {
-    const transport = fakeDeepTransport(createDcFixtureTransport());
+    const transport = fakeDeepTransport(createDcFixtureTransport({ guard: createRunGuard({ mode: "deep" }) }));
+    onTransport(transport);
     const deep = createDeepPass({ dcDeep, transport, repo, storage, pipeline, username: "acct", credentialId: job.credential_id, env });
     return { adapter: createDcAdapter({ transport: deep.wrapTransport(transport), accountDownload: true }), afterPermit: deep.afterPermit, close: async () => {} };
   };
@@ -131,8 +133,9 @@ test("deep mode end to end: crash-safe capture, linked-project sync with one age
   assert.deepEqual([...s.storage.objects.keys()].filter((k) => k.includes("/files/")).sort(), [
     `${permit11105}/files/700101_A-101.pdf`, `${permit11105}/files/700102_A-101.pdf`,
   ]);
-  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 28 * 5);
-  assert.equal(await h.count("permit_report_contents"), 28 * 5, "one version per report");
+  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 28 * 4);
+  assert.equal(await h.count("permit_reports", "content_status = 'failed' AND content_error LIKE 'guard_denied%'"), 28, "report 4 (\"All Uploaded Files\") is never opened");
+  assert.equal(await h.count("permit_report_contents"), 28 * 4, "one version per captured report");
   assert.ok((await h.db.query(`SELECT pdf_storage_path FROM permit_report_contents LIMIT 1`)).rows[0].pdf_storage_path.match(/^[0-9a-f-]{36}\/reports\/[^/]+\/[0-9a-f]{64}\.pdf$/));
   assert.equal(await h.count("permit_deep_state"), 28);
   assert.equal(dcDeep.calls.syncs.length, 0, "no linked project yet: no portal_data written");
@@ -245,7 +248,7 @@ test("one-permit scope (D-074): discovery lists all 28, only the scoped permit g
   assert.deepEqual(dcDeep.calls.scrapes.map((c) => c.permit), ["B2407514"], "one deep pass");
   assert.deepEqual(dcDeep.calls.downloads, ["700101", "700102"]);
   assert.equal(await h.count("permit_deep_state"), 1);
-  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 5, "reports of the scoped permit only");
+  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 4, "reports of the scoped permit only (report 4 guard_denied)");
 
   await s.enqueue({ only_portal_record_ids: ["99999"] });
   const nf = await runOnce({ rpc: s.rpc, openAdapter: open, workerId: "w1" });
@@ -306,4 +309,90 @@ test("reports tab unavailable (D-074): reports marked failed, job completes, no 
   assert.equal(r2.outcome, "completed");
   assert.equal(r2.metrics.deep.deep_passes, 0, "failed reports are not retried every job");
   assert.equal(failing.calls.scrapes.length, 1);
+});
+
+const REPORT4 = "Current Project - All Uploaded Files with Sheet Sizes";
+
+test("D-079: a report whose viewer URL the guard denies is not opened, is recorded failed/guard_denied, and the job continues", async () => {
+  const s = await setup();
+  const { h } = s;
+  const dcDeep = fakeDcDeep(h);
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep, ...s }), workerId: "w1" });
+  assert.equal(r.outcome, "completed", JSON.stringify(r.metrics));
+  assert.deepEqual(dcDeep.calls.reportsSkipped, [REPORT4]);
+  assert.equal(dcDeep.calls.reportsOpened.includes(REPORT4), false, "the denied report is never opened");
+  assert.equal(r.metrics.deep.reports_guard_denied, 1);
+  assert.equal(r.metrics.deep.reports_captured, 4);
+  const permit = (await h.db.query(`SELECT id FROM permits WHERE portal_record_id = '11105'`)).rows[0].id;
+  const rows = (await h.db.query(`SELECT report_key, content_status, content_error FROM permit_reports WHERE permit_id = $1 ORDER BY report_key::int`, [permit])).rows;
+  assert.deepEqual(rows.map((x) => [x.report_key, x.content_status]), [["4", "failed"], ["12", "captured"], ["14", "captured"], ["15", "captured"], ["16", "captured"]]);
+  assert.equal(rows[0].content_error, "guard_denied (deny_pattern): GET session.planreview.dob.dc.gov/WebForms/ReportViewer.aspx");
+  const ev = (await h.db.query(`SELECT level, message, data FROM permit_sync_events WHERE code = 'guard_denied'`)).rows;
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].level, "warn");
+  assert.deepEqual(ev[0].data, { method: "GET", host: "session.planreview.dob.dc.gov", path: "/WebForms/ReportViewer.aspx", rule: "deny_pattern", report_key: "4" });
+  assert.equal(JSON.stringify(ev[0]).includes("Upload"), false, "the event carries method, host and path only (no query)");
+  assert.equal(await h.count("permit_deep_state"), 1, "the deep pass completes");
+
+  // A later job with unchanged report inputs does not retry the denied report.
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r2 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep, ...s }), workerId: "w1" });
+  assert.equal(r2.metrics.deep.deep_passes, 0);
+  assert.equal(await h.count("permit_sync_events", "code = 'guard_denied'"), 1);
+});
+
+test("D-079: a mutation request during the reports still fails the job; reports finished before it stay recorded", async () => {
+  const s = await setup();
+  const { h } = s;
+  let transport = null;
+  const dcDeep = fakeDcDeep(h, {
+    onReportExport: async (rep) => {
+      if (rep.name === "Plan Review - Review Details") transport.guard.checkRequest("POST", "https://session.planreview.dob.dc.gov/Workflow/AcceptTask?taskId=1");
+    },
+  });
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep, ...s, onTransport: (t) => { transport = t; } }), workerId: "w1" });
+  assert.equal(r.outcome, "failed_unrecoverable");
+  assert.equal(r.code, "safety_violation");
+  const permit = (await h.db.query(`SELECT id FROM permits WHERE portal_record_id = '11105'`)).rows[0].id;
+  const rows = (await h.db.query(`SELECT report_key, content_status FROM permit_reports WHERE permit_id = $1 ORDER BY report_key::int`, [permit])).rows;
+  assert.deepEqual(rows.map((x) => [x.report_key, x.content_status]), [["4", "failed"], ["12", "captured"], ["14", "captured"], ["15", "captured"], ["16", "captured"]],
+    "rows recorded as each report finished survive the abort");
+  assert.equal(await h.count("permit_report_contents"), 4);
+  assert.equal(await h.count("permit_deep_state"), 0, "the aborted pass is not recorded as complete");
+  assert.equal(dcDeep.calls.syncs.length, 0, "no portal_data write after a violation");
+});
+
+test("D-079: reports are persisted incrementally; a crash mid-reports leaves rows for finished exports", async () => {
+  const s = await setup();
+  const { h } = s;
+  const seenAtExport = [];
+  let crashed = false;
+  const dcDeep = fakeDcDeep(h, {
+    onReportExport: async (rep) => {
+      seenAtExport.push([rep.name, await h.count("permit_report_contents")]);
+      if (rep.name === "Plan Review - Review Comments" && !crashed) {
+        crashed = true;
+        throw new LeaseLostError();
+      }
+    },
+  });
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r1 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep, ...s }), workerId: "w1" });
+  assert.equal(r1.outcome, "lease_lost");
+  assert.deepEqual(seenAtExport, [["Plan Review - Department Review Status", 0], ["Plan Review - Review Comments", 1]],
+    "report 12 was recorded before report 14 was opened");
+  const permit = (await h.db.query(`SELECT id FROM permits WHERE portal_record_id = '11105'`)).rows[0].id;
+  const statuses = async () => Object.fromEntries((await h.db.query(`SELECT report_key, content_status FROM permit_reports WHERE permit_id = $1`, [permit])).rows.map((x) => [x.report_key, x.content_status]));
+  assert.deepEqual(await statuses(), { 4: "failed", 12: "captured", 14: "not_captured", 15: "not_captured", 16: "not_captured" });
+  const v = (await h.db.query(`SELECT pdf_storage_path FROM permit_report_contents WHERE permit_id = $1`, [permit])).rows;
+  assert.equal(v.length, 1);
+  assert.ok(s.storage.objects.has(v[0].pdf_storage_path), "the recorded version points at the stored export");
+
+  await h.db.query(`UPDATE permit_sync_jobs SET lease_expires_at = now() - interval '1 second'`);
+  const r2 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep, ...s }), workerId: "w2" });
+  assert.equal(r2.outcome, "completed", JSON.stringify(r2.metrics));
+  assert.deepEqual(await statuses(), { 4: "failed", 12: "captured", 14: "captured", 15: "captured", 16: "captured" });
+  assert.equal(await h.count("permit_report_contents"), 4, "report 12 is not versioned twice");
 });

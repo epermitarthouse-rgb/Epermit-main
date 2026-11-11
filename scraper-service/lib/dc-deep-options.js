@@ -10,6 +10,8 @@
  *   fileGate(fileId, meta) -> { download, reason, previous? },   // checked before any download work
  *   storeFile({ localPath, fileId, fileName }) -> Promise<storageRef|null>,
  *   storeReportArtifact({ localPath, kind: "pdf"|"excel", reportName }) -> Promise<storageRef|null>,
+ *   beforeReport({ reportName }) -> Promise<{ open: boolean, reason? }>,  // checked before a report is opened
+ *   onReportEntry(entry) -> Promise<void>,         // each finished Reports-tab entry, recorded at once
  *   isProtectedPage(page) -> boolean,              // pages the pre-download sweep must not close
  * }
  * storageRef = { bucket, path, sha256, size, contentType }
@@ -59,6 +61,19 @@ function isProtectedPage(deep, page) {
   return Boolean(deep && typeof deep.isProtectedPage === "function" && deep.isProtectedPage(page));
 }
 
+/** null = open the report (manual behaviour); otherwise the Reports-tab entry for a report that is not opened. */
+async function reportSkipEntry(deep, reportName) {
+  if (!deep || typeof deep.beforeReport !== "function") return null;
+  const d = (await deep.beforeReport({ reportName })) || {};
+  if (d.open === true) return null;
+  const reason = String(d.reason || "report_skipped");
+  return { fileName: reportName, text: "", pages: 0, error: reason, skipped: reason };
+}
+
+async function reportFinished(deep, entry) {
+  if (deep && typeof deep.onReportEntry === "function" && entry) await deep.onReportEntry(entry);
+}
+
 module.exports = {
   normalizeDeepOptions,
   fileGateDecision,
@@ -66,4 +81,6 @@ module.exports = {
   storesPrivately,
   storesReportsPrivately,
   isProtectedPage,
+  reportSkipEntry,
+  reportFinished,
 };

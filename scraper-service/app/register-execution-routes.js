@@ -10187,6 +10187,15 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
   // Click each report link by its text
   for (let i = 0; i < reportNames.length; i++) {
     const reportName = reportNames[i];
+    // Deep runs (D-079): a report whose viewer URL the read guard would refuse is not opened.
+    const skipped = await dcDeepOptions.reportSkipEntry(deep, reportName);
+    if (skipped) {
+      console.log(`      📄 [${i + 1}/${reportNames.length}] Not opened: "${reportName}" (${skipped.skipped})`);
+      pdfData.push(skipped);
+      await dcDeepOptions.reportFinished(deep, skipped);
+      continue;
+    }
+    const entriesBefore = pdfData.length;
     console.log(
       `      📄 [${i + 1}/${reportNames.length}] Clicking: "${reportName}"`,
     );
@@ -10418,6 +10427,7 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
         error: err.message,
       });
     }
+    for (const entry of pdfData.slice(entriesBefore)) await dcDeepOptions.reportFinished(deep, entry);
   }
 
   return pdfData;

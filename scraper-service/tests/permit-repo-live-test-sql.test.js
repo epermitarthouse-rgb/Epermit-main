@@ -59,6 +59,20 @@ test("live-test SQL: link, deep request (scoped, capped), cancel and unlink work
   assert.deepEqual(watch.events.map((e) => e.code), ["enqueued"]);
   const inspect = (await h.db.query(sql("04-inspect.sql"))).rows[0].inspect;
   assert.equal(inspect.projects_with_permit_number, 1);
+  assert.equal(inspect.guard_events, null);
+  assert.deepEqual(inspect.deep_jobs.map((j) => [j.job, j.status]), [[job.id, "queued"]]);
+
+  // D-079: guard refusals show in 04-inspect: pre-check denials as events, job-ending violations as last_error.
+  await h.db.query(
+    `INSERT INTO permit_sync_events (job_id, level, code, message, data) VALUES ($1, 'warn', 'guard_denied', 'GET session.planreview.dob.dc.gov/WebForms/ReportViewer.aspx', $2::jsonb)`,
+    [job.id, JSON.stringify({ method: "GET", host: "session.planreview.dob.dc.gov", path: "/WebForms/ReportViewer.aspx", rule: "deny_pattern", report_key: "4" })],
+  );
+  await h.db.query(`UPDATE permit_sync_jobs SET error_code = 'safety_violation', last_error = 'portal request refused (deny_pattern: GET https://x.invalid/a)' WHERE id = $1`, [job.id]);
+  const inspect2 = (await h.db.query(sql("04-inspect.sql"))).rows[0].inspect;
+  assert.deepEqual(inspect2.guard_events.map((e) => [e.code, e.method, e.host, e.path, e.report_key]),
+    [["guard_denied", "GET", "session.planreview.dob.dc.gov", "/WebForms/ReportViewer.aspx", "4"]]);
+  assert.equal(inspect2.deep_jobs[0].error_code, "safety_violation");
+  assert.match(inspect2.deep_jobs[0].last_error, /^portal request refused/);
 
   await h.db.exec(sql("02-cancel-deep-job.sql"));
   assert.equal((await h.db.query(`SELECT status FROM permit_sync_jobs WHERE id = $1`, [job.id])).rows[0].status, "cancelled");

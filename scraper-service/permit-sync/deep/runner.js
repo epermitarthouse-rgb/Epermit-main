@@ -15,6 +15,7 @@
  */
 
 const policy = require("./policy");
+const safety = require("../core/safety");
 const { fileDigest, contentTypeFor } = require("./repo");
 const { PortalChangedError, SessionEndedError } = require("../core/errors");
 
@@ -96,6 +97,8 @@ function manualProject(record, row) {
  */
 function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, username, credentialId = null, log = () => {}, quiet = withQuietConsole, env = {} }) {
   const index = createDashboardIndex(transport);
+  /** portal_record_id -> GetReportList items of the JSON pass in this job. */
+  const reportListByRecord = new Map();
   let session = null;
   /** One download budget per job (D-074), sized on the first permit from env + job options. */
   let budget = null;
@@ -164,6 +167,54 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     return storage.put(objectPath, body, kind === "excel" ? contentTypeFor("x.xlsx") : contentTypeFor("x.pdf"));
   }
 
+  /**
+   * D-079: before a report is opened, its viewer URL is evaluated with the deep-mode guard (same deny patterns,
+   * nothing lifted). A refused report is not opened: it is recorded failed (guard_denied) with a guard event and
+   * the pass continues. Every request the browser actually makes still goes through the transport guard, and
+   * a refusal there still fails the job.
+   */
+  async function precheckReport(ctx, reports, event, { reportName }) {
+    const n = policy.normName(reportName);
+    const item = ctx.reportItems.find((r) => policy.normName(r.name) === n) || null;
+    const rep = policy.matchReport(reports, reportName);
+    const url = policy.reportViewerUrl(item || { reportId: rep && rep.report_key, name: reportName }, DC_SESSION_ORIGIN, ctx.portalRecordId);
+    const v = safety.evaluateRequest({ method: "GET", url, mode: "deep" });
+    if (v.allowed) return { open: true };
+    const at = policy.requestLocation("GET", url);
+    await event("warn", "guard_denied", `${at.method} ${at.host}${at.path}`, { ...at, rule: v.rule, report_key: rep ? rep.report_key : null });
+    ctx.m.reports_guard_denied += 1;
+    if (rep) {
+      await repo.recordReportFailure(ctx.permitId, rep.report_key, `guard_denied (${v.rule}): ${at.method} ${at.host}${at.path}`);
+      ctx.reportsRecorded.set(rep.report_key, "failed");
+      ctx.m.reports_failed += 1;
+    }
+    return { open: false, reason: "guard_denied" };
+  }
+
+  /** Records one Reports-tab entry as soon as it is finished; later entries for an already captured report are ignored. */
+  async function recordReportEntry(ctx, reports, entry) {
+    if (!entry || ctx.reportEntriesSeen.has(entry)) return;
+    ctx.reportEntriesSeen.add(entry);
+    if (entry.skipped) return;
+    const rep = policy.matchReport(reports, entry.fileName);
+    if (!rep) {
+      ctx.m.reports_unmatched += 1;
+      return;
+    }
+    const prev = ctx.reportsRecorded.get(rep.report_key);
+    if (prev === "captured") return;
+    if (policy.reportCaptured(entry)) {
+      const out = await repo.recordReport(ctx.permitId, rep.report_key, policy.reportContent(entry, { pdf: entry.pdfStorageRef, excel: entry.excelStorageRef }), ctx.runId);
+      if (out && out.result === "inserted") ctx.m.reports_captured += 1;
+      else ctx.m.reports_unchanged += 1;
+      ctx.reportsRecorded.set(rep.report_key, "captured");
+    } else if (!prev) {
+      await repo.recordReportFailure(ctx.permitId, rep.report_key, entry.error || "no report content");
+      ctx.reportsRecorded.set(rep.report_key, "failed");
+      ctx.m.reports_failed += 1;
+    }
+  }
+
   /** Files the gate let through but that were not stored are recorded as failed (retried when the files section changes). */
   async function recordFileFailures(ctx, filesTab) {
     for (const folder of (filesTab && filesTab.folders) || []) {
@@ -177,29 +228,16 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     }
   }
 
-  async function recordReports(permitId, runId, reports, reportsTab, m) {
-    for (const entry of (reportsTab && reportsTab.pdfs) || []) {
-      const rep = policy.matchReport(reports, entry.fileName);
-      if (!rep) {
-        m.reports_unmatched += 1;
-        continue;
-      }
-      if (policy.reportCaptured(entry)) {
-        const out = await repo.recordReport(permitId, rep.report_key, policy.reportContent(entry, { pdf: entry.pdfStorageRef, excel: entry.excelStorageRef }), runId);
-        if (out && out.result === "inserted") m.reports_captured += 1;
-        else m.reports_unchanged += 1;
-      } else {
-        await repo.recordReportFailure(permitId, rep.report_key, entry.error || "no report content");
-        m.reports_failed += 1;
-      }
-    }
+  /** Entries the scraper did not hand to onReportEntry (none in the current scraper) are recorded here. */
+  async function recordReports(ctx, reports, reportsTab) {
+    for (const entry of (reportsTab && reportsTab.pdfs) || []) await recordReportEntry(ctx, reports, entry);
   }
 
   /** core/worker afterPermit hook. */
   async function afterPermit({ record, batch, result, job, event = async () => {} }) {
     const m = {
       deep_passes: 0, deep_skipped: 0, files_downloaded: 0, files_unchanged: 0, files_failed: 0, files_capped: 0, bytes_downloaded: 0,
-      reports_captured: 0, reports_unchanged: 0, reports_failed: 0, reports_unmatched: 0,
+      reports_captured: 0, reports_unchanged: 0, reports_failed: 0, reports_unmatched: 0, reports_guard_denied: 0,
       portal_syncs: 0, portal_changed: 0, pipeline_runs: 0, pipeline_skipped: 0, pipeline_failed: 0,
     };
     if (!budget) budget = policy.createDownloadBudget(policy.downloadLimits(env, job && job.options));
@@ -220,12 +258,20 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     const project = manualProject(record, row);
     if (!project.projectNum) throw new PortalChangedError("permit has no permit number for the deep pass");
     const s = await getSession();
-    const ctx = { permitId, runId: job.id, m, captured: new Set(), docsByFileId: new Map(documents.map((d) => [String(d.portal_file_id), d])) };
+    const ctx = {
+      permitId, runId: job.id, m, captured: new Set(), docsByFileId: new Map(documents.map((d) => [String(d.portal_file_id), d])),
+      portalRecordId: String(record.portal_record_id),
+      reportItems: reportListByRecord.get(String(record.portal_record_id)) || [],
+      reportsRecorded: new Map(),
+      reportEntriesSeen: new Set(),
+    };
     const deepOptions = {
       skipPortalSync: true,
       fileGate: policy.buildFileGate(documents, { retryFailed: plan.changed.includes("files"), budget }),
       storeFile: (a) => storeFile(ctx, a),
       storeReportArtifact: (a) => storeReport(permitId, reports, a),
+      beforeReport: (a) => precheckReport(ctx, reports, event, a),
+      onReportEntry: (entry) => recordReportEntry(ctx, reports, entry),
       isProtectedPage: (p) => transport.ownsPage(p) || p === s.page,
     };
     await event("info", "deep_pass_started", null, { portal_record_id: record.portal_record_id, tabs: plan.tabs, reasons: plan.reasons, budget: { max_files: budget.maxFiles, max_bytes: budget.maxBytes, files_used: budget.files } });
@@ -248,13 +294,13 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     }
 
     if (plan.tabs.includes("files") && tabs.files && !tabs.files.error) await recordFileFailures(ctx, tabs.files);
-    if (plan.tabs.includes("reports") && tabs.reports && !tabs.reports.error) await recordReports(permitId, job.id, reports, tabs.reports, m);
+    if (plan.tabs.includes("reports") && tabs.reports && !tabs.reports.error) await recordReports(ctx, reports, tabs.reports);
     if (tabErrors.includes("reports")) {
       // D-074: a Reports tab that cannot render (e.g. an SSRS postback the read guard drops) marks the reports
       // failed and keeps the stored Reports tab; it is retried only when report inputs change, not every job.
       const why = `reports tab unavailable: ${String((tabs.reports && tabs.reports.error) || "no data")}`.slice(0, 300);
       for (const rep of reports) {
-        if (rep.content_status === "captured") continue;
+        if (rep.content_status === "captured" || ctx.reportsRecorded.has(rep.report_key)) continue;
         await repo.recordReportFailure(permitId, rep.report_key, why);
         m.reports_failed += 1;
       }
@@ -297,7 +343,21 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     return m;
   }
 
-  return { afterPermit, wrapTransport: (t) => index.wrap(t), index };
+  /** Adapter transport wrapper: fills the dashboard index and keeps each permit's report list (viewer metadata). */
+  function wrapTransport(t) {
+    const w = index.wrap(t);
+    if (typeof w.listReports !== "function") return w;
+    return {
+      ...w,
+      listReports: async (projectId) => {
+        const items = await w.listReports(projectId);
+        reportListByRecord.set(String(projectId), Array.isArray(items) ? items : []);
+        return items;
+      },
+    };
+  }
+
+  return { afterPermit, wrapTransport, index };
 }
 
 module.exports = { createDeepPass, createDashboardIndex, manualProject, withQuietConsole };

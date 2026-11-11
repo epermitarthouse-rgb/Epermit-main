@@ -75,8 +75,12 @@ test("corrections JSON → repository items: roles only, no names, UTC times", (
 test("report list JSON → listReports items keyed by QueryReportID", () => {
   const items = dc.reportListItems(reportList);
   assert.deepEqual(items.map((r) => r.key), ["4", "12", "14", "15", "16"]);
-  assert.deepEqual(items.find((r) => r.key === "14"), { key: "14", name: "Plan Review - Review Comments", category: "ProjectFlow", reportId: "14" });
+  assert.deepEqual(items.find((r) => r.key === "14"), {
+    key: "14", name: "Plan Review - Review Comments", category: "ProjectFlow", reportId: "14",
+    viewer: { reportPath: "/WashingtonDCProd/ProjectDox/Plan Review - Review Comments", dataSourceName: "DataSource1", paramQuery: "&ProjectID=11854&WFlowInstanceID=11975&Timezone=" },
+  });
   assert.equal(dc.reportItems(items).length, 5);
+  assert.deepEqual(dc.reportItems(items).find((r) => r.key === "14").fields, { name: "Plan Review - Review Comments", category: "ProjectFlow", portal_report_id: "14" }, "viewer metadata is not part of the section content");
 });
 
 test("active task list: tasks are under Tasks[]; verified fields map", () => {

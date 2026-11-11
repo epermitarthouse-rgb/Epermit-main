@@ -14,6 +14,7 @@ const { replay } = require("./replay-migrations");
 const { REPORTS } = require("./dc-fixture-transport");
 const dcDeepOptions = require("../../lib/dc-deep-options");
 const { portalContentHash } = require("../../lib/portal-content-hash");
+const { SafetyViolationError } = require("../../permit-sync/core/errors");
 
 /** projects.portal_data exists in production but is not created by any migration in the chain. */
 const PRODUCTION_DRIFT = ["ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS portal_data JSONB"];
@@ -76,10 +77,11 @@ const FILES = { "11105": [{ id: "700101", name: "A-101.pdf", status: "Approved" 
  * @param {object} [o]
  * @param {Function} [o.onDownload] (file, calls) => void; may throw to simulate a crash mid-pass
  * @param {string} [o.reportsError] the Reports tab fails with this error (e.g. an SSRS postback the guard drops)
+ * @param {Function} [o.onReportExport] (report, calls) => void, before a report's export; may throw (crash mid-reports)
  */
 function fakeDcDeep(h, o = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dc-deep-"));
-  const calls = { scrapes: [], downloads: [], reportExports: 0, syncs: [] };
+  const calls = { scrapes: [], downloads: [], reportExports: 0, reportsOpened: [], reportsSkipped: [], syncs: [] };
   const write = (name, body) => {
     const p = path.join(tmp, `${crypto.randomUUID()}_${name}`);
     fs.writeFileSync(p, body);
@@ -117,11 +119,23 @@ function fakeDcDeep(h, o = {}) {
         } else if (t === "reports" && o.reportsError) {
           data.tabs.reports = { error: o.reportsError };
         } else if (t === "reports") {
+          // Same per-report hooks as extractPDFsFromPage: pre-check before opening, record each finished entry.
           const pdfs = [];
           for (const r of REPORTS) {
+            const skipped = await dcDeepOptions.reportSkipEntry(deepOptions, r.name);
+            if (skipped) {
+              calls.reportsSkipped.push(r.name);
+              pdfs.push(skipped);
+              await dcDeepOptions.reportFinished(deepOptions, skipped);
+              continue;
+            }
             calls.reportExports += 1;
+            calls.reportsOpened.push(r.name);
+            if (o.onReportExport) await o.onReportExport(r, calls);
             const ref = await deepOptions.storeReportArtifact({ localPath: write("r.pdf", `pdf ${r.name}`), kind: "pdf", reportName: r.name });
-            pdfs.push({ fileName: r.name, text: `${r.name} for ${project.projectNum}\nGenerated:  11/11/2026 ${(n % 12) + 1}:0${n % 10} PM`, pages: 1, screenshot: `b64-${n}`, pdfPath: `/tmp/wa_report_${n}.pdf`, ...(ref ? { pdfStorageRef: ref } : {}) });
+            const entry = { fileName: r.name, text: `${r.name} for ${project.projectNum}\nGenerated:  11/11/2026 ${(n % 12) + 1}:0${n % 10} PM`, pages: 1, screenshot: `b64-${n}`, pdfPath: `/tmp/wa_report_${n}.pdf`, ...(ref ? { pdfStorageRef: ref } : {}) };
+            pdfs.push(entry);
+            await dcDeepOptions.reportFinished(deepOptions, entry);
           }
           data.tabs.reports = { keyValues: [], tables: [], links: [], pdfs };
         } else {
@@ -160,7 +174,7 @@ function fakeDeepTransport(fixture) {
     context: {},
     assertHealthy() {
       const v = fixture.guard.violations();
-      if (v.length) throw Object.assign(new Error("guard violation"), { code: "safety_violation" });
+      if (v.length) throw new SafetyViolationError(`portal request refused (${v[0].rule})`, v[0]);
     },
     dashboardPage: async () => page,
     adoptDashboard() {},
