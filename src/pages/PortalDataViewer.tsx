@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { ProjectPermitLinkPanel } from "@/components/permits/ProjectPermitLinkPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -3735,6 +3736,8 @@ export default function PortalDataViewer() {
           </div>
         }
       />
+
+      <ProjectPermitLinkPanel projectId={selectedProjectId} />
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard

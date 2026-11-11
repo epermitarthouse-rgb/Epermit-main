@@ -12,6 +12,7 @@ import {
   type FeatureFlagKey,
   type FeatureFlagRow,
 } from '@/lib/featureFlags';
+import { applyLocalInspectionFlags, assertPermitWritesAllowed } from '@/lib/localPermitInspection';
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
 
@@ -27,7 +28,7 @@ export function useFeatureFlags() {
     retry: 1,
   });
 
-  const flags = mergeWithDefaults(query.data);
+  const flags = applyLocalInspectionFlags(mergeWithDefaults(query.data));
 
   useEffect(() => {
     if (!query.isSuccess) return;
@@ -49,6 +50,9 @@ export function useFeatureFlags() {
     async (key: FeatureFlagKey, enabled: boolean) => {
       if (!isKnownFeatureFlagKey(key)) {
         throw new Error(`Unknown feature flag key: ${key}`);
+      }
+      if (key === FEATURE_FLAG.MODULE_CENTRAL_PERMITS) {
+        assertPermitWritesAllowed('set_feature_flag');
       }
       return mutation.mutateAsync({ key, enabled });
     },

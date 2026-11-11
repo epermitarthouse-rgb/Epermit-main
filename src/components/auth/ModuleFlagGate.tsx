@@ -4,7 +4,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { isFeatureEnabled } from '@/lib/featureFlags';
-import { getModuleFlagForPath } from '@/lib/moduleFeatureFlags';
+import { getModuleFlagForPath, moduleFlagOffRendersPage } from '@/lib/moduleFeatureFlags';
 
 /**
  * Global product visibility gate for module routes.
@@ -56,6 +56,7 @@ export function ModuleFlagGate({ children }: { children: ReactNode }) {
   }
 
   if (!isFeatureEnabled(flags, requiredFlag)) {
+    if (moduleFlagOffRendersPage(location.pathname)) return children;
     return <Navigate to="/dashboard" replace />;
   }
 

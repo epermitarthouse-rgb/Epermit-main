@@ -15,6 +15,7 @@ export const FEATURE_FLAG = {
   MODULE_PORTAL_HARVEST: 'module.portal_harvest',
   MODULE_OPERATIONS_BOARD: 'module.operations_board',
   MODULE_DEMO: 'module.demo',
+  MODULE_CENTRAL_PERMITS: 'module.central_permits',
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAG)[keyof typeof FEATURE_FLAG];
@@ -53,6 +54,7 @@ export const DEFAULT_FEATURE_FLAG_VALUES: Record<FeatureFlagKey, boolean> = {
   [FEATURE_FLAG.MODULE_PORTAL_HARVEST]: true,
   [FEATURE_FLAG.MODULE_OPERATIONS_BOARD]: true,
   [FEATURE_FLAG.MODULE_DEMO]: true,
+  [FEATURE_FLAG.MODULE_CENTRAL_PERMITS]: false,
 };
 
 /** Friendly admin UI metadata — no internal keys shown in the panel. */
@@ -123,6 +125,11 @@ export const flagUiConfig: Record<
   [FEATURE_FLAG.MODULE_DEMO]: {
     label: 'Executive Demo',
     description: 'McDonald\'s executive demo experience',
+    category: 'Modules',
+  },
+  [FEATURE_FLAG.MODULE_CENTRAL_PERMITS]: {
+    label: 'Permit Queue (central permits)',
+    description: 'Central permit interface at /permit-queue and sync admin',
     category: 'Modules',
   },
 };

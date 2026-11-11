@@ -15,6 +15,7 @@ import {
   isModuleRouteEnabled,
   isModuleHrefVisible,
   MODULE_FLAG_ROUTES,
+  moduleFlagOffRendersPage,
 } from './moduleFeatureFlags';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,17 +58,43 @@ function flagsWith(key: keyof typeof FEATURE_FLAG, enabled: boolean) {
 }
 
 describe('module feature flag allowlist', () => {
-  it('registers 13 known flags (1 homepage + 12 modules)', () => {
-    assert.equal(KNOWN_FEATURE_FLAG_KEYS.length, 13);
-    assert.equal(Object.keys(DEFAULT_FEATURE_FLAG_VALUES).length, 13);
+  it('registers 14 known flags (1 homepage + 13 modules)', () => {
+    assert.equal(KNOWN_FEATURE_FLAG_KEYS.length, 14);
+    assert.equal(Object.keys(DEFAULT_FEATURE_FLAG_VALUES).length, 14);
   });
 
-  it('defaults all module flags ON and homepage demo video OFF', () => {
+  it('defaults existing module flags ON; homepage demo video and Permit Repository OFF', () => {
     assert.equal(DEFAULT_FEATURE_FLAG_VALUES[FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO], false);
+    assert.equal(DEFAULT_FEATURE_FLAG_VALUES[FEATURE_FLAG.MODULE_CENTRAL_PERMITS], false);
     for (const key of KNOWN_FEATURE_FLAG_KEYS) {
-      if (key === FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO) continue;
+      if (key === FEATURE_FLAG.HOMEPAGE_SHOW_DEMO_VIDEO || key === FEATURE_FLAG.MODULE_CENTRAL_PERMITS) continue;
       assert.equal(DEFAULT_FEATURE_FLAG_VALUES[key], true);
     }
+  });
+
+  it('gates /permit-queue, /permits and /admin/permit-sync behind central permits without touching nearby routes', () => {
+    assert.equal(getModuleFlagForPath('/permit-queue'), FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
+    assert.equal(getModuleFlagForPath('/permit-queue/abc'), FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
+    assert.equal(getModuleFlagForPath('/permits'), FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
+    assert.equal(getModuleFlagForPath('/permits/abc'), FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
+    assert.equal(getModuleFlagForPath('/admin/permit-sync'), FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
+    assert.equal(getModuleFlagForPath('/permit-intelligence'), FEATURE_FLAG.MODULE_PERMIT_INTELLIGENCE);
+    assert.equal(getModuleFlagForPath('/permit-queuex'), null);
+    assert.equal(getModuleFlagForPath('/baltimore/permits'), null);
+    assert.equal(getModuleFlagForPath('/admin'), null);
+    assert.equal(isModuleRouteEnabled('/permits', DEFAULT_FEATURE_FLAG_VALUES), false);
+    assert.equal(isModuleHrefVisible('/permit-queue', DEFAULT_FEATURE_FLAG_VALUES), false);
+    assert.equal(isModuleHrefVisible('/permit-queue', flagsWith('MODULE_CENTRAL_PERMITS', true)), true);
+  });
+
+  it('with the flag OFF only /permit-queue renders its own page (the placeholder); other gated routes redirect', () => {
+    assert.equal(moduleFlagOffRendersPage('/permit-queue'), true);
+    assert.equal(moduleFlagOffRendersPage('/permit-queue/'), true);
+    assert.equal(moduleFlagOffRendersPage('/permit-queue/abc'), true);
+    assert.equal(moduleFlagOffRendersPage('/permits'), false);
+    assert.equal(moduleFlagOffRendersPage('/admin/permit-sync'), false);
+    assert.equal(moduleFlagOffRendersPage('/designcheck'), false);
+    assert.match(moduleFlagGateSource, /moduleFlagOffRendersPage\(location\.pathname\)\) return children/);
   });
 
   it('migration seeds 11 module flags default ON', () => {

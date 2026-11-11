@@ -140,7 +140,7 @@ const resourceItems = [
   { name: "Pricing", href: "/pricing", icon: DollarSign, keywords: ["pricing", "plans", "cost"] },
   { name: "FAQ", href: "/faq", icon: HelpCircle, keywords: ["faq", "questions", "help"] },
   { name: "Documentation", href: "/api-docs", icon: FileQuestion, keywords: ["docs", "api", "documentation"] },
-  { name: "Permit Queue", href: "/permit-queue", icon: FileText, keywords: ["queue", "filings", "coming soon"], requiresAuth: true },
+  { name: "Permit Queue", href: "/permit-queue", icon: FileText, keywords: ["queue", "permits", "reviews", "tasks"], requiresAuth: true },
   { name: "Contact", href: "/contact", icon: Mail, keywords: ["contact", "support", "email"] },
 ];
 

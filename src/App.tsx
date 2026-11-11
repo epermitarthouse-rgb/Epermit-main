@@ -47,6 +47,10 @@ import ShadowModeDashboard from "./pages/ShadowModeDashboard";
 import JurisdictionComparison from "./pages/JurisdictionComparison";
 import JurisdictionMapPage from "./pages/JurisdictionMapPage";
 import PermitIntelligence from "./pages/PermitIntelligence";
+import PermitsPage from "./pages/permits/PermitsPage";
+import PermitDetailPage from "./pages/permits/PermitDetailPage";
+import { LegacyPermitRedirect, PermitQueueGate } from "./components/permits/PermitQueueGate";
+import AdminPermitSync from "./pages/admin/AdminPermitSync";
 import CodeCompliance from "./pages/CodeCompliance";
 import SupabaseCodeAnalyzer from "./pages/SupabaseCodeAnalyzer";
 import DesignCheck from "./pages/DesignCheck";
@@ -88,7 +92,6 @@ import UciDashboard from "./pages/UciDashboard";
 import UciPortalHarvest from "./pages/UciPortalHarvest";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import EpermitDesignSystemPreview from "./pages/EpermitDesignSystemPreview";
-import PermitQueuePlaceholder from "./pages/placeholders/PermitQueuePlaceholder";
 import GlossaryPlaceholder from "./pages/placeholders/GlossaryPlaceholder";
 import UtilityCoveragePlaceholder from "./pages/placeholders/UtilityCoveragePlaceholder";
 import MessagesPlaceholder from "./pages/placeholders/MessagesPlaceholder";
@@ -185,6 +188,8 @@ const App = () => (
                   <Route path="/jurisdictions/map" element={<JurisdictionMapPage />} />
                   <Route path="/jurisdictions/:stateCode" element={<StateLandingPage />} />
                   <Route path="/permit-intelligence" element={<PermitIntelligence />} />
+                  <Route path="/permits" element={<Navigate to="/permit-queue" replace />} />
+                  <Route path="/permits/:permitId" element={<LegacyPermitRedirect />} />
                   <Route path="/designcheck" element={<DesignCheck />} />
                   <Route path="/code-analyzer" element={<SupabaseCodeAnalyzer />} />
                   <Route path="/code-compliance" element={<CodeCompliance />} />
@@ -204,6 +209,7 @@ const App = () => (
                     <Route path="platform/jurisdictions" element={<JurisdictionAdmin />} />
                     <Route path="platform/notifications" element={<AdminPlatformNotifications />} />
                     <Route path="platform/campaigns" element={<AdminPlatformCampaigns />} />
+                    <Route path="permit-sync" element={<AdminPermitSync />} />
                     {/* Legacy redirects */}
                     <Route path="members" element={<Navigate to="/admin/access/users" replace />} />
                     <Route
@@ -222,7 +228,8 @@ const App = () => (
                   <Route path="/api-docs" element={<APIDocumentation />} />
                   <Route path="/checklist-history" element={<ChecklistHistory />} />
                   <Route path="/checklists" element={<ChecklistHistory />} />
-                  <Route path="/permit-queue" element={<PermitQueuePlaceholder />} />
+                  <Route path="/permit-queue" element={<PermitQueueGate><PermitsPage /></PermitQueueGate>} />
+                  <Route path="/permit-queue/:permitId" element={<PermitQueueGate><PermitDetailPage /></PermitQueueGate>} />
                   <Route path="/reference/glossary" element={<GlossaryPlaceholder />} />
                   <Route
                     path="/reference/utility-coverage"

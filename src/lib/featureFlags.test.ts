@@ -73,8 +73,9 @@ describe('featureFlags helpers', () => {
     assert.equal(isKnownFeatureFlagKey('unknown.flag'), false);
   });
 
-  it('allowlist includes 13 server-backed flags', () => {
-    assert.equal(Object.keys(FEATURE_FLAG).length, 13);
+  it('allowlist includes 14 server-backed flags', () => {
+    assert.equal(Object.keys(FEATURE_FLAG).length, 14);
+    assert.equal(isKnownFeatureFlagKey(FEATURE_FLAG.MODULE_CENTRAL_PERMITS), true);
     assert.equal(isKnownFeatureFlagKey(FEATURE_FLAG.MODULE_CODE_ANALYZER_V2), true);
   });
 

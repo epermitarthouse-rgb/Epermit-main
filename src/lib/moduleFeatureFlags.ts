@@ -39,7 +39,23 @@ export const MODULE_FLAG_ROUTES: Readonly<
     { kind: 'exact', path: '/demo/mcdonalds' },
     { kind: 'exact', path: '/demo/mcd' },
   ],
+  [FEATURE_FLAG.MODULE_CENTRAL_PERMITS]: [
+    { kind: 'prefix', path: '/permit-queue' },
+    { kind: 'prefix', path: '/permits' },
+    { kind: 'prefix', path: '/admin/permit-sync' },
+  ],
 };
+
+/**
+ * Gated routes that render their own "off" state instead of redirecting to /dashboard.
+ * /permit-queue shows PermitQueuePlaceholder while module.central_permits is OFF (D-064).
+ */
+const FLAG_OFF_RENDERS_PAGE_PREFIXES = ['/permit-queue'] as const;
+
+export function moduleFlagOffRendersPage(pathname: string): boolean {
+  const normalized = normalizePathname(pathname);
+  return FLAG_OFF_RENDERS_PAGE_PREFIXES.some((p) => pathMatchesRule(normalized, { kind: 'prefix', path: p }));
+}
 
 /** Nav hrefs excluded from jurisdiction_map prefix (handled by other flags). */
 const JURISDICTION_MAP_EXCLUDED = new Set([
@@ -49,6 +65,7 @@ const JURISDICTION_MAP_EXCLUDED = new Set([
 
 /** Ordered module flags for first-match resolution (specific before broad). */
 const MODULE_FLAG_RESOLUTION_ORDER: FeatureFlagKey[] = [
+  FEATURE_FLAG.MODULE_CENTRAL_PERMITS,
   FEATURE_FLAG.MODULE_DEMO,
   FEATURE_FLAG.MODULE_PERMIT_FILING,
   FEATURE_FLAG.MODULE_RESPONSE_MATRIX,

@@ -73,9 +73,8 @@ export const hybridNavGroups: HybridNavGroup[] = [
         title: "Permit Queue",
         href: "/permit-queue",
         icon: ListTodo,
-        description: "Coming soon — aggregate filings & scrape jobs",
+        description: "Central permits: tasks, files, status, info, reports and reviews",
         requiresAuth: true,
-        comingSoon: true,
       },
       {
         title: "Demo",
@@ -273,6 +272,12 @@ export const hybridNavGroups: HybridNavGroup[] = [
         description: "Jurisdictions, notifications, campaigns, and flags",
         isRouteActive: (pathname) =>
           pathname.startsWith("/admin/platform") || pathname === "/admin/feature-flags",
+      },
+      {
+        title: "Permit Sync",
+        href: "/admin/permit-sync",
+        icon: RadioTower,
+        description: "Portal sources, sync jobs and permit access",
       },
       {
         title: "AI usage",
