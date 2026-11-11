@@ -95,6 +95,28 @@ test("re-applying the new migrations on the real chain is a no-op for the schema
   assert.deepEqual(b, a);
 });
 
+test("deep capture apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
+  const DEEP = "20261111120000_permit_deep_capture.sql";
+  const base = await replay({ exclude: [DEEP] });
+  const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay()).db.query(FINGERPRINT)).rows.map(key).sort();
+
+  await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${DEEP}`, "utf8")}\nCOMMIT;`);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
+
+  const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261111120000_permit_deep_capture.sql`, "utf8");
+  const cred = "10000000-0000-4000-8000-0000000000d1";
+  await base.db.query(`INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES ('10000000-0000-4000-8000-0000000000d2', 'd@test.invalid', '{}'::jsonb)`);
+  await base.db.query(`INSERT INTO public.portal_credentials (id, user_id, jurisdiction, portal_username, portal_password, permit_number) VALUES ($1, '10000000-0000-4000-8000-0000000000d2', 'Washington DC', 'acct', '{"pc_v":"1","iv":"aXY=","at":"YXQ=","ct":"Y3Q="}', 'D1')`, [cred]);
+  await base.db.query(`INSERT INTO public.permit_sync_sources (credential_id, adapter_key) VALUES ($1, 'dc-projectdox')`, [cred]);
+  await base.db.query(`INSERT INTO public.permit_sync_jobs (credential_id, adapter_key, trigger, worker_mode) VALUES ($1, 'dc-projectdox', 'manual', 'deep')`, [cred]);
+  await assert.rejects(base.db.exec(rollback), /cancel the active deep job first/);
+  await base.db.exec("ROLLBACK");
+  await base.db.query(`UPDATE public.permit_sync_jobs SET status = 'cancelled', completed_at = now()`);
+  await base.db.exec(rollback);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
+});
+
 test("access rules hold against the real credential, profile and default-privilege definitions", async () => {
   const db = full.db;
   const ids = {

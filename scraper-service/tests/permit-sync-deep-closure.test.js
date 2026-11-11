@@ -27,15 +27,19 @@ function probe(args, env = {}) {
   return JSON.parse(line.slice(13));
 }
 
+/** The committed file before the dcDeep export existed (HEAD while the change is uncommitted). */
 function headSource() {
+  const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
+  const file = "scraper-service/app/register-execution-routes.js";
   try {
-    return execFileSync("git", ["show", "HEAD:scraper-service/app/register-execution-routes.js"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
+    const added = git(["log", "--format=%H", "--reverse", "-S", "dcDeep: {", "--", `:(top)${file}`]).split("\n").filter(Boolean)[0];
+    return git(["show", `${added ? `${added}^` : "HEAD"}:${file}`]);
   } catch (_) {
     return null;
   }
 }
 
-test("HTTP routes are identical to HEAD; the only new export is dcDeep", (t) => {
+test("HTTP routes are identical to the version before dcDeep; the only new export is dcDeep", (t) => {
   const src = headSource();
   if (!src) return t.skip("git HEAD not available");
   const headFile = path.join(ROOT, "app", `.routes-head-${process.pid}.js`);
