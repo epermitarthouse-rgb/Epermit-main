@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { serviceUserResponse } from "../_shared/serviceExecution.ts";
 import { resolveServiceExecution } from "../_shared/serviceExecutionDeno.ts";
+import { planPortalCommentRefresh } from "../_shared/portalCommentRefresh.ts";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 import {
   extractMontgomeryGridRefOrder,
@@ -322,17 +323,6 @@ function diffRefs(fromRefs: string[], toRefs: string[]): string[] {
   return fromRefs.filter((r) => !keep.has(r));
 }
 
-function portalCommentKey(row: {
-  comment_number?: string | null;
-  original_text?: string | null;
-}): string {
-  const num = String(row.comment_number ?? "").trim();
-  if (num) return `ref:${num}`;
-  const refs = extractOrderedRefsFromText(String(row.original_text ?? ""));
-  if (refs.length > 0) return `ref:${refs[0]}`;
-  return `text:${normalizeText(String(row.original_text ?? ""))}`;
-}
-
 async function finalizePortalCommentRefresh(
   supabase: ReturnType<typeof createClient>,
   projectId: string,
@@ -367,47 +357,33 @@ async function finalizePortalCommentRefresh(
   const old = (oldRows ?? []) as ParsedCommentRow[];
   const staging = (stagingRows ?? []) as ParsedCommentRow[];
 
-  const oldByKey = new Map<string, ParsedCommentRow>();
-  for (const row of old) {
-    oldByKey.set(portalCommentKey(row), row);
-  }
-
-  const matchedOldIds = new Set<string>();
+  const plan = planPortalCommentRefresh(old, staging);
   let updated_count = 0;
   let inserted_count = 0;
 
-  for (const stagingRow of staging) {
-    const key = portalCommentKey(stagingRow);
-    const existing = oldByKey.get(key);
-    if (existing) {
-      matchedOldIds.add(existing.id);
-      const { error: updErr } = await supabase
-        .from("parsed_comments")
-        .update({
-          original_text: stagingRow.original_text,
-          page_number: stagingRow.page_number,
-          status: stagingRow.status,
-          comment_number: stagingRow.comment_number ?? existing.comment_number,
-        })
-        .eq("id", existing.id);
-      if (updErr) {
-        throw new Error(`Failed to update matched comment: ${updErr.message}`);
-      }
-      await supabase.from("parsed_comments").delete().eq("id", stagingRow.id);
-      updated_count++;
-    } else {
-      const { error: promErr } = await supabase
-        .from("parsed_comments")
-        .update({ ingest_source: "raw_ref" })
-        .eq("id", stagingRow.id);
-      if (promErr) {
-        throw new Error(`Failed to promote staging comment: ${promErr.message}`);
-      }
-      inserted_count++;
+  for (const u of plan.updates) {
+    const { error: updErr } = await supabase
+      .from("parsed_comments")
+      .update(u.patch)
+      .eq("id", u.oldId);
+    if (updErr) {
+      throw new Error(`Failed to update matched comment: ${updErr.message}`);
     }
+    await supabase.from("parsed_comments").delete().eq("id", u.stagingId);
+    updated_count++;
+  }
+  for (const stagingId of plan.promotions) {
+    const { error: promErr } = await supabase
+      .from("parsed_comments")
+      .update({ ingest_source: "raw_ref" })
+      .eq("id", stagingId);
+    if (promErr) {
+      throw new Error(`Failed to promote staging comment: ${promErr.message}`);
+    }
+    inserted_count++;
   }
 
-  const toDeleteIds = old.filter((r) => !matchedOldIds.has(r.id)).map((r) => r.id);
+  const toDeleteIds = plan.deletions;
   let deleted_count = 0;
   if (toDeleteIds.length > 0) {
     const { error: delErr } = await supabase
