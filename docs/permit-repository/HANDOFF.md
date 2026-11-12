@@ -1,6 +1,13 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-12 (full-capture live test RUN; agents off). Read "Full-capture live test" first; older sections below are history.
+Last updated: 2026-11-12 (deep job stop after viewer POST drop; agents off). Read "Deep job stop" first; older sections below are history.
+
+## Deep job stop (2026-11-12, viewer POST drop)
+- Why: in deep mode, `viewFile` for a view-only file submits a POST form to `/File/FileViewer?fileID=…` in a popup. The transport guard drops that non-GET (`method_dropped`, `route.abort('blockedbyclient')`). The popup stays on the blocked error page, so it is treated as present and the guarded GET `File/RetrieveFile` fallback never runs. Every view-only Drawings file ends `download_failed`. No deny rule and no method rule was changed. POST to FileViewer stays refused.
+- Local headed workers for this run had already exited before the stop: terminals 111707 (pid 99763), 111708 (pid 2571) and 111709 (pid 7731, job `74af8d1d`, outcome `completed_with_warnings`, exit 0 at 10:58:20Z). No SIGINT was sent. `ps` showed those pids gone, no `permit-sync/worker-entry`, and no Playwright Chromium. Unrelated local processes were left running.
+- Approved cancel `scripts/permit-repo/one-permit-live-test/02-cancel-deep-job.sql` via `supabase db query --linked -f` did not execute: the CLI stopped at "Initialising login role" with HTTP 403 (this CLI login's project list does not include `eeqxyjrcldivtpikcpvk`). No production write from that attempt.
+- SELECT after the attempt (statuses and counts only): job `74af8d1d` is terminal `completed_with_warnings`, `error_code` null. Active jobs (`queued` / `running` / `retry_wait` / `waiting_user`): 0. Documents for the permit: 72 = 9 stored, 27 `not_requested`, 33 `failed`, 3 `not_permitted`. No new document rows.
+- Not done: no live portal session, no download, no agent run, no deploy, no push, no cron or `automation_enabled` change, no secret set.
 
 ## Full-capture live test (2026-11-12 ~08:48–11:00 UTC), PARTIAL PASS — reports complete, files incomplete
 - User approval: apply migration `20261112100000`, one full-capture deep job for BCIV2500152 (72 / 600 MiB, no 50 MB `max_file_bytes`), one no-change rerun, agents OFF, headed Chromium. Upload limit raised to 500 MB in the dashboard (not readable via CLI; bucket `file_size_limit` still null). Do not push.

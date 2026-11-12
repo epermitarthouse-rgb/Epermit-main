@@ -114,6 +114,7 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | 6c | Pipeline triggered when no completed run for the hash | Done | Agents off; pipeline runs stayed 0 | |
 | 6d | Comment refresh keying | Done | Fingerprint unchanged `b4a09c21…` | |
 | Live | Full-capture live test | **Partial pass** | Reports 5/5; files 9/72 stored | HANDOFF "Full-capture live test"; crash fix `ffec70b`; 27 permitted never attempted |
+| Stop | Cancel job `74af8d1d` after viewer POST drop | Terminal already | Job `completed_with_warnings`; 0 active jobs; documents unchanged (9/27/33/3) | Workers already exited. `02-cancel-deep-job.sql` did not run (CLI login-role 403). Cause: POST `/File/FileViewer` is `method_dropped`, so the RetrieveFile GET fallback never runs. |
 
 ## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
 | Step | Status | Evidence |
