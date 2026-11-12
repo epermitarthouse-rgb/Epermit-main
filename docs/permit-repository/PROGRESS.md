@@ -117,6 +117,8 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Stop | Cancel job `74af8d1d` after viewer POST drop | Terminal already | Job `completed_with_warnings`; 0 active jobs; documents unchanged (9/27/33/3) | Workers already exited. `02-cancel-deep-job.sql` did not run (CLI login-role 403). Cause: POST `/File/FileViewer` is `method_dropped`, so the RetrieveFile GET fallback never runs. |
 | 2c fix | Deep-mode blocked viewer popup falls back to GET RetrieveFile (D-089) | Done, not live | Locally tested | `npm run test:permit-sync` 204/204. POST FileViewer still `method_dropped`. Manual route list unchanged. Live check not run. |
 | Live | One-file viewer retry (max 1, agents off) | **Rolled back** | Session ended before any file | Job `3865c23c` cancelled (`session_ended`). 33 retry times restored. Counts 9/27/33/3. Hash and parsed_comments unchanged. Viewer path not verified. |
+| Diag | Session-end trail + `deep_trace` (method/host/path/step only) | Done | Used live | Commit `a10a83e`; named the Log Out link fetch as the trigger (job `099bb4e7`) |
+| 2c fix 2 | Deep fallback uses DC Web API + page session id, no link scan (D-090) | Done | **Live verified** | Commit `babd024`, 208/208. Job `9c25736c` stored view-only 813992 as PDF rendition (85.7 MB vs 86.1 MB portal). No guard events. Original refused/unusable; 32 viewer rows remain. |
 
 ## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
 | Step | Status | Evidence |

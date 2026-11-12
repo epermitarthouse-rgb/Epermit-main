@@ -1,6 +1,17 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-12 (viewer test rolled back). Read "Viewer retry rollback" first.
+Last updated: 2026-11-12 (session_ended root cause fixed; one view-only file stored). Read "Viewer session_ended investigation" first.
+
+## Viewer session_ended investigation (2026-11-12 ~15:22–15:37 UTC)
+- Diagnostic (commit `a10a83e`): the transport keeps a 25-entry trail of DC requests (method, host, path, resource type, rule, action; no query, body, cookies or page text). `last_error` now names the dead-URL match, request and step. The deep runner emits one `deep_trace` line and event (gated counts by reason, attempted file ids with status and error).
+- Run 2 (job `099bb4e7`, same scope, 33 viewer rows reset to now() at 15:22:14 after saving to `exports.local/viewer-retry-reset-20261112T152204Z.json`): `session_ended`, last_error `portal session ended (session_ended_page: GET session.planreview.dob.dc.gov/WebForms/SessionEnded.aspx, fetch via browser, step read)`. Trail: POST `/File/FileViewer` `method_dropped`, then fetch GETs `/User/Index`, `/User/Profile`, `/WebForms/SessionEnded.aspx` (aborted, never sent), then `/Project/Index` ×7 and one `/File/RetrieveFile` on session.planreview. No Web API request. File 813992 `download_failed`, no row changed. Cancelled.
+- Root cause (our code, D-090): the no-popup fallback derived the Web API host from the session.planreview page and got a non-existent host, so RetrieveFile never ran. It then fell through to the generic link scan, which fetched the page's Log Out link. The guard blocked it and flagged a false session end. The portal session was never ended.
+- One fix, commit `babd024` (D-090): deep fallback uses the DC Web API host with the page `Globals.Session.SessionID`, records a reason code, and never scans page links. Closure probe cases `live_origin` and `api_refused`; the old code fails them. `npm run test:permit-sync` 208/208.
+- One retry, job `9c25736c` (15:34:04–15:37:18): first line `agent_trigger=off`, claimed only by `javerias-MacBook-Pro.local`. `completed_with_warnings` (`files_pending`, `files_failed_open`). `deep_trace`: session_ended_at null, attempted 813992 success, gated cap_files 62, already_stored 9. No guard events.
+- Stored: 813992 (Drawings, view-only) as `stored` / `viewer` / source `retrieve_file_rendition` / rendition true, 85,704,611 bytes vs portal 86,127,421 (`size_matches_portal` false), private `permit-documents`. The two original-file requests did not return a usable file; the exact status is not recorded. So for `DownloadFile=false` the PDF rendition works and the original does not.
+- Counts now 10 stored / 32 `failed` viewer / 27 `not_requested` / 3 `not_permitted`. Only change row: `permit_documents` 813992 (`sha256`, `download_status`). Project hash `13ac00b0eef8d096` → `10f7f34c166e4e48` (from the stored file). Pipeline runs 0, parsed_comments 6, service-execution audit 0, active jobs 0, no worker running.
+- Cleanup: no job left in `retry_wait`. The 32 unattempted viewer rows have their saved `capture_next_attempt_at` back (32/32 match, attempts 2). Other 39 rows' fingerprint unchanged (`6330601be77700f23fadbad284778f4b`). No push, no deploy.
+- Next decision: approve a larger viewer run (the 32 remaining Drawings, as renditions) and/or the 27 permitted files, or decide that renditions are not acceptable for view-only files.
 
 ## Viewer retry rollback (2026-11-12)
 - No worker-entry process was running. Job `3865c23c` cancelled with `02-cancel-deep-job.sql`: status `cancelled`, error still `session_ended`. Active DC jobs 0.
