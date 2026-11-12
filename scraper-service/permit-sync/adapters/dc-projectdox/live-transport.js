@@ -35,6 +35,7 @@ const {
   PortalChangedError,
   TransientError,
 } = require("../../core/errors");
+const { awaitPopupPage } = require("../../../lib/await-popup-page");
 const { buildDcUrl } = require("./routes");
 const { extractProjectInfoFields, extractReviewCommentsReport } = require("./dom-extract");
 const { correctionRowsFromJson, reportListItems } = require("./normalize");
@@ -560,9 +561,10 @@ async function createDcLiveTransport(opts) {
     phase = "auth";
     let popup;
     try {
-      const popupPromise = context.waitForEvent("page", { timeout: 25000 });
-      await safeClick(link);
-      popup = await popupPromise;
+      popup = await awaitPopupPage(context, () => safeClick(link), {
+        timeout: 25000,
+        label: "DC API SSO hop popup",
+      });
       const deadline = Date.now() + 60000;
       while (Date.now() < deadline) {
         await popup.waitForLoadState("domcontentloaded").catch(() => {});

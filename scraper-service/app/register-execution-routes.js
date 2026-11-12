@@ -84,6 +84,7 @@ const {
 const scrapeEvents = require("../lib/scrape-events.js");
 const dcCredentialLock = require("../lib/dc-credential-lock.js");
 const dcDeepOptions = require("../lib/dc-deep-options.js");
+const { awaitPopupPage } = require("../lib/await-popup-page.js");
 const { portalContentHash } = require("../lib/portal-content-hash.js");
 const { SCRAPE_STAGES } = require("../lib/scrape-stages.js");
 const scrapeFileResults = require("../lib/scrape-file-results.js");
@@ -858,9 +859,12 @@ async function openDcPlanReviewProjectPopup(session, project) {
   // Automated deep runs pass the SSO hop through their login-phase request policy (D-055); manual sessions have no hook.
   const hop = typeof session.dcAuthHop === "function" ? session.dcAuthHop : (fn) => fn();
   const popup = await hop(async () => {
-    const popupPromise = context.waitForEvent("page", { timeout: 25000 });
-    await link.click();
-    const opened = await popupPromise;
+    // awaitPopupPage drains waitForEvent even when the click throws, so a late timeout cannot
+    // become an unhandled rejection and kill the deep worker (full-capture live test 2026-11-12).
+    const opened = await awaitPopupPage(context, () => link.click(), {
+      timeout: 25000,
+      label: `DC project popup for ${permit}`,
+    });
     console.log(`[DC][session] popup initial URL: ${opened.url()}`);
 
     const deadline = Date.now() + 60000;

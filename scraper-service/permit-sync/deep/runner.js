@@ -425,7 +425,10 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       storeReportArtifact: (a) => storeReport(ctx, reports, a),
       beforeReport: (a) => precheckReport(ctx, reports, event, a),
       onReportEntry: (entry) => recordReportEntry(ctx, reports, entry),
-      isProtectedPage: (p) => transport.ownsPage(p) || p === s.page,
+      // Protect the extraction popup too: the pre-download sweep closes every other page, and if
+      // downloadProjectDoxFile's `page` arg ever differs from `_dcExtractionPage` the reopen path
+      // used to race waitForEvent and crash the worker on an unhandled timeout.
+      isProtectedPage: (p) => transport.ownsPage(p) || p === s.page || p === s._dcExtractionPage,
       maxFileBytes: limits.maxFileBytes,
       preferOriginal: true,
     };
