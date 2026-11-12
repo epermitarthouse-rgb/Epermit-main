@@ -116,6 +116,7 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Live | Full-capture live test | **Partial pass** | Reports 5/5; files 9/72 stored | HANDOFF "Full-capture live test"; crash fix `ffec70b`; 27 permitted never attempted |
 | Stop | Cancel job `74af8d1d` after viewer POST drop | Terminal already | Job `completed_with_warnings`; 0 active jobs; documents unchanged (9/27/33/3) | Workers already exited. `02-cancel-deep-job.sql` did not run (CLI login-role 403). Cause: POST `/File/FileViewer` is `method_dropped`, so the RetrieveFile GET fallback never runs. |
 | 2c fix | Deep-mode blocked viewer popup falls back to GET RetrieveFile (D-089) | Done, not live | Locally tested | `npm run test:permit-sync` 204/204. POST FileViewer still `method_dropped`. Manual route list unchanged. Live check not run. |
+| Live | One-file viewer retry (max 1, agents off) | **Stopped before any write** | — | `db query --linked` HTTP 403 on login role; account project list does not include `eeqxyjrcldivtpikcpvk`. No export, no retry reset, no job, no Chromium. |
 
 ## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
 | Step | Status | Evidence |

@@ -1,6 +1,12 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-12 (D-089 local fallback, not live). Read "Deep job stop" and "Supervised live check" first.
+Last updated: 2026-11-12 (viewer live check stopped before any write). Read "Viewer retry live check" first.
+
+## Viewer retry live check (2026-11-12 ~13:32 UTC), STOPPED at pre-check
+- Approved scope was: save and reset `capture_next_attempt_at` on the 33 failed view-only rows for BCIV2500152, then one headed deep job, `max_files=1`, agents off. Nothing else.
+- `supabase db query --linked` did not run. The CLI stopped at "Initialising login role" with HTTP 403 (`--agent=no` the same). `supabase projects list` returns 2 projects and does not include `eeqxyjrcldivtpikcpvk`. The link file still names that ref. `SUPABASE_DB_PASSWORD` is unset, so there was no direct-connection fallback. No query result, so the 33-row count was not confirmed.
+- Not done: no export, no `UPDATE`, no job, no worker, no Chromium, no agent run, no deploy, no push, no cron or `automation_enabled` change, no secret set. Rollback is not needed.
+- Next: log the CLI in as an account that can see InsightDC (`eeqxyjrcldivtpikcpvk`), confirm `db query --linked` returns rows, then rerun this same scope. Do not reset retry times until that pre-check can read the 33 rows.
 
 ## Deep job stop (2026-11-12, viewer POST drop)
 - Why: in deep mode, `viewFile` for a view-only file submits a POST form to `/File/FileViewer?fileID=…` in a popup. The transport guard drops that non-GET (`method_dropped`, `route.abort('blockedbyclient')`). The popup stays on the blocked error page, so it is treated as present and the guarded GET `File/RetrieveFile` fallback never runs. Every view-only Drawings file ends `download_failed`. No deny rule and no method rule was changed. POST to FileViewer stays refused.
@@ -11,7 +17,7 @@ Last updated: 2026-11-12 (D-089 local fallback, not live). Read "Deep job stop" 
 - Local fix (D-089, not live): deep mode closes a viewer popup that is empty, blocked, or has no WebViewer config, then uses the existing GET `File/RetrieveFile` fallback (original, then PDF rendition). POST to FileViewer stays refused. `npm run test:permit-sync` 204/204.
 
 ## Supervised live check (not run) — one Drawings view-only file
-Needed before this counts as verified. Queue one deep job for ProjectID 6364 with `max_files` 1 (do not reuse `12-request-full-deep-job.sql` as written; that queues 72). The CLI login must be able to run `supabase db query --linked` again (this session got HTTP 403 on login-role). Agents off. Headed. The 33 failed Drawings rows were next eligible about 14:58 UTC on 2026-11-12; before that, `max_files=1` can take a permitted `not_requested` file instead of a view-only retry.
+Attempted 2026-11-12 and stopped before any write: see "Viewer retry live check" (CLI login role HTTP 403). Needed before this counts as verified. Queue one deep job for ProjectID 6364 with `max_files` 1 (do not reuse `12-request-full-deep-job.sql` as written; that queues 72). The CLI login must be able to run `supabase db query --linked` again (this session got HTTP 403 on login-role). Agents off. Headed. The 33 failed Drawings rows were next eligible about 14:58 UTC on 2026-11-12; before that, `max_files=1` can take a permitted `not_requested` file instead of a view-only retry.
 
 ```bash
 cd /Users/javerianaveed/epermit/Epermit-main/scraper-service && env -u PERMITPILOT_SERVICE_PIPELINE_SECRET \
