@@ -158,9 +158,9 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Commits (local, not pushed) | Done | n/a | `5f1e164` migrations, `e29ec90` worker, `6c63370` edge, `9284ab9` Permit Queue, `c964c9a` live-test scripts, then docs. `scripts/local-dc-e2e/` left uncommitted. |
 
 
-## Continuous deep scraping rollout P0–P2 (2026-11-13, local only)
+## Continuous deep scraping rollout P0–P2 (2026-11-13)
 
-Status levels: Implemented / Locally tested / Deployed / Production-verified. Nothing below is deployed.
+Status levels: Implemented / Locally tested / Deployed / Production-verified. The first table is the local build; production status is in "Production rollout" below it.
 
 | Item | Decision | Status | Evidence |
 |---|---|---|---|
@@ -179,3 +179,19 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. No
 | Hash swap ff193644 | D-101 | Fixed locally; cause consistent with data, not proven | content-hash tests 7/7; live data: stored = old fn `10f7f34c…`, new fn `88470093…` |
 | P3 verification query | — | Implemented; checked on replayed schema | `scripts/permit-repo/verify-full-refresh.sql` |
 | DC sources 0610eaa5 / de8592f9 | D-095 | Audited | Same login; permit links only on de8592f9; recommend pausing 0610eaa5 (approval) |
+
+### Production rollout (approved, 2026-11-12 ~19:40–20:25 UTC)
+
+| Step | Status | Evidence |
+|---|---|---|
+| Push branch, fast-forward `main` dd08ed1 → 563cb9e → 14516b2 | Deployed | No other commits on `main`. Railway `Epermit-main` (HTTP scraper) build `fe059bae` and later wait in **NEEDS_APPROVAL** and are not live. `code-analyzer-worker` did not redeploy |
+| Migration `20261113100000` | Production-verified (schema) | One transaction via `supabase db query --linked -f`, then `migration repair --status applied`. 3 tables with RLS, 9 functions, both in-flight indexes, anon has no EXECUTE, 20 jobs and 0 open, cron unchanged |
+| Pause 0610eaa5 | Production-verified | Direct UPDATE plus `_permit_audit('permit_sync_source.pause')` in one transaction. 0610eaa5 `paused`, de8592f9 `inactive` (manual refresh allowed), automation false on both |
+| Frontend (Vercel, from `main`) | Deployed | Vercel status `success` for 563cb9e |
+| `module.central_permits` ON | Production-verified | Audited `feature_flag.enable`, `updated_at` 20:20:33 UTC |
+| Worker `permit-sync-worker` deployment `b11446dd` | Deployed, idle | `railway up` of a clean `git archive` of `scraper-service` at 563cb9e with `railway.permit-sync-worker.toml` as `railway.toml`. Variables: mode deep, enabled, A-3, caps 5000 files / 20 GiB / 200 MiB per file; no record-id narrowing, no once mode. Heartbeat `idle`, scope `all`, agent_trigger false, 0 jobs run. `version` is null (CLI uploads have no `RAILWAY_GIT_COMMIT_SHA`): the code is 563cb9e |
+| Monitor cron `permit-sync-monitor` (*/5) | Installed, ran once | One open alert: `guard_violation` for the earlier local job `f60b7e0d` (session-timeout poll, D-092; the keepalive rule is in the deployed worker). It resolves 24 h after 17:52 UTC |
+| Alert notifier function + cron | **Not deployed** | Needs recipient emails and the app URL |
+| Scheduling | **Off** | No sync cron, automation false, no schedule enabled |
+| CI on `main` | Green except one scraper file | 14516b2: secret scan, tsc/eslint, frontend, analyzer, permit-sync, build pass. `reconcile-territory-provider-names.test.js` reads local territory data and is now listed as environment-dependent |
+| First full DC refresh | Not started | Belongs to the user (Permit Queue → Refresh all). No job was enqueued |

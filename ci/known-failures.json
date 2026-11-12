@@ -75,7 +75,10 @@
         "tests/ragQuality.test.js",
         "tests/requirementBenchmark.test.js",
         "tests/verifierEvidenceRegressions.test.js"
-      ]
+      ],
+      "environment_dependent": {
+        "tests/reconcile-territory-provider-names.test.js": "input-dir case reads local Maryland territory data that is not in the repo"
+      }
     }
   }
 }

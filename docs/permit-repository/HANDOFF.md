@@ -1,8 +1,17 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-13 (continuous deep scraping P0–P2 implemented locally; nothing deployed). Read "Continuous deep scraping P0–P2" first.
+Last updated: 2026-11-13 (continuous deep scraping P0–P2 deployed; first full refresh not started). Read "Production rollout" first.
 
-## Continuous deep scraping P0–P2 (2026-11-13, local only)
+## Production rollout (2026-11-12 ~19:40–20:25 UTC, approved)
+- `main` = 14516b2 (fast-forward from dd08ed1). Frontend live on Vercel. Migration `20261113100000` applied and recorded. `module.central_permits` ON.
+- Railway `permit-sync-worker` deployment `b11446dd` (code 563cb9e, clean archive, worker toml as `railway.toml`): idle, deep, scope `all`, caps 5000 / 20 GiB / 200 MiB, agent trigger off. To redeploy, use the same `git archive` + `railway up --path-as-root` (the service has no repo source, so "Wait for CI" does not apply).
+- DC sources: 0610eaa5 `paused` (audited), de8592f9 `inactive`, which allows manual refresh. Automation is false on both.
+- Monitor cron installed (`permit-sync-monitor`, */5). One open critical alert for the earlier local job `f60b7e0d` (keepalive poll, fixed). It clears around 17:52 UTC on 2026-11-13.
+- Not done: the alert notifier function and its cron (needs recipient emails and the app URL); scheduling (stays off until the first full refresh is verified, then `scheduling/02-enable-sync-cron.sql`).
+- Railway `Epermit-main` (HTTP scraper) has a 563cb9e/14516b2 build waiting for approval. The live HTTP scraper is the older build without the D-061 login lock, so do not run a manual DC scrape from the old flow while a full refresh is running.
+- Next: the user starts Permit Queue → Refresh all. Then run `scripts/permit-repo/verify-full-refresh.sql` on the real job (P3).
+
+## Continuous deep scraping P0–P2 (2026-11-13, built locally, now deployed)
 - Built: migration `20261113100000_permit_sync_orchestration.sql` (+ rollback script) with one deep request path, coalescing, the same-login claim lock, release without spending attempts, per-permit progress, worker heartbeats, slot-based schedules, the monitor and alerts (D-093 – D-099). It enqueues nothing and installs no cron.
 - Worker: graceful SIGTERM (releases the job), `/health`, JSON logs, heartbeats with scope and limits; `scraper-service/railway.permit-sync-worker.toml`. Never enqueues.
 - UI: Permit Queue Refresh all (confirmation shows jurisdiction and permit count), Refresh per row and on the detail page, batch banner with counts and Cancel; Management Admin scheduling, workers, alerts, Retry. Admin "Sync now" replaced by the confirmed Refresh all.
