@@ -1,6 +1,15 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-12 (viewer live check stopped before any write). Read "Viewer retry live check" first.
+Last updated: 2026-11-12 (one-file viewer check ran; session ended before any file). Read "Viewer retry live check" first.
+
+## Viewer retry live check (2026-11-12 14:54–15:01 UTC), NOT VERIFIED
+- Pre-check passed after the CLI reconnect: `select 1` ok, project list includes `eeqxyjrcldivtpikcpvk`. Active jobs 0, job `74af8d1d` terminal `completed_with_warnings`, cron 3, automation off, flag OFF, migration history 26. Documents 72 = 9 stored / 27 `not_requested` / 33 `failed` / 3 `not_permitted`. The 33 are `failed` / `viewer` / `download_failed` / attempts 2.
+- Saved the 33 `capture_next_attempt_at` values (attempts 2) to git-ignored `exports.local/viewer-retry-reset-20261112T145456Z.json`. Not printed.
+- Reset: `capture_next_attempt_at = now()` on those 33 only. Verified 33 changed, attempts still 2, the other 39 rows' fingerprint unchanged (`6330601be77700f23fadbad284778f4b`).
+- Job `3865c23c-d5e3-4b3f-a048-404516815250` queued (deep, scope 6364, max_files 1, max_bytes and max_file_bytes 209715200). Still unclaimed 5 s later (0 claim events, 1 active job). Claimed only by the local worker `javerias-MacBook-Pro.local`. First log line `agent_trigger=off`. Login ok, API session ok, blocked 0. Deep pass started 14:59:52 (tabs `files` only, reason `documents_pending`).
+- Outcome: worker exit 0, job **`retry_wait` / `session_ended`**, last_error `portal session ended` (the bare session-ended error, no host or path stored). Finished 15:01:03. No `guard_denied`. No document row changed: still 33 failed/viewer/attempts 2/`download_failed`, 9 stored, 27 `not_requested`, 3 `not_permitted`. No file stored, so no signed URL. The deep pass silences scraper console output, and the log has no popup line and no `RetrieveFile` line. The viewer fallback was not shown to run. Whether the portal refuses `RetrieveFile` when `DownloadFile=false` is still unknown.
+- Unchanged: project hash `13ac00b0eef8d096`, `last_checked_at` 09:23:32Z, pipeline runs 0, parsed_comments 6, service-execution audit 0, reports 5 captured, 6 report versions, cron 3, flag OFF, automation off. No second run, no code change, no deploy, no push.
+- Leftover: the job is still `retry_wait`. A later deep worker would claim it. Rollback is not applied. Restore all 33 timestamps from the saved file (none were attempted) and cancel with `02-cancel-deep-job.sql`.
 
 ## Viewer retry live check (2026-11-12 ~13:32 UTC), STOPPED at pre-check
 - Approved scope was: save and reset `capture_next_attempt_at` on the 33 failed view-only rows for BCIV2500152, then one headed deep job, `max_files=1`, agents off. Nothing else.
@@ -17,7 +26,7 @@ Last updated: 2026-11-12 (viewer live check stopped before any write). Read "Vie
 - Local fix (D-089, not live): deep mode closes a viewer popup that is empty, blocked, or has no WebViewer config, then uses the existing GET `File/RetrieveFile` fallback (original, then PDF rendition). POST to FileViewer stays refused. `npm run test:permit-sync` 204/204.
 
 ## Supervised live check (not run) — one Drawings view-only file
-Attempted 2026-11-12 and stopped before any write: see "Viewer retry live check" (CLI login role HTTP 403). Needed before this counts as verified. Queue one deep job for ProjectID 6364 with `max_files` 1 (do not reuse `12-request-full-deep-job.sql` as written; that queues 72). The CLI login must be able to run `supabase db query --linked` again (this session got HTTP 403 on login-role). Agents off. Headed. The 33 failed Drawings rows were next eligible about 14:58 UTC on 2026-11-12; before that, `max_files=1` can take a permitted `not_requested` file instead of a view-only retry.
+Ran 2026-11-12 14:54–15:01 UTC and stopped at `session_ended` before any file: see "Viewer retry live check". Needed before this counts as verified. Queue one deep job for ProjectID 6364 with `max_files` 1 (do not reuse `12-request-full-deep-job.sql` as written; that queues 72). The CLI login must be able to run `supabase db query --linked` again (this session got HTTP 403 on login-role). Agents off. Headed. The 33 failed Drawings rows were next eligible about 14:58 UTC on 2026-11-12; before that, `max_files=1` can take a permitted `not_requested` file instead of a view-only retry.
 
 ```bash
 cd /Users/javerianaveed/epermit/Epermit-main/scraper-service && env -u PERMITPILOT_SERVICE_PIPELINE_SECRET \
