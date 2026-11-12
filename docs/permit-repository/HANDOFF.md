@@ -1,6 +1,41 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-11 (one-permit live test PASSED with agents off, local commits only). Read "One-permit live test: guard-safe fix and rerun" first, then "Unified DC deep automation"; the older sections below are history.
+Last updated: 2026-11-12 (deep capture corrections committed locally; full-capture live test PREPARED, not run). Read "Deep capture corrections" first, then "One-permit live test: guard-safe fix and rerun"; the older sections below are history.
+
+## Deep capture corrections (2026-11-12, local commits only, no push)
+- Commits on `feat/central-permit-repository` (after `3193cb4`): `0f8b506` safety (3b download route uses `route.fallback` in deep mode so the guard sees every request, proven with real Chromium; 3c no unguarded browser re-init), `e5bc0ef` accuracy + migration `20261112100000_permit_capture_retry.sql` (D-080..D-087, 3d heartbeat in the pass, 6b, 6c, 5c), `e7c8ee3` Permit Queue UI (4, 5b), `30c1ebd` comment-parser refresh keying (6d), then the docs/live-prep commit.
+- Decisions D-080 (retry/back-off), D-081 (guard identity exemption), D-082 (viewer path, revises D-056), D-083 (per-file limit), D-084 (originals + validation), D-085 (capture-hash re-sync), D-086 (`completed_with_warnings`), D-087 (no orphan report uploads), D-088 (pipeline trigger + comment keying).
+- Tests (local, 2026-11-12): `npm run test:permit-sync` 201/201 outside the sandbox (Chromium; 0 skipped); Arlington + scraper-cancel-boundaries (the closure-touching suites) 142/142; edge `_shared` serviceExecution + portalCommentRefresh 33/33; frontend permit/Permit Queue/Portal Harvest/Response Matrix 141/141; Code Analyzer 263/263; `npx tsc --noEmit -p .` clean; migration chain + rollback replay in the permit-sync suite. `deno check comment-parser-agent/index.ts`: the same 9 type errors as HEAD before the change (pre-existing).
+- Needs live verification: report 4 captured under D-081 (and nothing else newly allowed); the viewer path for the 36 view-only files; originals byte-matching `FileSize`; report 14 v2 with structured rows; heartbeat on a long pass.
+- Not changed: Arlington, Montgomery, Howard, UCI, Code Analyzer V2, manual scrape HTTP behaviour (route-identity test passes; deep-only/additive edits in `register-execution-routes.js`).
+
+### Storage limit finding (read-only)
+`storage.buckets.file_size_limit` is null for `permit-documents` and `project-drawings`, so the project-wide upload limit applies. It is not readable with our access (the CLI is logged into another account; the Management API needs the owning account). Supabase's default is 50 MB. No object over ~40 MB exists in production. Permit 6364 has 72 files, 517.5 MiB on the portal: 9 stored, 27 permitted pending, 36 view-only; 4 files are 80–82 MB (2 permitted: 817026, 817060; 2 view-only: 813992, 811437); none over 200 MiB. Requirement: confirm or raise the global upload limit to ≥ 100 MB (Dashboard → Storage → Settings) before the full run, or queue the job with `"max_file_bytes": 52428800` so those 4 are recorded `deferred_oversize`.
+
+### Full-capture live test (PREPARED 2026-11-12; nothing below has been run)
+Target: permit `06fa082e-b942-4b54-b448-a1527f58df41` (BCIV2500152, ProjectID 6364), credential `de8592f9-…`, project `ff193644-…` (already linked), agents OFF (`PERMITPILOT_SERVICE_PIPELINE_SECRET` unset; worker line must read `agent_trigger=off`). Files in `scripts/permit-repo/one-permit-live-test/`, tested on the replayed chain with these ids (`tests/permit-repo-live-test-sql.test.js`).
+
+Pre-flight (read-only):
+- `supabase login` as the account that owns `eeqxyjrcldivtpikcpvk` (the current CLI login gets 403), then `supabase db query --linked -f scripts/permit-repo/one-permit-live-test/10-precheck-capture-retry.sql`. Before the migration rows 1–4 are false; rows 5–11 and 14 must be true.
+- Storage limit (above).
+- Old Railway `permit-sync-worker` (JSON-only code) cannot claim the job: its two-argument claim returns `worker_mode = 'json'` jobs only (pre-check row 6; proven in production on 2026-11-11). It also never calls the v2 capture RPC. The new local worker requires the migration first (it calls `record_permit_document_capture_v2`).
+
+Ordered approvals:
+1. **A-M — apply migration `20261112100000`** (production DDL; additive columns, CHECK widened with `deferred_oversize`, new service_role-only RPC, 3 replaced RPCs; no RLS/policy change). Never `db push`.
+   `sh scripts/permit-repo/one-permit-live-test/11-apply-capture-retry.sh --i-have-approval` (pre-check → BEGIN/`db query -f`/COMMIT → `supabase migration repair --status applied 20261112100000` → pre-check rows 1–4 true).
+   Rollback: `supabase db query --linked -f scripts/permit-repo/rollback-20261112100000_permit_capture_retry.sql && supabase migration repair --status reverted 20261112100000` (refuses while a deep job is active; `deferred_oversize` rows return to `not_requested`/`not_permitted`; stored rows and objects stay).
+2. **A-S — storage limit** (only if the global limit is below 100 MB and the 4 large files should be stored): Dashboard → Storage → Settings → upload file size limit ≥ 100 MB. Rollback: set it back. Alternative without approval: the 50 MiB job variant below.
+3. **A-R — live run (portal access, production writes).** Queue: `supabase db query --linked -f scripts/permit-repo/one-permit-live-test/12-request-full-deep-job.sql` (72 files, 600 MiB; for the 50 MB variant add `"max_file_bytes": 52428800` to the options). Run from `scraper-service`, user watching:
+   ```bash
+   env -u PERMITPILOT_SERVICE_PIPELINE_SECRET \
+   PERMIT_SYNC_WORKER_ENABLED=true PERMIT_SYNC_LIVE_PORTAL_APPROVED=A-3 PERMIT_SYNC_MODE=deep PERMIT_SYNC_WORKER_ONCE=true \
+   PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS=6364 PERMIT_SYNC_DEEP_MAX_FILES=72 PERMIT_SYNC_DEEP_MAX_BYTES=629145600 PERMIT_SYNC_DEEP_MAX_FILE_BYTES=209715200 \
+   SCRAPER_HEADLESS=false PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright" \
+   node -r dotenv/config permit-sync/worker-entry.js 2>&1 | tee /tmp/full-capture-live.log
+   ```
+   First line: `mode=deep agent_trigger=off scope=6364 max_files=72 max_bytes=629145600 max_file_bytes=209715200 max_attempts=5`. Watch `03-watch.sql`; after exit `04-inspect.sql`. Abort: Ctrl-C, then `02-cancel-deep-job.sql`. Rollback: rows are additive and tagged with the job id; stored objects are under `06fa082e-…/`.
+   Expected: report 4 captured (no `guard_denied` event, no safety violation); 72 files each `stored` or `deferred_oversize` (or `failed` with a reason and back-off), view-only files `capture_access_path = viewer` in the private bucket, originals with `size_matches_portal = true` where the portal serves them, renditions labelled; report 14 version 2 with structured rows; outcome `completed` or `completed_with_warnings` with `deep_warnings`; the Permit Queue Tasks tab shows "no open tasks" then the completed workflow table; Files pill "N of 72 files stored …", Reports pill "5 of 5 reports". Then queue the same request again and run once more: 0 downloads of stored files, 0 report versions, 0 changes, hash unchanged (only due retries or deferred files may act).
+4. **Later — agents (separate decision, D-077/D-088).** Prerequisites: a new `PERMITPILOT_SERVICE_PIPELINE_SECRET` set on both sides (Supabase function secret and the worker env); deploy of `intake-pipeline-agent`, `comment-parser-agent` (now with the 6d keying fix), `discipline-classifier-agent`, `context-reference-engine`, `auto-router-agent`; production functions lag `main` by unrelated commits (`5199937`, `85b3da9`, `7be2588`, `972e312`, `52a9405`; see attempt 2 below), so the decision is deploy HEAD including them, or a service-mode-only build on top of the production sources. Rollback: `supabase secrets unset PERMITPILOT_SERVICE_PIPELINE_SECRET`.
 
 ## One-permit live test: guard-safe fix and rerun (2026-11-11 08:20–08:38 UTC), PASSED with agents off
 - User approval: guard-safe report fix plus rerun; agents stay off (no secret, no edge deploy, no Railway change). Every deny pattern unchanged (`/Upload/i` kept; tested).

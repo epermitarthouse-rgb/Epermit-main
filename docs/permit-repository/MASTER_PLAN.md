@@ -6,6 +6,8 @@ Status: **APPROVED DIRECTION (2026-11-05), REVISED 2026-11-11 (unified DC deep a
 
 This section supersedes the parts of §2, §6 and §9 that say the worker never loads the HTTP app, that DC is metadata only, and that Portal Harvest and the Repository stay separate for DC. Everything else below still holds.
 
+Amended 2026-11-12 (D-080 to D-088): view-only DC files are captured through the viewer into the private bucket (D-082 revises D-056); report-identity values are exempt from deny patterns in deep mode (D-081); failed captures retry with bounded back-off (D-080); a deep job with open items ends `completed_with_warnings` (D-086).
+
 ### 0.1 Objective
 Automate the existing manual DC deep scraper and the agent pipeline behind it. It is not replaced by a metadata-only system. One flow per job:
 

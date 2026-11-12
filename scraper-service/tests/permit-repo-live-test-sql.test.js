@@ -101,3 +101,35 @@ test("live-test SQL: link, deep request (scoped, capped), cancel and unlink work
   assert.equal(await h.count("project_permits"), 0);
   assert.equal(await h.count("platform_audit_events", "action = 'permit.unlink_project'"), 1);
 });
+
+test("full-capture live-test SQL: pre-check reads the capture schema; the full job request uses real caps", async () => {
+  const h = await setup();
+  // Stand-ins where the replay has no production schema (migration history; cron/storage come from the replay helper).
+  const exists = async (rel) => (await h.db.query(`SELECT to_regclass($1) IS NOT NULL AS ok`, [rel])).rows[0].ok;
+  if (!(await exists("supabase_migrations.schema_migrations"))) {
+    await h.db.exec(`CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations (version text PRIMARY KEY);`);
+  }
+  await h.db.exec(`INSERT INTO supabase_migrations.schema_migrations (version) VALUES ('20261111120000'), ('20261112100000') ON CONFLICT DO NOTHING;`);
+  assert.ok(await exists("cron.job"));
+  assert.ok(await exists("storage.objects"));
+  await h.db.exec(sql("01-link-project.sql"));
+  const rows = (await h.db.query(sql("10-precheck-capture-retry.sql"))).rows;
+  const by = Object.fromEntries(rows.map((r) => [r.check_name, r]));
+  for (const n of [
+    "capture retry migration recorded", "permit_documents capture columns present", "record_permit_document_capture_v2 present, service_role only",
+    "download_status accepts deferred_oversize", "two-argument claim returns json jobs only (old Railway worker cannot take a deep job)",
+    "no active permit sync job", "no source automated anywhere", "project ff193644 linked to permit 06fa082e",
+    "permit-documents bucket: private, file_size_limit (null = global limit)",
+  ]) assert.equal(by[n] && by[n].ok, true, n);
+  assert.equal(rows.length, 16);
+
+  await h.db.exec(sql("12-request-full-deep-job.sql"));
+  const job = (await h.db.query(`SELECT * FROM permit_sync_jobs WHERE credential_id = $1`, [CRED])).rows[0];
+  assert.equal(job.worker_mode, "deep");
+  assert.deepEqual(job.options, { only_portal_record_ids: ["6364"], max_files: 72, max_bytes: 629145600 });
+  assert.equal(await h.svc(`SELECT (claim_permit_sync_job('railway-old', 300)).id`), null, "the deployed JSON worker cannot take it");
+  await h.db.exec(sql("02-cancel-deep-job.sql"));
+  // The 50 MB fallback variant is accepted by the option validation.
+  await h.db.exec(sql("12-request-full-deep-job.sql").replace('"max_bytes": 629145600}', '"max_bytes": 629145600, "max_file_bytes": 52428800}'));
+  assert.equal((await h.db.query(`SELECT options ->> 'max_file_bytes' AS m FROM permit_sync_jobs WHERE status = 'queued'`)).rows[0].m, "52428800");
+});

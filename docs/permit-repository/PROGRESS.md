@@ -94,6 +94,27 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | R5 | Offline E2E + all suites | Done | Locally tested | permit-sync 164/164; closure-touching scraper tests 39/39; edge 28/28; frontend 163/163; `npm test` 158/159 (pre-existing Code Analyzer failure, untouched) |
 | R6 | pg_cron SQL + approvals | Prepared only | n/a | HANDOFF "Approvals, in order" |
 
+## Deep capture corrections (2026-11-12, D-080 to D-088; local commits, no push)
+| Item | Change | Status | Level | Evidence / notes |
+|---|---|---|---|---|
+| 3b | Deep download route passes on with `route.fallback` (guard sees every request) | Done | Locally tested | Real-Chromium closure probe; fails with `route.continue` |
+| 3c | `reinitializeBrowser` refused in deep sessions → `session_ended` | Done | Locally tested | Closure probe + e2e |
+| 3d | Lease heartbeat inside the deep pass; lost lease cancels the scrape | Done | Locally tested | e2e (`lease_lost`, beats during the pass) |
+| 1a/1b | Guard identity exemption for report params (D-081) | Done | Locally tested; needs live verification | Safety tests (report 4 + export pass; denied params/paths/POST still refused); e2e |
+| 1d/3a | Attempts + back-off + attempt cap (D-080), migration `20261112100000` | Done | Locally tested; migration NOT applied (A-M) | Chain + rollback test; e2e retries for files and reports |
+| 2b | Per-file limit, `deferred_oversize` (D-083) | Done | Locally tested | e2e; storage global limit unknown (HANDOFF) |
+| 2c | View-only files via the viewer, private bucket only (D-082) | Done | Locally tested; needs live verification | e2e with `account_download=false` |
+| 2d/3f | Originals first, provenance, body validation (D-084) | Done | Locally tested; needs live verification | e2e (HTML/truncated rejected, exact original stored) |
+| 3e | No orphan report uploads (D-087) | Done | Locally tested | e2e (crash mid-reports, forced re-scrape) |
+| 5a | `completed_with_warnings` + `deep_warnings` (D-086) | Done | Locally tested | Worker unit + e2e; admin jobs table shows reasons |
+| 2e | Capture-hash re-sync, hash kept (D-085) | Done | Locally tested | e2e |
+| 6b | `structuredRows` name fix | Done | Locally tested; report 14 v2 needs live run | Deep unit test |
+| 5c | `04-inspect.sql` capture section | Done | Locally tested | `permit-repo-live-test-sql.test.js` |
+| 4/5b | Tasks tab shows workflows; content pills; diagnostics admin-only | Done | Locally tested; NOT deployed | `PermitQueueViews.test.tsx` |
+| 6c | Pipeline triggered when no completed run for the hash | Done | Locally tested; agents off | e2e |
+| 6d | Comment refresh keying (`_shared/portalCommentRefresh.ts`) | Done | Locally tested; NOT deployed | 6-row shape test |
+| Live | Full-capture live test | Prepared only | — | HANDOFF "Full-capture live test"; approvals A-M, A-S (maybe), A-R, later agents |
+
 ## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
 | Step | Status | Evidence |
 |---|---|---|
