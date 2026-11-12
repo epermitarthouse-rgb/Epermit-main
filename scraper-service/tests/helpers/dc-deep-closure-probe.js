@@ -87,7 +87,9 @@ async function syncScenario() {
   await run("deep_no_project_id", () => d.syncPortalDataToSupabase(session(), [project], null, "u1", null, deepOpts));
   await run("deep_linked_project", () => d.syncPortalDataToSupabase(session(), [project], existing.id, "u1", null, deepOpts));
   await run("manual_default", () => d.syncPortalDataToSupabase(session(), [project], existing.id, "u1", null));
-  return { keys: Object.keys(d).sort(), results };
+  const miniReset = Object.fromEntries([[null, 10], [null, 9], [null, 20], [{ fileGate: () => ({ download: true }) }, 10], [{}, 20]]
+    .map(([deep, n], i) => [`${deep ? "deep" : "manual"}_${n}_${i}`, d.shouldMiniResetFilesPage(deep, n, "811481")]));
+  return { keys: Object.keys(d).sort(), results, miniReset };
 }
 
 /**

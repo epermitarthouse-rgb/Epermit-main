@@ -7309,6 +7309,16 @@ function escapeCSSId(str) {
 
 const MINI_RESET_INTERVAL = 10;
 
+/**
+ * Manual scrapes reopen the Files page every MINI_RESET_INTERVAL downloads. Deep runs never do: the reopen
+ * URL is the legacy WebUI Frame.aspx host derived from the page, which the deep guard aborts as off-host,
+ * so the reset would close the live Files page and lose every later file and folder (D-091).
+ */
+function shouldMiniResetFilesPage(deep, downloadableCount, fileId) {
+  if (deep) return false;
+  return downloadableCount > 0 && downloadableCount % MINI_RESET_INTERVAL === 0 && Boolean(fileId);
+}
+
 async function isPageAlive(pg) {
   try {
     await pg.evaluate(() => true);
@@ -9333,7 +9343,7 @@ async function extractFilesTab(
 
         if (file.id) totalDownloadableCount++;
 
-        if (totalDownloadableCount > 0 && totalDownloadableCount % MINI_RESET_INTERVAL === 0 && file.id) {
+        if (shouldMiniResetFilesPage(deep, totalDownloadableCount, file.id)) {
           console.log(`       🔄 Mini-reset after ${totalDownloadableCount} total downloads to free memory...`);
           try {
             const oldPage = page;
@@ -14257,6 +14267,7 @@ app.post("/api/filing/reauth", async (req, res) => {
       hashPortalData,
       stripPortalSyncTransientFields,
       downloadProjectDoxFile,
+      shouldMiniResetFilesPage,
       reinitializeBrowser,
     },
     arlingtonWorker: startArlingtonDurableWorkerLoop({

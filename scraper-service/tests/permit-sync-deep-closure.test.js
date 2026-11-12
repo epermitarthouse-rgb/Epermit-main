@@ -60,8 +60,10 @@ test("deep portal sync writes only to an existing linked project and never re-po
   assert.deepEqual(r.keys, [
     "DEFAULT_DASHBOARD_URL", "TAB_DEFS", "collectDcPlanReviewDashboardAllPages", "collectDcPlanReviewDashboardProjects",
     "deriveWebUiBase", "downloadProjectDoxFile", "hashPortalData", "openDcPlanReviewProjectPopup", "performLogin",
-    "reinitializeBrowser", "scrapeAll", "stripPortalSyncTransientFields", "supabase", "syncPortalDataToSupabase",
+    "reinitializeBrowser", "scrapeAll", "shouldMiniResetFilesPage", "stripPortalSyncTransientFields", "supabase", "syncPortalDataToSupabase",
   ]);
+  assert.deepEqual(r.miniReset, { manual_10_0: true, manual_9_1: false, manual_20_2: true, deep_10_3: false, deep_20_4: false },
+    "manual scrapes keep the every-10 Files page reset; deep runs never close the live Files page (D-091)");
   const { deep_missing_project: missing, deep_no_project_id: noId, deep_linked_project: linked, manual_default: manual } = r.results;
   assert.equal(missing.ok, false, "no linked row: the sync fails instead of creating a project");
   assert.deepEqual(missing.requests.map((q) => q.method), ["GET"], "no permit_number lookup, no insert");
