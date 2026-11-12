@@ -100,20 +100,20 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | 3b | Deep download route passes on with `route.fallback` (guard sees every request) | Done | Locally tested | Real-Chromium closure probe; fails with `route.continue` |
 | 3c | `reinitializeBrowser` refused in deep sessions → `session_ended` | Done | Locally tested | Closure probe + e2e |
 | 3d | Lease heartbeat inside the deep pass; lost lease cancels the scrape | Done | Locally tested | e2e (`lease_lost`, beats during the pass) |
-| 1a/1b | Guard identity exemption for report params (D-081) | Done | Locally tested; needs live verification | Safety tests (report 4 + export pass; denied params/paths/POST still refused); e2e |
-| 1d/3a | Attempts + back-off + attempt cap (D-080), migration `20261112100000` | Done | Locally tested; migration NOT applied (A-M) | Chain + rollback test; e2e retries for files and reports |
-| 2b | Per-file limit, `deferred_oversize` (D-083) | Done | Locally tested | e2e; storage global limit unknown (HANDOFF) |
-| 2c | View-only files via the viewer, private bucket only (D-082) | Done | Locally tested; needs live verification | e2e with `account_download=false` |
-| 2d/3f | Originals first, provenance, body validation (D-084) | Done | Locally tested; needs live verification | e2e (HTML/truncated rejected, exact original stored) |
-| 3e | No orphan report uploads (D-087) | Done | Locally tested | e2e (crash mid-reports, forced re-scrape) |
-| 5a | `completed_with_warnings` + `deep_warnings` (D-086) | Done | Locally tested | Worker unit + e2e; admin jobs table shows reasons |
-| 2e | Capture-hash re-sync, hash kept (D-085) | Done | Locally tested | e2e |
-| 6b | `structuredRows` name fix | Done | Locally tested; report 14 v2 needs live run | Deep unit test |
-| 5c | `04-inspect.sql` capture section | Done | Locally tested | `permit-repo-live-test-sql.test.js` |
-| 4/5b | Tasks tab shows workflows; content pills; diagnostics admin-only | Done | Locally tested; NOT deployed | `PermitQueueViews.test.tsx` |
-| 6c | Pipeline triggered when no completed run for the hash | Done | Locally tested; agents off | e2e |
-| 6d | Comment refresh keying (`_shared/portalCommentRefresh.ts`) | Done | Locally tested; NOT deployed | 6-row shape test |
-| Live | Full-capture live test | Prepared only | — | HANDOFF "Full-capture live test"; approvals A-M, A-S (maybe), A-R, later agents |
+| 1a/1b | Guard identity exemption for report params (D-081) | Done | **Live verified** (report 4 captured; no new guard_denied on job `095d5d6f`) | Safety tests + live job |
+| 1d/3a | Attempts + back-off + attempt cap (D-080), migration `20261112100000` | Done | **Applied to production** (history 25→26); live retries seen (attempts 1→2) | `11-apply-capture-retry.sh`; rerun job `74af8d1d` |
+| 2b | Per-file limit, `deferred_oversize` (D-083) | Done | Locally tested; live used 200 MiB / 500 MB project limit | No `deferred_oversize` rows this run |
+| 2c | View-only files via the viewer, private bucket only (D-082) | Done | **Live failed** | 33 Drawings `failed`/`viewer`/`download_failed`; 0 stored via viewer |
+| 2d/3f | Originals first, provenance, body validation (D-084) | Done | Not exercised live (0 new file stores) | Prior 9 stored still null provenance columns |
+| 3e | No orphan report uploads (D-087) | Done | Live: `report_objects_removed` 6; orphans 0 after | Job `095d5d6f` |
+| 5a | `completed_with_warnings` + `deep_warnings` (D-086) | Done | **Live verified** both jobs | Warnings: files_failed, files_pending, files_failed_open |
+| 2e | Capture-hash re-sync, hash kept (D-085) | Done | Live: hash changed only with report content (`5a283b80`→`13ac00b0`); rerun hash stable | ff193644 |
+| 6b | `structuredRows` name fix | Done | **Live verified** report 14 v2 has 6 rows | Job `095d5d6f` |
+| 5c | `04-inspect.sql` capture section | Done | Used live | |
+| 4/5b | Tasks tab shows workflows; content pills; diagnostics admin-only | Done | Locally tested; NOT deployed | |
+| 6c | Pipeline triggered when no completed run for the hash | Done | Agents off; pipeline runs stayed 0 | |
+| 6d | Comment refresh keying | Done | Fingerprint unchanged `b4a09c21…` | |
+| Live | Full-capture live test | **Partial pass** | Reports 5/5; files 9/72 stored | HANDOFF "Full-capture live test"; crash fix `ffec70b`; 27 permitted never attempted |
 
 ## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
 | Step | Status | Evidence |
