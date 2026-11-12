@@ -5,11 +5,34 @@ SELECT json_build_object(
   'documents', (SELECT json_object_agg(download_status, n) FROM (
       SELECT download_status, count(*) AS n FROM public.permit_documents
       WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' GROUP BY download_status) d),
+  -- D-080..D-084: how each file was (or will be) captured. 'open' = every file not stored yet, with attempts.
+  'capture', (SELECT json_build_object(
+      'by_status_and_path', (SELECT json_object_agg(k, n) FROM (
+          SELECT download_status || '/' || coalesce(capture_access_path, CASE WHEN download_permitted THEN 'download' WHEN download_permitted = false THEN 'viewer' ELSE 'unknown' END) AS k,
+                 count(*) AS n FROM public.permit_documents
+          WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND removed_at IS NULL GROUP BY 1) s),
+      'viewer_eligible', (SELECT count(*) FROM public.permit_documents
+          WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND removed_at IS NULL AND download_permitted = false),
+      'stored_original', (SELECT count(*) FROM public.permit_documents
+          WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND download_status = 'stored' AND capture_is_rendition = false),
+      'stored_rendition', (SELECT count(*) FROM public.permit_documents
+          WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND download_status = 'stored' AND capture_is_rendition = true),
+      'size_matches_portal', (SELECT json_object_agg(coalesce(size_matches_portal::text, 'null'), n) FROM (
+          SELECT size_matches_portal, count(*) AS n FROM public.permit_documents
+          WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND download_status = 'stored' GROUP BY 1) m),
+      'open', (SELECT json_agg(json_build_object('file_id', portal_file_id, 'status', download_status, 'permitted', download_permitted,
+                                                 'portal_bytes', size_bytes, 'attempts', capture_attempts, 'next_attempt_at', capture_next_attempt_at,
+                                                 'error', left(download_error, 160)) ORDER BY size_bytes DESC NULLS LAST)
+               FROM public.permit_documents
+               WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND removed_at IS NULL AND download_status <> 'stored'))),
   'stored_files', (SELECT json_agg(json_build_object('file_id', portal_file_id, 'folder', folder_name, 'path', storage_path,
-                                                     'bytes', stored_size_bytes, 'sha256', left(sha256, 12), 'run', download_run_id))
+                                                     'bytes', stored_size_bytes, 'portal_bytes', size_bytes, 'size_match', size_matches_portal,
+                                                     'path_kind', capture_access_path, 'source', capture_source_endpoint, 'rendition', capture_is_rendition,
+                                                     'sha256', left(sha256, 12), 'run', download_run_id))
                    FROM public.permit_documents
-                   WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND download_status IN ('stored', 'failed')),
+                   WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41' AND download_status = 'stored'),
   'reports', (SELECT json_agg(json_build_object('key', report_key, 'status', content_status, 'error', left(content_error, 160),
+                                                'attempts', content_attempts, 'next_attempt_at', content_next_attempt_at,
                                                 'captured_at', content_captured_at) ORDER BY report_key)
               FROM public.permit_reports WHERE permit_id = '06fa082e-b942-4b54-b448-a1527f58df41'),
   'report_versions', (SELECT json_agg(json_build_object('key', report_key, 'version', version, 'pdf', pdf_storage_path,
@@ -47,7 +70,8 @@ SELECT json_build_object(
                           OR e.data ->> 'error_code' = 'safety_violation')),
   'deep_jobs', (SELECT json_agg(json_build_object('job', id, 'status', status, 'error_code', error_code, 'last_error', left(last_error, 300),
                                                   'created_at', created_at, 'completed_at', completed_at,
-                                                  'deep', metrics -> 'deep', 'changes', metrics -> 'changes') ORDER BY created_at)
+                                                  'deep', metrics -> 'deep', 'deep_warnings', metrics -> 'deep_warnings',
+                                                  'changes', metrics -> 'changes') ORDER BY created_at)
                 FROM public.permit_sync_jobs
                 WHERE credential_id = 'de8592f9-69fc-4c71-8544-cb22bbbd5813' AND worker_mode = 'deep')
 ) AS inspect;

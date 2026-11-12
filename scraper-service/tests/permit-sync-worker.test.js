@@ -227,3 +227,11 @@ test("supervised mode (once): one claim attempt, no sleep, no second claim after
   assert.equal(claims, 2, "the retry is left for a later, approved run");
   assert.equal(slept, 0);
 });
+
+test("D-086: deep warnings list only open or failed deep items; a clean pass has none", () => {
+  const { deepWarnings, DEEP_WARNING_KEYS } = require("../permit-sync/core/worker");
+  assert.deepEqual(deepWarnings(undefined), []);
+  assert.deepEqual(deepWarnings({ files_downloaded: 3, reports_captured: 5, files_capped: 2 }), [], "caps alone are not warnings; the pending files they leave are");
+  assert.deepEqual(deepWarnings({ files_pending: 1, reports_guard_denied: 1, files_failed: 0 }), ["reports_guard_denied", "files_pending"]);
+  assert.deepEqual([...DEEP_WARNING_KEYS], ["reports_failed", "files_failed", "reports_guard_denied", "files_pending", "files_deferred_oversize", "files_failed_open", "reports_open"]);
+});

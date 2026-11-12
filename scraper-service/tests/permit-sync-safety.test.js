@@ -320,13 +320,12 @@ describe("D-079 report pre-check leaves the guard unchanged", () => {
     assert.equal(json.length, safety.DENY_PATTERNS.length);
   });
 
-  it("a report viewer request the browser makes outside the pre-check is still a violation in deep mode", () => {
-    const guard = safety.createRunGuard({ mode: "deep" });
+  it("json mode still refuses the report 4 viewer URL (the D-081 exemption is deep-only)", () => {
+    const guard = safety.createRunGuard({ mode: "json" });
     const d = routeReadRequest({ method: "GET", url: report4, resourceType: "document" }, guard);
     assert.equal(d.action, "abort");
     assert.equal(d.violation, true);
     assert.equal(d.rule, "deny_pattern");
-    assert.equal(guard.shouldAbort(), true);
   });
 
   it("mutations still abort in deep mode", () => {
@@ -341,5 +340,55 @@ describe("D-079 report pre-check leaves the guard unchanged", () => {
       assert.equal(d.violation, true, url);
     }
     assert.equal(routeReadRequest({ method: "POST", url: "https://session.planreview.dob.dc.gov/Project/SaveSettings", resourceType: "xhr" }, guard).violation, true);
+  });
+});
+
+describe("D-081 report-identity values are not deny-checked (deep mode)", () => {
+  const safety = require("../permit-sync/core/safety");
+  const { routeReadRequest } = require("../permit-sync/adapters/dc-projectdox/live-transport");
+  const SESSION = "https://session.planreview.dob.dc.gov";
+  const report4 = `${SESSION}/WebForms/ReportViewer.aspx?ReportID=4&ReportPath=/WashingtonDCProd/ProjectDox/Current%20Project%20-%20All%20Uploaded%20Files%20with%20Sheet%20Sizes&DataSourceName=DataSource1&ProjectID=6364&Timezone=`;
+  const exportUrl = `${SESSION}/Reserved.ReportViewerWebControl.axd?ReportSession=abc&Culture=1033&CultureOverrides=True&UICulture=1033&UICultureOverrides=True&ReportStack=1&ControlID=ctl&OpType=Export&FileName=Current+Project+-+All+Uploaded+Files+with+Sheet+Sizes&ContentDisposition=OnlyHtmlInline&Format=PDF`;
+
+  it("report 4's viewer URL and an export URL whose FileName says Uploaded pass", () => {
+    const guard = safety.createRunGuard({ mode: "deep" });
+    for (const url of [report4, exportUrl]) {
+      const v = guard.checkRequest("GET", url);
+      assert.equal(v.allowed, true, url);
+      const d = routeReadRequest({ method: "GET", url, resourceType: "document" }, guard);
+      assert.equal(d.action, "continue", url);
+      assert.equal(d.violation, false, url);
+    }
+    assert.equal(guard.shouldAbort(), false);
+    assert.equal(safety.evaluateRequest({ method: "GET", url: report4.replace("ReportPath=", "reportpath="), mode: "deep" }).allowed, true, "parameter names match case-insensitively");
+  });
+
+  it("an Upload path, a task or upload parameter on the same pages, and a POST mutation are still denied", () => {
+    const denied = [
+      ["GET", `${SESSION}/File/Upload?ProjectID=6364`],
+      ["GET", `${SESSION}/WebForms/Upload/ReportViewer.aspx?ReportID=4`],
+      ["GET", `${SESSION}/WebForms/ReportViewer.aspx?ReportID=4&ReportPath=x&action=AcceptTask`],
+      ["GET", `${SESSION}/WebForms/ReportViewer.aspx?ReportID=4&ReportPath=x&next=%2FFile%2FUpload`],
+      ["GET", `${SESSION}/Reserved.ReportViewerWebControl.axd?OpType=Export&FileName=x&target=Upload`],
+      ["GET", `${SESSION}/Reserved.ReportViewerWebControl.axd?OpType=Export&FileName=x&cmd=Log+Out`],
+      ["GET", `${SESSION}/Project/Index?ProjectID=6364&ReportPath=Uploaded`],
+      ["GET", `https://washington-dc-us-projectdoxwebui.avolvecloud.com/WebForms/ReportViewer.aspx?ReportPath=Uploaded`],
+      ["POST", report4],
+      ["POST", `${SESSION}/Workflow/AcceptTask?taskId=1`],
+    ];
+    for (const [method, url] of denied) {
+      const guard = safety.createRunGuard({ mode: "deep" });
+      const d = routeReadRequest({ method, url, resourceType: "xhr" }, guard);
+      assert.equal(d.action, "abort", `${method} ${url}`);
+      assert.equal(d.violation, true, `${method} ${url}`);
+      assert.equal(d.rule, "deny_pattern", `${method} ${url}`);
+    }
+  });
+
+  it("HEAD gets the exemption, other methods never do", () => {
+    assert.equal(safety.evaluateRequest({ method: "HEAD", url: report4, mode: "deep" }).allowed, true);
+    for (const m of ["POST", "PUT", "PATCH", "DELETE"]) {
+      assert.equal(safety.evaluateRequest({ method: m, url: report4, mode: "deep" }).rule, "deny_pattern", m);
+    }
   });
 });

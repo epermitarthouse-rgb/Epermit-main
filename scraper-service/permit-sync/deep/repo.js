@@ -35,10 +35,10 @@ function supabaseDeepRepo(client) {
   };
   return {
     documents: (permitId) => rows(
-      client.from("permit_documents").select("id, portal_file_id, file_name, size_bytes, download_permitted, download_status, storage_path, sha256").eq("permit_id", permitId).is("removed_at", null),
+      client.from("permit_documents").select("id, portal_file_id, file_name, size_bytes, download_permitted, download_status, storage_path, sha256, capture_attempts, capture_next_attempt_at").eq("permit_id", permitId).is("removed_at", null),
       "permit_documents"),
     reports: (permitId) => rows(
-      client.from("permit_reports").select("id, report_key, name, content_status").eq("permit_id", permitId).is("removed_at", null),
+      client.from("permit_reports").select("id, report_key, name, content_status, latest_content_id, content_attempts, content_next_attempt_at").eq("permit_id", permitId).is("removed_at", null),
       "permit_reports"),
     async deepState(permitId) {
       const r = await rows(client.from("permit_deep_state").select("section_hashes").eq("permit_id", permitId).limit(1), "permit_deep_state");
@@ -48,15 +48,31 @@ function supabaseDeepRepo(client) {
       const l = await rows(client.from("project_permits").select("project_id").eq("permit_id", permitId), "project_permits");
       if (!l.length) return [];
       const p = await rows(client.from("projects").select("id, user_id, permit_number, portal_data_hash, portal_data->permitRepositorySync").in("id", l.map((x) => x.project_id)), "projects");
-      return p.map((x) => ({ projectId: x.id, ownerUserId: x.user_id, permitNumber: x.permit_number, portalDataHash: x.portal_data_hash, syncedHashes: (x.permitRepositorySync && x.permitRepositorySync.section_hashes) || null }));
+      return p.map((x) => ({
+        projectId: x.id, ownerUserId: x.user_id, permitNumber: x.permit_number, portalDataHash: x.portal_data_hash,
+        syncedHashes: (x.permitRepositorySync && x.permitRepositorySync.section_hashes) || null,
+        captureHash: (x.permitRepositorySync && x.permitRepositorySync.capture_hash) || null,
+      }));
+    },
+    /** True when a report content version references this private-bucket object (it must then be kept). */
+    async reportObjectReferenced(objectPath) {
+      const r = await rows(
+        client.from("permit_report_contents").select("id").or(`pdf_storage_path.eq."${objectPath}",excel_storage_path.eq."${objectPath}"`).limit(1),
+        "permit_report_contents");
+      return r.length > 0;
     },
     async projectHash(projectId) {
       const r = await rows(client.from("projects").select("portal_data_hash").eq("id", projectId).limit(1), "projects");
       return r[0] ? r[0].portal_data_hash : null;
     },
-    recordDocument: (a) => rpc("record_permit_document_capture", {
-      p_document_id: a.documentId, p_status: a.status, p_storage_path: a.storagePath || null, p_sha256: a.sha256 || null,
-      p_size_bytes: a.size ?? null, p_content_type: a.contentType || null, p_error: a.error || null, p_run_id: a.runId || null,
+    /** record_permit_document_capture_v2 (20261112100000): stored | failed | deferred_oversize, with access path and provenance. */
+    recordDocument: (a) => rpc("record_permit_document_capture_v2", {
+      p_document_id: a.documentId,
+      p_capture: {
+        status: a.status, access_path: a.accessPath, storage_path: a.storagePath || null, sha256: a.sha256 || null,
+        size_bytes: a.size ?? null, content_type: a.contentType || null, error: a.error || null, run_id: a.runId || null,
+        source_endpoint: a.sourceEndpoint || null, is_rendition: a.isRendition ?? null, size_matches_portal: a.sizeMatchesPortal ?? null,
+      },
     }),
     recordReport: (permitId, reportKey, content, runId) => rpc("record_permit_report_content", { p_permit_id: permitId, p_report_key: reportKey, p_content: content, p_run_id: runId || null }),
     recordReportFailure: (permitId, reportKey, error) => rpc("record_permit_report_failure", { p_permit_id: permitId, p_report_key: reportKey, p_error: String(error || "failed").slice(0, 300) }),
@@ -72,6 +88,11 @@ function supabaseDeepStorage(client, bucket = BUCKET) {
       const { error } = await client.storage.from(bucket).upload(objectPath, buf, { contentType, upsert: true });
       if (error) throw new Error(`storage upload: ${error.message}`);
       return { bucket, path: objectPath, sha256, size, contentType };
+    },
+    /** Removes an object this pass uploaded and nothing references (report renders, D-087). */
+    async remove(objectPath) {
+      const { error } = await client.storage.from(bucket).remove([objectPath]);
+      if (error) throw new Error(`storage remove: ${error.message}`);
     },
   };
 }

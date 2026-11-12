@@ -74,6 +74,25 @@ test("live-test SQL: link, deep request (scoped, capped), cancel and unlink work
   assert.equal(inspect2.deep_jobs[0].error_code, "safety_violation");
   assert.match(inspect2.deep_jobs[0].last_error, /^portal request refused/);
 
+  // 5c: the capture section shows stored originals / renditions, viewer-eligible files and every open item with attempts.
+  const doc = (id, permitted, status, extra = "") => h.db.query(
+    `INSERT INTO permit_documents (permit_id, portal_file_id, file_name, download_permitted, download_status, size_bytes${extra ? ", " + extra.split("=")[0] : ""})
+     VALUES ($1, $2, $2 || '.pdf', $3, $4, 1000${extra ? ", " + extra.split("=")[1] : ""})`, [PERMIT, id, permitted, status]);
+  await doc("f1", true, "not_requested");
+  await doc("f2", false, "not_permitted");
+  await doc("f3", false, "deferred_oversize");
+  await doc("f4", true, "failed", "capture_attempts=2");
+  await h.db.query(`UPDATE permit_documents SET download_status = 'stored', storage_path = $1 || '/files/f5.pdf', sha256 = 'abc', stored_size_bytes = 1000,
+                      capture_access_path = 'download', capture_is_rendition = false, size_matches_portal = true, capture_source_endpoint = 'retrieve_file_original'
+                    WHERE portal_file_id = 'f1'`, [PERMIT]);
+  const cap = (await h.db.query(sql("04-inspect.sql"))).rows[0].inspect.capture;
+  assert.deepEqual(cap.by_status_and_path, { "stored/download": 1, "not_permitted/viewer": 1, "deferred_oversize/viewer": 1, "failed/download": 1 });
+  assert.equal(cap.viewer_eligible, 2);
+  assert.equal(cap.stored_original, 1);
+  assert.equal(cap.stored_rendition, 0);
+  assert.deepEqual(cap.size_matches_portal, { true: 1 });
+  assert.deepEqual(cap.open.map((o) => [o.file_id, o.status, o.attempts]).sort(), [["f2", "not_permitted", 0], ["f3", "deferred_oversize", 0], ["f4", "failed", 2]]);
+
   await h.db.exec(sql("02-cancel-deep-job.sql"));
   assert.equal((await h.db.query(`SELECT status FROM permit_sync_jobs WHERE id = $1`, [job.id])).rows[0].status, "cancelled");
   assert.equal(await pgliteWorkerRpc(h, { mode: "deep" }).claim("local", 300), null, "a cancelled job is not claimed");

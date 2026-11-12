@@ -454,6 +454,8 @@ app.get("/api/health/playwright", async (req, res) => {
 const MIN_FILE_SIZE = 1024;
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const MAX_SCRAPE_CUMULATIVE_SIZE = 1000 * 1024 * 1024;
+const MANUAL_MAX_FILE_SIZE = MAX_FILE_SIZE;
+const MANUAL_MAX_SCRAPE_CUMULATIVE_SIZE = MAX_SCRAPE_CUMULATIVE_SIZE;
 const MAX_DOWNLOADS_DIR_SIZE = 1 * 1024 * 1024 * 1024;
 
 function getDownloadsDir() {
@@ -3830,9 +3832,18 @@ async function syncPortalDataToSupabase(
           // bookkeeping key is refreshed when it differs.
           const bookkeeping = currentData.permitRepositorySync;
           const touch = { last_checked_at: new Date().toISOString() };
+          const existingBookkeeping = existingRow.portal_data?.permitRepositorySync ?? null;
           if (
             bookkeeping &&
-            stableStringify(bookkeeping) !== stableStringify(existingRow.portal_data?.permitRepositorySync ?? null)
+            bookkeeping.capture_hash &&
+            bookkeeping.capture_hash !== (existingBookkeeping && existingBookkeeping.capture_hash)
+          ) {
+            // D-085: newly stored files or reports change storage refs only (not the content hash); the merged
+            // tabs are written so the project shows them, and the hash stays, so no pipeline trigger fires.
+            touch.portal_data = canonicalApply.portalData;
+          } else if (
+            bookkeeping &&
+            stableStringify(bookkeeping) !== stableStringify(existingBookkeeping)
           ) {
             touch.portal_data = { ...existingRow.portal_data, permitRepositorySync: bookkeeping };
           }
@@ -9353,7 +9364,7 @@ async function extractFilesTab(
           console.log(`       📥 [${i + 1}/${filesFound.length}] Downloading via FileHandler: ${safeName}`);
           try {
             dlResult = await downloadProjectDoxFile(page, context, file.id, safeName, webUiBase, session, supabaseProjectId, {
-              preferViewerRuntime: /drawing/i.test(folderName || ""),
+              preferViewerRuntime: dcDeepOptions.prefersOriginal(deep) || /drawing/i.test(folderName || ""),
               ...(deep && { deep }),
             });
             if (dlResult.success) {
@@ -9383,7 +9394,7 @@ async function extractFilesTab(
                 console.log(`       ✅ Recovered, retrying file ${safeName}...`);
                 try {
                   const retryResult = await downloadProjectDoxFile(page, context, file.id, safeName, webUiBase, session, supabaseProjectId, {
-                    preferViewerRuntime: /drawing/i.test(folderName || ""),
+                    preferViewerRuntime: dcDeepOptions.prefersOriginal(deep) || /drawing/i.test(folderName || ""),
                     ...(deep && { deep }),
                   });
                   if (retryResult.success) {
@@ -10539,6 +10550,10 @@ async function downloadMontgomeryProjectDoxFile(
 let _downloadProjectDoxFileCallSeq = 0;
 
 async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase, session, projectId, options = {}) {
+  // Deep runs: their own per-file max, and the runner's job budget instead of the cumulative cap (D-083).
+  const MAX_FILE_SIZE = dcDeepOptions.maxFileBytes(options && options.deep, MANUAL_MAX_FILE_SIZE);
+  const MAX_SCRAPE_CUMULATIVE_SIZE = options && options.deep ? Infinity : MANUAL_MAX_SCRAPE_CUMULATIVE_SIZE;
+  const deepPrefersOriginal = dcDeepOptions.prefersOriginal(options && options.deep);
   const downloadDir = getDownloadsDir();
   const adapter = String(options?.adapter || "").trim().toLowerCase();
   const preferDirectRetrieve = options?.preferDirectRetrieve === true;
@@ -10675,7 +10690,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       // D-058: deep runs store every body in the private permit-documents bucket (no public URL, no aliasing).
       let storageRef = null;
       try {
-        storageRef = await options.deep.storeFile({ localPath: filePath, fileId: String(fileId), fileName });
+        storageRef = await options.deep.storeFile({ localPath: filePath, fileId: String(fileId), fileName, downloadUrl: meta.downloadUrl || null });
       } catch (err) {
         console.log(`      ⚠️ Private storage failed for file ID ${fileId}: ${err?.message || err}`);
       }
@@ -10942,6 +10957,37 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     console.log(`${logPrefix} portal session cookie present for RetrieveFile`);
 
     const retrieveUrl = `${webApiOrigin}/File/RetrieveFile?convertToPDF=true&inline=true&blackCADBackground=false&fileID=${fileConfig.fileID}`;
+    if (deepPrefersOriginal) {
+      // D-084: deep runs store the original file; the PDF rendition below is the labelled fallback.
+      const originalUrl = `${webApiOrigin}/File/RetrieveFile?inline=true&fileID=${fileConfig.fileID}`;
+      try {
+        const original = await ctx.request.get(originalUrl, {
+          timeout: MONTGOMERY_RETRIEVE_TIMEOUT_MS,
+          headers: { sessionid: sessionIdVal, Referer: `${webUiOrigin}/`, Origin: webUiOrigin, "X-Requested-With": "XMLHttpRequest" },
+        });
+        const originalCt = original.headers()["content-type"] || "";
+        if (original.ok() && !isHtmlLikeContentType(originalCt)) {
+          const buffer = await original.body();
+          const wantsPdf = /\.pdf$/i.test(String(fileConfig.fileName || metadata?.fileName || fileName || ""));
+          if (buffer && buffer.length >= MIN_FILE_SIZE && (!wantsPdf || hasValidPdfHeader(buffer))) {
+            return {
+              viewerIndex: 0,
+              viewersCount: 1,
+              filename: fileConfig.fileName || metadata?.fileName || "",
+              fileType: wantsPdf ? "pdf" : "original",
+              pages: 0,
+              fileSize: buffer.length,
+              downloadLink: originalUrl,
+              buffer,
+            };
+          }
+        }
+        console.log(`${logPrefix} original RetrieveFile unusable fileID=${fileConfig.fileID} HTTP ${original.status()}; using the PDF rendition`);
+      } catch (origErr) {
+        if (origErr && origErr.name === "SafetyViolationError") throw origErr;
+        console.log(`${logPrefix} original RetrieveFile failed fileID=${fileConfig.fileID}; using the PDF rendition`);
+      }
+    }
     console.log(
       `${logPrefix} RetrieveFile start fileID=${fileConfig.fileID} timeoutMs=${MONTGOMERY_RETRIEVE_TIMEOUT_MS}`,
     );
@@ -11969,6 +12015,8 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
             `${webApiOrigin}/File/RetrieveFile?inline=true&fileID=${encodeURIComponent(String(fileId))}&${cacheBuster}`,
             `${webApiOrigin}/File/RetrieveFile?fileID=${encodeURIComponent(String(fileId))}&${cacheBuster}`,
           ];
+          // D-084: deep runs try the original file before the PDF rendition.
+          if (deepPrefersOriginal) waRetrieveUrls.push(waRetrieveUrls.shift());
           try {
             const allCookies = await context.cookies([originNorm, webApiOrigin]);
             const sessionCookie = allCookies.find((c) => c.name === "SessionID");

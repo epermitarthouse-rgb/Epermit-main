@@ -185,8 +185,9 @@ async function main(env = process.env) {
     });
   }
   const scope = workerScope(env);
-  const limits = require("./deep/policy").downloadLimits(env);
-  console.log(`[permit-sync] mode=${deep ? "deep" : "json"} agent_trigger=${pipeline ? "on" : "off"} scope=${scope ? scope.join(",") : "all"}${deep ? ` max_files=${limits.maxFiles} max_bytes=${limits.maxBytes}` : ""}`);
+  const deepPolicy = require("./deep/policy");
+  const limits = { ...deepPolicy.downloadLimits(env), ...deepPolicy.captureLimits(env) };
+  console.log(`[permit-sync] mode=${deep ? "deep" : "json"} agent_trigger=${pipeline ? "on" : "off"} scope=${scope ? scope.join(",") : "all"}${deep ? ` max_files=${limits.maxFiles} max_bytes=${limits.maxBytes} max_file_bytes=${limits.maxFileBytes} max_attempts=${limits.maxAttempts}` : ""}`);
   await runLoop({
     rpc: supabaseWorkerRpc(supabase, { mode: deep ? "deep" : "json" }),
     scope,

@@ -203,15 +203,46 @@ function parseUrl(url) {
  * @param {{ method?: string, url: string, hosts?: string[], allowlist?: Array<{name:string,pattern:RegExp,body:boolean}>, allowDownloads?: boolean, mode?: "json"|"deep" }} input
  * @returns {{ allowed: boolean, rule: string, reason: string, body: boolean }}
  */
-/** The deny pattern a URL matches, or null. Checked before the method rule so a denied POST still fails the job. */
-function matchingDenyPattern(url, mode) {
-  const raw = String(url || "");
-  const decoded = decodeURIComponentSafe(raw);
-  return modePolicy(mode).deny.find((p) => p.test(raw) || p.test(decoded)) || null;
+/**
+ * Report-identity query values (D-081). They name a report or an export file, e.g. a report titled
+ * "Uploaded Documents", and say nothing about what the request does. Deep mode only, GET/HEAD only, and only
+ * on these exact paths on the DC portal hosts; the path and every other parameter are still checked.
+ */
+const REPORT_IDENTITY_PARAMS = Object.freeze([
+  { path: /^\/WebForms\/ReportViewer\.aspx$/i, params: Object.freeze(["reportpath", "reportid", "datasourcename"]) },
+  { path: /\/Reserved\.ReportViewerWebControl\.axd$/i, params: Object.freeze(["filename"]) },
+]);
+
+/** The URL with report-identity values blanked, or the URL unchanged when the exemption does not apply. */
+function screenReportIdentity(url, mode, method) {
+  if (mode !== "deep" || !ALLOWED_METHODS.includes(String(method || "GET").toUpperCase())) return url;
+  const u = parseUrl(url);
+  if (!u || u.protocol !== "https:" || !DC_PORTAL_HOSTS.includes(u.hostname.toLowerCase())) return url;
+  const rule = REPORT_IDENTITY_PARAMS.find((r) => r.path.test(u.pathname));
+  if (!rule) return url;
+  // Other parameters stay byte-identical so the deny check sees them exactly as sent.
+  const query = u.search.replace(/^\?/, "");
+  const screened = query
+    .split("&")
+    .map((pair) => {
+      const eq = pair.indexOf("=");
+      const key = decodeURIComponentSafe((eq < 0 ? pair : pair.slice(0, eq)).replace(/\+/g, " ")).trim().toLowerCase();
+      return rule.params.includes(key) ? `${eq < 0 ? pair : pair.slice(0, eq)}=` : pair;
+    })
+    .join("&");
+  return `${u.origin}${u.pathname}${screened ? `?${screened}` : ""}`;
 }
 
-function matchesDenyPattern(url, mode) {
-  return Boolean(matchingDenyPattern(url, mode));
+/** The deny pattern a URL matches, or null. Checked before the method rule so a denied POST still fails the job. */
+function matchingDenyPattern(url, mode, method) {
+  const raw = screenReportIdentity(String(url || ""), mode, method);
+  const decoded = decodeURIComponentSafe(raw);
+  const plusDecoded = decodeURIComponentSafe(raw.replace(/\+/g, " "));
+  return modePolicy(mode).deny.find((p) => p.test(raw) || p.test(decoded) || p.test(plusDecoded)) || null;
+}
+
+function matchesDenyPattern(url, mode, method) {
+  return Boolean(matchingDenyPattern(url, mode, method));
 }
 
 function evaluateRequest(input) {
@@ -223,7 +254,7 @@ function evaluateRequest(input) {
   const raw = String((input && input.url) || "");
   const u = parseUrl(raw);
 
-  const denied = matchingDenyPattern(raw, input && input.mode);
+  const denied = matchingDenyPattern(raw, input && input.mode, method);
   if (denied) {
     return deny("deny_pattern", `matches deny pattern ${denied}`);
   }

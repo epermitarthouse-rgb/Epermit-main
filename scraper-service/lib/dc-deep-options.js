@@ -13,6 +13,8 @@
  *   beforeReport({ reportName }) -> Promise<{ open: boolean, reason? }>,  // checked before a report is opened
  *   onReportEntry(entry) -> Promise<void>,         // each finished Reports-tab entry, recorded at once
  *   isProtectedPage(page) -> boolean,              // pages the pre-download sweep must not close
+ *   maxFileBytes: number,                          // per-file size limit; replaces the manual 100 MiB cap (D-083)
+ *   preferOriginal: boolean,                       // RetrieveFile without convertToPDF first (D-084)
  * }
  * storageRef = { bucket, path, sha256, size, contentType }
  */
@@ -74,7 +76,19 @@ async function reportFinished(deep, entry) {
   if (deep && typeof deep.onReportEntry === "function" && entry) await deep.onReportEntry(entry);
 }
 
+/** The deep run's per-file limit, or the manual limit when there is no deep run or no valid value. */
+function maxFileBytes(deep, manualLimit) {
+  const n = deep ? Number(deep.maxFileBytes) : NaN;
+  return Number.isInteger(n) && n > 0 ? n : manualLimit;
+}
+
+function prefersOriginal(deep) {
+  return Boolean(deep && deep.preferOriginal === true);
+}
+
 module.exports = {
+  maxFileBytes,
+  prefersOriginal,
   normalizeDeepOptions,
   fileGateDecision,
   gatedFileEntry,

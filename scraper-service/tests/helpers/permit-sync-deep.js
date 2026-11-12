@@ -42,16 +42,21 @@ async function createDeepDb() {
 function pgliteDeepRepo(h) {
   const q = async (sql, params) => (await h.db.query(sql, params)).rows;
   return {
-    documents: (permitId) => q(`SELECT id, portal_file_id, file_name, size_bytes, download_permitted, download_status, storage_path, sha256 FROM permit_documents WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
-    reports: (permitId) => q(`SELECT id, report_key, name, content_status FROM permit_reports WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
+    documents: (permitId) => q(`SELECT id, portal_file_id, file_name, size_bytes, download_permitted, download_status, storage_path, sha256, capture_attempts, capture_next_attempt_at FROM permit_documents WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
+    reports: (permitId) => q(`SELECT id, report_key, name, content_status, latest_content_id, content_attempts, content_next_attempt_at FROM permit_reports WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
     deepState: async (permitId) => ((await q(`SELECT section_hashes FROM permit_deep_state WHERE permit_id = $1`, [permitId]))[0] || {}).section_hashes || null,
     links: async (permitId) => (await q(
-      `SELECT p.id, p.user_id, p.permit_number, p.portal_data_hash, p.portal_data->'permitRepositorySync'->'section_hashes' AS synced
+      `SELECT p.id, p.user_id, p.permit_number, p.portal_data_hash, p.portal_data->'permitRepositorySync'->'section_hashes' AS synced,
+              p.portal_data->'permitRepositorySync'->>'capture_hash' AS capture
        FROM project_permits pp JOIN projects p ON p.id = pp.project_id WHERE pp.permit_id = $1`, [permitId],
-    )).map((x) => ({ projectId: x.id, ownerUserId: x.user_id, permitNumber: x.permit_number, portalDataHash: x.portal_data_hash, syncedHashes: x.synced || null })),
+    )).map((x) => ({ projectId: x.id, ownerUserId: x.user_id, permitNumber: x.permit_number, portalDataHash: x.portal_data_hash, syncedHashes: x.synced || null, captureHash: x.capture || null })),
     projectHash: async (projectId) => ((await q(`SELECT portal_data_hash FROM projects WHERE id = $1`, [projectId]))[0] || {}).portal_data_hash || null,
-    recordDocument: (a) => h.svc(`SELECT public.record_permit_document_capture($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [a.documentId, a.status, a.storagePath || null, a.sha256 || null, a.size ?? null, a.contentType || null, a.error || null, a.runId || null]),
+    reportObjectReferenced: async (p) => (await q(`SELECT 1 FROM permit_report_contents WHERE pdf_storage_path = $1 OR excel_storage_path = $1 LIMIT 1`, [p])).length > 0,
+    recordDocument: (a) => h.svc(`SELECT public.record_permit_document_capture_v2($1, $2::jsonb)`, [a.documentId, JSON.stringify({
+      status: a.status, access_path: a.accessPath, storage_path: a.storagePath || null, sha256: a.sha256 || null, size_bytes: a.size ?? null,
+      content_type: a.contentType || null, error: a.error || null, run_id: a.runId || null, source_endpoint: a.sourceEndpoint || null,
+      is_rendition: a.isRendition ?? null, size_matches_portal: a.sizeMatchesPortal ?? null,
+    })]),
     recordReport: (permitId, key, content, runId) => h.svc(`SELECT public.record_permit_report_content($1, $2, $3::jsonb, $4)`, [permitId, key, JSON.stringify(content), runId || null]),
     recordReportFailure: (permitId, key, error) => h.svc(`SELECT public.record_permit_report_failure($1, $2, $3)`, [permitId, key, error]),
     recordDeepPass: (permitId, hashes, runId) => h.svc(`SELECT public.record_permit_deep_pass($1, $2::jsonb, $3)`, [permitId, JSON.stringify(hashes), runId || null]),
@@ -63,12 +68,22 @@ function memoryStorage() {
   return {
     objects,
     puts: [],
+    removes: [],
     async put(objectPath, { buf, sha256, size }, contentType) {
       this.puts.push(objectPath);
       objects.set(objectPath, buf);
       return { bucket: "permit-documents", path: objectPath, sha256, size, contentType };
     },
+    async remove(objectPath) {
+      this.removes.push(objectPath);
+      objects.delete(objectPath);
+    },
   };
+}
+
+/** A minimal valid PDF body for a fake download. */
+function pdfBody(label) {
+  return `%PDF-1.4\n% ${label}\n%%EOF\n`;
 }
 
 const FILES = { "11105": [{ id: "700101", name: "A-101.pdf", status: "Approved" }, { id: "700102", name: "A-101.pdf", status: "Approved V2" }] };
@@ -81,7 +96,7 @@ const FILES = { "11105": [{ id: "700101", name: "A-101.pdf", status: "Approved" 
  */
 function fakeDcDeep(h, o = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dc-deep-"));
-  const calls = { scrapes: [], downloads: [], reportExports: 0, reportsOpened: [], reportsSkipped: [], syncs: [] };
+  const calls = { scrapes: [], downloads: [], gateReasons: [], reportExports: 0, reportsOpened: [], reportsSkipped: [], syncs: [], deepOptions: [] };
   const write = (name, body) => {
     const p = path.join(tmp, `${crypto.randomUUID()}_${name}`);
     fs.writeFileSync(p, body);
@@ -97,6 +112,7 @@ function fakeDcDeep(h, o = {}) {
       if (!session.dcReloginDisabled || session.portalSubtype !== "dc-planreview") throw new Error("session is not a deep DC session");
       const project = projects[0];
       calls.scrapes.push({ permit: project.projectNum, tabs: [...tabs] });
+      calls.deepOptions.push({ maxFileBytes: deepOptions.maxFileBytes, preferOriginal: deepOptions.preferOriginal });
       // Like the manual scraper: every scrape carries a new scrape time, signed URLs, temp paths and SSRS render time.
       const n = calls.scrapes.length;
       const data = { name: project.name, projectNum: project.projectNum, description: project.description, location: project.location, dashboardStatus: project.status, portalType: "projectdox", scrapedAt: new Date(Date.now() + n).toISOString(), tabs: {} };
@@ -111,9 +127,15 @@ function fakeDcDeep(h, o = {}) {
               continue;
             }
             calls.downloads.push(f.id);
-            if (o.onDownload) await o.onDownload(f, calls);
-            const ref = await deepOptions.storeFile({ localPath: write(f.name, `body-${f.id}`), fileId: f.id, fileName: f.name });
-            files.push({ name: f.name, fileId: f.id, viewUrl: `https://example.invalid/sign/${f.id}?token=t${n}`, downloadStatus: ref ? "success" : "failed", ...(ref ? { storageRef: ref } : {}) });
+            calls.gateReasons.push([f.id, gate ? gate.reason : null]);
+            if (o.onDownload) await o.onDownload(f, calls, session);
+            if (session.dcDeepSessionLost || session._cancelRequested) return { cancelled: true };
+            const body = o.fileBody ? o.fileBody(f, calls) : pdfBody(`body-${f.id}`);
+            const ref = await deepOptions.storeFile({ localPath: write(f.name, body), fileId: f.id, fileName: f.name, downloadUrl: o.downloadUrl ? o.downloadUrl(f) : null });
+            files.push({
+              name: f.name, fileId: f.id, folderName: "Approved Drawings", status: f.status, reviewedBy: f.reviewedBy, uploadedDate: f.uploadedDate,
+              commentCount: 0, comments: [], viewUrl: `https://example.invalid/sign/${f.id}?token=t${n}`, downloadStatus: ref ? "success" : "failed", ...(ref ? { storageRef: ref } : {}),
+            });
           }
           data.tabs.files = { keyValues: [], tables: [], links: [], folders: [{ name: "Approved Drawings", files }] };
         } else if (t === "reports" && o.reportsError) {
@@ -132,8 +154,13 @@ function fakeDcDeep(h, o = {}) {
             calls.reportExports += 1;
             calls.reportsOpened.push(r.name);
             if (o.onReportExport) await o.onReportExport(r, calls);
-            const ref = await deepOptions.storeReportArtifact({ localPath: write("r.pdf", `pdf ${r.name}`), kind: "pdf", reportName: r.name });
-            const entry = { fileName: r.name, text: `${r.name} for ${project.projectNum}\nGenerated:  11/11/2026 ${(n % 12) + 1}:0${n % 10} PM`, pages: 1, screenshot: `b64-${n}`, pdfPath: `/tmp/wa_report_${n}.pdf`, ...(ref ? { pdfStorageRef: ref } : {}) };
+            // Each render differs (SSRS stamps the render time), so each upload has a new body-sha path.
+            const ref = await deepOptions.storeReportArtifact({ localPath: write("r.pdf", `pdf ${r.name} render ${n}`), kind: "pdf", reportName: r.name });
+            const entry = { fileName: r.name, text: `${r.name} for ${project.projectNum}\nGenerated:  11/11/2026 ${(n % 12) + 1}:0${n % 10} PM`, pages: 1, screenshot: `b64-${n}`, pdfPath: `/tmp/wa_report_${n}.pdf`, ...(ref ? { pdfStorageRef: ref } : {}), ...(o.reportEntry ? o.reportEntry(r, n) : {}) };
+            if (o.reportFails && o.reportFails(r, calls)) {
+              entry.error = "export failed";
+              entry.text = "";
+            }
             pdfs.push(entry);
             await dcDeepOptions.reportFinished(deepOptions, entry);
           }
@@ -156,6 +183,14 @@ function fakeDcDeep(h, o = {}) {
       const merged = { ...(row.portal_data || {}), ...data, tabs: { ...((row.portal_data && row.portal_data.tabs) || {}), ...data.tabs } };
       const hash = portalContentHash(merged);
       if (row.portal_data_hash === hash || (row.portal_data && portalContentHash(row.portal_data) === hash)) {
+        const bk = data.permitRepositorySync || null;
+        const old = (row.portal_data && row.portal_data.permitRepositorySync) || null;
+        if (bk && bk.capture_hash && bk.capture_hash !== (old && old.capture_hash)) {
+          // D-085: storage refs changed; merged tabs written, hash kept.
+          calls.captureWrites = (calls.captureWrites || 0) + 1;
+          await h.db.query(`UPDATE projects SET portal_data = $2::jsonb WHERE id = $1`, [projectId, JSON.stringify(merged)]);
+          return true;
+        }
         await h.db.query(`UPDATE projects SET portal_data = jsonb_set(coalesce(portal_data, '{}'::jsonb), '{permitRepositorySync}', $2::jsonb) WHERE id = $1`, [projectId, JSON.stringify(data.permitRepositorySync || null)]);
         return true;
       }
@@ -184,4 +219,4 @@ function fakeDeepTransport(fixture) {
   };
 }
 
-module.exports = { createDeepDb, pgliteDeepRepo, memoryStorage, fakeDcDeep, fakeDeepTransport, FILES };
+module.exports = { createDeepDb, pgliteDeepRepo, memoryStorage, fakeDcDeep, fakeDeepTransport, FILES, pdfBody };

@@ -214,17 +214,23 @@ test("deepOptions: no gate means manual behaviour; gated entries keep the manual
   assert.equal(deepOpts.fileGateDecision(null, { id: "1" }), null);
   assert.equal(deepOpts.storesPrivately(null), false);
   assert.equal(deepOpts.isProtectedPage(null, {}), false);
+  const now = Date.parse("2026-11-12T12:00:00Z");
+  const later = "2026-11-12T13:00:00Z";
   const docs = [
     { portal_file_id: "1", download_permitted: true, download_status: "stored", storage_path: "p/files/1_a.pdf", sha256: "a".repeat(64) },
     { portal_file_id: "2", download_permitted: true, download_status: "not_requested" },
     { portal_file_id: "3", download_permitted: false, download_status: "not_permitted" },
-    { portal_file_id: "4", download_permitted: true, download_status: "failed" },
+    { portal_file_id: "4", download_permitted: true, download_status: "failed", capture_attempts: 1, capture_next_attempt_at: later },
+    { portal_file_id: "5", download_permitted: true, download_status: "failed", capture_attempts: 5, capture_next_attempt_at: null },
+    { portal_file_id: "6", download_permitted: null, download_status: "not_requested" },
+    { portal_file_id: "7", download_permitted: true, download_status: "failed", capture_attempts: 2, capture_next_attempt_at: "2026-11-12T11:00:00Z" },
   ];
-  const deep = { fileGate: policy.buildFileGate(docs) };
+  const deep = { fileGate: policy.buildFileGate(docs, { now }) };
   const d = (id) => deepOpts.fileGateDecision(deep, { id, name: "a.pdf" });
-  assert.deepEqual([d("1").download, d("2").download, d("3").download, d("4").download, d("9").download], [false, true, false, false, false]);
-  assert.deepEqual([d("1").reason, d("3").reason, d("4").reason, d("9").reason], ["already_stored", "not_permitted", "failed_earlier", "not_in_repository"]);
-  assert.equal(deepOpts.fileGateDecision({ fileGate: policy.buildFileGate(docs, { retryFailed: true }) }, { id: "4" }).download, true);
+  assert.deepEqual(["1", "2", "3", "4", "5", "6", "7", "9"].map((id) => d(id).download), [false, true, true, false, false, false, true, false]);
+  assert.deepEqual(["1", "3", "4", "5", "6", "7", "9"].map((id) => d(id).reason), ["already_stored", "pending", "retry_backoff", "retry_exhausted", "not_permitted", "retry", "not_in_repository"]);
+  assert.equal(deepOpts.fileGateDecision({ fileGate: policy.buildFileGate(docs, { now, filesChanged: true }) }, { id: "4" }).download, true, "a files change skips the back-off");
+  assert.equal(deepOpts.fileGateDecision({ fileGate: policy.buildFileGate(docs, { now, filesChanged: true }) }, { id: "5" }).download, false, "but never the attempt cap");
   const entry = deepOpts.gatedFileEntry({ id: "1", name: "a.pdf", status: "Approved" }, "Approved Drawings", d("1"));
   assert.deepEqual(entry.storageRef, { bucket: "permit-documents", path: "p/files/1_a.pdf", sha256: "a".repeat(64) });
   assert.equal(entry.downloadStatus, "stored");
@@ -243,9 +249,25 @@ test("change gate: first pass, unchanged permit, file and report triggers, linke
 
   const pending = policy.planDeepPass({ previousHashes: hashes, hashes, documents: [{ download_permitted: true, download_status: "not_requested" }], reports: captured });
   assert.deepEqual(pending.tabs, ["files"]);
-  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes, documents: [{ download_permitted: false, download_status: "not_permitted" }], reports: captured }).run, false);
-  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes, documents: [{ download_permitted: true, download_status: "failed" }], reports: captured }).run, false, "a failed file waits for a files change");
-  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes: { ...hashes, files: "f2" }, documents: [{ download_permitted: true, download_status: "failed" }], reports: captured }).tabs, ["files"]);
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, documents: [{ download_permitted: false, download_status: "not_permitted" }], reports: captured }).tabs, ["files"], "view-only files are fetched through the viewer (D-082)");
+  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes, documents: [{ download_permitted: null, download_status: "not_requested" }], reports: captured }).run, false, "unknown permission: never fetched");
+  const now = Date.parse("2026-11-12T12:00:00Z");
+  const backoff = [{ download_permitted: true, download_status: "failed", capture_attempts: 1, capture_next_attempt_at: "2026-11-12T13:00:00Z" }];
+  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes, documents: backoff, reports: captured, now }).run, false, "a failed file waits out its back-off");
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, documents: backoff, reports: captured, now: now + 2 * 3600e3 }).tabs, ["files"], "then it is retried on a later run");
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes: { ...hashes, files: "f2" }, documents: backoff, reports: captured, now }).tabs, ["files"], "a files change retries at once");
+  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes: { ...hashes, files: "f2" }, documents: [{ ...backoff[0], capture_attempts: 5 }], reports: captured, now }).run, false, "never past the attempt cap");
+  const big = policy.planDeepPass({ previousHashes: hashes, hashes, documents: [{ download_permitted: true, download_status: "not_requested", size_bytes: 300 * 1024 * 1024 }], reports: captured });
+  assert.equal(big.run, false, "an oversize file never forces a pass");
+  assert.equal(big.deferDocuments.length, 1, "it is recorded deferred_oversize instead");
+  const deferred = [{ download_permitted: true, download_status: "deferred_oversize", size_bytes: 300 * 1024 * 1024 }];
+  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes, documents: deferred, reports: captured }).run, false);
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, documents: deferred, reports: captured, limits: { maxFileBytes: 400 * 1024 * 1024 } }).tabs, ["files"], "fetched once the per-file limit allows it");
+  const failedReport = [{ content_status: "failed", content_attempts: 1, content_next_attempt_at: "2026-11-12T13:00:00Z" }];
+  assert.equal(policy.planDeepPass({ previousHashes: hashes, hashes, documents: stored, reports: failedReport, now }).run, false, "a failed report waits out its back-off");
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, documents: stored, reports: failedReport, now: now + 2 * 3600e3 }).tabs, ["reports"]);
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, documents: stored, reports: [{ content_status: "failed" }] }).tabs, ["reports"], "a failure recorded before attempts existed is due");
+  assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, links: [{ syncedHashes: hashes, captureHash: "old" }], documents: stored, reports: captured, captureHash: "new" }).tabs, ["files"], "a linked project missing newly stored files is refreshed (D-085)");
 
   assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes, documents: stored, reports: [{ content_status: "not_captured" }] }).tabs, ["reports"]);
   assert.deepEqual(policy.planDeepPass({ previousHashes: hashes, hashes: { ...hashes, reviews: "r2" }, documents: stored, reports: captured }).tabs, ["reports"], "reviews changed: re-export");
@@ -263,9 +285,12 @@ test("private paths follow D-058 and report content is versioned by text and row
   assert.equal(policy.documentPath(pid, "1", "../../etc/passwd"), `${pid}/files/1_etc_passwd`);
   assert.equal(policy.reportPath(pid, "123", "a".repeat(64), "excel"), `${pid}/reports/123/${"a".repeat(64)}.xlsx`);
   assert.throws(() => policy.reportPath(pid, "123", "nothex", "pdf"));
-  const a = policy.reportContent({ text: "t", reviewCommentsStructuredRows: [{ n: 1 }] }, { pdf: { path: "p", sha256: "b".repeat(64), size: 3 } });
+  // 6b: the manual scraper's entry field is structuredRows (register-execution-routes pdfEntry.structuredRows).
+  const a = policy.reportContent({ text: "t", structuredRows: [{ n: 1 }] }, { pdf: { path: "p", sha256: "b".repeat(64), size: 3 } });
   assert.equal(a.pdf_path, "p");
-  assert.equal(a.sha256, policy.reportContent({ text: "t", reviewCommentsStructuredRows: [{ n: 1 }] }).sha256, "binary bytes do not change the version");
+  assert.deepEqual(a.structured_rows, [{ n: 1 }], "structured rows are recorded");
+  assert.notEqual(a.sha256, policy.reportContent({ text: "t" }).sha256, "rows are part of the version");
+  assert.equal(a.sha256, policy.reportContent({ text: "t", structuredRows: [{ n: 1 }] }).sha256, "binary bytes do not change the version");
   assert.notEqual(a.sha256, policy.reportContent({ text: "t2" }).sha256);
   assert.equal(policy.matchReport([{ name: "Review  Comments", report_key: "1" }], "review comments").report_key, "1");
   assert.equal(policy.reportCaptured({ text: "", error: "No content extracted" }), false);
@@ -425,10 +450,37 @@ test("download limits: small env defaults, env override, job options can only lo
   assert.equal(b.bytes, 90);
   assert.equal(b.take("d", 1), "cap_files");
 
-  const gate = policy.buildFileGate([{ portal_file_id: "1", download_permitted: true, download_status: "not_requested", size_bytes: 500 }], { budget: policy.createDownloadBudget({ maxFiles: 5, maxBytes: 100 }) });
-  const d = gate("1");
-  assert.equal(d.download, false);
-  assert.equal(d.reason, "cap_bytes");
+  const docs = [
+    { portal_file_id: "1", download_permitted: true, download_status: "not_requested", size_bytes: 500 },
+    { portal_file_id: "2", download_permitted: true, download_status: "not_requested", size_bytes: 10 },
+    { portal_file_id: "3", download_permitted: true, download_status: "not_requested", size_bytes: 2000 },
+  ];
+  const gate = policy.buildFileGate(docs, { budget: policy.createDownloadBudget({ maxFiles: 5, maxBytes: 100 }), limits: { maxFileBytes: 1000 } });
+  assert.equal(gate("1").download, true, "D-083: one file larger than the job's byte budget may be its first download");
+  assert.equal(gate("2").reason, "cap_bytes", "the budget is then spent; the next file waits for a later job");
+  assert.equal(gate("3").reason, "deferred_oversize", "over the per-file limit: deferred, never downloaded");
+  assert.equal(policy.createDownloadBudget({ maxFiles: 5, maxBytes: 0 }).take("x", 1), "cap_bytes", "max_bytes 0 still means no downloads");
+
+  assert.deepEqual(policy.captureLimits({}), { maxFileBytes: 200 * 1024 * 1024, maxAttempts: 5 });
+  assert.deepEqual(policy.captureLimits({ PERMIT_SYNC_DEEP_MAX_FILE_BYTES: "1000", PERMIT_SYNC_DEEP_MAX_ATTEMPTS: "2" }, { max_file_bytes: 5000 }), { maxFileBytes: 1000, maxAttempts: 2 }, "a job option never raises the env limit");
+  assert.deepEqual(policy.captureLimits({}, { max_file_bytes: 1048576 }).maxFileBytes, 1048576);
+});
+
+test("3f: file content checks, provenance and size comparison", () => {
+  const policy = require("../permit-sync/deep/policy");
+  const pdf = (n) => Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(n - 9, 32)]);
+  assert.deepEqual(policy.fileSource("https://w/File/RetrieveFile?convertToPDF=true&inline=true&fileID=1"), { endpoint: "retrieve_file_rendition", isRendition: true });
+  assert.deepEqual(policy.fileSource("https://w/File/RetrieveFile?inline=true&fileID=1"), { endpoint: "retrieve_file_original", isRendition: false });
+  assert.deepEqual(policy.fileSource(null), { endpoint: "unknown", isRendition: null });
+  const v = (buf, o = {}) => policy.validateFileBody({ buf, fileName: "A.pdf", portalSize: 1000, isRendition: false, ...o });
+  assert.deepEqual(v(Buffer.alloc(0)), { ok: false, error: "empty_body" });
+  assert.deepEqual(v(Buffer.from("<!DOCTYPE html><html>login</html>")), { ok: false, error: "html_instead_of_file" });
+  assert.deepEqual(v(Buffer.from("PK\u0003\u0004 not a pdf")), { ok: false, error: "not_a_pdf" });
+  assert.deepEqual(v(pdf(900)), { ok: false, error: "truncated: 900 of 1000 bytes" }, "a short original is never stored");
+  assert.deepEqual(v(pdf(1000)), { ok: true, sizeMatchesPortal: true, contentType: "application/pdf" });
+  assert.deepEqual(v(pdf(980), { isRendition: true }), { ok: true, sizeMatchesPortal: false, contentType: "application/pdf" }, "a rendition is stored, flagged");
+  assert.deepEqual(v(pdf(980), { isRendition: null }), { ok: true, sizeMatchesPortal: false, contentType: "application/pdf" }, "unknown source: stored, flagged");
+  assert.deepEqual(v(pdf(980), { portalSize: null }), { ok: true, sizeMatchesPortal: null, contentType: "application/pdf" });
 });
 
 test("worker entry: one-permit scope env, numeric caps, service key format guard for the agent trigger", () => {

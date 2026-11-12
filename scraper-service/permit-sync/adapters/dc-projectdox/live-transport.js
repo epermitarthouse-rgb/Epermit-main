@@ -93,7 +93,7 @@ function routeReadRequest(req, guard) {
   if (isDcHost(u.hostname) && isDeadUrl(req.url) && method === "GET") {
     return { action: "abort", violation: false, sessionEnded: true, rule: "session_ended" };
   }
-  if (safety.matchesDenyPattern(req.url, guard.mode)) {
+  if (safety.matchesDenyPattern(req.url, guard.mode, method)) {
     const v = guard.checkRequest(method, req.url);
     return { action: "abort", violation: true, sessionEnded: false, rule: v.rule };
   }

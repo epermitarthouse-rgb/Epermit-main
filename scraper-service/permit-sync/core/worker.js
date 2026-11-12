@@ -23,6 +23,19 @@ const { classify, safeMessage, LeaseLostError } = require("./errors");
 
 const ABORT_CODES = new Set(["safety_violation", "session_ended", "rate_limited", "mfa_required", "captcha", "auth_failed"]);
 
+/**
+ * D-086: a deep job that finished but left something behind is completed_with_warnings: reports or files
+ * that failed, guard refusals, and files or reports still pending, deferred or in back-off.
+ */
+const DEEP_WARNING_KEYS = Object.freeze([
+  "reports_failed", "files_failed", "reports_guard_denied", "files_pending", "files_deferred_oversize", "files_failed_open", "reports_open",
+]);
+
+function deepWarnings(deep) {
+  if (!deep) return [];
+  return DEEP_WARNING_KEYS.filter((k) => Number(deep[k]) > 0);
+}
+
 function emptySectionTally() {
   return { ok: 0, partial: 0, absent: 0, failed: 0, suspect_empty: 0 };
 }
@@ -124,7 +137,9 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
         metrics.permits_ok += 1;
         if (typeof session.afterPermit === "function") {
           try {
-            const extra = await session.afterPermit({ record, batch, result: res, job, event });
+            // 3d: the deep pass renews the lease while it runs; false = the lease is gone (cancel or reclaim).
+            const heartbeat = () => rpc.heartbeat(job.id, workerId, leaseTtlSeconds, checkpoint);
+            const extra = await session.afterPermit({ record, batch, result: res, job, event, heartbeat });
             const deep = metrics.deep || (metrics.deep = {});
             for (const [k, v] of Object.entries(extra || {})) if (typeof v === "number") deep[k] = (deep[k] || 0) + v;
           } catch (err) {
@@ -152,7 +167,9 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
       await rpc.finish(job.id, workerId, "failed", "all_permits_failed", "every permit failed", metrics, true, null);
       return { outcome: "failed", metrics, checkpoint };
     }
-    const outcome = metrics.permits_failed || metrics.deep_failed || sectionIssues || metrics.warnings || metrics.discovery_complete === false
+    const deepIssues = deepWarnings(metrics.deep);
+    if (deepIssues.length) metrics.deep_warnings = deepIssues;
+    const outcome = metrics.permits_failed || metrics.deep_failed || sectionIssues || metrics.warnings || metrics.discovery_complete === false || deepIssues.length
       ? "completed_with_warnings" : "completed";
     await rpc.finish(job.id, workerId, outcome, null, null, metrics, false, null);
     return { outcome, metrics, checkpoint };
@@ -226,4 +243,4 @@ function supabaseWorkerRpc(client, { mode = "json" } = {}) {
   };
 }
 
-module.exports = { runJob, runOnce, runLoop, supabaseWorkerRpc, jobScope };
+module.exports = { runJob, runOnce, runLoop, supabaseWorkerRpc, jobScope, deepWarnings, DEEP_WARNING_KEYS };
