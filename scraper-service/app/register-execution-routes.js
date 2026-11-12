@@ -10830,6 +10830,32 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     );
   }
 
+  /**
+   * Deep mode only (D-089). A popup that is still about:blank, or is the browser's
+   * blocked/error page, never loaded a viewer. Manual scrapes are not classified here.
+   * @returns {Promise<string|null>} a reason, or null when the popup may still be a viewer
+   */
+  async function deepViewerPopupUnusable(target) {
+    if (!(options && options.deep) || isMontgomeryAdapter || !target) return null;
+    let url = "";
+    try {
+      url = String(target.url() || "");
+    } catch (_) {
+      return null;
+    }
+    if (!url || url === "about:blank" || /^chrome-error:/i.test(url)) return "empty_or_blocked";
+    if (/ERR_BLOCKED_BY_CLIENT|blockedbyclient/i.test(url)) return "blocked";
+    try {
+      const blocked = await target.evaluate(() => {
+        const href = String(location.href || "");
+        const text = String((document.body && document.body.innerText) || "");
+        return /^chrome-error:/i.test(href) || /ERR_BLOCKED_BY_CLIENT|blockedbyclient/i.test(`${href}\n${text}`);
+      });
+      if (blocked) return "blocked";
+    } catch (_) {}
+    return null;
+  }
+
   function isHtmlLikeContentType(ct) {
     return /text\/html|text\/javascript|text\/css|application\/json/i.test(
       String(ct || ""),
@@ -11654,6 +11680,17 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         }
       } catch (_) {}
 
+      if (popup && options && options.deep && !isMontgomeryAdapter) {
+        const unusable = await deepViewerPopupUnusable(popup);
+        if (unusable) {
+          console.log(
+            `      ⚠️ Deep viewer popup did not load (${unusable}); closing and trying RetrieveFile GET for fileId ${fileId}`,
+          );
+          await popup.close().catch(() => {});
+          popup = null;
+        }
+      }
+
       if (popup) {
       if (preferViewerRuntime) {
         const runViewerRuntimeExtraction = async (targetPopup) => {
@@ -11747,17 +11784,28 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
             }
             return { success: false, reason: "stale_popup_file_id_mismatch" };
           }
-          if (errMsg === "viewer_missing_file_config") {
+          if (
+            (errMsg === "viewer_missing_file_config" || errMsg === "viewer_frame_not_found") &&
+            options && options.deep && !isMontgomeryAdapter
+          ) {
+            console.log(
+              `      ⚠️ Deep viewer popup has no WebViewer config (${errMsg}); closing and trying RetrieveFile GET for fileId ${fileId}`,
+            );
+            await popup.close().catch(() => {});
+            popup = null;
+          } else if (errMsg === "viewer_missing_file_config") {
             logMontgomeryFinal("rejected candidate reason = viewer_missing_file_config");
             return { success: false, reason: "viewer_missing_file_config" };
+          } else {
+            logMontgomeryFinal(
+              `rejected candidate reason = runtime_extraction_failed:${errMsg}`,
+            );
           }
-          logMontgomeryFinal(
-            `rejected candidate reason = runtime_extraction_failed:${errMsg}`,
-          );
         }
       } else {
         await popup.waitForTimeout(3000);
       }
+      if (popup) {
       const viewerIframeSrc = await popup
         .evaluate(() => {
           const iframe = document.querySelector("iframe[src]");
@@ -12003,6 +12051,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       console.log(`      🔍 Viewer popup debug:`, JSON.stringify(popupHtml));
 
       await popup.close().catch(() => {});
+      }
       }
     }
 

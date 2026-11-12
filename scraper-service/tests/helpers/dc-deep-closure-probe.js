@@ -267,6 +267,180 @@ async function downloadGuardScenario() {
   }
 }
 
+/**
+ * D-089: a deep-mode viewer popup that is blocked or empty is closed and is not treated as present,
+ * so the existing GET RetrieveFile fallback runs (original, then rendition). A popup that actually
+ * loaded a WebViewer fileConfig still uses that path. Offline Chromium; hostnames do not resolve.
+ */
+async function viewerFallbackScenario() {
+  const { out } = load(APP);
+  const d = out.dcDeep;
+  const safety = require("../../permit-sync/core/safety");
+  const policy = require("../../permit-sync/deep/policy");
+  const { routeReadRequest } = require("../../permit-sync/adapters/dc-projectdox/live-transport");
+  const { chromium } = require("playwright");
+  const fs = require("node:fs");
+  const WEBUI = "https://washington-dc-us-projectdoxwebui.avolvecloud.com";
+  const WEBAPI = "https://washington-dc-us-projectdoxwebapi.avolvecloud.com";
+  const pdfBytes = (tag) => {
+    const head = Buffer.from(`%PDF-1.4 ${tag}\n`);
+    const tail = Buffer.from("\n%%EOF\n");
+    return Buffer.concat([head, Buffer.alloc(Math.max(0, 2048 - head.length - tail.length), 0x20), tail]);
+  };
+  const browser = await chromium.launch({ args: ["--host-resolver-rules=MAP * ~NOTFOUND"] });
+  const decisions = [];
+  const server = [];
+  const apiGets = [];
+  const records = [];
+  const guard = safety.createRunGuard({ mode: "deep" });
+  const bodies = {
+    "700201": pdfBytes("api-700201"),
+    "700202": pdfBytes("api-700202"),
+    "700203": pdfBytes("api-short"),
+    "700301": pdfBytes("api-viewer"),
+  };
+  try {
+    const context = await browser.newContext({ acceptDownloads: true });
+    await context.addCookies([
+      { name: "SessionID", value: "probe-session", url: WEBUI },
+      { name: "SessionID", value: "probe-session", url: WEBAPI },
+    ]);
+    await context.route("**/*", (route) => {
+      const req = route.request();
+      const u = new URL(req.url());
+      server.push({ method: req.method(), path: u.pathname });
+      if (req.method() !== "GET" && req.method() !== "HEAD") {
+        return route.fulfill({ status: 599, contentType: "text/plain", body: "unexpected-method" });
+      }
+      if (u.pathname === "/files") {
+        return route.fulfill({
+          contentType: "text/html",
+          body: `<!doctype html><body><a href="javascript:viewFile(1)">file</a><script>
+            function viewFile(id) {
+              const mode = window.__mode || "blocked";
+              const name = "viewer_" + id + "_" + Date.now();
+              if (mode === "viewer") {
+                window.open(location.origin + "/File/FileViewer?fileID=" + id, name);
+              } else if (mode === "empty") {
+                window.open("about:blank", name);
+              } else {
+                const w = window.open("about:blank", name);
+                const f = w.document.createElement("form");
+                f.method = "POST";
+                f.action = location.origin + "/File/FileViewer?fileID=" + id;
+                f.target = name;
+                w.document.body.appendChild(f);
+                f.submit();
+              }
+              fetch(location.origin + "/File/RetrieveFile?wake=1&fileID=" + id).catch(function () {});
+            }
+          </script></body>`,
+        });
+      }
+      if (u.pathname === "/File/FileViewer") {
+        const id = u.searchParams.get("fileID") || "";
+        const custom = encodeURIComponent(JSON.stringify({ fileID: id, fileName: `${id}_A-101.pdf` }));
+        return route.fulfill({
+          contentType: "text/html",
+          body: `<!doctype html><iframe src="${WEBUI}/Scripts/File/WebViewer/ui/index.html#custom=${custom}"></iframe>`,
+        });
+      }
+      if (u.pathname.endsWith("/WebViewer/ui/index.html")) {
+        return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>viewer</title>" });
+      }
+      if (u.pathname === "/File/RetrieveFile") {
+        return route.fulfill({ contentType: "application/pdf", body: pdfBytes("page-wake") });
+      }
+      return route.fulfill({ status: 200, contentType: "text/plain", body: "ok" });
+    });
+    await context.route("**/*", (route) => {
+      const req = route.request();
+      const r = { method: req.method(), url: req.url(), resourceType: req.resourceType() };
+      const v = routeReadRequest(r, guard);
+      let path = "";
+      try { path = new URL(r.url).pathname; } catch (_) { path = ""; }
+      decisions.push({ method: r.method, path, action: v.action, violation: v.violation, rule: v.rule });
+      return v.action === "continue" ? route.fallback() : route.abort("blockedbyclient");
+    });
+    context.request.get = async (target) => {
+      const url = String(target);
+      apiGets.push(url);
+      const v = routeReadRequest({ method: "GET", url, resourceType: "xhr" }, guard);
+      if (v.action !== "continue") throw new Error(`guard_${v.rule}`);
+      const u = new URL(url);
+      const fileId = u.searchParams.get("fileID") || "";
+      const body = bodies[fileId] || pdfBytes("api-default");
+      return {
+        ok: () => true,
+        status: () => 200,
+        headers: () => ({ "content-type": "application/pdf" }),
+        body: async () => body,
+      };
+    };
+    const page = await context.newPage();
+    await page.goto(`${WEBUI}/files`);
+    const session = { _downloadedHashes: new Map(), _scrapeCumulativeBytes: 0 };
+    const openUrls = () => context.pages().filter((p) => !p.isClosed()).map((p) => {
+      try { return p.url(); } catch (_) { return ""; }
+    });
+    const runCase = async (name, fileId, mode, portalSize) => {
+      const d0 = decisions.length;
+      const a0 = apiGets.length;
+      const r0 = records.length;
+      await page.evaluate((m) => { window.__mode = m; }, mode);
+      const result = await d.downloadProjectDoxFile(page, context, fileId, `${fileId}_A-101.pdf`, WEBUI, session, null, {
+        preferViewerRuntime: true,
+        deep: {
+          preferOriginal: true,
+          maxFileBytes: 200 * 1024 * 1024,
+          storeFile: async ({ localPath, fileName, downloadUrl }) => {
+            const buf = fs.readFileSync(localPath);
+            const source = policy.fileSource(downloadUrl);
+            const check = policy.validateFileBody({ buf, fileName, portalSize, isRendition: source.isRendition });
+            records.push({
+              fileId,
+              accessPath: policy.captureAccessPath({ download_permitted: false }),
+              downloadUrl,
+              endpoint: source.endpoint,
+              isRendition: source.isRendition,
+              ok: check.ok,
+              error: check.ok ? null : check.error,
+              sizeMatchesPortal: check.ok ? check.sizeMatchesPortal : null,
+              magic: buf.slice(0, 4).toString("latin1"),
+              tag: buf.slice(0, 24).toString("latin1"),
+              size: buf.length,
+            });
+            if (!check.ok) return null;
+            return { bucket: "permit-documents", path: `p1/files/${fileId}_A-101.pdf`, sha256: "ab".repeat(32), size: buf.length };
+          },
+        },
+      });
+      return {
+        name,
+        success: Boolean(result && result.success),
+        reason: (result && result.reason) || null,
+        decisions: decisions.slice(d0),
+        apiGets: apiGets.slice(a0),
+        records: records.slice(r0),
+        openUrls: openUrls(),
+      };
+    };
+    const good = (id) => bodies[id].length;
+    const cases = [];
+    cases.push(await runCase("blocked", "700201", "blocked", good("700201")));
+    cases.push(await runCase("empty", "700202", "empty", good("700202")));
+    cases.push(await runCase("viewer", "700301", "viewer", good("700301")));
+    cases.push(await runCase("truncated", "700203", "blocked", 8000));
+    return {
+      cases,
+      guardViolations: guard.violations().map((v) => v.rule),
+      serverPosts: server.filter((s) => s.method === "POST").map((s) => s.path),
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
 /** 3c: a deep session never re-launches a browser (no guard, no password); the manual path is untouched. */
 async function reinitScenario() {
   const { out } = load(APP);
@@ -285,6 +459,7 @@ async function reinitScenario() {
 async function main() {
   const [scenario, arg] = process.argv.slice(2);
   if (scenario === "downloadguard") return downloadGuardScenario();
+  if (scenario === "viewerfallback") return viewerFallbackScenario();
   if (scenario === "reinit") return reinitScenario();
   if (scenario === "routes") {
     const { app, out } = load(path.resolve(arg));

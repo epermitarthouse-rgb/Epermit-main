@@ -19,8 +19,8 @@ const { execFileSync, spawnSync } = require("node:child_process");
 const ROOT = path.join(__dirname, "..");
 const PROBE = path.join(__dirname, "helpers", "dc-deep-closure-probe.js");
 
-function probe(args, env = {}) {
-  const r = spawnSync(process.execPath, [PROBE, ...args], { cwd: ROOT, env: { ...process.env, ...env }, encoding: "utf8", timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
+function probe(args, env = {}, timeout = 120000) {
+  const r = spawnSync(process.execPath, [PROBE, ...args], { cwd: ROOT, env: { ...process.env, ...env }, encoding: "utf8", timeout, maxBuffer: 64 * 1024 * 1024 });
   const line = String(r.stdout || "").split("\n").find((l) => l.startsWith("PROBE_RESULT ") || l.startsWith("PROBE_ERROR "));
   if (!line) throw new Error(`probe ${args[0]} printed no result (exit ${r.status})`);
   if (line.startsWith("PROBE_ERROR ")) throw new Error(JSON.parse(line.slice(12)));
@@ -115,6 +115,63 @@ test("3b: during a deep download, a denied request and a POST mutation still rea
   assert.equal(file.cacheControl, "no-cache, no-store, must-revalidate", "the download route's header override is kept (fallback carries it)");
   assert.equal(r.result.success, true);
   assert.deepEqual(r.stored.map((s) => s.fileId), ["700101"]);
+});
+
+test("D-089: a blocked or empty viewer popup falls back to RetrieveFile GET; a real viewer config does not", (t) => {
+  let r;
+  try {
+    r = probe(["viewerfallback"], {}, 180000);
+  } catch (e) {
+    if (/Executable doesn't exist|browserType\.launch/.test(String(e.message))) return t.skip("Chromium not installed");
+    throw e;
+  }
+  assert.deepEqual(r.guardViolations, []);
+  assert.deepEqual(r.serverPosts, [], "an aborted POST never reaches the fake portal");
+  const byName = Object.fromEntries(r.cases.map((c) => [c.name, c]));
+
+  for (const name of ["blocked", "empty"]) {
+    const c = byName[name];
+    assert.equal(c.success, true, `${name} ${c.reason}`);
+    assert.ok(c.openUrls.every((u) => !u.startsWith("chrome-error:") && u !== "about:blank"), `${name} popup stayed open: ${c.openUrls.join(" ")}`);
+    const gets = c.apiGets.filter((u) => u.includes("/File/RetrieveFile"));
+    assert.ok(gets.length >= 1, name);
+    assert.match(gets[0], /\/File\/RetrieveFile\?inline=true&fileID=/);
+    assert.equal(gets[0].includes("convertToPDF"), false, "original RetrieveFile is first");
+    assert.equal(gets[0].includes("_nocache="), true, "the no-popup fallback, not the viewer-config request");
+    const stored = c.records[0];
+    assert.equal(stored.accessPath, "viewer");
+    assert.equal(stored.magic, "%PDF");
+    assert.equal(stored.ok, true);
+    assert.equal(stored.sizeMatchesPortal, true);
+    assert.equal(stored.endpoint, "retrieve_file_original");
+    assert.equal(stored.isRendition, false);
+    assert.match(stored.tag, /^%PDF-1\.4 api-/);
+  }
+
+  const blockedPosts = byName.blocked.decisions.filter((d) => d.method === "POST" && d.path === "/File/FileViewer");
+  assert.ok(blockedPosts.length >= 1, "viewFile posted the viewer form");
+  for (const post of blockedPosts) {
+    assert.equal(post.action, "abort");
+    assert.equal(post.violation, false);
+    assert.equal(post.rule, "method_dropped");
+  }
+
+  const viewer = byName.viewer;
+  assert.equal(viewer.success, true, viewer.reason);
+  const viewerGets = viewer.apiGets.filter((u) => u.includes("/File/RetrieveFile"));
+  assert.ok(viewerGets.length >= 1);
+  assert.match(viewerGets[0], /\/File\/RetrieveFile\?inline=true&fileID=700301$/);
+  assert.equal(viewerGets[0].includes("_nocache="), false, "a loaded WebViewer config keeps the viewer RetrieveFile path");
+  assert.equal(viewer.records[0].accessPath, "viewer");
+  assert.equal(viewer.records[0].magic, "%PDF");
+  assert.match(viewer.records[0].tag, /api-viewer/);
+
+  const truncated = byName.truncated;
+  assert.equal(truncated.success, false);
+  assert.equal(truncated.records[0].accessPath, "viewer");
+  assert.equal(truncated.records[0].magic, "%PDF");
+  assert.equal(truncated.records[0].ok, false);
+  assert.match(truncated.records[0].error, /^truncated: /);
 });
 
 test("3c: a deep session refuses browser re-initialization and flags the session as lost", () => {

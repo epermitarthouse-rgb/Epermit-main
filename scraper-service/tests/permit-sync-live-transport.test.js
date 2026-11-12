@@ -138,6 +138,26 @@ test("a viewFile or Download GET on the ProjectDox API host is still refused and
   assert.equal(other.rule, "not_allowlisted");
 });
 
+test("POST FileViewer is dropped in deep mode with no violation; GET RetrieveFile stays allowed (D-089)", () => {
+  const guard = createRunGuard({ mode: "deep" });
+  const post = live.routeReadRequest(
+    { method: "POST", url: "https://washington-dc-us-projectdoxwebui.avolvecloud.com/File/FileViewer?fileID=700101", resourceType: "document" },
+    guard,
+  );
+  assert.equal(post.action, "abort");
+  assert.equal(post.violation, false);
+  assert.equal(post.rule, "method_dropped");
+  assert.equal(guard.violations().length, 0);
+  assert.equal(guard.shouldAbort(), false);
+  const get = live.routeReadRequest(
+    { method: "GET", url: "https://washington-dc-us-projectdoxwebapi.avolvecloud.com/File/RetrieveFile?inline=true&fileID=700101", resourceType: "xhr" },
+    guard,
+  );
+  assert.equal(get.action, "continue");
+  assert.equal(get.violation, false);
+  assert.equal(get.rule, "file_retrieve");
+});
+
 test("a non-GET that is not a deny pattern is aborted and the job continues (D-050)", () => {
   const guard = createRunGuard();
   const rum = live.routeReadRequest(
