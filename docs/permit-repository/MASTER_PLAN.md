@@ -109,6 +109,32 @@ Verification vocabulary used everywhere: **Implemented** (code exists) · **Loca
 
 ---
 
+### 0.6 Continuous deep scraping rollout (revision 2026-11-13, D-093 to D-101)
+
+Goal: the first user-initiated, continuously running full DC deep refresh, then scheduled refreshes. The first full
+refresh does not depend on the agent pipeline and is started only by the user from the Permit Queue.
+
+| Step | Scope | State |
+|---|---|---|
+| P0 | Orchestration migration `20261113100000`, worker shutdown/health/heartbeat, Railway worker config, DC source audit | Implemented, locally tested |
+| P1 | Permit Queue Refresh all / Refresh / progress; Management Admin scheduling, workers, alerts, Retry | Implemented, locally tested |
+| P2 | CI with baselines, Railway "Wait for CI", monitor + notifier, cron scripts (not run) | Implemented, locally tested |
+| P3 | Verify the first full refresh from persisted data (`scripts/permit-repo/verify-full-refresh.sql`) | Waiting for the user's run |
+| P4 | Agent service mode: hash stability (D-101, done locally); preserve human edits (D-088 keying); soft-mark unmatched comments; pipeline on new links; no duplicate runs; BCIV2500152's 6 comments first | Hash fix only |
+| P5 | Project creation from the jurisdictions directory, multi-permit links, filing linkage | Not started |
+| P6 | Code Analyzer V2 bridge (design below) | Design only |
+
+Order of production steps (each needs approval): push branch → migration → worker variables and deploy → frontend
+deploy → user's Refresh all → P3 verification → monitor cron (+ notifier) → schedule enable + sync cron.
+
+**P6 design (no analyzer changes during the scraping rollout).** Permit files stay in the private `permit-documents`
+bucket, keyed by `permit_documents` (sha256, rendition flag, permit version). A linked project offers "Analyze with
+Code Analyzer V2" for stored drawings; the bridge creates analyzer source documents that reference the stored
+object (signed URL at read time, no public copy) and records provenance (`permit_document_id`, sha256, portal
+version, rendition). Findings keep their existing citations (`source_document_id`, page, bbox or `sheet_job_id`);
+provenance maps them back to the permit file. Renditions are labelled as portal PDF renditions. New stored files
+(capture hash change, D-085) mark the analysis outdated; they never start an analysis on their own.
+
 ## 1. Evidence base (summary)
 
 Sources: codebase audits (Phase 1/2 audits, Nov 2026), live DC portal investigation (Nov 4 2026, read-only, logged-in browser), architecture plan (Nov 5 2026).

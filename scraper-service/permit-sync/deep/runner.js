@@ -17,7 +17,24 @@
 const policy = require("./policy");
 const safety = require("../core/safety");
 const { fileDigest, contentTypeFor } = require("./repo");
-const { PortalChangedError, SessionEndedError, LeaseLostError } = require("../core/errors");
+const { PortalChangedError, SessionEndedError, LeaseLostError, ShutdownError } = require("../core/errors");
+
+/** Minimum gap between per-file progress writes during a pass. */
+const PROGRESS_MIN_MS = 3000;
+
+/** Stored-content counts for the Permit Queue (D-096): only documents the pass may capture count toward files. */
+function captureCounts(documents = [], reports = [], open = {}) {
+  const capturable = documents.filter((d) => policy.captureAccessPath(d));
+  return {
+    files_total: capturable.length,
+    files_captured: capturable.filter((d) => d.download_status === "stored").length,
+    files_pending: (open.files_pending || 0) + (open.files_deferred_oversize || 0),
+    files_failed: open.files_failed_open || 0,
+    reports_total: reports.length,
+    reports_captured: reports.filter((r) => r.content_status === "captured").length,
+    reports_failed: reports.filter((r) => r.content_status === "failed").length,
+  };
+}
 
 const DEFAULT_HEARTBEAT_MS = 60000;
 /** Beats on progress (a stored file or report) at most this often; the interval covers long single downloads. */
@@ -268,6 +285,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     if (check.sizeMatchesPortal === false) ctx.m.files_size_mismatch += 1;
     ctx.captured.add(String(fileId));
     await ctx.heartbeat.progress();
+    await ctx.report("downloading_files");
     return ref;
   }
 
@@ -309,6 +327,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
    * and a refusal there still fails the job.
    */
   async function precheckReport(ctx, reports, event, { reportName }) {
+    await ctx.report("exporting_reports", true);
     const n = policy.normName(reportName);
     const item = ctx.reportItems.find((r) => policy.normName(r.name) === n) || null;
     const rep = policy.matchReport(reports, reportName);
@@ -346,6 +365,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
         else ctx.m.reports_unchanged += 1;
         ctx.reportsRecorded.set(rep.report_key, "captured");
         await ctx.heartbeat.progress();
+        await ctx.report("exporting_reports");
       } else if (!prev) {
         await repo.recordReportFailure(ctx.permitId, rep.report_key, entry.error || "no report content");
         ctx.reportsRecorded.set(rep.report_key, "failed");
@@ -427,7 +447,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
   }
 
   /** core/worker afterPermit hook. `heartbeat` (optional) renews the job lease and resolves false when it is lost. */
-  async function afterPermit({ record, batch, result, job, event = async () => {}, heartbeat = null }) {
+  async function afterPermit({ record, batch, result, job, event = async () => {}, heartbeat = null, progress = null, signal = null }) {
     const m = emptyMetrics();
     if (!budget) budget = policy.createDownloadBudget(policy.downloadLimits(env, job && job.options));
     const limits = policy.captureLimits(env, job && job.options);
@@ -440,11 +460,13 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     const now = Date.now();
     const plan = policy.planDeepPass({ previousHashes, hashes, links, documents, reports, now, limits, captureHash: policy.captureHash(documents, reports) });
     const ctxBase = { permitId, runId: job.id, m };
+    const send = typeof progress === "function" ? (fields) => Promise.resolve(progress(fields)).catch(() => false) : async () => false;
+    const reportFinal = async (after) => send(captureCounts(after.documents, after.reports, m));
     if (plan.deferDocuments.length) await recordDeferrals(ctxBase, plan.deferDocuments, limits);
     if (!plan.run) {
       if (policy.changedSections(previousHashes, hashes).length) await repo.recordDeepPass(permitId, hashes, job.id);
       m.deep_skipped = 1;
-      await countOpenItems(m, permitId, limits);
+      await reportFinal(await countOpenItems(m, permitId, limits));
       await triggerPipelines(m, links.map((l) => ({ ...l, currentHash: l.portalDataHash })), event, record);
       return m;
     }
@@ -452,6 +474,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     const row = await index.locate(record.portal_record_id);
     const project = manualProject(record, row);
     if (!project.projectNum) throw new PortalChangedError("permit has no permit number for the deep pass");
+    if (signal && signal.aborted) throw new ShutdownError();
     const s = await getSession();
     const hb = createPassHeartbeat({ heartbeat, session: s, intervalMs: Number(env.PERMIT_SYNC_DEEP_HEARTBEAT_MS) > 0 ? Number(env.PERMIT_SYNC_DEEP_HEARTBEAT_MS) : DEFAULT_HEARTBEAT_MS });
     const ctx = {
@@ -463,6 +486,28 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       reportUploads: new Set(),
       heartbeat: hb,
     };
+    // Live counts: what was stored before this pass plus what this pass stores; at most one write per PROGRESS_MIN_MS.
+    const base = captureCounts(documents, reports);
+    let lastReport = 0;
+    let lastPhase = null;
+    ctx.report = async (phase, force = false) => {
+      const t = Date.now();
+      if (!force && phase === lastPhase && t - lastReport < PROGRESS_MIN_MS) return;
+      lastReport = t;
+      lastPhase = phase;
+      await send({
+        phase,
+        files_total: base.files_total,
+        files_captured: Math.min(base.files_total, base.files_captured + m.files_downloaded),
+        reports_total: base.reports_total,
+        reports_captured: Math.min(base.reports_total, base.reports_captured + m.reports_captured),
+      });
+    };
+    // Review comments are read on the Status tab.
+    await ctx.report(plan.tabs.includes("status") ? "capturing_reviews" : plan.tabs.includes("files") ? "downloading_files" : plan.tabs.includes("reports") ? "exporting_reports" : "reading_info", true);
+    // Shutdown (D-098): ask the scraper to stop at its next check, like a cancel; nothing after it is recorded.
+    const onAbort = () => { s._cancelRequested = true; };
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
     const deepOptions = {
       skipPortalSync: true,
       fileGate: policy.buildFileGate(documents, { filesChanged: plan.filesChanged, budget, now, limits }),
@@ -501,6 +546,10 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
         delete s.data[project.id];
         throw new LeaseLostError();
       }
+      if (signal && signal.aborted) {
+        delete s.data[project.id];
+        throw new ShutdownError();
+      }
       // 3c: the scraper refused to re-initialize the browser or re-login (no guard, no password in a deep run).
       if (s.dcDeepSessionLost) {
         delete s.data[project.id];
@@ -533,6 +582,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       }
 
       const after = await countOpenItems(m, permitId, limits);
+      await reportFinal(after);
       const capture = policy.captureHash(after.documents, after.reports);
       const current = [];
       if (tabErrors.length === 0) {
@@ -561,6 +611,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       return m;
     } finally {
       hb.stop();
+      if (signal) signal.removeEventListener("abort", onAbort);
       await releaseReportUploads(ctx, [...ctx.reportUploads]);
     }
   }
@@ -582,4 +633,4 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
   return { afterPermit, wrapTransport, index };
 }
 
-module.exports = { createDeepPass, createDashboardIndex, manualProject, withQuietConsole, passTrace, filesTrace, reasonCode };
+module.exports = { createDeepPass, createDashboardIndex, manualProject, withQuietConsole, passTrace, filesTrace, reasonCode, captureCounts };

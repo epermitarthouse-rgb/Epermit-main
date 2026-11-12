@@ -10,13 +10,20 @@
  * PERMIT_SYNC_MODE=deep (D-055): the guard runs in deep mode, login is the manual `performLogin`, and after
  * each permit's JSON pass the manual DC scraper runs in the same browser session (permit-sync/deep). The
  * HTTP app closure is loaded without listening. It never shares a browser with the HTTP service.
+ *
+ * Starting the worker never enqueues anything: it only claims jobs that a user, Sync now or the schedule queued.
+ * Operations (D-097, D-098): one JSON log line per event; a liveness row in permit_sync_workers every
+ * PERMIT_SYNC_WORKER_HEARTBEAT_MS; GET /health on PERMIT_SYNC_HEALTH_PORT (or PORT) when set; SIGTERM / SIGINT
+ * stop claiming, ask the running pass to stop, and release the job (attempt given back) before exiting.
+ * Tunables: PERMIT_SYNC_LEASE_TTL_SECONDS (300), PERMIT_SYNC_IDLE_MS (60000), PERMIT_SYNC_PERMIT_PAUSE_MS (0),
+ * PERMIT_SYNC_DEEP_MAX_FILES / _MAX_BYTES / _MAX_FILE_BYTES / _MAX_ATTEMPTS (deep/policy.js).
  */
 
 const os = require("node:os");
 const { runLoop, supabaseWorkerRpc } = require("./core/worker");
 const { AuthError, PortalChangedError } = require("./core/errors");
 const { createDcAdapter } = require("./adapters/dc-projectdox/adapter");
-const { TransientError } = require("./core/errors");
+const { DeferredError } = require("./core/errors");
 const dcCredentialLock = require("../lib/dc-credential-lock");
 const { createDcLiveTransport, LIVE_APPROVAL_VALUE } = require("./adapters/dc-projectdox/live-transport");
 const { ADAPTER_KEY: DC_KEY } = require("./adapters/dc-projectdox/normalize");
@@ -63,21 +70,66 @@ function startupCheck(env) {
   if (!["json", "deep"].includes(syncMode(env))) return { ok: false, reason: `unknown PERMIT_SYNC_MODE ${env.PERMIT_SYNC_MODE}` };
   const scope = workerScope(env);
   if (scope && !scope.every((id) => /^[0-9]{1,12}$/.test(id))) return { ok: false, reason: "PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS must be numeric DC ProjectIDs" };
-  for (const k of ["PERMIT_SYNC_DEEP_MAX_FILES", "PERMIT_SYNC_DEEP_MAX_BYTES"]) {
+  for (const k of ["PERMIT_SYNC_DEEP_MAX_FILES", "PERMIT_SYNC_DEEP_MAX_BYTES", "PERMIT_SYNC_LEASE_TTL_SECONDS", "PERMIT_SYNC_IDLE_MS",
+    "PERMIT_SYNC_PERMIT_PAUSE_MS", "PERMIT_SYNC_WORKER_HEARTBEAT_MS", "PERMIT_SYNC_HEALTH_PORT"]) {
     if (env[k] !== undefined && env[k] !== "" && !/^[0-9]+$/.test(String(env[k]))) return { ok: false, reason: `${k} must be a non-negative integer` };
   }
   return { ok: true, reason: "ok" };
 }
 
 /**
- * D-061 worker side: wait (retryable) while a manual DC scrape that may use the same login is active,
- * so the account is never logged in twice at once. Runs before any browser is launched.
+ * D-061 worker side: hand the job back (no attempt spent, D-098) while a manual DC scrape that may use the
+ * same login is active, so the account is never logged in twice at once. Runs before any browser is launched.
  */
 async function deferWhileManualScrape({ supabase, username, now = new Date() }) {
   const credentialIds = await dcCredentialLock.sameLoginCredentialIds(supabase, username);
   if (await dcCredentialLock.manualDcScrapeActive(supabase, { credentialIds, now })) {
-    throw new TransientError("a manual DC scrape is using this portal login; deferred");
+    throw new DeferredError("a manual DC scrape is using this portal login; deferred");
   }
+}
+
+/** Positive integer env value, or the fallback. */
+function intEnv(env, key, fallback) {
+  const n = Number(env[key]);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+/** One JSON line per event; callers pass codes, ids and counts only (no credentials, URLs or page text). */
+function createLogger(write = (line) => console.log(line)) {
+  return (level, event, fields = {}) => write(JSON.stringify({ ts: new Date().toISOString(), level, svc: "permit-sync-worker", event, ...fields }));
+}
+
+/**
+ * Worker state for /health and the liveness row. Healthy while the loop is running and has made progress
+ * (claimed, idled or finished a job) within staleMs; a job in progress counts as progress.
+ */
+function createWorkerState({ now = Date.now, staleMs }) {
+  const st = { status: "starting", jobId: null, lastTickAt: now(), startedAt: now(), jobsRun: 0, lastOutcome: null };
+  return {
+    get: () => ({ ...st }),
+    tick(patch = {}) { Object.assign(st, patch, { lastTickAt: now() }); },
+    healthy() {
+      if (st.status === "stopped") return false;
+      if (st.status === "busy") return true;
+      return now() - st.lastTickAt < staleMs;
+    },
+  };
+}
+
+function startHealthServer({ port, state, log }) {
+  const http = require("node:http");
+  const server = http.createServer((req, res) => {
+    if (req.method !== "GET" || (req.url !== "/health" && req.url !== "/")) {
+      res.writeHead(404).end();
+      return;
+    }
+    const s = state.get();
+    const ok = state.healthy();
+    res.writeHead(ok ? 200 : 503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok, status: s.status, job: s.jobId, jobs_run: s.jobsRun, last_tick_at: new Date(s.lastTickAt).toISOString() }));
+  });
+  server.listen(port, () => log("info", "health_listening", { port }));
+  return server;
 }
 
 /**
@@ -158,22 +210,36 @@ async function launchChromiumContext({ acceptDownloads = false } = {}) {
 }
 
 async function main(env = process.env) {
+  const log = createLogger();
   const check = startupCheck(env);
   if (!check.ok) {
-    console.log(`[permit-sync] worker not started: ${check.reason}`);
+    log("warn", "worker_not_started", { reason: check.reason });
     return 0;
   }
   const { createClient } = require("@supabase/supabase-js");
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const workerId = `${os.hostname()}:${process.pid}`;
   const controller = new AbortController();
-  process.once("SIGTERM", () => controller.abort());
-  process.once("SIGINT", () => controller.abort());
   const deep = syncMode(env) === "deep";
+  const mode = deep ? "deep" : "json";
+  const leaseTtlSeconds = intEnv(env, "PERMIT_SYNC_LEASE_TTL_SECONDS", 300);
+  const idleMs = intEnv(env, "PERMIT_SYNC_IDLE_MS", 60000);
+  const pauseMs = intEnv(env, "PERMIT_SYNC_PERMIT_PAUSE_MS", 0);
+  const beatMs = intEnv(env, "PERMIT_SYNC_WORKER_HEARTBEAT_MS", 30000);
+  const state = createWorkerState({ staleMs: Math.max(idleMs * 3, 5 * 60 * 1000) });
+  const onSignal = (sig) => {
+    if (controller.signal.aborted) return;
+    log("info", "shutdown_requested", { signal: sig, job: state.get().jobId });
+    state.tick({ status: "stopping" });
+    controller.abort();
+  };
+  process.once("SIGTERM", () => onSignal("SIGTERM"));
+  process.once("SIGINT", () => onSignal("SIGINT"));
+
   let pipeline = null;
   const keyFormat = serviceKeyFormat(env.SUPABASE_SERVICE_ROLE_KEY);
   if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET && keyFormat !== "legacy_service_role_jwt") {
-    console.log(`[permit-sync] agent trigger off: service key format ${keyFormat} is not accepted by the pipeline functions`);
+    log("warn", "agent_trigger_off", { reason: `service key format ${keyFormat} is not accepted by the pipeline functions` });
   } else if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET) {
     const { createPipelineDriver } = require("./deep/pipeline");
     pipeline = createPipelineDriver({
@@ -187,25 +253,71 @@ async function main(env = process.env) {
   const scope = workerScope(env);
   const deepPolicy = require("./deep/policy");
   const limits = { ...deepPolicy.downloadLimits(env), ...deepPolicy.captureLimits(env) };
-  console.log(`[permit-sync] mode=${deep ? "deep" : "json"} agent_trigger=${pipeline ? "on" : "off"} scope=${scope ? scope.join(",") : "all"}${deep ? ` max_files=${limits.maxFiles} max_bytes=${limits.maxBytes} max_file_bytes=${limits.maxFileBytes} max_attempts=${limits.maxAttempts}` : ""}`);
-  await runLoop({
-    rpc: supabaseWorkerRpc(supabase, { mode: deep ? "deep" : "json" }),
-    scope,
-    openAdapter: buildOpenAdapter({
-      supabase,
-      env,
-      launchContext: () => launchChromiumContext({ acceptDownloads: deep }),
-      pipeline,
-      log: (e) => console.log(`[permit-sync] ${JSON.stringify({ code: e && e.code, step: e && e.step, state: e && e.state, at: e && e.at, blocked: e && e.blocked })}`),
-    }),
-    workerId,
-    signal: controller.signal,
-    // Supervised runs: claim at most one job, then exit, so a retry never logs in again unattended.
-    once: env.PERMIT_SYNC_WORKER_ONCE === "true",
-    onResult: (r) => {
-      if (r && !r.idle) console.log(`[permit-sync] ${JSON.stringify({ job: r.jobId, outcome: r.outcome, code: r.code || null })}`);
-    },
-  });
+  const details = {
+    version: env.RAILWAY_GIT_COMMIT_SHA ? String(env.RAILWAY_GIT_COMMIT_SHA).slice(0, 12) : null,
+    agent_trigger: Boolean(pipeline),
+    scope: scope ? scope.length : "all",
+    limits: deep ? { max_files: limits.maxFiles, max_bytes: limits.maxBytes, max_file_bytes: limits.maxFileBytes, max_attempts: limits.maxAttempts } : null,
+    lease_ttl_seconds: leaseTtlSeconds,
+  };
+  log("info", "worker_started", { worker: workerId, mode, ...details });
+
+  const rpc = supabaseWorkerRpc(supabase, { mode });
+  const beat = async () => {
+    const s = state.get();
+    const rssMb = Math.round(process.memoryUsage().rss / 1048576);
+    await rpc.workerBeat(workerId, s.status === "starting" ? "idle" : s.status, s.jobId, { ...details, rss_mb: rssMb, jobs_run: s.jobsRun, last_outcome: s.lastOutcome })
+      .catch((err) => log("warn", "worker_heartbeat_failed", { error: String((err && err.message) || err).slice(0, 200) }));
+  };
+  const beatTimer = setInterval(() => { void beat(); }, beatMs);
+  if (typeof beatTimer.unref === "function") beatTimer.unref();
+  const healthPort = Number(env.PERMIT_SYNC_HEALTH_PORT || env.PORT || 0);
+  const health = healthPort > 0 ? startHealthServer({ port: healthPort, state, log }) : null;
+  state.tick({ status: "idle" });
+  await beat();
+
+  try {
+    await runLoop({
+      rpc,
+      scope,
+      leaseTtlSeconds,
+      idleMs,
+      pauseMs,
+      openAdapter: buildOpenAdapter({
+        supabase,
+        env,
+        launchContext: () => launchChromiumContext({ acceptDownloads: deep }),
+        pipeline,
+        log: (e) => log("info", "transport", { code: e && e.code, step: e && e.step, state: e && e.state, at: e && e.at, blocked: e && e.blocked }),
+      }),
+      workerId,
+      signal: controller.signal,
+      // Supervised runs: claim at most one job, then exit, so a retry never logs in again unattended.
+      once: env.PERMIT_SYNC_WORKER_ONCE === "true",
+      onClaim: (job) => {
+        state.tick({ status: "busy", jobId: job.id });
+        log("info", "job_claimed", { job: job.id, attempt: job.attempt_count, trigger: job.trigger, scope: job.options && job.options.only_portal_record_ids ? job.options.only_portal_record_ids.length : "all" });
+        void beat();
+      },
+      onResult: (r) => {
+        const s = state.get();
+        if (r && !r.idle) {
+          log(r.outcome === "completed" || r.outcome === "released" ? "info" : "warn", "job_finished", { job: r.jobId, outcome: r.outcome, code: r.code || null, permits_ok: r.metrics && r.metrics.permits_ok, permits_failed: r.metrics && r.metrics.permits_failed, duration_ms: r.metrics && r.metrics.duration_ms });
+          state.tick({ status: controller.signal.aborted ? "stopping" : "idle", jobId: null, jobsRun: s.jobsRun + 1, lastOutcome: r.outcome });
+          void beat();
+        } else {
+          if (r && r.error) log("warn", "claim_failed", { error: r.error });
+          state.tick({ status: controller.signal.aborted ? "stopping" : "idle" });
+        }
+      },
+    });
+  } finally {
+    clearInterval(beatTimer);
+    state.tick({ status: "stopped", jobId: null });
+    await rpc.workerBeat(workerId, "stopped", null, details).catch(() => {});
+    if (health) health.close();
+    log("info", "worker_stopped", { worker: workerId });
+  }
   return 0;
 }
 
@@ -216,4 +328,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, main };
+module.exports = { startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, main };

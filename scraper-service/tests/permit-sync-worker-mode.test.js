@@ -66,6 +66,8 @@ test("a deep job is invisible to the two-argument claim the deployed worker call
 
 test("JSON jobs keep working on the old RPC; the v2 RPC refuses an unknown mode", async () => {
   const { h, admin, oldClaim } = await setup();
+  // D-093: requests are deep unless the source is set to JSON.
+  await admin(`SELECT admin_set_permit_sync_source($1, 'dc-projectdox', false, '{"account_download": false, "worker_mode": "json"}'::jsonb)`, [CRED]);
   const jsonId = (await admin(`SELECT admin_request_permit_sync($1) AS id`, [CRED]))[0].id;
   assert.equal((await pgliteWorkerRpc(h, { mode: "deep" }).claim("d", 300)), null, "a deep worker never takes a JSON job");
   const j = await oldClaim();
@@ -84,7 +86,9 @@ test("deep requests: admin only, audited, validated options, never merged into a
   }
   const id = await requestDeep({ only_portal_record_ids: ["11105"] });
   await assert.rejects(requestDeep({ only_portal_record_ids: ["9187"] }), /already has an active job/);
-  assert.equal((await admin(`SELECT admin_request_permit_sync($1) AS id`, [CRED]))[0].id, id, "a JSON request returns the active deep job, it does not queue a JSON job beside it");
+  await assert.rejects(admin(`SELECT admin_request_permit_sync($1) AS id`, [CRED]), /controlled job with exact options is queued/,
+    "Sync now never widens a queued exact-options job (D-094)");
+  assert.equal(await h.count("permit_sync_jobs", "credential_id = $1", [CRED]), 1);
   assert.equal(await h.count("platform_audit_events", "action = 'permit_sync.request_deep'"), 1);
   assert.equal(await h.count("permit_sync_events", "job_id = $1 AND code = 'enqueued'", [id]), 1);
 });

@@ -1,0 +1,78 @@
+{
+  "description": "Test files that already fail on feat/central-permit-repository (recorded 2026-11-13; frontend: 12 import vitest, which is not installed, 4 UCI assertion/render failures; analyzer: V2 OCR version test; scraper: analyzer/RAG quality tests). CI fails only on failures outside these lists. Remove a file once it passes; do not add files to hide new failures.",
+  "suites": {
+    "frontend": {
+      "cwd": ".",
+      "dirs": [
+        "src"
+      ],
+      "pattern": "^(?!src/lib/(codeAnalyzer|supabaseAnalyzer|codeModification)/|src/components/compliance/|src/lib/compliance[^/]*$).*\\.test\\.tsx?$",
+      "node_args": [
+        "--import",
+        "tsx"
+      ],
+      "timeout_seconds": 180,
+      "known_failures": [
+        "src/components/uci/UciD13WorkflowPanels.test.ts",
+        "src/lib/adminRoleHelpers.test.ts",
+        "src/lib/arlingtonScrapeJobIdentity.test.ts",
+        "src/lib/authPasswordReset.test.ts",
+        "src/lib/projectDestructiveSafety.test.ts",
+        "src/lib/scrapeJobTypes.test.ts",
+        "src/lib/uciActionTracker.test.ts",
+        "src/lib/uciCapabilityLabels.test.ts",
+        "src/lib/uciDocumentFindingsBridge.test.ts",
+        "src/lib/uciDocumentProcessing.test.ts",
+        "src/lib/uciDocumentRegistry.test.ts",
+        "src/lib/uciLoadProfile.test.ts",
+        "src/lib/uciLoadProfileWorkspace.test.ts",
+        "src/lib/uciStageHandoff.test.ts",
+        "src/pages/UciDashboard.applicationPrep.test.tsx",
+        "src/pages/uciApplicationBuilder.route.test.ts"
+      ]
+    },
+    "analyzer": {
+      "cwd": ".",
+      "dirs": [
+        "src",
+        "supabase/functions"
+      ],
+      "pattern": "^(src/lib/(codeAnalyzer|supabaseAnalyzer|codeModification)/|src/components/compliance/|src/lib/compliance[^/]*$|supabase/functions/).*\\.test\\.tsx?$",
+      "node_args": [
+        "--import",
+        "tsx"
+      ],
+      "timeout_seconds": 180,
+      "known_failures": [
+        "src/lib/supabaseAnalyzer/newRunAnalyzerVersion.test.ts"
+      ]
+    },
+    "permit-sync": {
+      "cwd": "scraper-service",
+      "dirs": [
+        "tests"
+      ],
+      "pattern": "^tests/(permit-sync-|permit-repo-)[^/]*\\.test\\.js$",
+      "timeout_seconds": 600,
+      "concurrency": 3,
+      "known_failures": []
+    },
+    "scraper": {
+      "cwd": "scraper-service",
+      "dirs": [
+        "tests"
+      ],
+      "pattern": "^tests/(?!permit-sync-|permit-repo-|uci-)[^/]*\\.test\\.js$",
+      "timeout_seconds": 600,
+      "concurrency": 3,
+      "known_failures": [
+        "tests/accuracyReview.test.js",
+        "tests/analyze-drawing.test.js",
+        "tests/findingQuality.test.js",
+        "tests/ragQuality.test.js",
+        "tests/requirementBenchmark.test.js",
+        "tests/verifierEvidenceRegressions.test.js"
+      ]
+    }
+  }
+}

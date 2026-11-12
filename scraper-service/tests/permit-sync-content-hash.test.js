@@ -81,3 +81,38 @@ test("a URL carrying a token or signature is treated as volatile wherever it app
   b.tabs.status.links = [{ href: "https://h/x?token=2" }];
   assert.equal(portalContentHash(a), portalContentHash(b));
 });
+
+test("D-101: the Files tab page snapshot and display order do not count when the folder list is present", () => {
+  const a = payload(1);
+  const b = payload(1);
+  a.tabs.files.rawText = "Approved Drawings (1)  A-101.pdf  2/9/26 1:30 PM";
+  a.tabs.files.tables = [{ tableIndex: 0, headers: ["A-101.pdf", "2/9/26 1:30 PM"], rows: [] }];
+  b.tabs.files.rawText = "Supporting Documents (0)";
+  b.tabs.files.tables = [{ tableIndex: 0, headers: ["Name"], rows: [{ Col_0: "x" }] }];
+  b.tabs.files.keyValues = [{ key: "Folder", value: "Supporting Documents" }];
+  assert.equal(portalContentHash(a), portalContentHash(b));
+
+  const twoFolders = (order) => {
+    const p = payload(1);
+    const drawings = p.tabs.files.folders[0];
+    drawings.files.push({ fileId: "700099", name: "A-099.pdf", folderName: "Approved Drawings", status: "Approved" });
+    const support = { name: "Approved Supporting Documents", fileCount: 1, files: [{ fileId: "700200", name: "S-1.pdf", status: "Approved" }] };
+    p.tabs.files.folders = order ? [drawings, support] : [support, { ...drawings, files: [...drawings.files].reverse() }];
+    return p;
+  };
+  assert.equal(portalContentHash(twoFolders(true)), portalContentHash(twoFolders(false)));
+
+  const renamed = payload(1);
+  renamed.tabs.files.folders[0].files[0].status = "Resubmit";
+  assert.notEqual(portalContentHash(renamed), portalContentHash(a), "a file status change still counts");
+});
+
+test("D-101: a Files tab without a folder list keeps its page text as content", () => {
+  const a = payload(1);
+  const b = payload(1);
+  delete a.tabs.files.folders;
+  delete b.tabs.files.folders;
+  a.tabs.files.rawText = "A-101.pdf Approved";
+  b.tabs.files.rawText = "A-101.pdf Resubmit";
+  assert.notEqual(portalContentHash(a), portalContentHash(b));
+});

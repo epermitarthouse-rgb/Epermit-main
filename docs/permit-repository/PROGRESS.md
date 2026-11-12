@@ -157,3 +157,25 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Regression | Done | Locally tested | permit-sync 182/182 (Chromium, outside sandbox); `npm test` 158/159 (pre-existing analyze-drawing failure); edge 29/29; frontend permit + Portal Harvest + Response Matrix + Code Analyzer (incl. V2) 483/483; `tsc --noEmit -p .` clean; whole scraper-service `tests/*.test.js` 1761 tests, 88 failing in 21 UCI/drawing-analysis files — the same 21 files fail on a clean checkout of HEAD `dd08ed1`, none imports changed code; Arlington and manual DC route tests pass. |
 | Commits (local, not pushed) | Done | n/a | `5f1e164` migrations, `e29ec90` worker, `6c63370` edge, `9284ab9` Permit Queue, `c964c9a` live-test scripts, then docs. `scripts/local-dc-e2e/` left uncommitted. |
 
+
+## Continuous deep scraping rollout P0–P2 (2026-11-13, local only)
+
+Status levels: Implemented / Locally tested / Deployed / Production-verified. Nothing below is deployed.
+
+| Item | Decision | Status | Evidence |
+|---|---|---|---|
+| Branch secured | — | Local bundle `../backups/feat-central-permit-repository-dd5eeb4.bundle` (verified), tag `backup/central-permit-repo-pre-orchestration` | Not pushed |
+| One request path, deep default, coalescing, follow-up | D-093, D-094 | Locally tested | `permit-sync-orchestration.test.js` 14/14 |
+| Claim lock, same-login lock | D-095 | Locally tested | same |
+| Release on shutdown/defer, lease recovery, bounded retries | D-098 | Locally tested | `permit-sync-fault-injection.test.js` 11/11 |
+| Per-permit progress, phases, counts | D-096 | Locally tested | orchestration + fault-injection tests; real counts only once a live job runs |
+| Worker health, heartbeat, JSON logs, Railway toml | D-098 | Implemented, locally tested | `/health` and liveness tests; toml not applied |
+| Schedule (per source, slot-based), cron scripts | D-097 | Locally tested; **not enabled, cron not installed** | scheduling-scripts test (stub pg_cron) |
+| Monitor + alerts | D-099 | Locally tested | two monitor tests; not installed |
+| Alert notifier (Resend) | D-099 | Locally tested | `permitSyncAlertEmail.test.ts` 6/6; not deployed |
+| Permit Queue: Refresh all (confirmation), Refresh per row and detail, batch banner, progress | D-096 | Locally tested | `PermitSyncControls.test.tsx` 7/7, `permitSync.test.ts` 9/9, `centralPermits.test.ts` |
+| Management Admin: schedule form, workers (scope, limits, version), alerts, Retry, confirmed Refresh all | D-097, D-099 | Locally tested | same |
+| CI workflow + baselines | D-100 | Locally dry-run | frontend 115 files (16 known), analyzer 81 (1 known), permit-sync 23 (0), scraper 43 (6 known); tsc 194 = baseline; eslint 154 = baseline; migrations pass |
+| Hash swap ff193644 | D-101 | Fixed locally; cause consistent with data, not proven | content-hash tests 7/7; live data: stored = old fn `10f7f34c…`, new fn `88470093…` |
+| P3 verification query | — | Implemented; checked on replayed schema | `scripts/permit-repo/verify-full-refresh.sql` |
+| DC sources 0610eaa5 / de8592f9 | D-095 | Audited | Same login; permit links only on de8592f9; recommend pausing 0610eaa5 (approval) |

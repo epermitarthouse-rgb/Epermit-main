@@ -46,6 +46,22 @@ class PortalChangedError extends PermitSyncError {
 class TransientError extends PermitSyncError {
   constructor(message) { super(message, { code: "transient" }); }
 }
+/**
+ * The worker hands the job back without spending an attempt (release_permit_sync_job): it is shutting down,
+ * or the portal login is in use by a manual scrape. The job is claimable again after retryAfterSeconds.
+ */
+class ReleaseError extends PermitSyncError {
+  constructor(message, code, retryAfterSeconds) {
+    super(message, { code });
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+class ShutdownError extends ReleaseError {
+  constructor(message = "worker is shutting down") { super(message, "worker_shutdown", 15); }
+}
+class DeferredError extends ReleaseError {
+  constructor(message, code = "deferred_manual_scrape", retryAfterSeconds = 120) { super(message, code, retryAfterSeconds); }
+}
 /** The worker lost its lease (cancelled or reclaimed); stop without finishing. */
 class LeaseLostError extends PermitSyncError {
   constructor() { super("job lease lost", { code: "lease_lost" }); }
@@ -62,6 +78,7 @@ function classify(err) {
   if (err instanceof RateLimitedError) return { outcome: "failed", code: err.code, retryable: true, retryAfterSeconds: err.retryAfterSeconds || 3600 };
   if (err instanceof SessionEndedError) return { outcome: "failed", code: err.code, retryable: true, retryAfterSeconds: null };
   if (err instanceof LeaseLostError) return { outcome: null, code: err.code, retryable: false, retryAfterSeconds: null };
+  if (err instanceof ReleaseError) return { outcome: "release", code: err.code, retryable: true, retryAfterSeconds: err.retryAfterSeconds };
   return { outcome: "failed", code: (err && err.code) || "transient", retryable: true, retryAfterSeconds: null };
 }
 
@@ -82,6 +99,9 @@ module.exports = {
   PortalChangedError,
   TransientError,
   LeaseLostError,
+  ReleaseError,
+  ShutdownError,
+  DeferredError,
   classify,
   safeMessage,
 };

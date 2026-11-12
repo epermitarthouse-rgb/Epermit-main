@@ -19,6 +19,12 @@ function pgliteWorkerRpc(h, { mode = null } = {}) {
         [jobId, workerId, outcome, code, message, metrics ? JSON.stringify(metrics) : null, Boolean(retryable), retryAfter]),
     applyDiscovery: (d) => h.rpc("apply_permit_discovery", d),
     applyBatch: (b) => h.rpc("apply_permit_sync_batch", b),
+    progress: (jobId, workerId, report) =>
+      svc(`SELECT report_permit_sync_progress($1, $2, $3::jsonb)`, [jobId, workerId, JSON.stringify(report)]),
+    release: (jobId, workerId, reason, checkpoint, retryAfter) =>
+      svc(`SELECT release_permit_sync_job($1, $2, $3, $4::jsonb, $5)`, [jobId, workerId, reason, checkpoint ? JSON.stringify(checkpoint) : null, retryAfter]),
+    workerBeat: (workerId, status, jobId, details) =>
+      svc(`SELECT permit_sync_worker_heartbeat($1, $2, $3, $4, $5::jsonb)`, [workerId, mode || "json", status, jobId || null, JSON.stringify(details || {})]),
   };
 }
 

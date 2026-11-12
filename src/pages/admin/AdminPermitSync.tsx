@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AlertsPanel, SchedulePanel, WorkerHealthPanel, useSchedulerStatus } from "@/components/admin/PermitSyncOperations";
 import { AlertBanner, Panel, StatusPill, type StatusTone } from "@/components/design/ProductPrimitives";
 import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanner";
 import { formatTimestamp } from "@/components/permits/PermitRepositoryViews";
+import { RefreshAllButton, SyncBatchBanner, useSyncOverview } from "@/components/permits/PermitSyncControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,8 +20,8 @@ import {
   listSyncEvents,
   listSyncJobs,
   listSyncSources,
-  requestPermitSync,
   resumePermitSyncSource,
+  retryPermitSyncJob,
   revokePermitAccess,
   type GrantScope,
 } from "@/lib/centralPermits";
@@ -35,6 +37,8 @@ const JOB_TONE: Record<string, StatusTone> = {
   queued: "info", running: "info", retry_wait: "warn", waiting_user: "warn", completed: "good",
   completed_with_warnings: "warn", failed: "bad", failed_unrecoverable: "bad", cancelled: "default",
 };
+
+const RETRYABLE_JOB_STATUSES = new Set(["failed", "failed_unrecoverable", "cancelled", "completed_with_warnings"]);
 
 function errorText(e: unknown) {
   return e instanceof Error ? e.message : String(e);
@@ -62,6 +66,9 @@ export default function AdminPermitSync() {
   const sources = useQuery({ queryKey: ["permit-sync", "sources"], queryFn: listSyncSources });
   const jobs = useQuery({ queryKey: ["permit-sync", "jobs"], queryFn: () => listSyncJobs(50), refetchInterval: 15000 });
   const grants = useQuery({ queryKey: ["permit-sync", "grants"], queryFn: listAccessGrants });
+  const overview = useSyncOverview();
+  const scheduler = useSchedulerStatus();
+  const overviewById = new Map((overview.data ?? []).map((o) => [o.credential_id, o]));
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [grantScope, setGrantScope] = useState<GrantScope>("permit");
   const [grantRef, setGrantRef] = useState("");
@@ -73,12 +80,13 @@ export default function AdminPermitSync() {
     mutationFn: async (fn: () => Promise<unknown>) => fn(),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["permit-sync"] });
+      void qc.invalidateQueries({ queryKey: ["central-permits", "sync"] });
       toast({ title: "Done" });
     },
     onError: (e) => toast({ title: "Action failed", description: errorText(e), variant: "destructive" }),
   });
 
-  const loadError = sources.error || jobs.error || grants.error;
+  const loadError = sources.error || jobs.error || grants.error || overview.error || scheduler.error;
 
   return (
     <AdminPageShell
@@ -86,7 +94,7 @@ export default function AdminPermitSync() {
       description="Portal sources, sync jobs and permit access grants for the central permit repository. Every action is audited."
       breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Permit Sync" }]}
       actions={
-        <Button size="sm" variant="outline" onClick={() => void qc.invalidateQueries({ queryKey: ["permit-sync"] })}>
+        <Button size="sm" variant="outline" onClick={() => { void qc.invalidateQueries({ queryKey: ["permit-sync"] }); void qc.invalidateQueries({ queryKey: ["central-permits", "sync"] }); }}>
           <RefreshCw className="mr-2 h-4 w-4" />Refresh
         </Button>
       }
@@ -94,6 +102,7 @@ export default function AdminPermitSync() {
       <div className="space-y-6">
         <LocalInspectionBanner />
         {loadError ? <AlertBanner tone="bad" title="Could not load sync data" detail={errorText(loadError)} /> : null}
+        <SyncBatchBanner sources={overview.data ?? []} />
 
         <Panel title="Sources" eyebrow="Portal accounts">
           {sources.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
@@ -122,9 +131,7 @@ export default function AdminPermitSync() {
                       <TableCell className="text-sm">{formatTimestamp(s.last_login_ok_at)}</TableCell>
                       <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground" title={str(s.last_error)}>{str(s.last_error) || "—"}</TableCell>
                       <TableCell className="space-x-2 text-right">
-                        <Button size="sm" variant="secondary" disabled={action.isPending || st !== "active"} onClick={() => action.mutate(() => requestPermitSync(id))}>
-                          Sync now
-                        </Button>
+                        {st === "active" && overviewById.get(id) ? <RefreshAllButton sources={[overviewById.get(id)!]} /> : null}
                         {["paused", "waiting_user", "auth_failed"].includes(st) ? (
                           <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => resumePermitSyncSource(id))}>
                             Resume
@@ -183,6 +190,11 @@ export default function AdminPermitSync() {
                         <Button size="sm" variant="ghost" onClick={() => setOpenJob(openJob === id ? null : id)}>
                           {openJob === id ? "Hide events" : "Events"}
                         </Button>
+                        {RETRYABLE_JOB_STATUSES.has(st) ? (
+                          <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => retryPermitSyncJob(id))}>
+                            Retry
+                          </Button>
+                        ) : null}
                         {ACTIVE_JOB_STATUSES.has(st) || st === "waiting_user" ? (
                           <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => cancelPermitSyncJob(id))}>
                             Cancel
@@ -201,12 +213,16 @@ export default function AdminPermitSync() {
                   return rows;
                 })}
                 {!jobs.data?.length ? (
-                  <TableRow><TableCell colSpan={9} className="py-6 text-center text-sm text-muted-foreground">No jobs yet. Scheduled syncs are not enabled.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="py-6 text-center text-sm text-muted-foreground">No jobs yet.</TableCell></TableRow>
                 ) : null}
               </TableBody>
             </Table>
           )}
         </Panel>
+
+        <SchedulePanel sources={overview.data ?? []} status={scheduler.data} />
+        <WorkerHealthPanel status={scheduler.data} loading={scheduler.isLoading} />
+        <AlertsPanel />
 
         <Panel title="Access grants" eyebrow="Who can see which permits">
           <form

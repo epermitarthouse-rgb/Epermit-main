@@ -16,13 +16,17 @@ const { replay, MIGRATIONS_DIR } = require("./helpers/replay-migrations");
 const fx = require("./helpers/permit-repo-fixtures");
 
 const NEW_MIGRATION = "20261111100000_central_permit_repository.sql";
-const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql"];
+const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql"];
+const ORCH = "20261113100000_permit_sync_orchestration.sql";
 const NEW_TABLE = /^(permits$|permit_(?!filings)|project_permits$)/;
 const NEW_FUNC = new RegExp([
   "^_?permit_", "^user_can_read_permit$", "^can_read_permit$", "^apply_permit_", "^record_permit_document_(download|capture|capture_v2)$", "^record_permit_report_(content|failure)$", "^record_permit_deep_pass$",
   "^admin_(grant|revoke)_permit_access$", "^admin_(link|unlink)_project_permit$", "^admin_set_permit_sync_source$",
   "^enqueue_permit_sync_runs$", "^admin_request_permit_(deep_)?sync$", "^claim_permit_sync_job_v2$", "^admin_cancel_permit_sync_job$", "^admin_resume_permit_sync_source$",
   "^(claim|heartbeat|finish)_permit_sync_job$", "^log_permit_sync_event$", "^search_permits$",
+  "^request_permit_(sync_)?refresh$", "^(cancel|release)_permit_sync_job$", "^admin_retry_permit_sync_job$", "^admin_set_permit_sync_schedule$",
+  "^get_permit_sync_(progress|overview|job_progress)$", "^report_permit_sync_progress$", "^mark_permit_sync_alerts_notified$",
+  "^invoke_permit_sync_alert_notifier$", "^admin_permit_sync_scheduler_status$",
 ].join("|"));
 
 const FINGERPRINT = `
@@ -97,9 +101,9 @@ test("re-applying the new migrations on the real chain is a no-op for the schema
 
 test("capture retry apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
   const RETRY = "20261112100000_permit_capture_retry.sql";
-  const base = await replay({ exclude: [RETRY] });
+  const base = await replay({ exclude: [RETRY, ORCH] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [ORCH] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${RETRY}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -120,9 +124,9 @@ test("capture retry apply (BEGIN/COMMIT-wrapped, as in production) and its rollb
 test("deep capture apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
   const DEEP = "20261111120000_permit_deep_capture.sql";
   // The capture-retry migration builds on deep capture, so this checks deep capture on the chain before it.
-  const base = await replay({ exclude: [DEEP, "20261112100000_permit_capture_retry.sql"] });
+  const base = await replay({ exclude: [DEEP, "20261112100000_permit_capture_retry.sql", ORCH] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await (await replay({ exclude: ["20261112100000_permit_capture_retry.sql"] })).db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: ["20261112100000_permit_capture_retry.sql", ORCH] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${DEEP}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -134,6 +138,27 @@ test("deep capture apply (BEGIN/COMMIT-wrapped, as in production) and its rollba
   await base.db.query(`INSERT INTO public.permit_sync_sources (credential_id, adapter_key) VALUES ($1, 'dc-projectdox')`, [cred]);
   await base.db.query(`INSERT INTO public.permit_sync_jobs (credential_id, adapter_key, trigger, worker_mode) VALUES ($1, 'dc-projectdox', 'manual', 'deep')`, [cred]);
   await assert.rejects(base.db.exec(rollback), /cancel the active deep job first/);
+  await base.db.exec("ROLLBACK");
+  await base.db.query(`UPDATE public.permit_sync_jobs SET status = 'cancelled', completed_at = now()`);
+  await base.db.exec(rollback);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
+});
+
+test("orchestration apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
+  const base = await replay({ exclude: [ORCH] });
+  const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+
+  await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${ORCH}`, "utf8")}\nCOMMIT;`);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
+
+  const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261113100000_permit_sync_orchestration.sql`, "utf8");
+  const cred = "10000000-0000-4000-8000-0000000000f1";
+  await base.db.query(`INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES ('10000000-0000-4000-8000-0000000000f2', 'f@test.invalid', '{}'::jsonb)`);
+  await base.db.query(`INSERT INTO public.portal_credentials (id, user_id, jurisdiction, portal_username, portal_password, permit_number) VALUES ($1, '10000000-0000-4000-8000-0000000000f2', 'Washington DC', 'acct', '{"pc_v":"1","iv":"aXY=","at":"YXQ=","ct":"Y3Q="}', 'F1')`, [cred]);
+  await base.db.query(`INSERT INTO public.permit_sync_sources (credential_id, adapter_key) VALUES ($1, 'dc-projectdox')`, [cred]);
+  await base.db.query(`INSERT INTO public.permit_sync_jobs (credential_id, adapter_key, trigger, worker_mode) VALUES ($1, 'dc-projectdox', 'manual', 'deep')`, [cred]);
+  await assert.rejects(base.db.exec(rollback), /cancel the active permit sync jobs first/);
   await base.db.exec("ROLLBACK");
   await base.db.query(`UPDATE public.permit_sync_jobs SET status = 'cancelled', completed_at = now()`);
   await base.db.exec(rollback);

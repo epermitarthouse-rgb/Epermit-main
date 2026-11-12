@@ -1,0 +1,146 @@
+name: PermitPilot CI
+
+# Validation only: this workflow never deploys, never calls Supabase or Railway, and needs no secrets.
+# Railway deploys a commit only after these checks pass ("Wait for CI" on the service); Edge Functions are
+# never deployed from CI. Known legacy failures are listed in ci/ and do not block; anything new does.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: permitpilot-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks version
+      - name: Scan commits of this change
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event.before }}" != "" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+          else
+            RANGE="${{ github.sha }}~1..${{ github.sha }}"
+          fi
+          ./gitleaks git --config .gitleaks.toml --log-opts="$RANGE" --redact --no-banner --exit-code 1
+
+  migrations:
+    name: Migration validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Naming, immutability and no activation
+        run: |
+          BASE="origin/${{ github.base_ref || 'main' }}"
+          if [ "${{ github.event_name }}" = "push" ]; then BASE="${{ github.event.before }}"; fi
+          git rev-parse --verify "$BASE" >/dev/null 2>&1 || BASE="HEAD~1"
+          node scripts/ci/validate-migrations.mjs --base "$BASE"
+
+  typecheck-lint:
+    name: Type check and lint (baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: node scripts/ci/diagnostics-baseline.mjs --tool tsc
+      - run: node scripts/ci/diagnostics-baseline.mjs --tool eslint
+
+  frontend-tests:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [frontend, analyzer]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: node scripts/ci/run-node-tests.mjs --suite ${{ matrix.suite }}
+
+  build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  scraper-service:
+    name: Scraper service tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [permit-sync, scraper]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: scraper-service/package-lock.json
+      - name: Install (no postinstall)
+        working-directory: scraper-service
+        run: npm ci --ignore-scripts
+      - name: Install Chromium
+        working-directory: scraper-service
+        run: npx playwright install chromium --with-deps
+      - name: Worker image starts without enqueueing
+        if: matrix.suite == 'permit-sync'
+        working-directory: scraper-service
+        run: |
+          ! grep -nE "request_permit_(sync|deep_sync|sync_refresh|refresh)|enqueue_permit_sync_runs" permit-sync/worker-entry.js permit-sync/core/*.js permit-sync/deep/*.js
+      - run: node scripts/ci/run-node-tests.mjs --suite ${{ matrix.suite }}
+
+  status:
+    name: CI status
+    if: always()
+    needs: [secrets, migrations, typecheck-lint, frontend-tests, build, scraper-service]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarise
+        run: |
+          echo "### PermitPilot CI for ${GITHUB_SHA::8}" >> "$GITHUB_STEP_SUMMARY"
+          echo '${{ toJSON(needs) }}' | jq -r 'to_entries[] | "- \(.key): \(.value.result)"' >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Deploys: Railway services with 'Wait for CI' deploy this commit only when every job passed. Edge Functions and migrations are applied manually after review." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '${{ toJSON(needs) }}' | jq -e 'all(.[]; .result == "success")' > /dev/null

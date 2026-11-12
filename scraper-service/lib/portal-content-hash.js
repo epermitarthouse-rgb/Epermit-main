@@ -73,6 +73,29 @@ function stripVolatile(value, key = null) {
   return value;
 }
 
+/** Page snapshot keys of the generic tab scraper: text and tables of whatever the page showed at the end. */
+const PAGE_SNAPSHOT_KEYS = ["rawText", "tables", "keyValues"];
+
+const byKey = (key) => (a, b) => String((a && a[key]) ?? "").localeCompare(String((b && b[key]) ?? ""));
+
+/**
+ * The Files tab, from its structured folder list when there is one (D-101). The page snapshot next to it shows
+ * whichever folder was open when the pass ended, so it differed between runs that downloaded files and runs
+ * that did not, with no permit change. Folders and files are sorted so the portal's display order does not count.
+ */
+function filesTabContent(files) {
+  if (!files || typeof files !== "object" || !Array.isArray(files.folders)) return stripVolatile(files, "files");
+  const out = {};
+  for (const [k, v] of Object.entries(files)) {
+    if (PAGE_SNAPSHOT_KEYS.includes(k) || isVolatileKey(k)) continue;
+    out[k] = stripVolatile(v, k);
+  }
+  out.folders = out.folders
+    .map((f) => (f && typeof f === "object" && Array.isArray(f.files) ? { ...f, files: [...f.files].sort(byKey("fileId")) } : f))
+    .sort(byKey("name"));
+  return out;
+}
+
 /** The portal_data subset that is permit content. */
 function portalContent(data) {
   if (!data || typeof data !== "object") return data ?? null;
@@ -81,6 +104,9 @@ function portalContent(data) {
     if (TOP_LEVEL_BOOKKEEPING.has(k)) continue;
     if (isVolatileKey(k)) continue;
     out[k] = stripVolatile(v, k);
+  }
+  if (out.tabs && typeof out.tabs === "object" && data.tabs && data.tabs.files !== undefined) {
+    out.tabs = { ...out.tabs, files: filesTabContent(data.tabs.files) };
   }
   return out;
 }

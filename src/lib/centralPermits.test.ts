@@ -13,6 +13,12 @@ import {
   permitFreshness,
   unlinkProjectFromPermit,
   requestPermitSync,
+  requestSourceRefresh,
+  requestPermitRefresh,
+  cancelSyncJob,
+  retryPermitSyncJob,
+  setPermitSyncSchedule,
+  loadPermitProgress,
   searchPermits,
   sectionTone,
   type CentralPermitsClient,
@@ -189,6 +195,39 @@ describe('central permits data layer', () => {
     __centralPermitsTestHooks.setClient(client);
     assert.equal(await requestPermitSync('cred-1'), 'job-1');
     assert.deepEqual(calls[0], { kind: 'rpc', name: 'admin_request_permit_sync', args: { p_credential_id: 'cred-1' }, ops: [] });
+  });
+
+  it('refresh requests, cancel, retry and schedule call the guarded RPCs with exact arguments', async () => {
+    const { client, calls } = fakeClient({}, () => ({ job_id: 'j1', result: 'created', status: 'queued' }));
+    __centralPermitsTestHooks.setClient(client);
+    assert.deepEqual(await requestSourceRefresh('cred-1'), { job_id: 'j1', result: 'created', status: 'queued' });
+    await requestPermitRefresh('p-1');
+    await cancelSyncJob('j1');
+    await retryPermitSyncJob('j1');
+    await setPermitSyncSchedule({
+      credentialId: 'cred-1', enabled: false, schedule: { frequency: 'daily', time: '02:00', timezone: 'America/New_York' },
+      deepDefaults: null, maxAttempts: null,
+    });
+    assert.deepEqual(calls.map((c) => [c.name, c.args]), [
+      ['request_permit_sync_refresh', { p_credential_id: 'cred-1' }],
+      ['request_permit_refresh', { p_permit_id: 'p-1' }],
+      ['cancel_permit_sync_job', { p_job_id: 'j1' }],
+      ['admin_retry_permit_sync_job', { p_job_id: 'j1' }],
+      ['admin_set_permit_sync_schedule', {
+        p_credential_id: 'cred-1', p_enabled: false, p_schedule: { frequency: 'daily', time: '02:00', timezone: 'America/New_York' },
+        p_deep_defaults: null, p_max_attempts: null,
+      }],
+    ]);
+  });
+
+  it('permit progress is read in chunks of 500 and keyed by permit', async () => {
+    const ids = Array.from({ length: 1200 }, (_, i) => `p${i}`);
+    const { client, calls } = fakeClient({}, () => [{ permit_id: 'p3', phase: 'queued' }]);
+    __centralPermitsTestHooks.setClient(client);
+    const map = await loadPermitProgress(ids);
+    assert.equal(calls.length, 3);
+    assert.deepEqual(calls.map((c) => ((c.args as { p_permit_ids: string[] }).p_permit_ids).length), [500, 500, 200]);
+    assert.equal(map.get('p3')?.phase, 'queued');
   });
 
   it('child reads page past the 1000-row response cap instead of truncating', async () => {

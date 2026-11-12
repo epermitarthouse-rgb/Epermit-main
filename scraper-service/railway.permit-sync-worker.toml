@@ -1,0 +1,37 @@
+# Railway config for the permit-sync-worker service (set the service's "Config file path" to
+# scraper-service/railway.permit-sync-worker.toml; root directory scraper-service). The HTTP scraper keeps
+# railway.toml. Same image, different start command. See docs/permit-repository/RUNBOOK_WORKER.md.
+#
+# Starting this service never enqueues a job. Required variables (not set here): PERMIT_SYNC_WORKER_ENABLED=true,
+# PERMIT_SYNC_LIVE_PORTAL_APPROVED=A-3, PERMIT_SYNC_MODE=deep, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+# PORTAL_CREDENTIALS_ENCRYPTION_KEY, and the deep caps. PERMIT_SYNC_WORKER_ONCE must be unset.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+watchPatterns = [
+  "permit-sync/**",
+  "lib/**",
+  "app/**",
+  "shared/**",
+  "server.js",
+  "package.json",
+  "package-lock.json",
+  "Dockerfile",
+  "railway.permit-sync-worker.toml",
+]
+
+[deploy]
+startCommand = "node permit-sync/worker-entry.js"
+# /health answers on $PORT (or PERMIT_SYNC_HEALTH_PORT). A worker that exits at startup (not enabled, missing
+# variables) fails the health check, so a misconfigured deploy never replaces a working one.
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+numReplicas = 1
+# No overlap: the old process stops (SIGTERM, releases its job) before the new one claims. The claim lock
+# would still keep the portal login single-session if both ran.
+overlapSeconds = 0
+# Time between SIGTERM and SIGKILL: enough for the scraper to stop at its next check and release the job.
+drainingSeconds = 120

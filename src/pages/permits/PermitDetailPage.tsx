@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { AlertBanner } from "@/components/design/ProductPrimitives";
@@ -7,6 +7,7 @@ import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanne
 import { PermitJsonExportButton } from "@/components/permits/PermitExportButtons";
 import { PermitQueueDetailView } from "@/components/permits/PermitQueueDetailView";
 import { ReportContentBody } from "@/components/permits/PermitSectionViews";
+import { PermitSyncPanel, RefreshPermitButton, usePermitProgress, useSyncOverview } from "@/components/permits/PermitSyncControls";
 import { PermitProjectLinksPanel } from "@/components/permits/ProjectPermitLinkPanel";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +20,7 @@ import {
   loadReportContent,
 } from "@/lib/centralPermits";
 import { PERMIT_QUEUE_PATH } from "@/lib/permitQueue";
+import { isPermitBusy } from "@/lib/permitSync";
 
 type Row = Record<string, unknown>;
 
@@ -90,6 +92,19 @@ export default function PermitDetailPage() {
     queryFn: () => loadPermitDetail(permitId),
     enabled: !!user && !!permitId,
   });
+  const overview = useSyncOverview(!!user);
+  const hasSources = (overview.data ?? []).length > 0;
+  const canRefresh = (overview.data ?? []).some((s) => s.can_refresh);
+  const progress = usePermitProgress(permitId ? [permitId] : [], !!user && hasSources);
+  const permitProgress = progress.data?.get(permitId) ?? null;
+
+  const qc = useQueryClient();
+  const wasBusy = useRef(false);
+  const busy = isPermitBusy(permitProgress);
+  useEffect(() => {
+    if (wasBusy.current && !busy) void qc.invalidateQueries({ queryKey: ["central-permits", "detail", permitId] });
+    wasBusy.current = busy;
+  }, [busy, permitId, qc]);
 
   const back = (
     <Button asChild variant="ghost" size="sm">
@@ -126,6 +141,12 @@ export default function PermitDetailPage() {
     <div className="space-y-6">
       {back}
       <LocalInspectionBanner />
+      {hasSources ? (
+        <PermitSyncPanel
+          progress={permitProgress}
+          action={canRefresh ? <RefreshPermitButton permitId={permitId} progress={permitProgress} size="default" /> : null}
+        />
+      ) : null}
       <PermitQueueDetailView
         detail={d}
         isAdmin={isAdmin}

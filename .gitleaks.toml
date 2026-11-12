@@ -1,0 +1,10 @@
+title = "PermitPilot gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public Supabase anon key of the production project (role anon; shipped to browsers by design)."
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlcXh5anJjbGRpdnRwaWtjcHZrIiwicm9sZSI6ImFub24i[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+''',
+]

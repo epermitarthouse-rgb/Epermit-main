@@ -5,6 +5,7 @@ import { AlertBanner, PageHeader, Panel } from "@/components/design/ProductPrimi
 import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanner";
 import { DcZipExportButton } from "@/components/permits/PermitExportButtons";
 import { PermitListTable } from "@/components/permits/PermitRepositoryViews";
+import { PermitSyncCell, RefreshAllButton, RefreshPermitButton, SyncBatchBanner, usePermitProgress, useSyncOverview } from "@/components/permits/PermitSyncControls";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -59,14 +60,24 @@ export default function PermitsPage() {
   const filtered = useMemo(() => filterQueueRows(allRows, linkCounts, { source, linked }), [allRows, linkCounts, source, linked]);
   const view = paginate(filtered, page, PERMIT_PAGE_SIZE);
 
+  const overview = useSyncOverview(!!user);
+  const syncSources = useMemo(() => overview.data ?? [], [overview.data]);
+  const canRefresh = syncSources.some((s) => s.can_refresh);
+  const progress = usePermitProgress(view.rows.map((r) => r.id), !!user && syncSources.length > 0);
+
   return (
     <div className="space-y-6">
       <LocalInspectionBanner />
       <PageHeader
         eyebrow="Central permits"
         title="Permit Queue"
-        body="Every permit collected from connected portals that you have access to, organised like the portal. Read-only; refreshed by scheduled syncs. No portal login is needed to view."
-        action={<DcZipExportButton />}
+        body="Every permit collected from connected portals that you have access to, organised like the portal. Portal data is read-only here; refreshes pull the latest from the portal. No portal login is needed to view."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <RefreshAllButton sources={syncSources} />
+            <DcZipExportButton />
+          </div>
+        }
       />
 
       <form
@@ -119,6 +130,8 @@ export default function PermitsPage() {
         <Button type="submit" variant="secondary">Search</Button>
       </form>
 
+      <SyncBatchBanner sources={syncSources} />
+
       {result.error ? (
         <AlertBanner tone="bad" title="Could not load permits" detail={result.error instanceof Error ? result.error.message : String(result.error)} />
       ) : null}
@@ -132,7 +145,16 @@ export default function PermitsPage() {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading permits…
           </div>
         ) : (
-          <PermitListTable rows={view.rows} linkCounts={result.data?.linkError ? undefined : linkCounts} />
+          <PermitListTable
+            rows={view.rows}
+            linkCounts={result.data?.linkError ? undefined : linkCounts}
+            syncCell={syncSources.length ? (r) => (
+              <div className="flex flex-col items-start gap-1.5">
+                <PermitSyncCell progress={progress.data?.get(r.id)} />
+                {canRefresh ? <RefreshPermitButton permitId={r.id} progress={progress.data?.get(r.id)} /> : null}
+              </div>
+            ) : undefined}
+          />
         )}
         {view.pages > 1 ? (
           <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">

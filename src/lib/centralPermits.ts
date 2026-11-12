@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { assertPermitWritesAllowed } from '@/lib/localPermitInspection';
+import type { PermitProgress, RefreshResult, SyncJobProgress, SyncSourceOverview } from '@/lib/permitSync';
 
 /**
  * Data access for the central permit repository (/permit-queue, /admin/permit-sync).
@@ -324,6 +325,85 @@ export async function requestPermitSync(credentialId: string): Promise<string> {
 export async function cancelPermitSyncJob(jobId: string): Promise<void> {
   assertPermitWritesAllowed('admin_cancel_permit_sync_job');
   unwrap(await client().rpc('admin_cancel_permit_sync_job', { p_job_id: jobId }), 'admin_cancel_permit_sync_job');
+}
+
+// ---- Refresh requests and progress (D-093 .. D-099) -------------------------
+
+
+/** Sources the caller can see, with counts, schedule, and the job in flight / queued / last finished. */
+export async function loadSyncOverview(): Promise<SyncSourceOverview[]> {
+  return (unwrap(await client().rpc('get_permit_sync_overview'), 'get_permit_sync_overview') as SyncSourceOverview[] | null) ?? [];
+}
+
+/** Latest refresh state per permit (only permits the caller can read are returned). */
+export async function loadPermitProgress(permitIds: string[]): Promise<Map<string, PermitProgress>> {
+  const out = new Map<string, PermitProgress>();
+  for (let i = 0; i < permitIds.length; i += 500) {
+    const rows = (unwrap(await client().rpc('get_permit_sync_progress', { p_permit_ids: permitIds.slice(i, i + 500) }), 'get_permit_sync_progress') as PermitProgress[] | null) ?? [];
+    for (const r of rows) out.set(r.permit_id, r);
+  }
+  return out;
+}
+
+export async function loadSyncJobProgress(jobId: string): Promise<SyncJobProgress> {
+  return unwrap(await client().rpc('get_permit_sync_job_progress', { p_job_id: jobId }), 'get_permit_sync_job_progress') as SyncJobProgress;
+}
+
+/** Refresh every permit of a source. Coalesces with a queued or running job instead of starting another. */
+export async function requestSourceRefresh(credentialId: string): Promise<RefreshResult> {
+  assertPermitWritesAllowed('request_permit_sync_refresh');
+  return unwrap(await client().rpc('request_permit_sync_refresh', { p_credential_id: credentialId }), 'request_permit_sync_refresh') as RefreshResult;
+}
+
+export async function requestPermitRefresh(permitId: string): Promise<RefreshResult> {
+  assertPermitWritesAllowed('request_permit_refresh');
+  return unwrap(await client().rpc('request_permit_refresh', { p_permit_id: permitId }), 'request_permit_refresh') as RefreshResult;
+}
+
+/** Cancel for platform admins and 'manage' grantees; captured files and reports are kept. */
+export async function cancelSyncJob(jobId: string): Promise<void> {
+  assertPermitWritesAllowed('cancel_permit_sync_job');
+  unwrap(await client().rpc('cancel_permit_sync_job', { p_job_id: jobId }), 'cancel_permit_sync_job');
+}
+
+export async function retryPermitSyncJob(jobId: string): Promise<RefreshResult> {
+  assertPermitWritesAllowed('admin_retry_permit_sync_job');
+  return unwrap(await client().rpc('admin_retry_permit_sync_job', { p_job_id: jobId }), 'admin_retry_permit_sync_job') as RefreshResult;
+}
+
+export interface SyncScheduleInput {
+  credentialId: string;
+  enabled: boolean;
+  schedule: { frequency: 'daily' | 'weekdays' | 'weekly'; time: string; timezone: string; weekday?: number } | null;
+  deepDefaults: { max_files?: number; max_bytes?: number; max_file_bytes?: number } | null;
+  maxAttempts: number | null;
+}
+
+export async function setPermitSyncSchedule(input: SyncScheduleInput): Promise<{ automation_enabled: boolean; next_run_at: string | null }> {
+  assertPermitWritesAllowed('admin_set_permit_sync_schedule');
+  return unwrap(await client().rpc('admin_set_permit_sync_schedule', {
+    p_credential_id: input.credentialId,
+    p_enabled: input.enabled,
+    p_schedule: input.schedule,
+    p_deep_defaults: input.deepDefaults,
+    p_max_attempts: input.maxAttempts,
+  }), 'admin_set_permit_sync_schedule') as { automation_enabled: boolean; next_run_at: string | null };
+}
+
+export interface SchedulerStatus {
+  cron_available: boolean;
+  cron_jobs: Array<{ name: string; schedule: string; active: boolean }>;
+  workers: Array<{ worker_id: string; mode: string; status: string; current_job_id: string | null; started_at: string; last_seen_at: string; details: Record<string, unknown> }>;
+  open_alerts: number;
+}
+
+export async function loadSchedulerStatus(): Promise<SchedulerStatus> {
+  return unwrap(await client().rpc('admin_permit_sync_scheduler_status'), 'admin_permit_sync_scheduler_status') as SchedulerStatus;
+}
+
+export async function listSyncAlerts(limit = 50): Promise<Record<string, unknown>[]> {
+  const res = await client().from('permit_sync_alerts').select('*').order('last_seen_at', { ascending: false }).limit(limit);
+  return (unwrap(res, 'permit_sync_alerts') as Record<string, unknown>[] | null) ?? [];
 }
 
 export async function resumePermitSyncSource(credentialId: string): Promise<void> {

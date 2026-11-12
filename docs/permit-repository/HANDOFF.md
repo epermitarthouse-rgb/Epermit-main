@@ -1,6 +1,24 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-13 (D-092: one keepalive GET allowed; BCIV2500152 files accepted). Read "D-092 keepalive" first.
+Last updated: 2026-11-13 (continuous deep scraping P0–P2 implemented locally; nothing deployed). Read "Continuous deep scraping P0–P2" first.
+
+## Continuous deep scraping P0–P2 (2026-11-13, local only)
+- Built: migration `20261113100000_permit_sync_orchestration.sql` (+ rollback script) with one deep request path, coalescing, the same-login claim lock, release without spending attempts, per-permit progress, worker heartbeats, slot-based schedules, the monitor and alerts (D-093 – D-099). It enqueues nothing and installs no cron.
+- Worker: graceful SIGTERM (releases the job), `/health`, JSON logs, heartbeats with scope and limits; `scraper-service/railway.permit-sync-worker.toml`. Never enqueues.
+- UI: Permit Queue Refresh all (confirmation shows jurisdiction and permit count), Refresh per row and on the detail page, batch banner with counts and Cancel; Management Admin scheduling, workers, alerts, Retry. Admin "Sync now" replaced by the confirmed Refresh all.
+- CI: `.github/workflows/permitpilot-ci.yml` with known-failure baselines (D-100). Alert notifier edge function written, not deployed. Cron scripts in `scripts/permit-repo/scheduling/`, not run.
+- Hash swap (D-101): ff193644's hash alternated because the Files tab page snapshot was hashed. Fixed locally; verify with two runs before agents are on.
+- Runbook: `RUNBOOK_WORKER.md`. P3 check after the first full refresh: `scripts/permit-repo/verify-full-refresh.sql`.
+- Tests: permit-sync 23/23 files, frontend and analyzer suites no new failures, tsc/eslint at baseline. Local bundle backup in `../backups/`. No push, no deploy, no production write, no job enqueued.
+- Before the first full refresh: apply the migration, deploy the worker with high deep caps and `PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS` / `PERMIT_SYNC_WORKER_ONCE` unset, deploy the frontend. The user starts it from Permit Queue. Scheduling stays off.
+- Open: P4 agent service mode (beyond the hash fix), P5 project creation, P6 analyzer bridge (design note in MASTER_PLAN §0.6). Stale production rows (3 DC `scrape_jobs` running since 2026-07-27, 2 pipeline runs since 2026-06-26) are untouched.
+
+## D-092 live rerun (2026-11-12 18:24–18:28 UTC), COMPLETED
+- Approved: one supervised headed deep job for 6364 on HEAD `dd5eeb4`, agents off, same caps as `f60b7e0d` (64 files, 734003200 bytes, 209715200 per file; env the same). `npm run test:permit-sync` 210/210 first. Pre-check 12/12 true.
+- Job `2a845e88` (log `/tmp/rerun-keepalive.log`): first line `agent_trigger=off`, claimed only by `javerias-MacBook-Pro.local`, login ok, API session ok, worker exit 0. Outcome **`completed`**, `error_code` null, no deep warnings. JSON pass: 28 discovered, 1 in scope, 7/7 sections ok, 0 changes, 0 snapshots.
+- `deep_trace`: tabs `files` only; gated `already_stored` 72; attempted 0; folder errors 0; trail empty. `files_downloaded` 0, `bytes_downloaded` 0, reports captured/failed 0. No `guard_denied` or violation event. The pass lasted about 28 s, so `GetSessionTimeout` was not polled: the D-092 rule was not exercised live.
+- Unchanged: 72 stored (36 download / 36 viewer), document fingerprint, 84 storage objects, 6 report versions, `permit_changes` 181, parsed_comments fingerprint `b4a09c21…`, pipeline runs 0, flag OFF, cron 3, no automated source. Review comments still 6 with the same content; only `last_seen_at` moved.
+- Changed: `permit_deep_state` now names this run, and ff193644 `portal_data` was written once (`portal_changed` 1): hash `13ac00b0eef8d096` → `10f7f34c166e4e48`. Those two values swap between deep runs (`9c25736c` and `795b06f7`) with no permit content change. With agents on, each swap would start a pipeline run (D-088). Needs a look before agents are on.
 
 ## D-092 keepalive (2026-11-13, local only, no live run)
 - Decided: keep all 72 stored files of BCIV2500152 (permit `06fa082e`) as PDF renditions, including the 3 view-only Supporting Documents. That permit's files are complete. Do not re-download them.
