@@ -131,7 +131,7 @@ export default function AdminPermitSync() {
                       <TableCell className="text-sm">{formatTimestamp(s.last_login_ok_at)}</TableCell>
                       <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground" title={str(s.last_error)}>{str(s.last_error) || "—"}</TableCell>
                       <TableCell className="space-x-2 text-right">
-                        {st === "active" && overviewById.get(id) ? <RefreshAllButton sources={[overviewById.get(id)!]} /> : null}
+                        {overviewById.get(id) ? <RefreshAllButton sources={[overviewById.get(id)!]} /> : null}
                         {["paused", "waiting_user", "auth_failed"].includes(st) ? (
                           <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => resumePermitSyncSource(id))}>
                             Resume

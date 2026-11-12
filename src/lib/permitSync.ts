@@ -231,6 +231,13 @@ export function refreshResultMessage(r: RefreshResult): { title: string; detail:
   }
 }
 
+/** Source statuses that refuse every run (mirrors _permit_sync_request); 'inactive' only means no schedule. */
+export const BLOCKED_SOURCE_STATUSES: ReadonlySet<string> = new Set(['needs_encryption', 'auth_failed', 'paused', 'waiting_user']);
+
+export function sourceAllowsManualRefresh(status: string | null | undefined): boolean {
+  return !!status && !BLOCKED_SOURCE_STATUSES.has(status);
+}
+
 /** The open (queued or running) job of a source, preferring the one running. */
 export function sourceOpenJob(s: SyncSourceOverview): SyncJobSummary | null {
   return s.active_job ?? s.queued_job ?? null;

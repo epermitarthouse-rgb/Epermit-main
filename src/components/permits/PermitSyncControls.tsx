@@ -26,6 +26,7 @@ import {
   phaseTone,
   refreshAllConfirmation,
   refreshResultMessage,
+  sourceAllowsManualRefresh,
   sourceOpenJob,
   type PermitProgress,
   type RefreshResult,
@@ -75,7 +76,7 @@ function useRefreshToast() {
  * and says when a refresh is already open (the request then joins it instead of starting another).
  */
 export function RefreshAllButton({ sources }: { sources: SyncSourceOverview[] }) {
-  const refreshable = sources.filter((s) => s.can_refresh && s.permit_count > 0);
+  const refreshable = sources.filter((s) => s.can_refresh && s.permit_count > 0 && sourceAllowsManualRefresh(s.status));
   const [target, setTarget] = useState<SyncSourceOverview | null>(null);
   const handlers = useRefreshToast();
   const run = useMutation({ mutationFn: (credentialId: string) => requestSourceRefresh(credentialId), ...handlers });

@@ -39,6 +39,10 @@ describe("Permit Queue refresh controls", () => {
     assert.match(render(createElement(RefreshAllButton, { sources: [source()] })), /Refresh all/);
     assert.equal(render(createElement(RefreshAllButton, { sources: [source({ can_refresh: false })] })), "");
     assert.equal(render(createElement(RefreshAllButton, { sources: [source({ permit_count: 0 })] })), "");
+    assert.match(render(createElement(RefreshAllButton, { sources: [source({ status: "inactive" })] })), /Refresh all/, "no schedule is not a block");
+    for (const status of ["paused", "auth_failed", "waiting_user", "needs_encryption"]) {
+      assert.equal(render(createElement(RefreshAllButton, { sources: [source({ status })] })), "", status);
+    }
   });
 
   it("the batch banner shows recorded counts, the current permit and Cancel for managers only", () => {
