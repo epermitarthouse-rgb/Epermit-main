@@ -1,6 +1,6 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-12 (deep job stop after viewer POST drop; agents off). Read "Deep job stop" first; older sections below are history.
+Last updated: 2026-11-12 (D-089 local fallback, not live). Read "Deep job stop" and "Supervised live check" first.
 
 ## Deep job stop (2026-11-12, viewer POST drop)
 - Why: in deep mode, `viewFile` for a view-only file submits a POST form to `/File/FileViewer?fileID=…` in a popup. The transport guard drops that non-GET (`method_dropped`, `route.abort('blockedbyclient')`). The popup stays on the blocked error page, so it is treated as present and the guarded GET `File/RetrieveFile` fallback never runs. Every view-only Drawings file ends `download_failed`. No deny rule and no method rule was changed. POST to FileViewer stays refused.
@@ -8,6 +8,20 @@ Last updated: 2026-11-12 (deep job stop after viewer POST drop; agents off). Rea
 - Approved cancel `scripts/permit-repo/one-permit-live-test/02-cancel-deep-job.sql` via `supabase db query --linked -f` did not execute: the CLI stopped at "Initialising login role" with HTTP 403 (this CLI login's project list does not include `eeqxyjrcldivtpikcpvk`). No production write from that attempt.
 - SELECT after the attempt (statuses and counts only): job `74af8d1d` is terminal `completed_with_warnings`, `error_code` null. Active jobs (`queued` / `running` / `retry_wait` / `waiting_user`): 0. Documents for the permit: 72 = 9 stored, 27 `not_requested`, 33 `failed`, 3 `not_permitted`. No new document rows.
 - Not done: no live portal session, no download, no agent run, no deploy, no push, no cron or `automation_enabled` change, no secret set.
+- Local fix (D-089, not live): deep mode closes a viewer popup that is empty, blocked, or has no WebViewer config, then uses the existing GET `File/RetrieveFile` fallback (original, then PDF rendition). POST to FileViewer stays refused. `npm run test:permit-sync` 204/204.
+
+## Supervised live check (not run) — one Drawings view-only file
+Needed before this counts as verified. Queue one deep job for ProjectID 6364 with `max_files` 1 (do not reuse `12-request-full-deep-job.sql` as written; that queues 72). The CLI login must be able to run `supabase db query --linked` again (this session got HTTP 403 on login-role). Agents off. Headed. The 33 failed Drawings rows were next eligible about 14:58 UTC on 2026-11-12; before that, `max_files=1` can take a permitted `not_requested` file instead of a view-only retry.
+
+```bash
+cd /Users/javerianaveed/epermit/Epermit-main/scraper-service && env -u PERMITPILOT_SERVICE_PIPELINE_SECRET \
+  PERMIT_SYNC_WORKER_ENABLED=true PERMIT_SYNC_LIVE_PORTAL_APPROVED=A-3 PERMIT_SYNC_MODE=deep PERMIT_SYNC_WORKER_ONCE=true \
+  PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS=6364 PERMIT_SYNC_DEEP_MAX_FILES=1 PERMIT_SYNC_DEEP_MAX_BYTES=209715200 PERMIT_SYNC_DEEP_MAX_FILE_BYTES=209715200 \
+  SCRAPER_HEADLESS=false PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright" \
+  node -r dotenv/config permit-sync/worker-entry.js
+```
+
+Expect the first log line `agent_trigger=off` and one new stored document with `capture_access_path=viewer`. Guard events for the job, if any, are only `method_dropped`. The portal may still refuse RetrieveFile when `DownloadFile=false`; that result is a portal refusal, not a guard change.
 
 ## Full-capture live test (2026-11-12 ~08:48–11:00 UTC), PARTIAL PASS — reports complete, files incomplete
 - User approval: apply migration `20261112100000`, one full-capture deep job for BCIV2500152 (72 / 600 MiB, no 50 MB `max_file_bytes`), one no-change rerun, agents OFF, headed Chromium. Upload limit raised to 500 MB in the dashboard (not readable via CLI; bucket `file_size_limit` still null). Do not push.
