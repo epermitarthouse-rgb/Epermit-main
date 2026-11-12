@@ -197,8 +197,95 @@ async function login409Scenario() {
   return { status: res.status, body: await res.json(), requests: pg.requests.map((q) => `${q.method} ${q.table}`) };
 }
 
+/**
+ * 3b: downloadProjectDoxFile installs its own context route while a file downloads. In a deep run that route
+ * must hand every request on to the transport guard (route.fallback). Real Chromium; the lowest route plays
+ * the network, and hostnames never resolve, so nothing can reach a real server even if a route regresses.
+ */
+async function downloadGuardScenario() {
+  const { out } = load(APP);
+  const d = out.dcDeep;
+  const safety = require("../../permit-sync/core/safety");
+  const { routeReadRequest } = require("../../permit-sync/adapters/dc-projectdox/live-transport");
+  const { chromium } = require("playwright");
+  const WEBUI = "https://washington-dc-us-projectdoxwebui.avolvecloud.com";
+  const WEBAPI = "https://washington-dc-us-projectdoxwebapi.avolvecloud.com";
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(4096, 32), Buffer.from("\n%%EOF\n")]);
+  const browser = await chromium.launch({ args: ["--host-resolver-rules=MAP * ~NOTFOUND"] });
+  const server = [];
+  const violations = [];
+  const stored = [];
+  try {
+    const context = await browser.newContext({ acceptDownloads: true });
+    await context.route("**/*", (route) => {
+      const req = route.request();
+      const u = new URL(req.url());
+      server.push({ method: req.method(), path: u.pathname, cacheControl: req.headers()["cache-control"] || null });
+      if (u.href.startsWith(`${WEBUI}/files`)) {
+        return route.fulfill({ contentType: "text/html", body: `<!doctype html><body><a href="javascript:viewFile(700101)">A-101.pdf</a><script>
+          function viewFile(id) { window.open("${WEBUI}/viewer?fileID=" + id, "viewer"); }
+        </script></body>` });
+      }
+      if (u.href.startsWith(`${WEBUI}/viewer`)) {
+        return route.fulfill({ contentType: "text/html", body: `<!doctype html><body><iframe src="${WEBAPI}/File/RetrieveFile?convertToPDF=true&inline=true&fileID=700101"></iframe><script>
+          fetch("https://session.planreview.dob.dc.gov/File/Upload?ProjectID=6364").catch(() => {});
+          fetch("${WEBAPI}/File/ToggleViewed?fileId=700101", { method: "POST", body: "x" }).catch(() => {});
+        </script></body>` });
+      }
+      if (/\/File\/RetrieveFile/.test(u.pathname)) return route.fulfill({ contentType: "application/pdf", body: pdf });
+      return route.fulfill({ status: 200, contentType: "text/plain", body: "ok" });
+    });
+    const guard = safety.createRunGuard({ mode: "deep" });
+    await context.route("**/*", (route) => {
+      const req = route.request();
+      const r = { method: req.method(), url: req.url(), resourceType: req.resourceType() };
+      const v = routeReadRequest(r, guard);
+      if (v.violation) violations.push(`${r.method} ${new URL(r.url).pathname}`);
+      return v.action === "continue" ? route.fallback() : route.abort("blockedbyclient");
+    });
+    const page = await context.newPage();
+    await page.goto(`${WEBUI}/files`);
+    const session = { _downloadedHashes: new Map(), _scrapeCumulativeBytes: 0 };
+    const deep = {
+      storeFile: async ({ localPath, fileId }) => {
+        stored.push({ fileId, size: require("node:fs").statSync(localPath).size });
+        return { bucket: "permit-documents", path: `p1/files/${fileId}_A-101.pdf`, sha256: "0".repeat(64), size: 1 };
+      },
+    };
+    const started = Date.now();
+    const result = await d.downloadProjectDoxFile(page, context, "700101", "700101_A-101.pdf", WEBUI, session, null, { deep });
+    return {
+      result: { success: result && result.success, reason: (result && result.reason) || null },
+      seconds: Math.round((Date.now() - started) / 1000),
+      violations,
+      guardViolations: guard.violations().map((v) => `${v.method} ${new URL(v.url).pathname} ${v.rule}`),
+      server,
+      stored,
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+/** 3c: a deep session never re-launches a browser (no guard, no password); the manual path is untouched. */
+async function reinitScenario() {
+  const { out } = load(APP);
+  const d = out.dcDeep;
+  let closed = 0;
+  const session = { dcReloginDisabled: true, portalType: "projectdox", portalSubtype: "dc-planreview", browser: { close: async () => { closed += 1; } } };
+  let error = null;
+  try {
+    await d.reinitializeBrowser(session);
+  } catch (e) {
+    error = String(e.message);
+  }
+  return { error, closed, lost: session.dcDeepSessionLost || null, cancel: session._cancelRequested === true };
+}
+
 async function main() {
   const [scenario, arg] = process.argv.slice(2);
+  if (scenario === "downloadguard") return downloadGuardScenario();
+  if (scenario === "reinit") return reinitScenario();
   if (scenario === "routes") {
     const { app, out } = load(path.resolve(arg));
     return { routes: routeList(app), keys: Object.keys(out) };

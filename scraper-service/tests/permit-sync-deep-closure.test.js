@@ -59,8 +59,8 @@ test("deep portal sync writes only to an existing linked project and never re-po
   const r = probe(["sync"]);
   assert.deepEqual(r.keys, [
     "DEFAULT_DASHBOARD_URL", "TAB_DEFS", "collectDcPlanReviewDashboardAllPages", "collectDcPlanReviewDashboardProjects",
-    "deriveWebUiBase", "hashPortalData", "openDcPlanReviewProjectPopup", "performLogin", "scrapeAll",
-    "stripPortalSyncTransientFields", "supabase", "syncPortalDataToSupabase",
+    "deriveWebUiBase", "downloadProjectDoxFile", "hashPortalData", "openDcPlanReviewProjectPopup", "performLogin",
+    "reinitializeBrowser", "scrapeAll", "stripPortalSyncTransientFields", "supabase", "syncPortalDataToSupabase",
   ]);
   const { deep_missing_project: missing, deep_no_project_id: noId, deep_linked_project: linked, manual_default: manual } = r.results;
   assert.equal(missing.ok, false, "no linked row: the sync fails instead of creating a project");
@@ -95,6 +95,34 @@ test("DC /api/login answers 409 while an automated sync holds a live lease on th
   assert.equal(r.status, 409);
   assert.equal(r.body.error, "automated_sync_in_progress");
   assert.deepEqual(r.requests, ["GET portal_credentials", "GET permit_sync_jobs"], "checked before any browser launch");
+});
+
+test("3b: during a deep download, a denied request and a POST mutation still reach the transport guard (real Chromium)", (t) => {
+  let r;
+  try {
+    r = probe(["downloadguard"]);
+  } catch (e) {
+    if (/Executable doesn't exist|browserType\.launch/.test(String(e.message))) return t.skip("Chromium not installed");
+    throw e;
+  }
+  assert.deepEqual([...r.violations].sort(), ["GET /File/Upload", "POST /File/ToggleViewed"], "both refused by the guard");
+  assert.deepEqual([...r.guardViolations].sort(), ["GET /File/Upload deny_pattern", "POST /File/ToggleViewed deny_pattern"]);
+  const reached = r.server.map((s) => s.path);
+  assert.equal(reached.includes("/File/Upload"), false, "the denied GET never reached the server");
+  assert.equal(reached.includes("/File/ToggleViewed"), false, "the mutation never reached the server");
+  const file = r.server.find((s) => s.path === "/File/RetrieveFile");
+  assert.ok(file, "allowed file reads still pass through");
+  assert.equal(file.cacheControl, "no-cache, no-store, must-revalidate", "the download route's header override is kept (fallback carries it)");
+  assert.equal(r.result.success, true);
+  assert.deepEqual(r.stored.map((s) => s.fileId), ["700101"]);
+});
+
+test("3c: a deep session refuses browser re-initialization and flags the session as lost", () => {
+  const r = probe(["reinit"]);
+  assert.match(r.error, /re-initialization is disabled/);
+  assert.equal(r.closed, 0, "the guarded browser is not closed and no unguarded one is launched");
+  assert.equal(r.lost, "reinitialize_refused");
+  assert.equal(r.cancel, true, "the scraper loop stops at its next cancel check");
 });
 
 test("dashboard pager: default reads page 1 only; allPages tags every row; the popup pages back to the permit", (t) => {

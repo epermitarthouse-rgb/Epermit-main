@@ -932,6 +932,8 @@ async function ensureDcPlanReviewExtractionPage(session, project) {
 async function rebuildDcPlanReviewProjectSession(session, project) {
   if (session.dcReloginDisabled) {
     // D-065: automated deep runs log in once per job; a lost session fails this permit's deep pass instead.
+    session.dcDeepSessionLost = session.dcDeepSessionLost || "relogin_refused";
+    session._cancelRequested = true;
     throw new Error("DC session lost; re-login is disabled for this session");
   }
   console.log(
@@ -7308,6 +7310,12 @@ function isTargetClosedError(err) {
 }
 
 async function reinitializeBrowser(session) {
+  if (session && session.dcReloginDisabled) {
+    // Deep runs: a new browser would have no transport guard and no password; the job's retry handles it.
+    session.dcDeepSessionLost = session.dcDeepSessionLost || "reinitialize_refused";
+    session._cancelRequested = true;
+    throw new Error("DC session lost; browser re-initialization is disabled for this session");
+  }
   console.log('   🔄 Re-initializing browser after crash...');
   try { if (session.browser) await session.browser.close().catch(() => {}); } catch (_) {}
   const browser = await launchChromiumForScraper({ label: "reinitialize", route: "reinitializeBrowser", file: "server.js" });
@@ -11059,12 +11067,16 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
     }
   };
 
+  // Deep mode: the transport guard is an earlier context route; continue() here would bypass it.
+  const passRoute = options && options.deep
+    ? (route, overrides) => route.fallback(overrides)
+    : (route, overrides) => route.continue(overrides);
   const cacheRouteHandler = async (route) => {
     const req = route.request();
     const url = req.url();
     if (isFileContentType(req.headers()["accept"] || "") || isFileUrl(url) ||
         /filehandler|viewfile|getfile|filedownload/i.test(url)) {
-      await route.continue({
+      await passRoute(route, {
         headers: {
           ...req.headers(),
           "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -11074,7 +11086,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
         },
       });
     } else {
-      await route.continue();
+      await passRoute(route);
     }
   };
   await context.route("**/*", cacheRouteHandler);
@@ -14115,6 +14127,8 @@ app.post("/api/filing/reauth", async (req, res) => {
       syncPortalDataToSupabase,
       hashPortalData,
       stripPortalSyncTransientFields,
+      downloadProjectDoxFile,
+      reinitializeBrowser,
     },
     arlingtonWorker: startArlingtonDurableWorkerLoop({
     supabase,
