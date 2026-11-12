@@ -84,6 +84,51 @@ async function withQuietConsole(fn) {
   }
 }
 
+/** Short reason code from a scraper error string: URLs dropped, no file names, at most 80 characters. */
+function reasonCode(v) {
+  if (v === undefined || v === null || v === "") return null;
+  return String(v).replace(/https?:\/\/\S+/gi, "<url>").replace(/[^\w:.<> -]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || null;
+}
+
+/** Files-tab outcome for the pass trace: gate reasons as counts, attempted files by id, status and reason code. */
+function filesTrace(filesTab) {
+  const gated = {};
+  const attempted = [];
+  const folderErrors = [];
+  for (const folder of (filesTab && filesTab.folders) || []) {
+    if (folder.folderError) folderErrors.push(reasonCode(folder.folderError));
+    for (const f of folder.files || []) {
+      if (f.downloadGate) {
+        gated[f.downloadGate] = (gated[f.downloadGate] || 0) + 1;
+        continue;
+      }
+      attempted.push({ file_id: f.fileId ? String(f.fileId) : null, status: f.downloadStatus || null, error: reasonCode(f.downloadError || f.uploadStorageMessage) });
+    }
+  }
+  return { tab_error: reasonCode(filesTab && filesTab.error), gated, attempted: attempted.slice(0, 10), attempted_total: attempted.length, folder_errors: folderErrors.slice(0, 5) };
+}
+
+/**
+ * One diagnostic record per deep pass (method, host, masked path, step and reason codes only; no page text,
+ * cookies or credentials): where the transport saw the session end, the recent portal requests, and the
+ * Files-tab outcome. The scraper's own console is silenced, so this is the only record of what it did.
+ */
+function passTrace({ transport, session, data }) {
+  const diag = transport && typeof transport.diagnostics === "function" ? transport.diagnostics() : null;
+  const tabs = (data && data.tabs) || {};
+  const sessionEndedAt = (diag && diag.sessionEndedAt) || null;
+  const files = tabs.files ? filesTrace(tabs.files) : null;
+  const failed = Boolean(files && files.attempted.some((f) => f.status !== "success"));
+  return {
+    code: "deep_trace",
+    session_ended_at: sessionEndedAt,
+    session_lost: (session && session.dcDeepSessionLost) || null,
+    tabs: Object.fromEntries(Object.entries(tabs).map(([k, t]) => [k, t && t.error ? reasonCode(t.error) : "ok"])),
+    files,
+    trail: diag && (sessionEndedAt || failed || (session && session.dcDeepSessionLost)) ? diag.trail : [],
+  };
+}
+
 /** Remembers dashboard rows (page number, description, location) seen by discovery, for the manual project object. */
 function createDashboardIndex(transport) {
   const rows = new Map();
@@ -141,7 +186,7 @@ function manualProject(record, row) {
  * @param {string|null} deps.credentialId
  * @param {Function} [deps.log]
  */
-function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, username, credentialId = null, log = () => {}, quiet = withQuietConsole, env = {} }) {
+function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, username, credentialId = null, log = () => {}, quiet = withQuietConsole, env = {}, trace = (o) => console.log(`[permit-sync] ${JSON.stringify(o)}`) }) {
   const index = createDashboardIndex(transport);
   /** portal_record_id -> GetReportList items of the JSON pass in this job. */
   const reportListByRecord = new Map();
@@ -443,6 +488,13 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
         await quiet(() => dcDeep.scrapeAll(s, [project], `permit-sync:${job.id}`, plan.tabs, null, null, false, null, null, null, deepOptions));
       } finally {
         hb.stop();
+        try {
+          const t = passTrace({ transport, session: s, data: s.data && s.data[project.id] });
+          trace(t);
+          await event(t.session_ended_at || t.session_lost ? "warn" : "info", "deep_trace", t.session_ended_at ? `${t.session_ended_at.match} ${t.session_ended_at.method} ${t.session_ended_at.host}${t.session_ended_at.path}` : null, { portal_record_id: record.portal_record_id, ...t });
+        } catch (_) {
+          // The trace is diagnostic only; it never changes the pass outcome.
+        }
         await afterScrape(s);
       }
       if (hb.lost) {
@@ -530,4 +582,4 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
   return { afterPermit, wrapTransport, index };
 }
 
-module.exports = { createDeepPass, createDashboardIndex, manualProject, withQuietConsole };
+module.exports = { createDeepPass, createDashboardIndex, manualProject, withQuietConsole, passTrace, filesTrace, reasonCode };

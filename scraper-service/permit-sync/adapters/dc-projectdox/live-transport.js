@@ -46,6 +46,10 @@ const IDP_HOSTS = [/(^|\.)b2clogin\.com$/i, /(^|\.)okta\.com$/i, /^login\.micros
 const STATIC_RESOURCE_TYPES = new Set(["stylesheet", "image", "font", "media", "script"]);
 const AUTH_TRACE_TYPES = new Set(["document", "xhr", "fetch"]);
 const DEAD_URL = [/SessionEnded\.aspx/i, /SessionIDDoesNotExist/i, /\/oauth2\/v2\.0\/logout/i];
+const DEAD_URL_CODES = ["session_ended_page", "session_id_missing", "b2c_logout"];
+/** Read-phase request trail kept for a session-end diagnosis (method, host, path, type, rule; no query). */
+const TRAIL_MAX = 25;
+const TRAIL_TYPES = new Set(["document", "xhr", "fetch", "other"]);
 
 function parse(url) {
   try {
@@ -58,6 +62,27 @@ function parse(url) {
 const isIdpHost = (host) => IDP_HOSTS.some((p) => p.test(host));
 const isDcHost = (host) => safety.DC_HOSTS.includes(String(host).toLowerCase());
 const isDeadUrl = (url) => DEAD_URL.some((p) => p.test(String(url)));
+
+/** Which session-dead pattern a URL matched, and whether in the path or only in the query. */
+function deadUrlMatch(url) {
+  const i = DEAD_URL.findIndex((p) => p.test(String(url)));
+  if (i < 0) return null;
+  const u = parse(url);
+  const inPath = u ? DEAD_URL[i].test(u.pathname) : true;
+  return `${DEAD_URL_CODES[i]}${inPath ? "" : "_in_query"}`;
+}
+
+/** Method, host and masked path of a request (no query, no fragment). */
+function requestPoint(method, url, extra = {}) {
+  const at = loginLocation(url);
+  const slash = at.indexOf("/");
+  return { method: String(method || "GET").toUpperCase(), host: slash < 0 ? at : at.slice(0, slash), path: slash < 0 ? "/" : at.slice(slash), ...extra };
+}
+
+function sessionEndedMessage(at) {
+  if (!at) return undefined;
+  return `portal session ended (${at.match}: ${at.method} ${at.host}${at.path}, ${at.type || "request"} via ${at.via}, step ${at.phase})`;
+}
 
 /**
  * Login-phase request policy (D-046). The existing DC scraper (performLogin in
@@ -288,6 +313,16 @@ async function createDcLiveTransport(opts) {
   let dashboard = null;
   let currentPage = 0;
   const authBlocked = [];
+  const trail = [];
+  let sessionEndedAt = null;
+  const remember = (entry) => {
+    trail.push(entry);
+    if (trail.length > TRAIL_MAX) trail.shift();
+  };
+  const markSessionEnded = (method, url, extra) => {
+    sessionEnded = true;
+    if (!sessionEndedAt) sessionEndedAt = requestPoint(method, url, { match: deadUrlMatch(url), phase, ...extra });
+  };
 
   await context.route("**/*", async (route) => {
     const req = route.request();
@@ -304,13 +339,16 @@ async function createDcLiveTransport(opts) {
     }
     const d = routeReadRequest(r, guard);
     if (d.violation) violation = violation || describeViolation(d, r);
-    if (d.sessionEnded) sessionEnded = true;
+    if (d.sessionEnded) markSessionEnded(r.method, r.url, { type: r.resourceType || null, via: "browser" });
+    if (isDcHost(parse(r.url)?.hostname || "") && (TRAIL_TYPES.has(r.resourceType) || d.action !== "continue")) {
+      remember(requestPoint(r.method, r.url, { type: r.resourceType || null, rule: d.rule, action: d.action }));
+    }
     return d.action === "continue" ? route.continue() : route.abort("blockedbyclient");
   });
 
   function assertHealthy() {
     if (violation) throw new SafetyViolationError(violationMessage(violation), violation);
-    if (sessionEnded) throw new SessionEndedError();
+    if (sessionEnded) throw new SessionEndedError(sessionEndedMessage(sessionEndedAt));
   }
 
   const isOpen = (p) => Boolean(p) && !(typeof p.isClosed === "function" && p.isClosed());
@@ -326,8 +364,10 @@ async function createDcLiveTransport(opts) {
       api[m] = async (target, options = {}) => {
         const url = typeof target === "string" ? target : target && typeof target.url === "function" ? target.url() : String(target);
         const method = m === "fetch" ? String((options && options.method) || (target && typeof target.method === "function" ? target.method() : "GET")).toUpperCase() : m.toUpperCase();
-        if (isDcHost(parse(url)?.hostname || "") && isDeadUrl(url)) sessionEnded = true;
+        const onDcHost = isDcHost(parse(url)?.hostname || "");
+        if (onDcHost && isDeadUrl(url)) markSessionEnded(method, url, { type: "api_request", via: "context_request" });
         const v = guard.checkRequest(method, url);
+        if (onDcHost) remember(requestPoint(method, url, { type: "api_request", rule: v.rule, action: v.allowed ? "continue" : "refused" }));
         if (!v.allowed) {
           violation = violation || describeViolation(v, { method, url });
           throw new SafetyViolationError(violationMessage(violation), violation);
@@ -696,6 +736,10 @@ async function createDcLiveTransport(opts) {
     mode,
     context,
     assertHealthy,
+    /** Session-end point and recent portal requests (method, host, masked path, type, rule only). */
+    diagnostics() {
+      return { sessionEndedAt, trail: trail.slice() };
+    },
     /** The dashboard page (reopened if it was closed); the deep pass shares it as session.page. */
     dashboardPage: getDashboard,
     /**

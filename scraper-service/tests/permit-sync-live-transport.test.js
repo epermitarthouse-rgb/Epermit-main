@@ -658,6 +658,28 @@ test("a 401 from the API is session_ended and names the route; a session page la
   );
 });
 
+test("a session-dead page in the read phase names its method, host, path and type, never the query", async () => {
+  await withApiSession({ reply: jsonReply }, async ({ transport, browser }) => {
+    await browser.navigate("https://session.planreview.dob.dc.gov/Project/ProjectStatus?projectID=11854&timeStamp=1");
+    await browser.navigate("https://session.planreview.dob.dc.gov/WebForms/SessionEnded.aspx?token=s3cret&user=someone");
+    assert.throws(() => transport.assertHealthy(), (e) => {
+      assert.ok(e instanceof errors.SessionEndedError);
+      assert.equal(e.code, "session_ended");
+      assert.equal(e.message, "portal session ended (session_ended_page: GET session.planreview.dob.dc.gov/WebForms/SessionEnded.aspx, document via browser, step read)");
+      return true;
+    });
+    const d = transport.diagnostics();
+    assert.deepEqual(d.sessionEndedAt, { method: "GET", host: "session.planreview.dob.dc.gov", path: "/WebForms/SessionEnded.aspx", match: "session_ended_page", phase: "read", type: "document", via: "browser" });
+    const tail = d.trail.slice(-2);
+    assert.deepEqual(tail.map((t) => [t.method, t.host, t.path, t.type, t.action]), [
+      ["GET", "session.planreview.dob.dc.gov", "/Project/ProjectStatus", "document", "continue"],
+      ["GET", "session.planreview.dob.dc.gov", "/WebForms/SessionEnded.aspx", "document", "abort"],
+    ]);
+    assert.equal(tail[1].rule, "session_ended");
+    assert.ok(!JSON.stringify(d).includes("s3cret") && !JSON.stringify(d).includes("projectID"), "no query values in the diagnostics");
+  });
+});
+
 test("a project page without Globals.Session.SessionID stops before any API read", async () => {
   await assert.rejects(
     withApiSession({ sessionId: null, reply: jsonReply }, async ({ transport, seen }) => {
