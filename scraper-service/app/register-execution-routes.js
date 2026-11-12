@@ -237,6 +237,9 @@ function isWashingtonDcPlanReviewDashboard(url) {
   }
 }
 
+/** The DC ProjectDox Web API (RetrieveFile, GetFolderFiles); not derivable from the session.planreview host. */
+const DC_PROJECTDOX_WEBAPI_ORIGIN = "https://washington-dc-us-projectdoxwebapi.avolvecloud.com";
+
 /** Authenticated DC project shell host (popup). */
 function isDcPlanReviewSessionHost(url) {
   try {
@@ -12055,13 +12058,18 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
       }
     }
 
+    // D-090: a deep DC Files page is on session.planreview, so a Web API origin derived from it
+    // ("session-projectdoxwebapi…") does not exist. Deep runs use the real API host with the page's
+    // session id, and never fall through to fetching arbitrary page links (one is the portal's Log Out).
+    const deepDcFallback = Boolean(options && options.deep && !isMontgomeryAdapter);
+    let deepFallbackReason = null;
     if (!popup && !isMontgomeryAdapter && origin) {
       console.log(
         `      ⚙️ Same-tab viewer (no popup): trying direct RetrieveFile + main-page scan for fileId ${fileId}`,
       );
       try {
         const originNorm = String(origin).replace(/\/$/, "");
-        const webApiOrigin = originNorm.replace(/projectdoxwebui/gi, "projectdoxwebapi");
+        const webApiOrigin = deepDcFallback ? DC_PROJECTDOX_WEBAPI_ORIGIN : originNorm.replace(/projectdoxwebui/gi, "projectdoxwebapi");
         if (webApiOrigin !== originNorm) {
           const waRetrieveUrls = [
             `${webApiOrigin}/File/RetrieveFile?convertToPDF=true&inline=true&blackCADBackground=false&fileID=${encodeURIComponent(String(fileId))}&${cacheBuster}`,
@@ -12073,12 +12081,24 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
           try {
             const allCookies = await context.cookies([originNorm, webApiOrigin]);
             const sessionCookie = allCookies.find((c) => c.name === "SessionID");
-            if (sessionCookie) {
+            // The DC Web API authenticates with the project page's Globals.Session.SessionID (D-047).
+            const pageSessionId = deepDcFallback
+              ? await page.evaluate(() => (window.Globals && window.Globals.Session && window.Globals.Session.SessionID) || null).catch(() => null)
+              : null;
+            const sessionValue = pageSessionId || (sessionCookie && sessionCookie.value) || null;
+            let pageOrigin = originNorm;
+            if (deepDcFallback) {
+              try {
+                pageOrigin = new URL(page.url()).origin;
+              } catch (_) {}
+            }
+            if (!sessionValue) deepFallbackReason = "retrieve_no_session_id";
+            if (sessionValue) {
               const waHeaders = {
-                sessionid: sessionCookie.value,
-                Cookie: `SessionID=${sessionCookie.value}`,
-                Referer: `${originNorm}/`,
-                Origin: originNorm,
+                sessionid: sessionValue,
+                ...(sessionCookie ? { Cookie: `SessionID=${sessionCookie.value}` } : {}),
+                Referer: `${pageOrigin}/`,
+                Origin: pageOrigin,
                 "X-Requested-With": "XMLHttpRequest",
               };
               for (let wi = 0; wi < waRetrieveUrls.length; wi++) {
@@ -12091,6 +12111,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                   const status = response.status();
                   const ct = response.headers()["content-type"] || "";
                   if (!response.ok()) {
+                    deepFallbackReason = `retrieve_http_${status}`;
                     continue;
                   }
                   const buffer = await response.body();
@@ -12106,6 +12127,7 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                     }
                   }
                   if (rejectReason) {
+                    deepFallbackReason = `retrieve_${rejectReason}_http_${status}${/html/i.test(ct) ? "_html" : ""}`;
                     continue;
                   }
                   const cumulative = (session?._scrapeCumulativeBytes || 0) + buffer.length;
@@ -12121,12 +12143,18 @@ async function downloadProjectDoxFile(page, context, fileId, fileName, webUiBase
                     fileSizeKB: Math.max(1, Math.round(buffer.length / 1024)),
                   });
                 } catch (oneErr) {
+                  if (deepDcFallback) deepFallbackReason = oneErr && oneErr.code === "safety_violation" ? "retrieve_guard_refused" : "retrieve_request_error";
                 }
               }
             } else {
             }
           } catch (wErr) {
+            if (deepDcFallback) deepFallbackReason = deepFallbackReason || "retrieve_setup_error";
           }
+        }
+
+        if (deepDcFallback) {
+          return { success: false, reason: deepFallbackReason || "retrieve_failed" };
         }
 
         const directCandidates = [

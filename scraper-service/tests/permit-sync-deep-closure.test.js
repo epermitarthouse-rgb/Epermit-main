@@ -148,6 +148,22 @@ test("D-089: a blocked or empty viewer popup falls back to RetrieveFile GET; a r
     assert.match(stored.tag, /^%PDF-1\.4 api-/);
   }
 
+  // D-090: on the live layout the fallback still reaches the real Web API with the page's session id,
+  // a refusal is reported as an HTTP reason, and no deep case ever fetches a page link (Profile, Log Out).
+  const liveCase = byName.live_origin;
+  assert.equal(liveCase.success, true, liveCase.reason);
+  assert.ok(liveCase.apiGets.length >= 1 && liveCase.apiGets.every((u) => u.startsWith("https://washington-dc-us-projectdoxwebapi.avolvecloud.com/File/RetrieveFile?")), liveCase.apiGets.join(" "));
+  assert.equal(liveCase.apiSessionIds[0], "probe-page-session");
+  assert.equal(liveCase.records[0].endpoint, "retrieve_file_original");
+  const refused = byName.api_refused;
+  assert.equal(refused.success, false);
+  assert.equal(refused.reason, "retrieve_http_403");
+  assert.equal(refused.records.length, 0);
+  for (const c of r.cases) {
+    const linkFetches = c.decisions.filter((d) => /^\/(User\/|WebForms\/SessionEnded)/.test(d.path));
+    assert.deepEqual(linkFetches, [], `${c.name} fetched a page link`);
+  }
+
   const blockedPosts = byName.blocked.decisions.filter((d) => d.method === "POST" && d.path === "/File/FileViewer");
   assert.ok(blockedPosts.length >= 1, "viewFile posted the viewer form");
   for (const post of blockedPosts) {

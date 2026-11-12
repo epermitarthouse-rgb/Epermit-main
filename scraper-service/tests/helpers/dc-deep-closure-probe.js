@@ -298,6 +298,7 @@ async function viewerFallbackScenario() {
     "700202": pdfBytes("api-700202"),
     "700203": pdfBytes("api-short"),
     "700301": pdfBytes("api-viewer"),
+    "700205": pdfBytes("api-live"),
   };
   try {
     const context = await browser.newContext({ acceptDownloads: true });
@@ -315,7 +316,9 @@ async function viewerFallbackScenario() {
       if (u.pathname === "/files") {
         return route.fulfill({
           contentType: "text/html",
-          body: `<!doctype html><body><a href="javascript:viewFile(1)">file</a><script>
+          body: `<!doctype html><body><a href="javascript:viewFile(1)">file</a>
+          <a href="/User/Profile">Profile</a><a href="/WebForms/SessionEnded.aspx">Log Out</a><script>
+            window.Globals = { Session: { SessionID: "probe-page-session" } };
             function viewFile(id) {
               const mode = window.__mode || "blocked";
               const name = "viewer_" + id + "_" + Date.now();
@@ -362,13 +365,18 @@ async function viewerFallbackScenario() {
       decisions.push({ method: r.method, path, action: v.action, violation: v.violation, rule: v.rule });
       return v.action === "continue" ? route.fallback() : route.abort("blockedbyclient");
     });
-    context.request.get = async (target) => {
+    const apiSessionIds = [];
+    context.request.get = async (target, options = {}) => {
       const url = String(target);
       apiGets.push(url);
+      apiSessionIds.push((options.headers && options.headers.sessionid) || null);
       const v = routeReadRequest({ method: "GET", url, resourceType: "xhr" }, guard);
       if (v.action !== "continue") throw new Error(`guard_${v.rule}`);
       const u = new URL(url);
       const fileId = u.searchParams.get("fileID") || "";
+      if (fileId === "700204") {
+        return { ok: () => false, status: () => 403, headers: () => ({ "content-type": "text/html" }), body: async () => Buffer.from("refused") };
+      }
       const body = bodies[fileId] || pdfBytes("api-default");
       return {
         ok: () => true,
@@ -383,12 +391,12 @@ async function viewerFallbackScenario() {
     const openUrls = () => context.pages().filter((p) => !p.isClosed()).map((p) => {
       try { return p.url(); } catch (_) { return ""; }
     });
-    const runCase = async (name, fileId, mode, portalSize) => {
+    const runCase = async (name, fileId, mode, portalSize, webUiBase = WEBUI) => {
       const d0 = decisions.length;
       const a0 = apiGets.length;
       const r0 = records.length;
       await page.evaluate((m) => { window.__mode = m; }, mode);
-      const result = await d.downloadProjectDoxFile(page, context, fileId, `${fileId}_A-101.pdf`, WEBUI, session, null, {
+      const result = await d.downloadProjectDoxFile(page, context, fileId, `${fileId}_A-101.pdf`, webUiBase, session, null, {
         preferViewerRuntime: true,
         deep: {
           preferOriginal: true,
@@ -421,6 +429,7 @@ async function viewerFallbackScenario() {
         reason: (result && result.reason) || null,
         decisions: decisions.slice(d0),
         apiGets: apiGets.slice(a0),
+        apiSessionIds: apiSessionIds.slice(a0),
         records: records.slice(r0),
         openUrls: openUrls(),
       };
@@ -431,6 +440,10 @@ async function viewerFallbackScenario() {
     cases.push(await runCase("empty", "700202", "empty", good("700202")));
     cases.push(await runCase("viewer", "700301", "viewer", good("700301")));
     cases.push(await runCase("truncated", "700203", "blocked", 8000));
+    // Live layout: the Files page is on session.planreview, so the derived web UI base is not a real host.
+    const LIVE_DERIVED = "https://session-projectdoxwebui.planreview.dob.dc.gov";
+    cases.push(await runCase("live_origin", "700205", "blocked", good("700205"), LIVE_DERIVED));
+    cases.push(await runCase("api_refused", "700204", "blocked", 4096, LIVE_DERIVED));
     return {
       cases,
       guardViolations: guard.violations().map((v) => v.rule),
