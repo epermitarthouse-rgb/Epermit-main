@@ -92,6 +92,34 @@ export const DOCUMENT_VIEW_LABEL: Record<DocumentViewState, string> = {
   not_captured: 'Not captured',
 };
 
+// ---- Content capture pills (D-086) --------------------------------------------
+
+export interface ContentPill {
+  label: string;
+  tone: 'good' | 'warn';
+}
+
+/** "9 of 72 files stored · 61 pending · 2 too large": what is stored, not whether the metadata read worked. */
+export function filesContentPill(documents: Row[]): ContentPill | null {
+  const docs = documents.filter((d) => !d.removed_at);
+  if (!docs.length) return null;
+  const stored = docs.filter((d) => documentViewState(d) === 'viewable').length;
+  const deferred = docs.filter((d) => d.download_status === 'deferred_oversize').length;
+  const pending = docs.length - stored - deferred;
+  const parts = [`${stored} of ${docs.length} files stored`];
+  if (pending) parts.push(`${pending} pending`);
+  if (deferred) parts.push(`${deferred} too large`);
+  return { label: parts.join(' · '), tone: stored === docs.length ? 'good' : 'warn' };
+}
+
+/** "4 of 5 reports": report contents captured out of the reports the portal lists. */
+export function reportsContentPill(reports: Row[]): ContentPill | null {
+  const list = reports.filter((r) => !r.removed_at);
+  if (!list.length) return null;
+  const captured = list.filter((r) => r.content_status === 'captured').length;
+  return { label: `${captured} of ${list.length} reports`, tone: captured === list.length ? 'good' : 'warn' };
+}
+
 export interface FileGroup {
   key: string;
   /** Highest version first. */

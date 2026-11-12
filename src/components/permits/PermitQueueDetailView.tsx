@@ -15,17 +15,24 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { currentRows, type PermitDetail } from "@/lib/centralPermits";
 import { classifySectionState, sectionStateMap, type PermitSection } from "@/lib/permitSections";
-import { PERMIT_QUEUE_TABS, PERMIT_QUEUE_TAB_LABELS, type PermitQueueTab } from "@/lib/permitQueue";
+import {
+  PERMIT_QUEUE_TABS,
+  PERMIT_QUEUE_TAB_LABELS,
+  filesContentPill,
+  reportsContentPill,
+  type ContentPill,
+  type PermitQueueTab,
+} from "@/lib/permitQueue";
 
 type Row = Record<string, unknown>;
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
-/** The stored sections behind each portal tab. Status also carries the workflows. */
+/** The stored sections behind each portal tab. Tasks also carries the workflows, as on the portal. */
 const TAB_SECTIONS: Record<PermitQueueTab, PermitSection[]> = {
-  tasks: ["tasks"],
+  tasks: ["tasks", "workflows"],
   files: ["files"],
-  status: ["status", "workflows"],
+  status: ["status"],
   info: ["info"],
   reports: ["reports"],
   reviews: ["reviews"],
@@ -67,6 +74,17 @@ export function PermitQueueDetailView({
     files: currentRows(d.documents).length,
     reports: currentRows(d.reports).length,
     reviews: currentRows(d.comments).length,
+  };
+  const contentPills: Partial<Record<PermitQueueTab, ContentPill | null>> = {
+    files: filesContentPill(d.documents),
+    reports: reportsContentPill(d.reports),
+  };
+  /** The section read state, unless it was read fine and the tab has content to count: then what is stored. */
+  const tabPill = (t: PermitQueueTab) => {
+    const read = classifySectionState(state(TAB_SECTIONS[t][0])).status;
+    const content = contentPills[t];
+    if (read === "ok" && content) return <StatusPill tone={content.tone} data-permit-content-pill={t}>{content.label}</StatusPill>;
+    return <ExtractionStatusPill status={read} />;
   };
   const incomplete = PERMIT_QUEUE_TABS.filter((t) =>
     TAB_SECTIONS[t].some((s) => {
@@ -123,15 +141,20 @@ export function PermitQueueDetailView({
         </TabsList>
         {PERMIT_QUEUE_TABS.map((t) => (
           <TabsContent key={t} value={t}>
-            <Panel title={PERMIT_QUEUE_TAB_LABELS[t]} action={<ExtractionStatusPill status={classifySectionState(state(TAB_SECTIONS[t][0])).status} />}>
-              {t === "tasks" ? <TasksSectionView tasks={d.tasks} state={state("tasks")} /> : null}
+            <Panel title={PERMIT_QUEUE_TAB_LABELS[t]} action={tabPill(t)}>
+              {t === "tasks" ? (
+                <div className="space-y-6">
+                  <TasksSectionView tasks={d.tasks} state={state("tasks")} />
+                  <WorkflowsSectionView workflows={d.workflows} state={state("workflows")} snapshots={d.snapshots} part="workflows" />
+                </div>
+              ) : null}
               {t === "files" ? (
                 <FilesSectionView folders={d.folders} documents={d.documents} state={state("files")} onViewDocument={onViewDocument} busyDocumentId={busyDocumentId} />
               ) : null}
               {t === "status" ? (
                 <div className="space-y-6">
                   <StatusSectionView permit={p} state={state("status")} snapshots={d.snapshots} />
-                  <WorkflowsSectionView workflows={d.workflows} state={state("workflows")} snapshots={d.snapshots} />
+                  <WorkflowsSectionView workflows={d.workflows} state={state("workflows")} snapshots={d.snapshots} part="steps" />
                 </div>
               ) : null}
               {t === "info" ? <InfoSectionView permit={p} state={state("info")} snapshots={d.snapshots} /> : null}

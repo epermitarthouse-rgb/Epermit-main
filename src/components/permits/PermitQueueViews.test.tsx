@@ -86,9 +86,45 @@ describe("Permit Queue detail", () => {
       const t = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false, defaultTab: tab }));
       assert.doesNotMatch(t, DIAGNOSTICS, `diagnostics leaked into ${tab}`);
     }
-    assert.match(render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false, defaultTab: "status" })), /Plan Review/);
     assert.match(render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false, defaultTab: "reviews" })), /Provide setbacks/);
     assert.match(render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false, defaultTab: "files" })), /A-101\.pdf/);
+  });
+
+  // Radix renders only the active tab's content, so each render shows one tab.
+  it("Tasks shows the active tasks, then the workflows table (as on the portal); Status no longer repeats it", () => {
+    const steps = { id: "snap-2", section: "status", source_kind: "json", run_id: "r", captured_at: "2026-11-11T03:41:00Z", payload: { SubWorkflows: [{ SubWorkflow: "Intake review", StatusName: "Done" }] } };
+    const noTasks = detail({ tasks: [], workflows: [{ id: "w1", name: "Plan Review", state: "Completed" }], snapshots: [steps] });
+    const tasks = render(createElement(PermitQueueDetailView, { detail: noTasks, isAdmin: false }));
+    assert.match(tasks, /The portal listed no open tasks/);
+    assert.match(tasks, />Workflows</);
+    assert.match(tasks, /Plan Review/);
+    assert.ok(tasks.indexOf("open tasks") < tasks.indexOf(">Workflows<"), "tasks first, then the workflow table");
+    assert.doesNotMatch(tasks, /Review steps/);
+    const status = render(createElement(PermitQueueDetailView, { detail: noTasks, isAdmin: false, defaultTab: "status" }));
+    assert.doesNotMatch(status, />Workflows</);
+    assert.doesNotMatch(status, /Plan Review/);
+    assert.match(status, /Review steps/);
+    assert.match(status, /Intake review/);
+  });
+
+  it("Files and Reports pills count stored content; a failed read keeps the read status", () => {
+    const doc = (id: string, over: Row = {}): Row => ({ id, portal_file_id: id, portal_folder_id: "9", file_name: `${id}.pdf`, download_permitted: true, download_status: "pending", ...over });
+    const docs = [
+      doc("a", { download_status: "stored", storage_path: "p-1/files/a.pdf" }),
+      doc("b", { download_status: "stored", storage_path: "p-1/files/b.pdf", download_permitted: false, capture_access_path: "viewer" }),
+      doc("c"), doc("d", { download_status: "failed" }), doc("e", { download_status: "deferred_oversize" }),
+      doc("gone", { removed_at: "2026-11-01T00:00:00Z" }),
+    ];
+    const reports = ["4", "12", "14", "15", "16"].map((k, i) => ({ id: `r${k}`, report_key: k, name: `R${k}`, content_status: i < 4 ? "captured" : "failed" }));
+    const files = render(createElement(PermitQueueDetailView, { detail: detail({ documents: docs, reports }), isAdmin: false, defaultTab: "files" }));
+    assert.match(files, /data-permit-content-pill="files"[^>]*>2 of 5 files stored · 2 pending · 1 too large</);
+    const reps = render(createElement(PermitQueueDetailView, { detail: detail({ documents: docs, reports }), isAdmin: false, defaultTab: "reports" }));
+    assert.match(reps, /data-permit-content-pill="reports"[^>]*>4 of 5 reports</);
+    assert.doesNotMatch(reps, DIAGNOSTICS);
+    const failedRead = detail({ documents: docs, sections: detail().sections.map((s) => (s.section === "files" ? { ...s, status: "failed", last_error: "session_ended" } : s)) });
+    const blocked = render(createElement(PermitQueueDetailView, { detail: failedRead, isAdmin: false, defaultTab: "files" }));
+    assert.doesNotMatch(blocked, /data-permit-content-pill/);
+    assert.match(blocked, /Inaccessible \/ blocked/);
   });
 
   it("renders the linked-projects panel and header actions passed in", () => {

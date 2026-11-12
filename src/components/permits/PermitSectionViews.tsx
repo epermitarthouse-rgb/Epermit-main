@@ -315,11 +315,23 @@ export function StatusSectionView({ permit, state, snapshots }: { permit: Row; s
   );
 }
 
-export function WorkflowsSectionView({ workflows, state, snapshots }: { workflows: Row[]; state: Row | null; snapshots: Row[] }) {
+/** `part`: the Permit Queue shows the workflows table on Tasks (as the portal does) and the review steps on Status. */
+export function WorkflowsSectionView({
+  workflows,
+  state,
+  snapshots,
+  part = "all",
+}: {
+  workflows: Row[];
+  state: Row | null;
+  snapshots: Row[];
+  part?: "all" | "workflows" | "steps";
+}) {
   const visible = currentRows(workflows);
   const steps = statusSubWorkflows(latestSnapshot(snapshots, "status")?.payload);
   return (
     <div className="space-y-4">
+      {part !== "steps" ? (
       <div className="space-y-2">
         <h4 className="text-sm font-medium">Workflows</h4>
         <SectionStatusLine state={state} />
@@ -343,6 +355,8 @@ export function WorkflowsSectionView({ workflows, state, snapshots }: { workflow
           <Muted>{noDataMessage(state, "workflows")}</Muted>
         )}
       </div>
+      ) : null}
+      {part !== "workflows" ? (
       <div className="space-y-2">
         <h4 className="text-sm font-medium">Review steps</h4>
         {steps.length ? (
@@ -370,6 +384,7 @@ export function WorkflowsSectionView({ workflows, state, snapshots }: { workflow
           <p className="text-sm text-muted-foreground">No review steps in the status capture.</p>
         )}
       </div>
+      ) : null}
     </div>
   );
 }
@@ -706,6 +721,10 @@ export function PermitDiagnosticsView({ isAdmin, detail }: { isAdmin: boolean; d
             ["Folder id", (r) => <Mono>{dash(r.portal_folder_id)}</Mono>],
             ["Download permitted", (r) => yesNo(r.download_permitted)],
             ["Download status", (r) => dash(r.download_status)],
+            ["Access path", (r) => dash(r.capture_access_path)],
+            ["Source", (r) => [str(r.capture_source_endpoint), r.capture_is_rendition === true ? "rendition" : ""].filter(Boolean).join(" · ") || "—"],
+            ["Size matches portal", (r) => yesNo(r.size_matches_portal)],
+            ["Attempts", (r) => [str(r.capture_attempts ?? ""), r.capture_next_attempt_at ? `next ${formatTimestamp(r.capture_next_attempt_at)}` : ""].filter(Boolean).join(" · ") || "—"],
             ["Storage path", (r) => <Mono>{dash(r.storage_path)}</Mono>],
             ["SHA-256", (r) => (r.sha256 ? <Mono>{str(r.sha256).slice(0, 16)}…</Mono> : "—")],
             ["Error", (r) => dash(r.download_error)],
@@ -722,6 +741,7 @@ export function PermitDiagnosticsView({ isAdmin, detail }: { isAdmin: boolean; d
             ["Portal report id", (r) => <Mono>{dash(r.portal_report_id)}</Mono>],
             ["Content status", (r) => dash(r.content_status ?? "not_captured (column missing)")],
             ["Latest content id", (r) => <Mono>{dash(r.latest_content_id)}</Mono>],
+            ["Attempts", (r) => [str(r.content_attempts ?? ""), r.content_next_attempt_at ? `next ${formatTimestamp(r.content_next_attempt_at)}` : ""].filter(Boolean).join(" · ") || "—"],
             ["Error", (r) => dash(r.content_error)],
           ]}
         />

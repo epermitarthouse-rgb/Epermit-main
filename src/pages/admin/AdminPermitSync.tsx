@@ -171,6 +171,9 @@ export default function AdminPermitSync() {
                       <TableCell>
                         <StatusPill tone={JOB_TONE[st] ?? "default"}>{st.replace(/_/g, " ")}</StatusPill>
                         {j.error_code ? <p className="mt-1 text-xs text-muted-foreground">{str(j.error_code)}</p> : null}
+                        {Array.isArray(m.deep_warnings) && m.deep_warnings.length ? (
+                          <p className="mt-1 text-xs text-muted-foreground">{(m.deep_warnings as unknown[]).map((w) => str(w).replace(/_/g, " ")).join(", ")}</p>
+                        ) : null}
                       </TableCell>
                       <TableCell className="tabular-nums">{str(j.attempt_count)}/{str(j.max_attempts)}</TableCell>
                       <TableCell className="tabular-nums">{str(m.permits_ok) || "—"} / {str(m.permits_failed) || "—"}</TableCell>
