@@ -108,7 +108,8 @@ function evaluateAuthRequest(req) {
 /**
  * Read-phase routing decision for browser traffic, including requests the project page itself makes.
  * GET/HEAD decisions come from core/safety (named routes, then any other GET/HEAD on
- * DC_OPEN_READ_HOSTS). A deny-pattern match is a violation and fails the job, for every method.
+ * DC_OPEN_READ_HOSTS, plus the one deep-mode keepalive GET/HEAD of /User/GetSessionTimeout on
+ * washington-dc-us-portalwebapi.avolvecloud.com). A deny-pattern match is a violation and fails the job, for every method.
  * Any other non-GET/HEAD on those three hosts is aborted and not recorded as a violation (D-050).
  * @returns {{ action: "continue"|"abort", violation: boolean, sessionEnded: boolean, rule: string }}
  */

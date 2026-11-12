@@ -392,3 +392,63 @@ describe("D-081 report-identity values are not deny-checked (deep mode)", () => 
     }
   });
 });
+
+describe("D-092 one portalwebapi keepalive in deep mode", () => {
+  const safety = require("../permit-sync/core/safety");
+  const { routeReadRequest } = require("../permit-sync/adapters/dc-projectdox/live-transport");
+  const HOST = "washington-dc-us-portalwebapi.avolvecloud.com";
+  const url = `https://${HOST}/User/GetSessionTimeout`;
+
+  it("allows GET and HEAD of that exact path in deep mode, and json mode still refuses it", () => {
+    assert.equal(safety.DC_PORTALWEBAPI_HOST, HOST);
+    assert.equal(safety.DC_SESSION_TIMEOUT_PATH, "/User/GetSessionTimeout");
+    assert.equal(safety.DC_OPEN_READ_HOSTS.includes(HOST), false, "the host is not opened for every path");
+    for (const method of ["GET", "HEAD"]) {
+      const v = safety.evaluateRequest({ method, url, mode: "deep" });
+      assert.equal(v.allowed, true, method);
+      assert.equal(v.rule, "session_timeout_keepalive", method);
+      assert.equal(v.body, false, method);
+    }
+    assert.equal(safety.evaluateRequest({ method: "GET", url: `${url}?_=1`, mode: "deep" }).rule, "session_timeout_keepalive", "a query does not change the path");
+    assert.equal(safety.evaluateRequest({ method: "GET", url }).rule, "not_allowlisted");
+    const guard = safety.createRunGuard({ mode: "deep" });
+    const d = routeReadRequest({ method: "GET", url, resourceType: "xhr" }, guard);
+    assert.equal(d.action, "continue");
+    assert.equal(d.violation, false);
+    assert.equal(d.rule, "session_timeout_keepalive");
+    assert.equal(guard.shouldAbort(), false);
+  });
+
+  it("refuses another path, a POST, and a look-alike host, and still drops POST FileViewer", () => {
+    const otherPath = safety.evaluateRequest({ method: "GET", url: `https://${HOST}/User/Profile`, mode: "deep" });
+    assert.equal(otherPath.allowed, false);
+    assert.equal(otherPath.rule, "not_allowlisted");
+    assert.equal(safety.evaluateRequest({ method: "GET", url: `https://${HOST}/User/GetSessionTimeout/extra`, mode: "deep" }).rule, "not_allowlisted");
+    assert.equal(safety.evaluateRequest({ method: "GET", url: `https://${HOST}/User/GetSessionTimeoutExtra`, mode: "deep" }).rule, "not_allowlisted");
+    assert.equal(safety.evaluateRequest({ method: "GET", url: `${url}?next=/File/Upload`, mode: "deep" }).rule, "deny_pattern");
+    assert.equal(safety.evaluateRequest({ method: "POST", url, mode: "deep" }).rule, "method");
+    assert.equal(safety.evaluateRequest({ method: "GET", url: `https://${HOST}.evil.test/User/GetSessionTimeout`, mode: "deep" }).rule, "host");
+    assert.equal(safety.evaluateRequest({ method: "GET", url: `https://not-${HOST}/User/GetSessionTimeout`, mode: "deep" }).rule, "host");
+
+    const guard = safety.createRunGuard({ mode: "deep" });
+    const pathDenied = routeReadRequest({ method: "GET", url: `https://${HOST}/User/Profile`, resourceType: "xhr" }, guard);
+    assert.equal(pathDenied.action, "abort");
+    assert.equal(pathDenied.violation, true);
+    assert.equal(pathDenied.rule, "not_allowlisted");
+    const post = routeReadRequest({ method: "POST", url, resourceType: "xhr" }, guard);
+    assert.equal(post.action, "abort");
+    assert.equal(post.violation, true);
+    assert.equal(post.rule, "method");
+    assert.equal(guard.shouldAbort(), true);
+
+    const fresh = safety.createRunGuard({ mode: "deep" });
+    const fileViewer = routeReadRequest(
+      { method: "POST", url: "https://session.planreview.dob.dc.gov/File/FileViewer?fileID=1", resourceType: "document" },
+      fresh,
+    );
+    assert.equal(fileViewer.action, "abort");
+    assert.equal(fileViewer.violation, false);
+    assert.equal(fileViewer.rule, "method_dropped");
+    assert.equal(fresh.shouldAbort(), false);
+  });
+});

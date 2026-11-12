@@ -138,6 +138,13 @@ const ALLOWED_METHODS = Object.freeze(["GET", "HEAD"]);
 const DEEP_MODE_LIFTED_DENY = Object.freeze([/viewFile/i, /OpType=Export/i, /rs:Format=/i].map(String));
 /** The file viewer page runs on the ProjectDox web UI host; deep mode reads it like the other open hosts (GET/HEAD only). */
 const DC_WEBUI_HOST = "washington-dc-us-projectdoxwebui.avolvecloud.com";
+
+/**
+ * One keepalive the portal page polls during a long deep pass (D-092). Exact host and exact path.
+ * Deep mode, GET and HEAD only. It is not an open host: every other path on it stays refused.
+ */
+const DC_PORTALWEBAPI_HOST = "washington-dc-us-portalwebapi.avolvecloud.com";
+const DC_SESSION_TIMEOUT_PATH = "/User/GetSessionTimeout";
 const MODES = Object.freeze({
   json: Object.freeze({ deny: DENY_PATTERNS, openHosts: DC_OPEN_READ_HOSTS, allowDownloads: false }),
   deep: Object.freeze({
@@ -269,6 +276,9 @@ function evaluateRequest(input) {
   }
   if (!hosts.includes(u.hostname.toLowerCase())) {
     return deny("host", `host ${u.hostname} not on allowlist`);
+  }
+  if ((input && input.mode) === "deep" && u.hostname.toLowerCase() === DC_PORTALWEBAPI_HOST && u.pathname === DC_SESSION_TIMEOUT_PATH) {
+    return { allowed: true, rule: "session_timeout_keepalive", reason: "deep-mode GET or HEAD of /User/GetSessionTimeout on the DC portal API host", body: false };
   }
 
   const target = u.pathname + u.search;
@@ -412,6 +422,8 @@ module.exports = {
   DC_OPEN_READ_HOSTS,
   ALLOWED_METHODS,
   DC_WEBUI_HOST,
+  DC_PORTALWEBAPI_HOST,
+  DC_SESSION_TIMEOUT_PATH,
   MODES,
   modePolicy,
   LOGIN_EXTRA_HOSTS,

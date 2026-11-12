@@ -1,6 +1,11 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-12 (all 72 BCIV2500152 files stored; retry job ended on a guard refusal). Read "Remaining-files capture" first.
+Last updated: 2026-11-13 (D-092: one keepalive GET allowed; BCIV2500152 files accepted). Read "D-092 keepalive" first.
+
+## D-092 keepalive (2026-11-13, local only, no live run)
+- Decided: keep all 72 stored files of BCIV2500152 (permit `06fa082e`) as PDF renditions, including the 3 view-only Supporting Documents. That permit's files are complete. Do not re-download them.
+- Deep mode allows GET and HEAD of `/User/GetSessionTimeout` on `washington-dc-us-portalwebapi.avolvecloud.com` only (rule `session_timeout_keepalive`). No other path on that host, no POST, no other host. JSON mode still refuses it. Deny patterns and POST FileViewer are unchanged.
+- No live scrape, no deploy, no push.
 
 ## Remaining-files capture (2026-11-12 ~17:00–17:52 UTC)
 - Approved: PDF renditions are acceptable for view-only Drawings when the original is unavailable. One job, agents off, headed, scope 6364, max_files 64, max_bytes 734003200 (700 MiB), per file 209715200. The worker env used the same caps (env caps only lower job options).
@@ -12,7 +17,7 @@ Last updated: 2026-11-12 (all 72 BCIV2500152 files stored; retry job ended on a 
 - One retry, job `f60b7e0d` (log `/tmp/viewer-remaining-retry.log`, ~17:15–17:52): `agent_trigger=off`, local claim only. 53 files attempted, all stored, 0 folder errors; the 19 stored files were gated `already_stored` (not downloaded again). The job then ended **`failed_unrecoverable` / `safety_violation`**: `portal request refused (not_allowlisted: GET https://washington-dc-us-portalwebapi.avolvecloud.com/User/GetSessionTimeout)`. That is a session-timeout poll from the portal page itself during the 36-minute pass, refused correctly by the guard. The guard was not changed and no third run was made.
 - Result: **72/72 stored** (36 `download` path, 36 `viewer` path). The 63 new files are all PDF renditions (`retrieve_file_rendition`), `size_matches_portal` false, size ratio 0.86–1.02 of the portal size. 0 originals: the 27 download-permitted files (24 Approved Drawings, 3 Approved Supporting Documents) also came as renditions. The 9 older stored files have null provenance. The 3 former `not_permitted` Supporting Documents files (view-only) were captured by the viewer path. They were not reset or edited by hand.
 - Unchanged: pipeline runs 0, parsed_comments 6, service-execution audit 0, hash `13ac00b0eef8d096`. Active jobs 0, no worker. No `guard_denied` events. Nothing to restore (every viewer row was attempted and stored). No push, no deploy.
-- Next decisions: (1) whether to allowlist read-only GET `portalwebapi /User/GetSessionTimeout` in deep mode (a guard change; without it, long deep runs end `safety_violation` even when the capture succeeded). (2) Whether renditions are acceptable for the 27 download-permitted files, or originals must be fetched (the deep fallback tries the original first, but the reason it failed is not recorded). (3) Whether the 3 view-only Supporting Documents files should be kept.
+- Decided in D-092: renditions accepted for all 72 files, the 3 Supporting Documents kept, and the one keepalive GET allowlisted in deep mode. Do not re-download these files.
 
 ## Viewer session_ended investigation (2026-11-12 ~15:22–15:37 UTC)
 - Diagnostic (commit `a10a83e`): the transport keeps a 25-entry trail of DC requests (method, host, path, resource type, rule, action; no query, body, cookies or page text). `last_error` now names the dead-URL match, request and step. The deep runner emits one `deep_trace` line and event (gated counts by reason, attempted file ids with status and error).
