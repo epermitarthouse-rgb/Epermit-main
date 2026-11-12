@@ -4,7 +4,14 @@ title = "PermitPilot gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Public Supabase anon key of the production project (role anon; shipped to browsers by design)."
+description = "Known non-secrets: the public Supabase anon key, credential row UUIDs in SQL/docs, the jwt.io example token in redaction tests."
+# Matched against the whole finding so the credential_id pattern can require the column name and a bare UUID.
+regexTarget = "match"
 regexes = [
+  # Production anon key (role anon; shipped to browsers by design).
   '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlcXh5anJjbGRpdnRwaWtjcHZrIiwicm9sZSI6ImFub24i[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+''',
+  # portal_credentials row ids: a UUID primary key, not a credential value.
+  '''credential_id\s*=\s*'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'$''',
+  # {"sub":"1234567890"}: the jwt.io sample token.
+  '''eyJ[A-Za-z0-9_-]*\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.[A-Za-z0-9_-]*''',
 ]

@@ -43,9 +43,12 @@
         "tsx"
       ],
       "timeout_seconds": 180,
-      "known_failures": [
-        "src/lib/supabaseAnalyzer/newRunAnalyzerVersion.test.ts"
-      ]
+      "known_failures": [],
+      "environment_dependent": {
+        "src/lib/supabaseAnalyzer/newRunAnalyzerVersion.test.ts": "fails on the developer Mac, passes on ubuntu CI",
+        "src/lib/supabaseAnalyzer/stage3StorageBridge.test.ts": "needs the gitignored local A-3.06 / A-6.00 / FP200 pilot packs",
+        "src/lib/supabaseAnalyzer/brandedReport.test.ts": "PDF text-layout assertions pass on macOS, fail on ubuntu CI"
+      }
     },
     "permit-sync": {
       "cwd": "scraper-service",

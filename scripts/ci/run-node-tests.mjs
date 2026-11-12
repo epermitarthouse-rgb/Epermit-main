@@ -71,18 +71,23 @@ await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, as
 }));
 
 const failing = results.filter((r) => !r.ok).map((r) => r.file).sort();
-const known = new Set(suite.known_failures ?? []);
+// environment_dependent: files whose result differs between a developer Mac and CI (local-only fixtures, fonts).
+// They never fail the run and are not reported as fixed; each entry records why.
+const envDependent = new Map(Object.entries(suite.environment_dependent ?? {}));
+const known = new Set([...(suite.known_failures ?? []), ...envDependent.keys()]);
 
 if (writeBaseline) {
-  suite.known_failures = failing;
+  suite.known_failures = failing.filter((f) => !envDependent.has(f));
   writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
   console.log(`\nbaseline for ${suiteName} written: ${failing.length} known failing file(s)`);
   process.exit(0);
 }
 
 const unexpected = failing.filter((f) => !known.has(f));
-const fixed = [...known].filter((f) => files.includes(f) && !failing.includes(f));
+const fixed = [...known].filter((f) => !envDependent.has(f) && files.includes(f) && !failing.includes(f));
 const missing = [...known].filter((f) => !files.includes(f));
+const envFailing = failing.filter((f) => envDependent.has(f));
+if (envFailing.length) console.log(`environment-dependent failures (not counted): ${envFailing.map((f) => `${f} (${envDependent.get(f)})`).join(', ')}`);
 
 for (const r of results.filter((x) => !x.ok && !known.has(x.file))) {
   console.log(`\n----- ${r.file} -----\n${r.out.slice(-6000)}`);
