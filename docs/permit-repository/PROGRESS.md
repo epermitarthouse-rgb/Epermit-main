@@ -119,6 +119,8 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Live | One-file viewer retry (max 1, agents off) | **Rolled back** | Session ended before any file | Job `3865c23c` cancelled (`session_ended`). 33 retry times restored. Counts 9/27/33/3. Hash and parsed_comments unchanged. Viewer path not verified. |
 | Diag | Session-end trail + `deep_trace` (method/host/path/step only) | Done | Used live | Commit `a10a83e`; named the Log Out link fetch as the trigger (job `099bb4e7`) |
 | 2c fix 2 | Deep fallback uses DC Web API + page session id, no link scan (D-090) | Done | **Live verified** | Commit `babd024`, 208/208. Job `9c25736c` stored view-only 813992 as PDF rendition (85.7 MB vs 86.1 MB portal). No guard events. Original refused/unusable; 32 viewer rows remain. |
+| 2c fix 3 | Deep runs never mini-reset the Files page (D-091) | Done | **Live verified** | Commit `416c97f`, 208/208. Job `795b06f7` lost the Files page after 10 files; retry `f60b7e0d` attempted 53 with 0 folder errors |
+| Live | Remaining-files capture, BCIV2500152 | **Files complete, job failed** | 72/72 stored | 63 renditions, 0 originals, 9 older null provenance. Job `f60b7e0d` `failed_unrecoverable` on GET `portalwebapi /User/GetSessionTimeout` (not allowlisted). Pipeline 0, parsed_comments 6 |
 
 ## One-permit live test execution (2026-11-11 07:19–07:23 UTC)
 | Step | Status | Evidence |
