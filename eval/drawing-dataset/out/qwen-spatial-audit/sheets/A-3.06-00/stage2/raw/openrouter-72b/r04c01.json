@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842058-MMVNXPi5lYC0LPEbgCut",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 234, 126, 256],\n        \"text_content\": \"0\\\" A.F.F.\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 271, 383, 303],\n        \"text_content\": \"TING ROOF @ L.P. (V.I.F.)\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [249, 448, 512, 477],\n        \"text_content\": \"REPLACE EXIST.\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [249, 488, 612, 518],\n        \"text_content\": \"GUTTER & DOWNSPOUT\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [249, 530, 612, 560],\n        \"text_content\": \"W/ NEW. MATCH EXIST.\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [249, 572, 558, 602],\n        \"text_content\": \"EXTENT OF GUTTER\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [287, 860, 556, 890],\n        \"text_content\": \"EXIST. MASONRY\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [287, 902, 476, 932],\n        \"text_content\": \"TO REMAIN.\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 574,
+ "costUsd": 0.001807,
+ "reportedCostUsd": 0.0018068,
+ "latencyS": 13.44,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

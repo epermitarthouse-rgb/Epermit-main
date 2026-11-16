@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842001-EkBqzlu3wZgZZCX3Y4m9",
+ "text": "```json\n[\n    {\"bbox_2d\": [106, 884, 160, 980], \"text_content\": \"3'-6\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [172, 688, 207, 980], \"text_content\": \"DECK MEMBRANE\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [608, 453, 977, 486], \"text_content\": \"I-1/4\\\" PIPE RAILING. PAI\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [608, 498, 959, 538], \"text_content\": \"TO MATCH NEW METAL\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [608, 543, 842, 583], \"text_content\": \"PARAPET CAP.\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [608, 685, 977, 718], \"text_content\": \"GUARD RAIL SLEEVE A\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [610, 730, 938, 765], \"text_content\": \"BASE PLATE SET ON\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [610, 778, 977, 813], \"text_content\": \"ELASTOMERIC TAPE AN\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [610, 825, 977, 860], \"text_content\": \"SECURED TO NEW WOOD\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [610, 872, 977, 907], \"text_content\": \"BLOCK AS REQUIRED W\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [610, 919, 804, 954], \"text_content\": \"FASTENERS.\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 697,
+ "costUsd": 0.00193,
+ "reportedCostUsd": 0.0019298,
+ "latencyS": 20.76,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

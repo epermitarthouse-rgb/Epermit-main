@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842960-HX3Qmr1NHikzdO4BsYRs",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [246, 0, 980, 26],\n        \"text_content\": \"A STATEMENT OF SPECIAL INSPECTION\",\n        \"category\": \"schedule_title\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [212, 34, 980, 60],\n        \"text_content\": \"WHERE SPECIAL INSPECTIONS AND TE\",\n        \"category\": \"schedule_title\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [212, 68, 520, 102],\n        \"text_content\": \"AND 1705.\",\n        \"category\": \"schedule_title\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [212, 252, 252, 286],\n        \"text_content\": \"A.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [312, 252, 776, 286],\n        \"text_content\": \"SPECIAL INSPECTIONS\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [212, 310, 252, 344],\n        \"text_content\": \"B.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [312, 310, 864, 344],\n        \"text_content\": \"CONCRETE CONSTRUCTION\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [212, 362, 252, 396],\n        \"text_content\": \"C.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [312, 362, 846, 396],\n        \"text_content\": \"MASONRY CONSTRUCTION\",\n        \"category\": \"schedule_cell\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [212, 420, 252, 454],\n        \"text_content\": \"D.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [312, 420, 772, 454],\n        \"text_content\": \"COLD-FORMED STEEL\",\n        \"category\": \"schedule_cell\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 774,
+ "costUsd": 0.002007,
+ "reportedCostUsd": 0.0020068,
+ "latencyS": 19.4,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

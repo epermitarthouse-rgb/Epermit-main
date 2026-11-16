@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842554-mSbxnQKoU06PTzpxodaG",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 446, 196, 532],\n        \"text_content\": \"LAN\",\n        \"category\": \"schedule_title\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 746, 282, 788],\n        \"text_content\": \"L ADA NOTES:\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 798, 762, 838],\n        \"text_content\": \"D INSTALL ADAAG COMPLIANT BRAILLE /\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 846, 310, 884],\n        \"text_content\": \"RE MENU SIGNAGE\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 940, 703, 980],\n        \"text_content\": \"D INSTALL ADAAG COMPLIANT \\\"STAFF\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 354,
+ "costUsd": 0.001587,
+ "reportedCostUsd": 0.0015868,
+ "latencyS": 14.86,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

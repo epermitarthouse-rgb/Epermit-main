@@ -1,0 +1,80 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "D_v2_12x9",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_02f840aab18a9138016aec8f18ff8c87d29ac2724a3ac87441",
+ "latencyMs": 10031,
+ "inputTokens": 5105,
+ "outputTokens": 563,
+ "costUsd": 0.0183925,
+ "userPromptChars": 3571,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "This sheet contains detailed plans and elevations related to toilet room layouts, fixture plans, signage height, and accessory elevations. It includes ADA compliance requirements for door operations and accessory mounting heights.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Door Schedule Reference Missing",
+   "observation": "The note on the sheet directs to \"SEE SHEET A-6.00 FOR DOOR SCHEDULE,\" but no door schedule details are provided on this sheet.",
+   "drawing_evidence": "5. SEE SHEET A-6.00 FOR DOOR SCHEDULE.",
+   "drawing_location": "Bottom left of the sheet near the General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that Sheet A-6.00 contains the necessary door schedule information or include it in this sheet.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Door Schedule Reference Missing",
+    "originalObservation": "The note on the sheet directs to \"SEE SHEET A-6.00 FOR DOOR SCHEDULE,\" but no door schedule details are provided on this sheet.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "General Notes and ADA Compliance",
+   "observation": "General notes include ADA compliance but provide minimal detailed specifications on mounting heights and other ADA-specific requirements.",
+   "drawing_evidence": "NOTES: SEE SHEET A-4.00 FOR ACCESSORY MOUNTING HEIGHTS.",
+   "drawing_location": "General Notes Section",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that all ADA requirements and mounting specifications conform to the relevant accessibility codes and standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "General Notes and ADA Compliance",
+    "originalObservation": "General notes include ADA compliance but provide minimal detailed specifications on mounting heights and other ADA-specific requirements.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Inconsistent Door Specifications",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

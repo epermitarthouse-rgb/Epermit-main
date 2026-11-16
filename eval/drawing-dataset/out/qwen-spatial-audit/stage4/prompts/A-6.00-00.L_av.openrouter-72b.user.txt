@@ -1,0 +1,137 @@
+Review this permit drawing sheet and return the structured preliminary observations.
+
+Current file: A-6.00-00.pdf
+
+Submitted sheet index (filenames and detected numbers only; other sheets were not read in this request):
+- number not detected | A-6.00-00.pdf | current sheet
+- number not detected | A-1.00-00.pdf | in project, not in this analysis
+- number not detected | A-1.01-00.pdf | in project, not in this analysis
+- number not detected | A-1.02-00.pdf | in project, not in this analysis
+- number not detected | A-1.03-00.pdf | in project, not in this analysis
+- number not detected | A-1.04.00.pdf | in project, not in this analysis
+- number not detected | A-1.05.00.pdf | in project, not in this analysis
+- number not detected | A-1.06-00.pdf | in project, not in this analysis
+- number not detected | A-2.00-00.pdf | in project, not in this analysis
+- number not detected | A-2.01-00.pdf | in project, not in this analysis
+- number not detected | A-2.02.00.pdf | in project, not in this analysis
+- number not detected | A-3.00-00.pdf | in project, not in this analysis
+- number not detected | A-3.01-00.pdf | in project, not in this analysis
+- number not detected | A-3.02-00.pdf | in project, not in this analysis
+- number not detected | A-3.03-00.pdf | in project, not in this analysis
+- number not detected | A-3.04-00.pdf | in project, not in this analysis
+- number not detected | A-3.05-00.pdf | in project, not in this analysis
+- number not detected | A-3.06-00.pdf | in project, not in this analysis
+- number not detected | A-4.00-00.pdf | in project, not in this analysis
+- number not detected | A-4.01-00.pdf | in project, not in this analysis
+- number not detected | A-4.02-00.pdf | in project, not in this analysis
+- number not detected | A-6.01.00.pdf | in project, not in this analysis
+- number not detected | CV-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.01-00.pdf | in project, not in this analysis
+- number not detected | DM-1.02-00.pdf | in project, not in this analysis
+- number not detected | DM-2.00-00.pdf | in project, not in this analysis
+- number not detected | DM-2.01-00.pdf | in project, not in this analysis
+- number not detected | E-1.0-00.pdf | in project, not in this analysis
+- number not detected | E-1.1-00.pdf | in project, not in this analysis
+- number not detected | E-1.2-00.pdf | in project, not in this analysis
+- number not detected | E-1.3-00.pdf | in project, not in this analysis
+- number not detected | E-2.1-00.pdf | in project, not in this analysis
+- number not detected | E-2.2-00.pdf | in project, not in this analysis
+- number not detected | E-3.0-00.pdf | in project, not in this analysis
+- number not detected | E-3.1-00.pdf | in project, not in this analysis
+- number not detected | E-3.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.0-00.pdf | in project, not in this analysis
+- number not detected | E-4.1-00.pdf | in project, not in this analysis
+- number not detected | E-4.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.3-00.pdf | in project, not in this analysis
+- number not detected | EN-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-2.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-3.00-0.pdf | in project, not in this analysis
+- number not detected | FP100.pdf | in project, not in this analysis
+- number not detected | FP200 .pdf | in project, not in this analysis
+- number not detected | FP201.pdf | in project, not in this analysis
+- number not detected | FP300.pdf | in project, not in this analysis
+- number not detected | G-0.00-0.pdf | in project, not in this analysis
+- number not detected | M-1.1.pdf | in project, not in this analysis
+- number not detected | M-1.2.pdf | in project, not in this analysis
+- number not detected | M-1.3.pdf | in project, not in this analysis
+- number not detected | M-1.4.pdf | in project, not in this analysis
+- number not detected | M-2.0.pdf | in project, not in this analysis
+- number not detected | M-3.0.pdf | in project, not in this analysis
+- number not detected | M-4.0.pdf | in project, not in this analysis
+- number not detected | M-4.1.pdf | in project, not in this analysis
+- number not detected | MD-1.1.pdf | in project, not in this analysis
+- number not detected | MD-1.2.pdf | in project, not in this analysis
+- number not detected | MD-1.3.pdf | in project, not in this analysis
+- number not detected | P-1.0-00.pdf | in project, not in this analysis
+- number not detected | P-1.1-00.pdf | in project, not in this analysis
+- number not detected | P-1.2-00.pdf | in project, not in this analysis
+- number not detected | P-1.3-00.pdf | in project, not in this analysis
+- number not detected | P-1.4-00.pdf | in project, not in this analysis
+- number not detected | P-1.5-00.pdf | in project, not in this analysis
+- number not detected | P-1.6-00.pdf | in project, not in this analysis
+- number not detected | P-1.7-00.pdf | in project, not in this analysis
+- number not detected | P-1.8-00.pdf | in project, not in this analysis
+- number not detected | P-2.0-00.pdf | in project, not in this analysis
+- number not detected | P-2.1-00.pdf | in project, not in this analysis
+- number not detected | P-3.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.1-00.pdf | in project, not in this analysis
+- number not detected | S-001.00.pdf | in project, not in this analysis
+- number not detected | S-002.00.pdf | in project, not in this analysis
+- number not detected | S-201.00.pdf | in project, not in this analysis
+- number not detected | S-202.00.pdf | in project, not in this analysis
+- number not detected | S-203.00.pdf | in project, not in this analysis
+- number not detected | S-204.00.pdf | in project, not in this analysis
+- number not detected | S-300.00.pdf | in project, not in this analysis
+If a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.
+
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-6.00-00 source=4x3 annotations=236 technical=173 shown=43 independentlyVerified=false
+- EQ.
+- V.I.F.
+- V.I.F.
+- ?4'-0'
+- 1/2" (ctx?)
+- 8'-6"
+- 8'-0"
+- 2. 1/4" CLEAR TEMPERED GLAZING (ctx?)
+- 1/2" CORIAN SILL EACH SIDE (ctx?)
+- 1 EA HINGE 780-112HD 83" ALUM HAGER (ctx?)
+- HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB / PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE. (ctx?)
+- H.M. ; 2"JAMB 4"HD
+- 1 EA PANIC 9975E0-LD 36" (ctx?)
+- 4 ; H.M. ; H.M. ; 2"JAMB 4"HD
+- H.M. ; 3'-8"x7'-0"x1 3/4 ; H.M. ; 2"JAMB 4"HD
+- EA WTH/STP160V 36 X 84 N.GUARD / EA THRESHOLD 325HD 36" N.GUARD (ctx?)
+- 5 ; S.C. WOOD W/ LAM. ; H.M. ; 2"JAMB & HEAD
+- 5. SEE ELEVATIONS AND WALL SECTIONS (ctx?)
+- 1 EA THRESHOLD 325HD 36" N.GUARD (ctx?)
+- 1 EA HINGE 780-112HD 83" ALUM HAGER (ctx?)
+- 1/4" TEMP.
+- 1 EA PANIC 9975EO-LD 48" SP28 V.DUPRIN / EA TRIM 990DT US26D V.DUPRIN (ctx?)
+- 5'-10"
+- 1 EA THRESHOLD 325HD 48" N.GUARD (ctx?)
+- 5'-0"
+- 10" STILE
+- 1 EA HINGE 780-112HD 83" ALUM HAGER (ctx?)
+- 1/4" / JEMPERED GLASS
+- F
+- S.C. WOOD W/ LAM. ; D ; H.M. ; 2"JAMB & HEAD
+- 2. 3 EA HINGES OFFSET PIVOT ANSI -A-156.4 GRADE 1; PROVIDE EXPOSED PARTS OF (ctx?)
+- 6A ; S.C. WOOD W/ LAM. ; H.M. ; 2"JAMB & HEAD
+- 7 ; S.C. WOOD W/ LAM. ; H.M. ; {2"JAMB & HEAD | 2 JAMB & HEAD}
+- 10 ; H.M. ; 3'-0"x7'-0"x1 3/4" ; H.M. ; {2"JAMB & HEAD | 2 JAMB & HEAD}
+- 8. DOOR 3, 4. & 4A TO HAVE MAXIMUM U VALUE = 0.61 / DOOR 5 RESTROOM EXTERIOR, 7 - LAMINATED FINISH, PER DECOR / GEOMETRY - "LAMITECH 2315 MT DARKSTEEL" (ctx?)
+- ?12 S.C. WOOD W/ LAM. 3'-0"x6'-8'x1 3/4
+- 2"JAMB & HEAD
+- (FINISH TO MATCH STOREFRONT DOOR) / {WIDE x 1/2" RISE (ADA ACCESSIBLE). | WIDE x 1/2 RISE (ADA ACCESSIBLE).} (ctx?)
+- {1 EA PUSH PLATE 30S 4 X 32 US32D 40*AFF MOUNTED TO CENTER OF PLATE | 1 EA PUSH PLATE 30S 4 X 32 US32D 40 AFF MOUNTED TO CENTER OF PLATE | 3. 1 EA PUSH PLATE 3OS 4 X 32 US32D 40"AFF MOL | 1 EA PUSH PLATE 30S 4 X 32 US32D 40"AFF MOL} (ctx?)
+- {1 EA PULL PLATE LADDER PULL HANDLE WITH DECORATIVE FIXING, 32"L 1"DIA | 4. 1 EA PULL PLATE LADDER PULL HANDLE WITH DECO} / #S-32-1000 - UMCO 32D. 40" AFF MOUNTED CENTER OF PULL / ALT. OPTION: 1 EA PULLPLATE SANITGRASP (ctx?)
+- ONTARIO OAK 1540 PW" / {FRAME FINISH BENJAMIN MOORE "GRAY 2121-10" | FRAME FINISH BENJAMIN MC} (ctx?)
+- 2. 6 EA HINGES OFFSET PIVOT ANSI -A-156.4 GRADE 1; BY DOOR MANUFACTURER. (ctx?)
+- M
+omitted: 193 annotations (133 technical: qualifier 4, numeric 100, reference 2, dimension 13, datum 13, value 1; 60 other) by budget; not shown is not absent

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842004-mwllOaD5zFQ6T4wrCYDb",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [106, 469, 934, 510],\n        \"text_content\": \"THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010\",\n        \"category\": \"detail_title\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 592, 979, 622],\n        \"text_content\": \"I-1/4\\\" PIPE RAIL\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 635, 979, 665],\n        \"text_content\": \"TO MATCH MET\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 678, 979, 708],\n        \"text_content\": \"AND/OR (E) CO\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 763, 979, 793],\n        \"text_content\": \"DURA-LAST CA\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 878, 979, 908],\n        \"text_content\": \"STAINLESS STE\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 908, 979, 938],\n        \"text_content\": \"POSITIONED 1/\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [744, 938, 979, 968],\n        \"text_content\": \"OF THE STACK\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 708, 183, 738],\n        \"text_content\": \"D FLASHING\",\n        \"category\": \"label\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 748, 204, 778],\n        \"text_content\": \"TOP EDGE OF\",\n        \"category\": \"label\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 710,
+ "costUsd": 0.001943,
+ "reportedCostUsd": 0.0019428,
+ "latencyS": 20.05,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

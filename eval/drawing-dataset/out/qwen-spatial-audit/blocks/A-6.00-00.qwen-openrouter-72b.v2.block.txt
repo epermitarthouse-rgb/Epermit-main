@@ -1,0 +1,42 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-6.00-00 source=qwen-openrouter-72b annotations=508 technical=344 shown=37 independentlyVerified=false
+- 1 ; ALUM. ; 3'-0"x7'-0"x1 3/4" ; 3/4" A ALUM. (NOTE 5)
+- AL NOTE 6, SHEET A-1.00 / {CHES SHALL BE RECESSED INTO THE TOP OF | OP OF THE} (ctx?)
+- AL FRAME ABOVE. (ctx?)
+- S, & HARDWARE FOR DOORS 3, 4, 4A 5, 6, / NIVERSAL MANUFACTURING 1-800-821-1414 (ctx?)
+- WALL SECTIONS (ctx?)
+- 2 ; H.M. ; 6'-0"x7'-0"x1 3/4" ; 3/4" A1 ALUM. (NOTE 5)
+- 3 ; H.M. ; 4'-0"x7'-0"x1 3/4" ; 3/4" B H.M. 2"JAMB 4"HD
+- 4 ; H.M. ; 3'-0"x7'-0"x1 3/4" ; 3/4" B H.M. 2"JAMB 4"HD
+- S.C. WOOD W/ LAM. ; 3'-8"x7'-0"x1 3/4" ; 3/4" B H.M. 2"JAMB 4"HD
+- 5 ; S.C. WOOD W/ LAM. ; 3'-0"x6'-8"x1 3/4" ; 3/4" C H.M. 2"JAMB & HEAD
+- 5. SEE ELEVATIONS AND WALL S (ctx?)
+- MIN MOORE "GRAY 2121-10" (ctx?)
+- 780-112HD 83" ALUM HAGER / R 4111 H-CUSH ALUM LCN (ctx?)
+- 4. 2 EA BACK TO BACK LADDER PULL HANDLE, 16" / MOUNTED 6" FROM EDGE OF DOOR TO CENTER C / MOUNTED 28½" FROM TOP OF DOOR TO C/L OF (ctx?)
+- {4. 2 EA BACK TO BACK LADDER PULL HANDLE, 16" | 3.}
+- ?MOUNTED 6" FROM EDGE OF DOOR TO CENTER ( (ctx?)
+- {MOUNTED 6" FROM EDGE OF DOOR TO CENTER C | MOUNTED 28½" FROM TOP OF DOOR TO C/L OF} (ctx?)
+- 10" STILE / AT BOTTOM
+- 780-112HD 83" ALUM HAGER / ER 4111 H-CUSH ALUM LCN (ctx?)
+- 1/4" / TEMPERED GLASS
+- 40" TYP.
+- {ORE WOOD DOORS TO HAVE A LAMINATED FI | TED FINISH.} (ctx?)
+- UNDERCUT FOR MAKE UP AIR. DOOR 16. (ctx?)
+- UNDERCUT FOR MAKE UP AIR. DOOR 16. (ctx?)
+- "WILSONART DOVE GREY" D92-60 (ctx?)
+- "WILSONART DOVE GREY" D92-60 (ctx?)
+- HAVE MAXIMUM U VALUE = 0.61 (ctx?)
+- XTERIOR, 7 - LAMINATED FINISH, PER DECOR (ctx?)
+- 6 ; S.C. WOOD W/ LAM. ; 3'-0"x4'-8"x1 3/4" ; 3/4" D H.M. 2"JAMB & HEAD
+- ER LCN 4021 x 18 / S OFFSET PIVOT ANSI -A-156.4 GRADE 1; PROVIDE EXI / NUM ALLOY, AS SUPPLIED BY DOOR MANUFACTURER. (ctx?)
+- 7. DOOR 8 & 8A - 1" UNDER / LAMINATED FINISH - "WILSO / DOOR 3, 4, & 4A TO HAVE / DOOR 5 RESTROOM EXTERIO (ctx?)
+- 7 ; S.C. WOOD W/ LAM. ; 3'-0"x7'-0"x1 3/4" ; H.M. ; 2"JAMB & HEAD
+- 40"AFF MOUNTED TO CENTER OF PLATE / WITH DECORATIVE FIXING, 32"L 1"DIA / OUNTED CENTER OF PULL (ctx?)
+- 3. 1 EA PUSH PLATE 30S 4 X 32 US32D 40"AFF
+- 467 MT LINEAL OAK" / {H - BENJAMIN MOORE "GRAY 2121-10" | W"} (ctx?)
+- #S-32-1000 - UMCO 32D. 40" AFF MOUNTED (ctx?)
+- R LCN 4041 x 18 / S OFFSET PIVOT ANSI -A-156.4 GRADE 1; BY DOOR MA / /PULL HANDLE HAGER PUSH/PULL SET 164D/V/B. (ctx?)
+omitted: 471 annotations (310 technical: dimension 71, qualifier 18, numeric 205, value 3, reference 3, datum 10; 161 other) by budget; not shown is not absent

@@ -1,0 +1,174 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "L_av",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0009b2296efde6ba016afb2dea98a487d2918ae0e9f40cf0f9",
+ "latencyMs": 25676,
+ "inputTokens": 12531,
+ "outputTokens": 2427,
+ "reasoningTokens": 1645,
+ "costUsd": 0.0054186,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "S-201.00.pdf",
+  "evidenceSha": "610b94a5c42d6873",
+  "userPromptChars": 9431,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"S-201.00\",\"detected_sheet_title\":\"WALL SECTIONS AND NOTES\",\"discipline\":\"Structural\",\"summary\":\"The sheet contains two wall sections, structural design criteria, steel, wood, reinforced concrete, masonry/foundation, light-gage steel, submittal, and special-inspection notes. Preliminary observations are limited to sheet-local drafting, document-control, and clarification concerns visible on this sheet.\",\"findings\":[{\"category\":\"actual discrepancy\",\"severity\":\"advisory\",\"title\":\"Wall section 2 scale notation is incomplete\",\"observation\":\"The caption beneath wall section 2 reads `SCALE: 3/4\\\"1'-0\\\"`, while wall section 1 is shown as `SCALE: 3/4\\\"=1'-0\\\"`. The equal sign is missing from the wall section 2 scale notation.\",\"drawing_evidence\":\"Bottom caption beneath detail 2, WALL SECTION: `SCALE: 3/4\\\"1'-0\\\"`; detail 1 caption immediately to the left shows `SCALE: 3/4\\\"=1'-0\\\"`.\",\"drawing_location\":\"Bottom of sheet, beneath wall sections 1 and 2\",\"suggested_code_reference\":\"\",\"recommendation\":\"Correct the wall section 2 scale notation or identify it as not to scale if that is intended.\"},{\"category\":\"missing required information\",\"severity\":\"advisory\",\"title\":\"Sheet-count field appears incomplete\",\"observation\":\"The title block identifies the page as `S-201.00`, but the adjacent sheet-count field reads `OF 00`. This appears to be an incomplete or placeholder document-control entry.\",\"drawing_evidence\":\"Title block fields at lower right: `PAGE #: S-201.00` and `SHEET: OF 00`.\",\"drawing_location\":\"Lower-right title block\",\"suggested_code_reference\":\"\",\"recommendation\":\"Verify and update the total-sheet field, or confirm that `OF 00` is an intentional project-standard notation.\"},{\"category\":\"missing required information\",\"severity\":\"advisory\",\"title\":\"Typical-section reference is not specifically identified\",\"observation\":\"Both wall section details include the note `2X4 REPAIR SEE TYPICAL SECTION`, but the note does not identify a sheet number or detail number. The submitted index includes other structural sheets, but none was reviewed here to determine which detail is intended.\",\"drawing_evidence\":\"Wall section 1 and wall section 2 each contain the annotation `2X4 REPAIR SEE TYPICAL SECTION`.\",\"drawing_location\":\"Within the wall section diagrams, adjacent to the 2x4 repair callouts\",\"suggested_code_reference\":\"\",\"recommendation\":\"Add the specific sheet and detail reference for the 2x4 repair condition, or confirm the location of the applicable typical section in the structural set.\"},{\"category\":\"further professional review\",\"severity\":\"advisory\",\"title\":\"Snow-load design input and governing selection should be clarified\",\"observation\":\"The design criteria list `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`. The sheet does not state how the listed snow-load values are selected or coordinated with the roof design criterion.\",\"drawing_evidence\":\"Design Criteria block lists `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`; it also states `NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED`.\",\"drawing_location\":\"Upper-right-center design criteria block\",\"suggested_code_reference\":\"\",\"recommendation\":\"Have the structural design professional clarify the governing roof snow/live-load input and show the applicable selection method in the calculations or design criteria.\"}]}",
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet contains two wall sections, structural design criteria, steel, wood, reinforced concrete, masonry/foundation, light-gage steel, submittal, and special-inspection notes. Preliminary observations are limited to sheet-local drafting, document-control, and clarification concerns visible on this sheet.",
+ "drafts": [
+  {
+   "category": "actual discrepancy",
+   "severity": "advisory",
+   "title": "Wall section 2 scale notation is incomplete",
+   "observation": "The caption beneath wall section 2 reads `SCALE: 3/4\"1'-0\"`, while wall section 1 is shown as `SCALE: 3/4\"=1'-0\"`. The equal sign is missing from the wall section 2 scale notation.",
+   "drawing_evidence": "Bottom caption beneath detail 2, WALL SECTION: `SCALE: 3/4\"1'-0\"`; detail 1 caption immediately to the left shows `SCALE: 3/4\"=1'-0\"`.",
+   "drawing_location": "Bottom of sheet, beneath wall sections 1 and 2",
+   "suggested_code_reference": "",
+   "recommendation": "Correct the wall section 2 scale notation or identify it as not to scale if that is intended."
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Sheet-count field appears incomplete",
+   "observation": "The title block identifies the page as `S-201.00`, but the adjacent sheet-count field reads `OF 00`. This appears to be an incomplete or placeholder document-control entry.",
+   "drawing_evidence": "Title block fields at lower right: `PAGE #: S-201.00` and `SHEET: OF 00`.",
+   "drawing_location": "Lower-right title block",
+   "suggested_code_reference": "",
+   "recommendation": "Verify and update the total-sheet field, or confirm that `OF 00` is an intentional project-standard notation."
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Typical-section reference is not specifically identified",
+   "observation": "Both wall section details include the note `2X4 REPAIR SEE TYPICAL SECTION`, but the note does not identify a sheet number or detail number. The submitted index includes other structural sheets, but none was reviewed here to determine which detail is intended.",
+   "drawing_evidence": "Wall section 1 and wall section 2 each contain the annotation `2X4 REPAIR SEE TYPICAL SECTION`.",
+   "drawing_location": "Within the wall section diagrams, adjacent to the 2x4 repair callouts",
+   "suggested_code_reference": "",
+   "recommendation": "Add the specific sheet and detail reference for the 2x4 repair condition, or confirm the location of the applicable typical section in the structural set."
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Snow-load design input and governing selection should be clarified",
+   "observation": "The design criteria list `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`. The sheet does not state how the listed snow-load values are selected or coordinated with the roof design criterion.",
+   "drawing_evidence": "Design Criteria block lists `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`; it also states `NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED`.",
+   "drawing_location": "Upper-right-center design criteria block",
+   "suggested_code_reference": "",
+   "recommendation": "Have the structural design professional clarify the governing roof snow/live-load input and show the applicable selection method in the calculations or design criteria."
+  }
+ ],
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "advisory",
+   "title": "Wall section 2 scale notation is incomplete",
+   "observation": "The caption beneath wall section 2 reads `SCALE: 3/4\"1'-0\"`, while wall section 1 is shown as `SCALE: 3/4\"=1'-0\"`. The equal sign is missing from the wall section 2 scale notation.",
+   "drawing_evidence": "Bottom caption beneath detail 2, WALL SECTION: `SCALE: 3/4\"1'-0\"`; detail 1 caption immediately to the left shows `SCALE: 3/4\"=1'-0\"`.",
+   "drawing_location": "Bottom of sheet, beneath wall sections 1 and 2",
+   "suggested_code_reference": null,
+   "recommendation": "Correct the wall section 2 scale notation or identify it as not to scale if that is intended.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Wall section 2 scale notation is incomplete",
+    "originalObservation": "The caption beneath wall section 2 reads `SCALE: 3/4\"1'-0\"`, while wall section 1 is shown as `SCALE: 3/4\"=1'-0\"`. The equal sign is missing from the wall section 2 scale notation.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Sheet-count field appears incomplete",
+   "observation": "The title block identifies the page as `S-201.00`, but the adjacent sheet-count field reads `OF 00`. This appears to be an incomplete or placeholder document-control entry.",
+   "drawing_evidence": "Title block fields at lower right: `PAGE #: S-201.00` and `SHEET: OF 00`.",
+   "drawing_location": "Lower-right title block",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and update the total-sheet field, or confirm that `OF 00` is an intentional project-standard notation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Sheet-count field appears incomplete",
+    "originalObservation": "The title block identifies the page as `S-201.00`, but the adjacent sheet-count field reads `OF 00`. This appears to be an incomplete or placeholder document-control entry.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Typical-section reference is not specifically identified",
+   "observation": "Both wall section details include the note `2X4 REPAIR SEE TYPICAL SECTION`, but the note does not identify a sheet number or detail number. The submitted index includes other structural sheets, but none was reviewed here to determine which detail is intended.",
+   "drawing_evidence": "Wall section 1 and wall section 2 each contain the annotation `2X4 REPAIR SEE TYPICAL SECTION`.",
+   "drawing_location": "Within the wall section diagrams, adjacent to the 2x4 repair callouts",
+   "suggested_code_reference": null,
+   "recommendation": "Add the specific sheet and detail reference for the 2x4 repair condition, or confirm the location of the applicable typical section in the structural set.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Typical-section reference is not specifically identified",
+    "originalObservation": "Both wall section details include the note `2X4 REPAIR SEE TYPICAL SECTION`, but the note does not identify a sheet number or detail number. The submitted index includes other structural sheets, but none was reviewed here to determine which detail is intended.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Snow-load design input and governing selection should be clarified",
+   "observation": "The design criteria list `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`. The sheet does not state how the listed snow-load values are selected or coordinated with the roof design criterion.",
+   "drawing_evidence": "Design Criteria block lists `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`; it also states `NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED`.",
+   "drawing_location": "Upper-right-center design criteria block",
+   "suggested_code_reference": null,
+   "recommendation": "Have the structural design professional clarify the governing roof snow/live-load input and show the applicable selection method in the calculations or design criteria.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Snow-load design input and governing selection should be clarified",
+    "originalObservation": "The design criteria list `ROOF LIVE LOAD: 30 PSF`, `GROUND SNOW LOAD: 25 PSF`, and `OR 30 PSF EQUIVALENT UNIFORM LOAD`. The sheet does not state how the listed snow-load values are selected or coordinated with the roof design criterion.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "A_pdf_only",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_096598e7ebbfae58016aec8f19f10087d29a986cbaeae2c58d",
+ "latencyMs": 7364,
+ "inputTokens": 3762,
+ "outputTokens": 438,
+ "costUsd": 0.013785,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "Preliminary review of the mezzanine and basement floor plan for compliance and coordination.",
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Plan Notes and Coordination",
+   "observation": "Plan keyed notes and symbols are visible but require further review to ensure all items are clearly coordinated and comply with applicable codes.",
+   "drawing_evidence": "Keyed notes are listed in section 4 with respective floor plans.",
+   "drawing_location": "Section 4, bottom of the sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Verify detailed compliance of each note and symbol with applicable building codes and ensure coordination with other disciplines.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Plan Notes and Coordination",
+    "originalObservation": "Plan keyed notes and symbols are visible but require further review to ensure all items are clearly coordinated and comply with applicable codes.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Fire-Resistant Construction Notes",
+   "observation": "The drawing specifies a 1-hour fire-rated partition with a note indicating to 'SEE CODE'.",
+   "drawing_evidence": "Note states '1HR RATED PARTITION; SEE CODE'.",
+   "drawing_location": "2nd Floor Alteration Floor Plan, near partition details.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that fire partition details comply with the specific code requirements referenced.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Fire-Resistant Construction Notes",
+    "originalObservation": "The drawing specifies a 1-hour fire-rated partition with a note indicating to 'SEE CODE'.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Stair Egress Clarification",
+   "observation": "Existing stair egress is shown, but additional information is needed to verify compliance with egress requirements.",
+   "drawing_evidence": "'EXIST. STAIR & RAILING' label without detailed egress dimensioning.",
+   "drawing_location": "Both floor plans, at stair locations.",
+   "suggested_code_reference": "2015 IBC Chapter 10 (Egress)",
+   "recommendation": "Provide detailed dimensional and compliance information for the existing stair and railing to ensure it meets egress requirements.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Stair Egress Clarification",
+    "originalObservation": "Existing stair egress is shown, but additional information is needed to verify compliance with egress requirements.",
+    "originalCodeReference": "2015 IBC Chapter 10 (Egress)",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": "2015 IBC Chapter 10 (Egress)",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

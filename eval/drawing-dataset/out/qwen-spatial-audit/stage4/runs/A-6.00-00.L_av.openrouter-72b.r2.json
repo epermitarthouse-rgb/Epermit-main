@@ -1,0 +1,69 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_av",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0a43c12d7f33ea40016afb2dc5580087d2a1a5aac458d8414a",
+ "latencyMs": 15562,
+ "inputTokens": 12856,
+ "outputTokens": 1351,
+ "reasoningTokens": 1011,
+ "costUsd": 0.004192400000000001,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "80a958b14fd7b74b",
+  "userPromptChars": 9450,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains door and hardware schedules, window types, hardware notes, and related elevation/details for the McDonald’s project at 75 New York Avenue, Washington, DC. One sheet-local clarification is recommended regarding the wording of the egress-door locking note. No confirmed code violation was identified from the visible information.\",\"findings\":[{\"category\":\"missing required information\",\"severity\":\"warning\",\"title\":\"Egress-door locking requirement is ambiguously worded\",\"observation\":\"The General Notes state: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” The phrase “keyless in the direction of egress” does not clearly identify the intended locking or releasing operation for exit doors.\",\"drawing_evidence\":\"Lower-left Door Hardware General Notes, Note 1: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” Related exit hardware is separately listed for doors including Door #4A – Stair Tower Exit and Door #11 – Stairwell Exit.\",\"drawing_location\":\"Lower-left portion of sheet, Door Hardware detail 2, General Notes; door-specific hardware lists immediately to the right and below.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Clarify the note using the intended operational requirement and coordinate it with the hardware sets for each designated exit door and the life-safety/egress plans. Confirm whether the intent is free egress without a key, passage operation, panic hardware, or another defined release arrangement.\"}]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains door and hardware schedules, window types, hardware notes, and related elevation/details for the McDonald’s project at 75 New York Avenue, Washington, DC. One sheet-local clarification is recommended regarding the wording of the egress-door locking note. No confirmed code violation was identified from the visible information.",
+ "drafts": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Egress-door locking requirement is ambiguously worded",
+   "observation": "The General Notes state: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” The phrase “keyless in the direction of egress” does not clearly identify the intended locking or releasing operation for exit doors.",
+   "drawing_evidence": "Lower-left Door Hardware General Notes, Note 1: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” Related exit hardware is separately listed for doors including Door #4A – Stair Tower Exit and Door #11 – Stairwell Exit.",
+   "drawing_location": "Lower-left portion of sheet, Door Hardware detail 2, General Notes; door-specific hardware lists immediately to the right and below.",
+   "suggested_code_reference": "",
+   "recommendation": "Clarify the note using the intended operational requirement and coordinate it with the hardware sets for each designated exit door and the life-safety/egress plans. Confirm whether the intent is free egress without a key, passage operation, panic hardware, or another defined release arrangement."
+  }
+ ],
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Egress-door locking requirement is ambiguously worded",
+   "observation": "The General Notes state: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” The phrase “keyless in the direction of egress” does not clearly identify the intended locking or releasing operation for exit doors.",
+   "drawing_evidence": "Lower-left Door Hardware General Notes, Note 1: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” Related exit hardware is separately listed for doors including Door #4A – Stair Tower Exit and Door #11 – Stairwell Exit.",
+   "drawing_location": "Lower-left portion of sheet, Door Hardware detail 2, General Notes; door-specific hardware lists immediately to the right and below.",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify the note using the intended operational requirement and coordinate it with the hardware sets for each designated exit door and the life-safety/egress plans. Confirm whether the intent is free egress without a key, passage operation, panic hardware, or another defined release arrangement.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Egress-door locking requirement is ambiguously worded",
+    "originalObservation": "The General Notes state: “ALL EXIT DOORS SHALL BE KEYLESS IN THE DIRECTION OF EGRESS.” The phrase “keyless in the direction of egress” does not clearly identify the intended locking or releasing operation for exit doors.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

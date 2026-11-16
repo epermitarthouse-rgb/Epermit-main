@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842183-cC4SWiUGNbuJN5mOLKve",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 240, 426, 275],\n        \"text_content\": \"E EXTENT OF NEW FINISH IN\",\n        \"category\": \"note\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 285, 386, 320],\n        \"text_content\": \"R W/MCDONALD'S ACM.\",\n        \"category\": \"note\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 522, 291, 560],\n        \"text_content\": \"TAIR TOWER \\\"A\\\"\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [87, 587, 173, 625],\n        \"text_content\": \"112\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [445, 650, 560, 694],\n        \"text_content\": \"A-2.00\",\n        \"category\": \"dimension\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 357,
+ "costUsd": 0.00159,
+ "reportedCostUsd": 0.0015898,
+ "latencyS": 6.57,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

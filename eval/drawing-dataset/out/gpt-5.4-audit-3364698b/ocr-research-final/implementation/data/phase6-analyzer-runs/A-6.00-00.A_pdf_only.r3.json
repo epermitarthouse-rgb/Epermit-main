@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "A_pdf_only",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_01c3a55778ee1dcc016aec8f4637c887d2aed16ac2f55cfcb9",
+ "latencyMs": 7272,
+ "inputTokens": 3741,
+ "outputTokens": 360,
+ "costUsd": 0.012952499999999999,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides a door and hardware schedule, window types, and related notes. The document includes professional certification and revision history.",
+ "published": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Door glazing and hardware notes",
+   "observation": "The door schedule includes specific glazing types and hardware notes (e.g., 1/4\" temper, closer/holder).",
+   "drawing_evidence": "Door notes section and door schedule table with glazing and hardware information.",
+   "drawing_location": "Bottom half of the sheet, particularly in the door schedule section.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that specified door glazing and hardware comply with relevant safety and accessibility standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door glazing and hardware notes",
+    "originalObservation": "The door schedule includes specific glazing types and hardware notes (e.g., 1/4\" temper, closer/holder).",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Door type not specified for all entries",
+   "observation": "Several entries in the door schedule table show 'TBD' for the door types.",
+   "drawing_evidence": "Door schedule table contains several 'TBD' entries.",
+   "drawing_location": "Door schedule section, various rows with 'TBD' under door types.",
+   "suggested_code_reference": null,
+   "recommendation": "Determine and specify all door types to ensure compliance and avoid installation errors.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Door type not specified for all entries",
+    "originalObservation": "Several entries in the door schedule table show 'TBD' for the door types.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Reference to general notes",
+   "observation": "General notes provided for guidance on door installation and specs.",
+   "drawing_evidence": "General notes section includes items 1-8 related to door handling and specifications.",
+   "drawing_location": "Top left of the sheet, in the GENERAL NOTES section.",
+   "suggested_code_reference": null,
+   "recommendation": "Review all general notes to ensure they align with project standards and client requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Reference to general notes",
+    "originalObservation": "General notes provided for guidance on door installation and specs.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

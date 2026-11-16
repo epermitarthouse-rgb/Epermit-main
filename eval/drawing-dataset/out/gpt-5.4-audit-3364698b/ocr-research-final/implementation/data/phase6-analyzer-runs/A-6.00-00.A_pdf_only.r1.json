@@ -1,0 +1,71 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "A_pdf_only",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_006efdd107dc9341016aec8f44a51487d29ea886ff82ea1862",
+ "latencyMs": 6758,
+ "inputTokens": 3741,
+ "outputTokens": 277,
+ "costUsd": 0.0121225,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "This sheet contains door and window types and a schedule related to door hardware, providing critical information for installation and compliance review.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Incomplete Door Specification",
+   "observation": "The door schedule indicates 'Door E1' without specifying the manufacturer or model number.",
+   "drawing_evidence": "Door schedule shows 'Door E1' with missing manufacturer details in the schedule table.",
+   "drawing_location": "Door schedule on lower right of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Provide the manufacturer and model number for 'Door E1' to ensure specification integrity and compliance verification.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Incomplete Door Specification",
+    "originalObservation": "The door schedule indicates 'Door E1' without specifying the manufacturer or model number.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "advisory",
+   "title": "Mismatch in Window Dimension",
+   "observation": "The window detail W3 shows dimensions different from what is listed in the general notes.",
+   "drawing_evidence": "Window detail labeled W3 shows 3'0\" x 4'0\" whereas general notes indicate a 4'0\" height consistently for window types W1 to W5.",
+   "drawing_location": "Upper section, detail labeled W3.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and correct the window dimensions for consistency with the general notes.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Mismatch in Window Dimension",
+    "originalObservation": "The window detail W3 shows dimensions different from what is listed in the general notes.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

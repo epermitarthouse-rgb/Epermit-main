@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842591-utU9ACeNmsWGSKAejqhd",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [226, 24, 273, 71],\n        \"text_content\": \"SF\",\n        \"category\": \"room_or_tag\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 0, 980, 35],\n        \"text_content\": \"NEW STOREFRONT SYSTEM - SEE A-\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 43, 980, 80],\n        \"text_content\": \"ELEVATIONS FOR LOCATIONS & SPE\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [226, 167, 273, 214],\n        \"text_content\": \"DS\",\n        \"category\": \"room_or_tag\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 149, 980, 186],\n        \"text_content\": \"DROPPED SOFFIT ABOVE - SEE RE\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 359,
+ "costUsd": 0.001592,
+ "reportedCostUsd": 0.0015918,
+ "latencyS": 10.77,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

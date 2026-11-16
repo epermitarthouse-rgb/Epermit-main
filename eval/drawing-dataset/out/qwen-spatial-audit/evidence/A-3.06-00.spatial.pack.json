@@ -1,0 +1,6874 @@
+{
+ "version": "qsa.spatial-evidence.v1",
+ "sheetId": "A-3.06-00",
+ "source": "qwen-openrouter-72b-validated",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "page": {
+  "width": 2592,
+  "height": 1728,
+  "rotation": 0,
+  "mediabox": [
+   0,
+   0,
+   2592,
+   1728
+  ],
+  "cropbox": [
+   0,
+   0,
+   2592,
+   1728
+  ],
+  "frame": "pdf-point, bottom-left origin"
+ },
+ "maxChars": 3200,
+ "details": [
+  {
+   "number": "4",
+   "title": "WALL SECTION @ HIGH ROOF",
+   "scale": "3/4\" = 1'-0\"",
+   "region": {
+    "x": 87.8,
+    "y": 18.93,
+    "width": 1426.0800000000002,
+    "height": 1156.12
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "5",
+   "title": "WALL SECTION @ NEW ORDER WINDOW",
+   "scale": "3/4\" = 1'-0\"",
+   "region": {
+    "x": 1483.88,
+    "y": 18.93,
+    "width": 745.2399999999998,
+    "height": 1156.12
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "1",
+   "title": "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "scale": "1/2\" = 1'-0\"",
+   "region": {
+    "x": 87.8,
+    "y": 1165.05,
+    "width": 752.0400000000001,
+    "height": 532.95
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "2",
+   "title": "GUARD RAIL DETAIL @ HIGH ROOF",
+   "scale": "3/4\" = 1'-0\"",
+   "region": {
+    "x": 809.84,
+    "y": 1165.05,
+    "width": 704.0400000000001,
+    "height": 532.95
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "3",
+   "title": "GUARD RAIL DETAIL @ HIGH ROOF",
+   "scale": "1-1/2\" = 1'-0\"",
+   "region": {
+    "x": 1483.88,
+    "y": 1165.05,
+    "width": 745.2399999999998,
+    "height": 532.95
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  }
+ ],
+ "shown": [
+  {
+   "id": "e40",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "1",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0069",
+     "box": {
+      "x": 1049.52,
+      "y": 826.08,
+      "width": 7.92,
+      "height": 16.32
+     },
+     "lines": [
+      {
+       "lid": "L0182",
+       "text": "1",
+       "box": {
+        "x": 1049.52,
+        "y": 826.08,
+        "width": 7.92,
+        "height": 16.32
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0070",
+     "box": {
+      "x": 1157.52,
+      "y": 826.08,
+      "width": 7.92,
+      "height": 16.32
+     },
+     "lines": [
+      {
+       "lid": "L0183",
+       "text": "1",
+       "box": {
+        "x": 1157.52,
+        "y": 826.08,
+        "width": 7.92,
+        "height": 16.32
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0112",
+     "box": {
+      "x": 500.16,
+      "y": 244.8,
+      "width": 7.68,
+      "height": 17.28
+     },
+     "lines": [
+      {
+       "lid": "L0252",
+       "text": "1",
+       "box": {
+        "x": 500.16,
+        "y": 244.8,
+        "width": 7.68,
+        "height": 17.28
+       },
+       "tiles": [
+        "r07c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e1",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "2 / A-3.06",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0000",
+     "box": {
+      "x": 267.6,
+      "y": 1629.6,
+      "width": 29.519999999999982,
+      "height": 21.840000000000146
+     },
+     "lines": [
+      {
+       "lid": "L0000",
+       "text": "2",
+       "box": {
+        "x": 277.92,
+        "y": 1643.52,
+        "width": 5.28,
+        "height": 7.92
+       },
+       "tiles": [
+        "r00c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0001",
+       "text": "A-3.06",
+       "box": {
+        "x": 267.6,
+        "y": 1629.6,
+        "width": 29.52,
+        "height": 9.6
+       },
+       "tiles": [
+        "r00c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e26",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "3 / A-3.00",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0090",
+     "box": {
+      "x": 1873.44,
+      "y": 617.28,
+      "width": 28.319999999999936,
+      "height": 23.280000000000086
+     },
+     "lines": [
+      {
+       "lid": "L0218",
+       "text": "3",
+       "box": {
+        "x": 1875.84,
+        "y": 637.2,
+        "width": 3.36,
+        "height": 3.36
+       },
+       "tiles": [
+        "r05c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0221",
+       "text": "A-3.00",
+       "box": {
+        "x": 1873.44,
+        "y": 617.28,
+        "width": 28.32,
+        "height": 11.52
+       },
+       "tiles": [
+        "r05c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e13",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "MIN. / 8\"",
+   "technical": true,
+   "classes": [
+    "qualifier",
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 7.5,
+   "copies": [
+    {
+     "aid": "N0023",
+     "box": {
+      "x": 1750.8,
+      "y": 1452.48,
+      "width": 8.400000000000091,
+      "height": 7.920000000000073
+     },
+     "lines": [
+      {
+       "lid": "L0067",
+       "text": "MIN.",
+       "box": {
+        "x": 1750.8,
+        "y": 1452.48,
+        "width": 8.4,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0069",
+       "text": "8\"",
+       "box": {
+        "x": 1750.8,
+        "y": 1452.48,
+        "width": 8.4,
+        "height": 5.76
+       },
+       "tiles": [
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e18",
+   "region": "2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "3 / {3 | A-3.06} / A-3.06",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": true,
+   "value": 10,
+   "copies": [
+    {
+     "aid": "N0027",
+     "box": {
+      "x": 1008,
+      "y": 1339.68,
+      "width": 31.680000000000064,
+      "height": 30.480000000000018
+     },
+     "lines": [
+      {
+       "lid": "L0084",
+       "text": "3",
+       "box": {
+        "x": 1017.84,
+        "y": 1368.24,
+        "width": 8.64,
+        "height": 1.92
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0087",
+       "text": "3",
+       "box": {
+        "x": 1019.04,
+        "y": 1352.88,
+        "width": 5.76,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c05",
+        "r01c04"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "A-3.06"
+       ]
+      },
+      {
+       "lid": "L0093",
+       "text": "A-3.06",
+       "box": {
+        "x": 1008,
+        "y": 1339.68,
+        "width": 31.68,
+        "height": 12
+       },
+       "tiles": [
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e8",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "3 / A-3.06",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0021",
+     "box": {
+      "x": 340.32,
+      "y": 1461.12,
+      "width": 27.120000000000005,
+      "height": 20.6400000000001
+     },
+     "lines": [
+      {
+       "lid": "L0057",
+       "text": "3",
+       "box": {
+        "x": 351.12,
+        "y": 1474.08,
+        "width": 5.28,
+        "height": 7.68
+       },
+       "tiles": [
+        "r01c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0064",
+       "text": "A-3.06",
+       "box": {
+        "x": 340.32,
+        "y": 1461.12,
+        "width": 27.12,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e35",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "3'-6\" MIN.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 6.5,
+   "copies": [
+    {
+     "aid": "N0061",
+     "box": {
+      "x": 572.64,
+      "y": 942.72,
+      "width": 24.48,
+      "height": 21.12
+     },
+     "lines": [
+      {
+       "lid": "L0163",
+       "text": "3'-6\" MIN.",
+       "box": {
+        "x": 572.64,
+        "y": 942.72,
+        "width": 24.48,
+        "height": 21.12
+       },
+       "tiles": [
+        "r03c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e20",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "I / A-3.00",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0046",
+     "box": {
+      "x": 1949.76,
+      "y": 1138.32,
+      "width": 27.59999999999991,
+      "height": 20.87999999999988
+     },
+     "lines": [
+      {
+       "lid": "L0121",
+       "text": "I",
+       "box": {
+        "x": 1950,
+        "y": 1149.6,
+        "width": 7.68,
+        "height": 9.6
+       },
+       "tiles": [
+        "r02c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0122",
+       "text": "A-3.00",
+       "box": {
+        "x": 1949.76,
+        "y": 1138.32,
+        "width": 27.6,
+        "height": 9.6
+       },
+       "tiles": [
+        "r02c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e36",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "1:12 MIN.",
+   "technical": true,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 3.5,
+   "copies": [
+    {
+     "aid": "N0062",
+     "box": {
+      "x": 1051.68,
+      "y": 931.92,
+      "width": 30.24,
+      "height": 7.44
+     },
+     "lines": [
+      {
+       "lid": "L0168",
+       "text": "1:12 MIN.",
+       "box": {
+        "x": 1051.68,
+        "y": 931.92,
+        "width": 30.24,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0066",
+     "box": {
+      "x": 674.88,
+      "y": 879.36,
+      "width": 30.24,
+      "height": 7.44
+     },
+     "lines": [
+      {
+       "lid": "L0177",
+       "text": "1:12 MIN.",
+       "box": {
+        "x": 674.88,
+        "y": 879.36,
+        "width": 30.24,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e33",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "2'-10\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0057",
+     "box": {
+      "x": 1313.52,
+      "y": 982.8,
+      "width": 8.64,
+      "height": 25.44
+     },
+     "lines": [
+      {
+       "lid": "L0155",
+       "text": "2'-10\"",
+       "box": {
+        "x": 1313.52,
+        "y": 982.8,
+        "width": 8.64,
+        "height": 25.44
+       },
+       "tiles": [
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e17",
+   "region": "2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "3'-6\" MIN. ABOVE DECK MI",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 8.5,
+   "copies": [
+    {
+     "aid": "N0017",
+     "box": {
+      "x": 1036.08,
+      "y": 1446.72,
+      "width": 21.36,
+      "height": 79.68
+     },
+     "lines": [
+      {
+       "lid": "L0040",
+       "text": "3'-6\" MIN. ABOVE DECK MI",
+       "box": {
+        "x": 1036.08,
+        "y": 1446.72,
+        "width": 21.36,
+        "height": 79.68
+       },
+       "tiles": [
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e43",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "EXIST. ROOF TRUSSES / TO REMAIN. TYP.",
+   "technical": true,
+   "classes": [
+    "datum",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 5.5,
+   "copies": [
+    {
+     "aid": "N0091",
+     "box": {
+      "x": 705.12,
+      "y": 620.4,
+      "width": 85.67999999999995,
+      "height": 17.280000000000086
+     },
+     "lines": [
+      {
+       "lid": "L0219",
+       "text": "EXIST. ROOF TRUSSES",
+       "box": {
+        "x": 705.12,
+        "y": 630.24,
+        "width": 85.68,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0222",
+       "text": "TO REMAIN. TYP.",
+       "box": {
+        "x": 705.12,
+        "y": 620.4,
+        "width": 61.92,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0092",
+     "box": {
+      "x": 1116.72,
+      "y": 620.4,
+      "width": 85.68000000000006,
+      "height": 17.280000000000086
+     },
+     "lines": [
+      {
+       "lid": "L0220",
+       "text": "EXIST. ROOF TRUSSES",
+       "box": {
+        "x": 1116.72,
+        "y": 630.24,
+        "width": 85.68,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0223",
+       "text": "TO REMAIN. TYP.",
+       "box": {
+        "x": 1116.72,
+        "y": 620.4,
+        "width": 64.56,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e30",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "1",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0119",
+     "box": {
+      "x": 2117.76,
+      "y": 164.4,
+      "width": 2.64,
+      "height": 2.64
+     },
+     "lines": [
+      {
+       "lid": "L0271",
+       "text": "1",
+       "box": {
+        "x": 2117.76,
+        "y": 164.4,
+        "width": 2.64,
+        "height": 2.64
+       },
+       "tiles": [
+        "r07c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e27",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "T/WINDOW / ELEV. + 8'-0\"",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "elevation"
+   ],
+   "uncertain": false,
+   "value": 7,
+   "copies": [
+    {
+     "aid": "N0095",
+     "box": {
+      "x": 1552.32,
+      "y": 587.04,
+      "width": 51.3599999999999,
+      "height": 17.760000000000105
+     },
+     "lines": [
+      {
+       "lid": "L0226",
+       "text": "T/WINDOW",
+       "box": {
+        "x": 1552.32,
+        "y": 598.08,
+        "width": 37.68,
+        "height": 6.72
+       },
+       "tiles": [
+        "r05c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0227",
+       "text": "ELEV. + 8'-0\"",
+       "box": {
+        "x": 1552.32,
+        "y": 587.04,
+        "width": 51.36,
+        "height": 7.92
+       },
+       "tiles": [
+        "r05c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e7",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "3'-6\"MIN HEIGHT T.O. ROOF DECK M",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 8.5,
+   "copies": [
+    {
+     "aid": "N0016",
+     "box": {
+      "x": 197.76,
+      "y": 1462.56,
+      "width": 17.28,
+      "height": 63.84
+     },
+     "lines": [
+      {
+       "lid": "L0039",
+       "text": "3'-6\"MIN HEIGHT T.O. ROOF DECK M",
+       "box": {
+        "x": 197.76,
+        "y": 1462.56,
+        "width": 17.28,
+        "height": 63.84
+       },
+       "tiles": [
+        "r01c00",
+        "r01c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e19",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "GUARD / 3 / SCALE: 1-1/2\"= / T/ BLK'G @ PARAPET / ELEV. + 17'-4\"",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "dimension",
+    "elevation"
+   ],
+   "uncertain": false,
+   "value": 14,
+   "copies": [
+    {
+     "aid": "N0039",
+     "box": {
+      "x": 1524.24,
+      "y": 1091.04,
+      "width": 122.16000000000008,
+      "height": 136.08000000000015
+     },
+     "lines": [
+      {
+       "lid": "L0110",
+       "text": "GUARD",
+       "box": {
+        "x": 1567.44,
+        "y": 1213.44,
+        "width": 78.96,
+        "height": 13.68
+       },
+       "tiles": [
+        "r02c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0114",
+       "text": "3",
+       "box": {
+        "x": 1524.24,
+        "y": 1199.28,
+        "width": 12.96,
+        "height": 19.2
+       },
+       "tiles": [
+        "r02c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0118",
+       "text": "SCALE: 1-1/2\"=",
+       "box": {
+        "x": 1566.72,
+        "y": 1186.56,
+        "width": 77.52,
+        "height": 7.92
+       },
+       "tiles": [
+        "r02c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0128",
+       "text": "T/ BLK'G @ PARAPET",
+       "box": {
+        "x": 1552.32,
+        "y": 1101.12,
+        "width": 82.56,
+        "height": 7.68
+       },
+       "tiles": [
+        "r02c07",
+        "r03c07",
+        "r02c08",
+        "r03c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0131",
+       "text": "ELEV. + 17'-4\"",
+       "box": {
+        "x": 1552.32,
+        "y": 1091.04,
+        "width": 52.08,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c07",
+        "r02c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e31",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "29'-0\" A.F.F. (V.I.F.) / T/BLK'G @ PARAPET",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 9.5,
+   "copies": [
+    {
+     "aid": "N0050",
+     "box": {
+      "x": 1336.32,
+      "y": 1064.16,
+      "width": 81.12000000000012,
+      "height": 18.480000000000018
+     },
+     "lines": [
+      {
+       "lid": "L0132",
+       "text": "29'-0\" A.F.F. (V.I.F.)",
+       "box": {
+        "x": 1337.28,
+        "y": 1073.76,
+        "width": 74.64,
+        "height": 8.88
+       },
+       "tiles": [
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0135",
+       "text": "T/BLK'G @ PARAPET",
+       "box": {
+        "x": 1336.32,
+        "y": 1064.16,
+        "width": 81.12,
+        "height": 8.64
+       },
+       "tiles": [
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e25",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "B/ UNDERCSORE / ELEV. + 10'-8\"",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "elevation"
+   ],
+   "uncertain": false,
+   "value": 7,
+   "copies": [
+    {
+     "aid": "N0080",
+     "box": {
+      "x": 1552.08,
+      "y": 731.04,
+      "width": 63.11999999999989,
+      "height": 17.75999999999999
+     },
+     "lines": [
+      {
+       "lid": "L0201",
+       "text": "B/ UNDERCSORE",
+       "box": {
+        "x": 1552.08,
+        "y": 741.12,
+        "width": 63.12,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0202",
+       "text": "ELEV. + 10'-8\"",
+       "box": {
+        "x": 1552.32,
+        "y": 731.04,
+        "width": 53.76,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e2",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "EXTEND GUARD RAIL MIN. 30\" BEYO",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 6.5,
+   "copies": [
+    {
+     "aid": "N0002",
+     "box": {
+      "x": 299.28,
+      "y": 1607.04,
+      "width": 137.52,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0003",
+       "text": "EXTEND GUARD RAIL MIN. 30\" BEYO",
+       "box": {
+        "x": 299.28,
+        "y": 1607.04,
+        "width": 137.52,
+        "height": 8.64
+       },
+       "tiles": [
+        "r00c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e45",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "10/15",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0108",
+     "box": {
+      "x": 106.08,
+      "y": 306.72,
+      "width": 3.36,
+      "height": 10.08
+     },
+     "lines": [
+      {
+       "lid": "L0247",
+       "text": "10/15",
+       "box": {
+        "x": 106.08,
+        "y": 306.72,
+        "width": 3.36,
+        "height": 10.08
+       },
+       "tiles": [
+        "r07c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e14",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "2\" DIAMETER F / PLATE",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0024",
+     "box": {
+      "x": 1994.4,
+      "y": 1439.04,
+      "width": 55.19999999999982,
+      "height": 18.000000000000227
+     },
+     "lines": [
+      {
+       "lid": "L0071",
+       "text": "2\" DIAMETER F",
+       "box": {
+        "x": 1994.4,
+        "y": 1448.88,
+        "width": 55.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0076",
+       "text": "PLATE",
+       "box": {
+        "x": 1994.4,
+        "y": 1439.04,
+        "width": 24.24,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e38",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "26'-2\" A.F.F. (V.I.F.) / {EXIST. ROOF @ H.P. | EXIST. ROOF 6'}",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum",
+    "qualifier"
+   ],
+   "uncertain": true,
+   "value": 9.5,
+   "copies": [
+    {
+     "aid": "N0064",
+     "box": {
+      "x": 1336.32,
+      "y": 919.2,
+      "width": 76.31999999999994,
+      "height": 18.719999999999914
+     },
+     "lines": [
+      {
+       "lid": "L0170",
+       "text": "26'-2\" A.F.F. (V.I.F.)",
+       "box": {
+        "x": 1337.28,
+        "y": 929.04,
+        "width": 74.4,
+        "height": 8.88
+       },
+       "tiles": [
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0173",
+       "text": "EXIST. ROOF @ H.P.",
+       "box": {
+        "x": 1336.32,
+        "y": 919.2,
+        "width": 76.32,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c06",
+        "r04c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "EXIST. ROOF 6'"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e24",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "7 / A-3.00 / NEW CANOPY / EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES)",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 10,
+   "copies": [
+    {
+     "aid": "N0068",
+     "box": {
+      "x": 1603.68,
+      "y": 680.16,
+      "width": 213.83999999999992,
+      "height": 163.68000000000006
+     },
+     "lines": [
+      {
+       "lid": "L0181",
+       "text": "7",
+       "box": {
+        "x": 1615.44,
+        "y": 836.88,
+        "width": 4.56,
+        "height": 6.96
+       },
+       "tiles": [
+        "r04c07",
+        "r04c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0185",
+       "text": "A-3.00",
+       "box": {
+        "x": 1603.68,
+        "y": 822.72,
+        "width": 28.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c07",
+        "r04c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "3.00"
+       ]
+      },
+      {
+       "lid": "L0205",
+       "text": "NEW CANOPY",
+       "box": {
+        "x": 1711.92,
+        "y": 713.52,
+        "width": 50.64,
+        "height": 7.2
+       },
+       "tiles": [
+        "r04c08",
+        "r05c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0212",
+       "text": "EXTERIOR ASSEMBLY-5",
+       "box": {
+        "x": 1712.64,
+        "y": 692.64,
+        "width": 104.88,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c08",
+        "r04c08",
+        "r04c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0215",
+       "text": "(SEE ASSEMBLY NOTES)",
+       "box": {
+        "x": 1712.4,
+        "y": 680.16,
+        "width": 105.12,
+        "height": 9.6
+       },
+       "tiles": [
+        "r05c08",
+        "r04c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e29",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "T/ SLAB / ?ELEV. + O'-O\"",
+   "technical": true,
+   "classes": [
+    "elevation"
+   ],
+   "uncertain": true,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0118",
+     "box": {
+      "x": 1552.32,
+      "y": 155.28,
+      "width": 52.07999999999993,
+      "height": 17.52000000000001
+     },
+     "lines": [
+      {
+       "lid": "L0268",
+       "text": "T/ SLAB",
+       "box": {
+        "x": 1555.68,
+        "y": 165.12,
+        "width": 27.6,
+        "height": 7.68
+       },
+       "tiles": [
+        "r08c07",
+        "r07c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0272",
+       "text": "ELEV. + O'-O\"",
+       "box": {
+        "x": 1552.32,
+        "y": 155.28,
+        "width": 52.08,
+        "height": 7.68
+       },
+       "tiles": [
+        "r08c07",
+        "r07c07"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "O'-O\"",
+         "candidate": "0'-0\"",
+         "reason": "dimension_or_number",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e34",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.",
+   "technical": true,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 3.5,
+   "copies": [
+    {
+     "aid": "N0059",
+     "box": {
+      "x": 710.88,
+      "y": 958.56,
+      "width": 79.92000000000007,
+      "height": 27.12000000000012
+     },
+     "lines": [
+      {
+       "lid": "L0157",
+       "text": "NEW MEMBRANE",
+       "box": {
+        "x": 712.08,
+        "y": 978.24,
+        "width": 61.2,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0159",
+       "text": "ROOFING OVER",
+       "box": {
+        "x": 710.88,
+        "y": 968.4,
+        "width": 61.44,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0161",
+       "text": "BUILT-UP ROOF TYP.",
+       "box": {
+        "x": 712.08,
+        "y": 958.56,
+        "width": 78.72,
+        "height": 7.2
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0060",
+     "box": {
+      "x": 1122.48,
+      "y": 938.4,
+      "width": 79.92000000000007,
+      "height": 27.12000000000012
+     },
+     "lines": [
+      {
+       "lid": "L0162",
+       "text": "NEW MEMBRANE",
+       "box": {
+        "x": 1123.68,
+        "y": 958.08,
+        "width": 61.2,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0165",
+       "text": "ROOFING OVER",
+       "box": {
+        "x": 1122.48,
+        "y": 948.24,
+        "width": 61.44,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0166",
+       "text": "BUILT-UP ROOF TYP.",
+       "box": {
+        "x": 1123.68,
+        "y": 938.4,
+        "width": 78.72,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e16",
+   "region": "2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "{3'-6\" DECK MEMBRANE | 31-6\"}",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0012",
+     "box": {
+      "x": 1036.08,
+      "y": 1495.2,
+      "width": 22.08,
+      "height": 66
+     },
+     "lines": [
+      {
+       "lid": "L0024",
+       "text": "3'-6\" DECK MEMBRANE",
+       "box": {
+        "x": 1036.08,
+        "y": 1495.2,
+        "width": 22.08,
+        "height": 66
+       },
+       "tiles": [
+        "r00c05",
+        "r00c04"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "31-6\""
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e3",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "EQ",
+   "technical": false,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 0.45,
+   "copies": [
+    {
+     "aid": "N0006",
+     "box": {
+      "x": 336.96,
+      "y": 1587.6,
+      "width": 10.8,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0008",
+       "text": "EQ",
+       "box": {
+        "x": 336.96,
+        "y": 1587.6,
+        "width": 10.8,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0007",
+     "box": {
+      "x": 490.08,
+      "y": 1587.6,
+      "width": 10.56,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0009",
+       "text": "EQ",
+       "box": {
+        "x": 490.08,
+        "y": 1587.6,
+        "width": 10.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0015",
+     "box": {
+      "x": 242.88,
+      "y": 1532.64,
+      "width": 8.16,
+      "height": 10.8
+     },
+     "lines": [
+      {
+       "lid": "L0032",
+       "text": "EQ",
+       "box": {
+        "x": 242.88,
+        "y": 1532.64,
+        "width": 8.16,
+        "height": 10.8
+       },
+       "tiles": [
+        "r00c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0022",
+     "box": {
+      "x": 242.64,
+      "y": 1464.96,
+      "width": 7.92,
+      "height": 10.8
+     },
+     "lines": [
+      {
+       "lid": "L0062",
+       "text": "EQ",
+       "box": {
+        "x": 242.64,
+        "y": 1464.96,
+        "width": 7.92,
+        "height": 10.8
+       },
+       "tiles": [
+        "r01c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e39",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "25'-0\" A.F.F. / {EXISTING ROO | TING ROOF @ L.P. (V.I.F.)}",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0067",
+     "box": {
+      "x": 181.68,
+      "y": 848.88,
+      "width": 53.51999999999998,
+      "height": 18.479999999999905
+     },
+     "lines": [
+      {
+       "lid": "L0179",
+       "text": "25'-0\" A.F.F.",
+       "box": {
+        "x": 181.68,
+        "y": 859.68,
+        "width": 48.72,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c00",
+        "r04c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0180",
+       "text": "EXISTING ROO",
+       "box": {
+        "x": 182.16,
+        "y": 848.88,
+        "width": 53.04,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c00",
+        "r04c01"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "TING ROOF @ L.P. (V.I.F.)"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e44",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "A-3.06-00 / STAN OVERBY / {10/15/26 | S New York Ave & 1st St, Wash DC SECTIONS.DWG}",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value",
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0106",
+     "box": {
+      "x": 98.88,
+      "y": 295.92,
+      "width": 10.560000000000002,
+      "height": 163.44
+     },
+     "lines": [
+      {
+       "lid": "L0242",
+       "text": "A-3.06-00",
+       "box": {
+        "x": 98.88,
+        "y": 424.8,
+        "width": 5.76,
+        "height": 34.56
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0244",
+       "text": "STAN OVERBY",
+       "box": {
+        "x": 106.08,
+        "y": 318.72,
+        "width": 3.36,
+        "height": 89.76
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0251",
+       "text": "10/15/26",
+       "box": {
+        "x": 98.88,
+        "y": 295.92,
+        "width": 5.76,
+        "height": 11.52
+       },
+       "tiles": [
+        "r06c00",
+        "r07c00"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "S New York Ave & 1st St, Wash DC SECTIONS.DWG"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e11",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "?I-1/4\" PIPE RAIL / TO MATCH MET / AND/OR (E) CO",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 4.6,
+   "copies": [
+    {
+     "aid": "N0008",
+     "box": {
+      "x": 1992.96,
+      "y": 1557.6,
+      "width": 56.63999999999987,
+      "height": 28.560000000000173
+     },
+     "lines": [
+      {
+       "lid": "L0012",
+       "text": "I-1/4\" PIPE RAIL",
+       "box": {
+        "x": 1992.96,
+        "y": 1578.24,
+        "width": 56.16,
+        "height": 7.92
+       },
+       "tiles": [
+        "r00c09"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "I-1/4\"",
+         "candidate": "1-1/4\"",
+         "reason": "dimension_or_number",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      },
+      {
+       "lid": "L0017",
+       "text": "TO MATCH MET",
+       "box": {
+        "x": 1993.2,
+        "y": 1568.16,
+        "width": 56.4,
+        "height": 7.92
+       },
+       "tiles": [
+        "r00c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0020",
+       "text": "AND/OR (E) CO",
+       "box": {
+        "x": 1993.2,
+        "y": 1557.6,
+        "width": 56.4,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e32",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "29'-0\" / {T/ BLOCKING | LOCKING @ PARAPET}",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0051",
+     "box": {
+      "x": 181.44,
+      "y": 1063.92,
+      "width": 51.120000000000005,
+      "height": 17.519999999999982
+     },
+     "lines": [
+      {
+       "lid": "L0133",
+       "text": "29'-0\"",
+       "box": {
+        "x": 181.44,
+        "y": 1073.76,
+        "width": 24.72,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c00",
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0136",
+       "text": "T/ BLOCKING",
+       "box": {
+        "x": 182.16,
+        "y": 1063.92,
+        "width": 50.4,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c00",
+        "r03c01"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "LOCKING @ PARAPET"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e4",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "{I-1/4\" PIPE RAILING. PAINT TO MATCH | I-I/4} / NEW METAL PARAPET CAP.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0010",
+     "box": {
+      "x": 619.68,
+      "y": 1560.48,
+      "width": 142.56000000000006,
+      "height": 19.920000000000073
+     },
+     "lines": [
+      {
+       "lid": "L0015",
+       "text": "I-1/4\" PIPE RAILING. PAINT TO MATCH",
+       "box": {
+        "x": 619.68,
+        "y": 1571.52,
+        "width": 142.56,
+        "height": 8.88
+       },
+       "tiles": [
+        "r00c03",
+        "r00c02"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "I-I/4"
+       ],
+       "valueChecks": [
+        {
+         "token": "I-1/4\"",
+         "candidate": "1-1/4\"",
+         "reason": "dimension_or_number",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      },
+      {
+       "lid": "L0019",
+       "text": "NEW METAL PARAPET CAP.",
+       "box": {
+        "x": 622.32,
+        "y": 1560.48,
+        "width": 102.72,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c03",
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "NEW"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e9",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "VARIES (V.I.F) / T.O. ROOF MEMBRANE / (E) JOISTS",
+   "technical": true,
+   "classes": [
+    "qualifier",
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 4.1,
+   "copies": [
+    {
+     "aid": "N0025",
+     "box": {
+      "x": 618,
+      "y": 1418.4,
+      "width": 102.96000000000004,
+      "height": 36.47999999999979
+     },
+     "lines": [
+      {
+       "lid": "L0073",
+       "text": "VARIES (V.I.F)",
+       "box": {
+        "x": 622.56,
+        "y": 1444.32,
+        "width": 66.48,
+        "height": 10.56
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0077",
+       "text": "T.O. ROOF MEMBRANE",
+       "box": {
+        "x": 618,
+        "y": 1433.76,
+        "width": 102.96,
+        "height": 8.64
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "T.O."
+       ]
+      },
+      {
+       "lid": "L0079",
+       "text": "(E) JOISTS",
+       "box": {
+        "x": 621.12,
+        "y": 1418.4,
+        "width": 40.56,
+        "height": 9.6
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e23",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "4\" METAL STUDS @ 16\" O.C.SEE / STRUCTURAL DRAWINGS.",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0056",
+     "box": {
+      "x": 1711.68,
+      "y": 1011.36,
+      "width": 136.07999999999993,
+      "height": 19.91999999999996
+     },
+     "lines": [
+      {
+       "lid": "L0147",
+       "text": "4\" METAL STUDS @ 16\" O.C.SEE",
+       "box": {
+        "x": 1711.68,
+        "y": 1022.4,
+        "width": 136.08,
+        "height": 8.88
+       },
+       "tiles": [
+        "r03c08",
+        "r03c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0151",
+       "text": "STRUCTURAL DRAWINGS.",
+       "box": {
+        "x": 1711.92,
+        "y": 1011.36,
+        "width": 114.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e41",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "EXIST. DOUBLE / ROOF TRUSS TO / REMAIN. TYP.",
+   "technical": true,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 3.5,
+   "copies": [
+    {
+     "aid": "N0084",
+     "box": {
+      "x": 570.72,
+      "y": 688.32,
+      "width": 64.08000000000004,
+      "height": 27.120000000000005
+     },
+     "lines": [
+      {
+       "lid": "L0207",
+       "text": "EXIST. DOUBLE",
+       "box": {
+        "x": 571.92,
+        "y": 708,
+        "width": 57.12,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c02",
+        "r05c02",
+        "r04c03",
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0210",
+       "text": "ROOF TRUSS TO",
+       "box": {
+        "x": 570.72,
+        "y": 698.16,
+        "width": 64.08,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c02",
+        "r05c02",
+        "r04c03",
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0213",
+       "text": "REMAIN. TYP.",
+       "box": {
+        "x": 570.72,
+        "y": 688.32,
+        "width": 52.32,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c02",
+        "r04c02",
+        "r04c03",
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e22",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "1/2\" EXTERIOR PLYWOOD / SHEATHING / {6\" METAL STUDS @ 16\" O.C.S | 6\" O.C.SEE} / STRUCTURAL DRAWINGS. / DIAGONAL BRACING, SEE / STRUCTURAL DRAWINGS",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0055",
+     "box": {
+      "x": 2125.68,
+      "y": 925.44,
+      "width": 125.51999999999998,
+      "height": 125.75999999999999
+     },
+     "lines": [
+      {
+       "lid": "L0142",
+       "text": "1/2\" EXTERIOR PLYWOOD",
+       "box": {
+        "x": 2125.68,
+        "y": 1042.32,
+        "width": 109.92,
+        "height": 8.88
+       },
+       "tiles": [
+        "r03c10",
+        "r03c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0145",
+       "text": "SHEATHING",
+       "box": {
+        "x": 2125.68,
+        "y": 1031.52,
+        "width": 48,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0150",
+       "text": "6\" METAL STUDS @ 16\" O.C.S",
+       "box": {
+        "x": 2125.68,
+        "y": 1012.56,
+        "width": 125.52,
+        "height": 8.64
+       },
+       "tiles": [
+        "r03c10",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "6\" O.C.SEE"
+       ]
+      },
+      {
+       "lid": "L0154",
+       "text": "STRUCTURAL DRAWINGS.",
+       "box": {
+        "x": 2125.68,
+        "y": 1001.28,
+        "width": 106.8,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c10",
+        "r03c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0167",
+       "text": "DIAGONAL BRACING, SEE",
+       "box": {
+        "x": 2125.92,
+        "y": 936,
+        "width": 115.44,
+        "height": 9.12
+       },
+       "tiles": [
+        "r03c10",
+        "r03c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "SEE"
+       ]
+      },
+      {
+       "lid": "L0171",
+       "text": "STRUCTURAL DRAWINGS",
+       "box": {
+        "x": 2125.68,
+        "y": 925.44,
+        "width": 125.52,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c10",
+        "r03c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e6",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO / PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4.3,
+   "copies": [
+    {
+     "aid": "N0014",
+     "box": {
+      "x": 620.88,
+      "y": 1524.24,
+      "width": 186,
+      "height": 19.920000000000073
+     },
+     "lines": [
+      {
+       "lid": "L0031",
+       "text": "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+       "box": {
+        "x": 620.88,
+        "y": 1535.76,
+        "width": 186,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c03",
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "GUAR"
+       ]
+      },
+      {
+       "lid": "L0036",
+       "text": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "box": {
+        "x": 622.56,
+        "y": 1524.24,
+        "width": 183.6,
+        "height": 8.64
+       },
+       "tiles": [
+        "r00c03",
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "PRE"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e21",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "EXTERIOR ASSEMBLY-4 / (SEE ASSEMBLY NOTES)",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0053",
+     "box": {
+      "x": 1711.92,
+      "y": 1045.44,
+      "width": 105.11999999999989,
+      "height": 20.88000000000011
+     },
+     "lines": [
+      {
+       "lid": "L0137",
+       "text": "EXTERIOR ASSEMBLY-4",
+       "box": {
+        "x": 1711.92,
+        "y": 1057.92,
+        "width": 105.12,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c08",
+        "r03c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0139",
+       "text": "(SEE ASSEMBLY NOTES)",
+       "box": {
+        "x": 1711.92,
+        "y": 1045.44,
+        "width": 105.12,
+        "height": 9.6
+       },
+       "tiles": [
+        "r03c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e28",
+   "region": "5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES) / (",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0115",
+     "box": {
+      "x": 1712.4,
+      "y": 212.88,
+      "width": 115.20000000000005,
+      "height": 21.360000000000014
+     },
+     "lines": [
+      {
+       "lid": "L0256",
+       "text": "EXTERIOR ASSEMBLY-5",
+       "box": {
+        "x": 1712.64,
+        "y": 225.6,
+        "width": 104.88,
+        "height": 8.64
+       },
+       "tiles": [
+        "r07c08",
+        "r08c08",
+        "r07c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0257",
+       "text": "(SEE ASSEMBLY NOTES)",
+       "box": {
+        "x": 1712.4,
+        "y": 212.88,
+        "width": 105.12,
+        "height": 9.84
+       },
+       "tiles": [
+        "r07c08",
+        "r08c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0258",
+       "text": "(",
+       "box": {
+        "x": 1814.4,
+        "y": 212.88,
+        "width": 13.2,
+        "height": 9.84
+       },
+       "tiles": [
+        "r07c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e46",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "008-0003 75 New York Ave & 1st St, Wash DC SECT",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0114",
+     "box": {
+      "x": 98.88,
+      "y": 35.76,
+      "width": 7.44,
+      "height": 199.2
+     },
+     "lines": [
+      {
+       "lid": "L0255",
+       "text": "008-0003 75 New York Ave & 1st St, Wash DC SECT",
+       "box": {
+        "x": 98.88,
+        "y": 35.76,
+        "width": 7.44,
+        "height": 199.2
+       },
+       "tiles": [
+        "r08c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e10",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "{THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010 | 4070}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0004",
+     "box": {
+      "x": 1839.84,
+      "y": 1606.56,
+      "width": 198.96,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0005",
+       "text": "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010",
+       "box": {
+        "x": 1839.84,
+        "y": 1606.56,
+        "width": 198.96,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c09",
+        "r00c10"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "4070"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e12",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "STAINLESS STE / POSITIONED 1/4 / OF THE STACK / OF THE STACK",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0019",
+     "box": {
+      "x": 1993.44,
+      "y": 1489.44,
+      "width": 56.159999999999854,
+      "height": 27.3599999999999
+     },
+     "lines": [
+      {
+       "lid": "L0043",
+       "text": "STAINLESS STE",
+       "box": {
+        "x": 1993.44,
+        "y": 1509.6,
+        "width": 56.16,
+        "height": 7.2
+       },
+       "tiles": [
+        "r00c09",
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0048",
+       "text": "POSITIONED 1/4",
+       "box": {
+        "x": 1993.44,
+        "y": 1498.8,
+        "width": 56.16,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0050",
+       "text": "OF THE STACK",
+       "box": {
+        "x": 1993.68,
+        "y": 1495.2,
+        "width": 55.92,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0053",
+       "text": "OF THE STACK",
+       "box": {
+        "x": 1993.44,
+        "y": 1489.44,
+        "width": 55.92,
+        "height": 7.68
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e15",
+   "region": "2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "{I-1/4\" PIPE RAILING. PAI | LING. PAINT} / {TO MATCH NEW METAL | N METAL} / PARAPET CAP. / {GUARD RAIL SLEEVE A | LEEVE AND} / BASE PLATE SET ON / {TAPE AND | ELASTOMERIC TAPE AN} / SECURED TO NEW WOOD / {BLOCK AS REQUIRED W | QUIRED WITH} / FASTENERS.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 5.5,
+   "copies": [
+    {
+     "aid": "N0001",
+     "box": {
+      "x": 1153.44,
+      "y": 1499.28,
+      "width": 96.48000000000002,
+      "height": 120.00000000000023
+     },
+     "lines": [
+      {
+       "lid": "L0002",
+       "text": "I-1/4\" PIPE RAILING. PAI",
+       "box": {
+        "x": 1153.92,
+        "y": 1610.88,
+        "width": 88.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c05",
+        "r00c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "LING. PAINT"
+       ],
+       "valueChecks": [
+        {
+         "token": "I-1/4\"",
+         "candidate": "1-1/4\"",
+         "reason": "dimension_or_number",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      },
+      {
+       "lid": "L0006",
+       "text": "TO MATCH NEW METAL",
+       "box": {
+        "x": 1153.92,
+        "y": 1599.36,
+        "width": 84.72,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c05",
+        "r00c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "N METAL"
+       ]
+      },
+      {
+       "lid": "L0010",
+       "text": "PARAPET CAP.",
+       "box": {
+        "x": 1153.92,
+        "y": 1588.08,
+        "width": 56.64,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0022",
+       "text": "GUARD RAIL SLEEVE A",
+       "box": {
+        "x": 1153.44,
+        "y": 1555.2,
+        "width": 89.52,
+        "height": 8.64
+       },
+       "tiles": [
+        "r00c05",
+        "r00c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "LEEVE AND"
+       ]
+      },
+      {
+       "lid": "L0027",
+       "text": "BASE PLATE SET ON",
+       "box": {
+        "x": 1155.12,
+        "y": 1544.16,
+        "width": 78,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c05",
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0033",
+       "text": "TAPE AND",
+       "box": {
+        "x": 1211.04,
+        "y": 1532.88,
+        "width": 38.88,
+        "height": 7.44
+       },
+       "tiles": [
+        "r00c06",
+        "r00c05"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "ELASTOMERIC TAPE AN"
+       ]
+      },
+      {
+       "lid": "L0037",
+       "text": "SECURED TO NEW WOOD",
+       "box": {
+        "x": 1155.12,
+        "y": 1521.6,
+        "width": 87.84,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c05",
+        "r00c06",
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0042",
+       "text": "BLOCK AS REQUIRED W",
+       "box": {
+        "x": 1155.12,
+        "y": 1510.32,
+        "width": 87.84,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c05",
+        "r00c06",
+        "r01c05"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "QUIRED WITH"
+       ]
+      },
+      {
+       "lid": "L0047",
+       "text": "FASTENERS.",
+       "box": {
+        "x": 1155.12,
+        "y": 1499.28,
+        "width": 45.36,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c05",
+        "r00c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e5",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "HEIGHT FROM DECK MEMBRANE",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0011",
+     "box": {
+      "x": 195.36,
+      "y": 1492.8,
+      "width": 19.68,
+      "height": 68.88
+     },
+     "lines": [
+      {
+       "lid": "L0023",
+       "text": "HEIGHT FROM DECK MEMBRANE",
+       "box": {
+        "x": 195.36,
+        "y": 1492.8,
+        "width": 19.68,
+        "height": 68.88
+       },
+       "tiles": [
+        "r00c00",
+        "r00c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e42",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "EXIST. MASONRY / TO REMAIN.",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0083",
+     "box": {
+      "x": 270.72,
+      "y": 697.44,
+      "width": 64.80000000000001,
+      "height": 17.279999999999973
+     },
+     "lines": [
+      {
+       "lid": "L0206",
+       "text": "EXIST. MASONRY",
+       "box": {
+        "x": 270.72,
+        "y": 707.52,
+        "width": 64.8,
+        "height": 7.2
+       },
+       "tiles": [
+        "r04c01",
+        "r05c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0211",
+       "text": "TO REMAIN.",
+       "box": {
+        "x": 270.72,
+        "y": 697.44,
+        "width": 44.64,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c01",
+        "r04c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e37",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "STANDING SEAM METAL / ROOF TO REMAIN",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0063",
+     "box": {
+      "x": 269.76,
+      "y": 921.12,
+      "width": 92.64000000000004,
+      "height": 17.280000000000086
+     },
+     "lines": [
+      {
+       "lid": "L0169",
+       "text": "STANDING SEAM METAL",
+       "box": {
+        "x": 270.48,
+        "y": 930.96,
+        "width": 91.92,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0172",
+       "text": "ROOF TO REMAIN",
+       "box": {
+        "x": 269.76,
+        "y": 921.12,
+        "width": 69.12,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "omitted": [
+  {
+   "id": "o1",
+   "region": "2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "NOTE: CONTRACTOR / TO FIELD VERIFY / LOCATION OF / MECHANICAL / EQUIPMENT ON THE / ROOF. PROVIDE AND / INSTALL GUARD RAILS / {AT LOCATION as AS | EN WO0D AT LOCATION as AS} / {SHOWN ON ROOF PLAN. | QUIRED WITH SHOWN ON ROOF PLAN.} / 4x4 WOOD BLOCKING / BETWEEN JOISTS AT NE / {GUARD RAIL PENETRAT | PENETRATION} / LOCATIONS. / F DECKING, INSULATION, AND / LL NEW PENETRATIONS TO FOLLOW / EM MANUFACTURER'S / TIONS TO MAINTAIN WARRANTY.",
+   "technical": true,
+   "classes": [
+    "datum",
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 4.1,
+   "copies": [
+    {
+     "aid": "N0005",
+     "box": {
+      "x": 1154.88,
+      "y": 1329.84,
+      "width": 214.0799999999997,
+      "height": 276.48000000000025
+     },
+     "lines": [
+      {
+       "lid": "L0007",
+       "text": "NOTE: CONTRACTOR",
+       "box": {
+        "x": 1281.12,
+        "y": 1597.92,
+        "width": 77.28,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0011",
+       "text": "TO FIELD VERIFY",
+       "box": {
+        "x": 1281.36,
+        "y": 1586.64,
+        "width": 65.52,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0014",
+       "text": "LOCATION OF",
+       "box": {
+        "x": 1281.36,
+        "y": 1575.36,
+        "width": 51.6,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0018",
+       "text": "MECHANICAL",
+       "box": {
+        "x": 1281.36,
+        "y": 1564.08,
+        "width": 48.24,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0025",
+       "text": "EQUIPMENT ON THE",
+       "box": {
+        "x": 1281.36,
+        "y": 1553.04,
+        "width": 70.08,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0028",
+       "text": "ROOF. PROVIDE AND",
+       "box": {
+        "x": 1280.64,
+        "y": 1541.76,
+        "width": 83.52,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0034",
+       "text": "INSTALL GUARD RAILS",
+       "box": {
+        "x": 1281.12,
+        "y": 1530.24,
+        "width": 84.96,
+        "height": 8.64
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0038",
+       "text": "AT LOCATION as AS",
+       "box": {
+        "x": 1281.36,
+        "y": 1519.2,
+        "width": 77.04,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c06",
+        "r01c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "EN WO0D AT LOCATION as AS"
+       ]
+      },
+      {
+       "lid": "L0045",
+       "text": "SHOWN ON ROOF PLAN.",
+       "box": {
+        "x": 1281.12,
+        "y": 1507.92,
+        "width": 87.84,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c06",
+        "r01c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "QUIRED WITH SHOWN ON ROOF PLAN."
+       ]
+      },
+      {
+       "lid": "L0055",
+       "text": "4x4 WOOD BLOCKING",
+       "box": {
+        "x": 1154.88,
+        "y": 1482.72,
+        "width": 82.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c05",
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0058",
+       "text": "BETWEEN JOISTS AT NE",
+       "box": {
+        "x": 1155.12,
+        "y": 1472.16,
+        "width": 88.08,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c05",
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0065",
+       "text": "GUARD RAIL PENETRAT",
+       "box": {
+        "x": 1155.12,
+        "y": 1460.4,
+        "width": 88.08,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c05",
+        "r01c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "PENETRATION"
+       ]
+      },
+      {
+       "lid": "L0068",
+       "text": "LOCATIONS.",
+       "box": {
+        "x": 1155.12,
+        "y": 1449.12,
+        "width": 44.88,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0083",
+       "text": "F DECKING, INSULATION, AND",
+       "box": {
+        "x": 1209.6,
+        "y": 1363.68,
+        "width": 106.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0088",
+       "text": "LL NEW PENETRATIONS TO FOLLOW",
+       "box": {
+        "x": 1209.6,
+        "y": 1352.64,
+        "width": 129.84,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0095",
+       "text": "EM MANUFACTURER'S",
+       "box": {
+        "x": 1209.6,
+        "y": 1341.12,
+        "width": 80.16,
+        "height": 8.64
+       },
+       "tiles": [
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0100",
+       "text": "TIONS TO MAINTAIN WARRANTY.",
+       "box": {
+        "x": 1209.6,
+        "y": 1329.84,
+        "width": 117.84,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o2",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "PIPE RAILING. PAINT PEX-I / ATCH METAL PANELS / OR (E) CORNICE / {DURA-LAST CA | -LAST CAULK} / LESS STEEL BAND / IONED 1/4\" FROM THE TOP / E STACK FLASHING / PREFABRICATE / ABRICATED VENT STACK / FLASHING / AMETER PIPE & BASE / (E) INSULATION / {(E) WOOD DECK | OOD DECKING} / {DIAMETER X | AMETER X 3\" LAG BOLTS} / 4x4 HORIZONTA / ORIZONTAL BLOCKING / {BETWEEN JOIS | EEN JOIST TOP CHORDS.}",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "datum",
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0009",
+     "box": {
+      "x": 1993.44,
+      "y": 1342.8,
+      "width": 120.48000000000002,
+      "height": 243.12000000000012
+     },
+     "lines": [
+      {
+       "lid": "L0013",
+       "text": "PIPE RAILING. PAINT PEX-I",
+       "box": {
+        "x": 2016,
+        "y": 1577.52,
+        "width": 97.92,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0016",
+       "text": "ATCH METAL PANELS",
+       "box": {
+        "x": 2016,
+        "y": 1568.16,
+        "width": 76.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0021",
+       "text": "OR (E) CORNICE",
+       "box": {
+        "x": 2016,
+        "y": 1557.6,
+        "width": 55.92,
+        "height": 8.88
+       },
+       "tiles": [
+        "r00c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0030",
+       "text": "DURA-LAST CA",
+       "box": {
+        "x": 1993.44,
+        "y": 1537.2,
+        "width": 56.16,
+        "height": 7.68
+       },
+       "tiles": [
+        "r00c09",
+        "r00c10"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "-LAST CAULK"
+       ]
+      },
+      {
+       "lid": "L0044",
+       "text": "LESS STEEL BAND",
+       "box": {
+        "x": 2016,
+        "y": 1509.12,
+        "width": 67.68,
+        "height": 7.68
+       },
+       "tiles": [
+        "r00c10",
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0049",
+       "text": "IONED 1/4\" FROM THE TOP",
+       "box": {
+        "x": 2016,
+        "y": 1499.52,
+        "width": 97.68,
+        "height": 7.92
+       },
+       "tiles": [
+        "r00c10",
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0054",
+       "text": "E STACK FLASHING",
+       "box": {
+        "x": 2016,
+        "y": 1489.2,
+        "width": 72.48,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0059",
+       "text": "PREFABRICATE",
+       "box": {
+        "x": 1993.44,
+        "y": 1472.4,
+        "width": 56.16,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0060",
+       "text": "ABRICATED VENT STACK",
+       "box": {
+        "x": 2016,
+        "y": 1471.92,
+        "width": 92.16,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0063",
+       "text": "FLASHING",
+       "box": {
+        "x": 1993.44,
+        "y": 1462.32,
+        "width": 36.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09",
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0072",
+       "text": "AMETER PIPE & BASE",
+       "box": {
+        "x": 2016,
+        "y": 1448.4,
+        "width": 79.44,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0078",
+       "text": "(E) INSULATION",
+       "box": {
+        "x": 1993.92,
+        "y": 1422.96,
+        "width": 54,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09",
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0080",
+       "text": "(E) WOOD DECK",
+       "box": {
+        "x": 1993.92,
+        "y": 1409.52,
+        "width": 54.24,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09",
+        "r01c10"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "OOD DECKING"
+       ]
+      },
+      {
+       "lid": "L0081",
+       "text": "DIAMETER X",
+       "box": {
+        "x": 2004,
+        "y": 1374.72,
+        "width": 45.6,
+        "height": 7.44
+       },
+       "tiles": [
+        "r01c09",
+        "r01c10"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "AMETER X 3\" LAG BOLTS"
+       ]
+      },
+      {
+       "lid": "L0090",
+       "text": "4x4 HORIZONTA",
+       "box": {
+        "x": 1994.16,
+        "y": 1352.88,
+        "width": 54.96,
+        "height": 6.24
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0091",
+       "text": "ORIZONTAL BLOCKING",
+       "box": {
+        "x": 2016,
+        "y": 1351.2,
+        "width": 84.48,
+        "height": 7.68
+       },
+       "tiles": [
+        "r01c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0096",
+       "text": "BETWEEN JOIS",
+       "box": {
+        "x": 1994.4,
+        "y": 1342.8,
+        "width": 55.2,
+        "height": 6.96
+       },
+       "tiles": [
+        "r01c09",
+        "r01c10"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "EEN JOIST TOP CHORDS."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o3",
+   "region": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "FLASHING/SEALANT / EALANT: EXTEND / UNDER BASE CAP PER / {MANUFACTURER'S INST | ER'S INSTRUCTIONS.} / CHECK WITH ROOF SY / MANUFACTURES GUIDE / AINTENANCE. / WARRANTY MAINTENAN",
+   "technical": false,
+   "classes": [],
+   "uncertain": true,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0020",
+     "box": {
+      "x": 1764.72,
+      "y": 1441.44,
+      "width": 111.12000000000012,
+      "height": 57.11999999999989
+     },
+     "lines": [
+      {
+       "lid": "L0051",
+       "text": "FLASHING/SEALANT",
+       "box": {
+        "x": 1764.72,
+        "y": 1492.8,
+        "width": 83.28,
+        "height": 5.76
+       },
+       "tiles": [
+        "r00c08",
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0052",
+       "text": "EALANT: EXTEND",
+       "box": {
+        "x": 1814.4,
+        "y": 1488.72,
+        "width": 61.44,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0056",
+       "text": "UNDER BASE CAP PER",
+       "box": {
+        "x": 1815.12,
+        "y": 1479.36,
+        "width": 31.44,
+        "height": 7.68
+       },
+       "tiles": [
+        "r01c09",
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "CAP PER"
+       ]
+      },
+      {
+       "lid": "L0061",
+       "text": "MANUFACTURER'S INST",
+       "box": {
+        "x": 1764.72,
+        "y": 1469.76,
+        "width": 83.28,
+        "height": 7.68
+       },
+       "tiles": [
+        "r01c08",
+        "r01c09"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "ER'S INSTRUCTIONS."
+       ]
+      },
+      {
+       "lid": "L0066",
+       "text": "CHECK WITH ROOF SY",
+       "box": {
+        "x": 1764.72,
+        "y": 1460.4,
+        "width": 83.28,
+        "height": 7.68
+       },
+       "tiles": [
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0070",
+       "text": "MANUFACTURES GUIDE",
+       "box": {
+        "x": 1764.72,
+        "y": 1450.8,
+        "width": 83.04,
+        "height": 7.44
+       },
+       "tiles": [
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0074",
+       "text": "AINTENANCE.",
+       "box": {
+        "x": 1814.4,
+        "y": 1446,
+        "width": 46.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0075",
+       "text": "WARRANTY MAINTENAN",
+       "box": {
+        "x": 1764.72,
+        "y": 1441.44,
+        "width": 83.28,
+        "height": 7.92
+       },
+       "tiles": [
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o4",
+   "region": "1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "EXISTING ROOF DECKING, INSULATION, AND / MEMBRANE. ALL NEW PENETRATIONS TO / FOLLOW ROOFING SYSTEM MANUFACTURER'S / RECOMMENDATIONS TO MAINTAIN WARRANTY.",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0028",
+     "box": {
+      "x": 621.12,
+      "y": 1326,
+      "width": 173.51999999999998,
+      "height": 42.47999999999979
+     },
+     "lines": [
+      {
+       "lid": "L0085",
+       "text": "EXISTING ROOF DECKING, INSULATION, AND",
+       "box": {
+        "x": 621.12,
+        "y": 1359.36,
+        "width": 162.48,
+        "height": 9.12
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0092",
+       "text": "MEMBRANE. ALL NEW PENETRATIONS TO",
+       "box": {
+        "x": 622.56,
+        "y": 1348.8,
+        "width": 150.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0097",
+       "text": "FOLLOW ROOFING SYSTEM MANUFACTURER'S",
+       "box": {
+        "x": 622.56,
+        "y": 1337.28,
+        "width": 168,
+        "height": 8.64
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0101",
+       "text": "RECOMMENDATIONS TO MAINTAIN WARRANTY.",
+       "box": {
+        "x": 621.36,
+        "y": 1326,
+        "width": 173.28,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c03",
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o5",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "G.C. TO COORDINATE / REGARDING REPLACING / EXISTING LADDER / BEYOND W/ / MCDONALD'S ACM.",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0054",
+     "box": {
+      "x": 268.08,
+      "y": 1007.04,
+      "width": 94.32,
+      "height": 47.2800000000002
+     },
+     "lines": [
+      {
+       "lid": "L0140",
+       "text": "G.C. TO COORDINATE",
+       "box": {
+        "x": 269.04,
+        "y": 1046.88,
+        "width": 82.56,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0143",
+       "text": "REGARDING REPLACING",
+       "box": {
+        "x": 268.08,
+        "y": 1037.04,
+        "width": 94.32,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0146",
+       "text": "EXISTING LADDER",
+       "box": {
+        "x": 269.28,
+        "y": 1027.2,
+        "width": 70.08,
+        "height": 7.44
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0149",
+       "text": "BEYOND W/",
+       "box": {
+        "x": 269.04,
+        "y": 1017.12,
+        "width": 44.64,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0153",
+       "text": "MCDONALD'S ACM.",
+       "box": {
+        "x": 269.28,
+        "y": 1007.04,
+        "width": 73.2,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o6",
+   "region": "4 WALL SECTION @ HIGH ROOF",
+   "text": "EXIST. LOWER ROOF / SLOPE TO REMAIN.",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0104",
+     "box": {
+      "x": 252,
+      "y": 470.4,
+      "width": 78.72000000000003,
+      "height": 17.52000000000004
+     },
+     "lines": [
+      {
+       "lid": "L0239",
+       "text": "EXIST. LOWER ROOF",
+       "box": {
+        "x": 252,
+        "y": 480.24,
+        "width": 78.72,
+        "height": 7.68
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0240",
+       "text": "SLOPE TO REMAIN.",
+       "box": {
+        "x": 252,
+        "y": 470.4,
+        "width": 76.32,
+        "height": 7.68
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "captions": [
+  {
+   "id": "c1",
+   "region": "title block",
+   "text": "McDonald's / HFA-AE , LTD. / 3700 O'Donnell Street, Suite 200 / Baltimore, Maryland 21224 / {t: 410.837.3622 | t. 410.837.} / f: 410.837.3621",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "value"
+   ],
+   "uncertain": true,
+   "value": 12,
+   "copies": [
+    {
+     "aid": "N0031",
+     "box": {
+      "x": 2344.56,
+      "y": 1109.28,
+      "width": 171.84000000000015,
+      "height": 199.44000000000005
+     },
+     "lines": [
+      {
+       "lid": "L0102",
+       "text": "McDonald's",
+       "box": {
+        "x": 2344.56,
+        "y": 1291.2,
+        "width": 108.24,
+        "height": 17.52
+       },
+       "tiles": [
+        "r01c11",
+        "r01c12",
+        "r02c11",
+        "r02c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "McDon"
+       ]
+      },
+      {
+       "lid": "L0120",
+       "text": "HFA-AE , LTD.",
+       "box": {
+        "x": 2367.84,
+        "y": 1167.84,
+        "width": 141.36,
+        "height": 14.16
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "HFA-AE"
+       ]
+      },
+      {
+       "lid": "L0123",
+       "text": "3700 O'Donnell Street, Suite 200",
+       "box": {
+        "x": 2361.6,
+        "y": 1139.04,
+        "width": 154.8,
+        "height": 9.12
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0124",
+       "text": "Baltimore, Maryland 21224",
+       "box": {
+        "x": 2375.76,
+        "y": 1128.96,
+        "width": 126.48,
+        "height": 9.12
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0125",
+       "text": "t: 410.837.3622",
+       "box": {
+        "x": 2401.92,
+        "y": 1119.36,
+        "width": 73.92,
+        "height": 8.64
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11",
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "t. 410.837."
+       ]
+      },
+      {
+       "lid": "L0126",
+       "text": "f: 410.837.3621",
+       "box": {
+        "x": 2404.08,
+        "y": 1109.28,
+        "width": 72.72,
+        "height": 8.4
+       },
+       "tiles": [
+        "r02c12",
+        "r03c12",
+        "r03c11",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "GUAR",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0032",
+     "box": {
+      "x": 171.36,
+      "y": 1207.68,
+      "width": 63.84,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0103",
+       "text": "GUAR",
+       "box": {
+        "x": 171.36,
+        "y": 1207.68,
+        "width": 63.84,
+        "height": 19.44
+       },
+       "tiles": [
+        "r02c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "UARD RAIL ELEVATI",
+   "technical": false,
+   "classes": [
+    "elevation"
+   ],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0033",
+     "box": {
+      "x": 201.6,
+      "y": 1207.92,
+      "width": 235.2,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0104",
+       "text": "UARD RAIL ELEVATI",
+       "box": {
+        "x": 201.6,
+        "y": 1207.92,
+        "width": 235.2,
+        "height": 18.96
+       },
+       "tiles": [
+        "r02c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "ATION DETAIL @ HI",
+   "technical": true,
+   "classes": [],
+   "uncertain": false,
+   "value": 1,
+   "copies": [
+    {
+     "aid": "N0034",
+     "box": {
+      "x": 403.2,
+      "y": 1206.24,
+      "width": 235.2,
+      "height": 20.88
+     },
+     "lines": [
+      {
+       "lid": "L0105",
+       "text": "ATION DETAIL @ HI",
+       "box": {
+        "x": 403.2,
+        "y": 1206.24,
+        "width": 235.2,
+        "height": 20.88
+       },
+       "tiles": [
+        "r02c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c5",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "HIGH ROOF",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0035",
+     "box": {
+      "x": 608.64,
+      "y": 1207.68,
+      "width": 140.16,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0106",
+       "text": "HIGH ROOF",
+       "box": {
+        "x": 608.64,
+        "y": 1207.68,
+        "width": 140.16,
+        "height": 19.44
+       },
+       "tiles": [
+        "r02c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0122",
+     "box": {
+      "x": 403.2,
+      "y": 61.68,
+      "width": 136.08,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0279",
+       "text": "HIGH ROOF",
+       "box": {
+        "x": 403.2,
+        "y": 61.68,
+        "width": 136.08,
+        "height": 19.44
+       },
+       "tiles": [
+        "r08c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c6",
+   "region": "detail title 2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "2 GUARD RAIL / SCALE: 3/4\" = 1'-0\"",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0036",
+     "box": {
+      "x": 850.08,
+      "y": 1186.56,
+      "width": 191.5200000000001,
+      "height": 40.559999999999945
+     },
+     "lines": [
+      {
+       "lid": "L0107",
+       "text": "2 GUARD RAIL",
+       "box": {
+        "x": 850.08,
+        "y": 1199.52,
+        "width": 191.52,
+        "height": 27.6
+       },
+       "tiles": [
+        "r02c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0117",
+       "text": "SCALE: 3/4\" = 1'-0\"",
+       "box": {
+        "x": 892.8,
+        "y": 1186.56,
+        "width": 90.48,
+        "height": 7.92
+       },
+       "tiles": [
+        "r02c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c7",
+   "region": "detail title 2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "AIL DETAIL @ HIGH",
+   "technical": true,
+   "classes": [],
+   "uncertain": false,
+   "value": 1,
+   "copies": [
+    {
+     "aid": "N0037",
+     "box": {
+      "x": 1008,
+      "y": 1206.24,
+      "width": 234.48,
+      "height": 20.88
+     },
+     "lines": [
+      {
+       "lid": "L0108",
+       "text": "AIL DETAIL @ HIGH",
+       "box": {
+        "x": 1008,
+        "y": 1206.24,
+        "width": 234.48,
+        "height": 20.88
+       },
+       "tiles": [
+        "r02c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c8",
+   "region": "detail title 2 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "GH ROOF",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0038",
+     "box": {
+      "x": 1209.6,
+      "y": 1207.68,
+      "width": 113.28,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0109",
+       "text": "GH ROOF",
+       "box": {
+        "x": 1209.6,
+        "y": 1207.68,
+        "width": 113.28,
+        "height": 19.44
+       },
+       "tiles": [
+        "r02c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c9",
+   "region": "detail title 3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "ARD RAIL DETAIL @",
+   "technical": true,
+   "classes": [],
+   "uncertain": false,
+   "value": 1,
+   "copies": [
+    {
+     "aid": "N0040",
+     "box": {
+      "x": 1612.8,
+      "y": 1206.72,
+      "width": 234.72,
+      "height": 20.4
+     },
+     "lines": [
+      {
+       "lid": "L0111",
+       "text": "ARD RAIL DETAIL @",
+       "box": {
+        "x": 1612.8,
+        "y": 1206.72,
+        "width": 234.72,
+        "height": 20.4
+       },
+       "tiles": [
+        "r02c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c10",
+   "region": "detail title 3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "@ HIGH ROOF",
+   "technical": true,
+   "classes": [],
+   "uncertain": false,
+   "value": 1,
+   "copies": [
+    {
+     "aid": "N0041",
+     "box": {
+      "x": 1823.52,
+      "y": 1206.72,
+      "width": 170.16,
+      "height": 20.4
+     },
+     "lines": [
+      {
+       "lid": "L0112",
+       "text": "@ HIGH ROOF",
+       "box": {
+        "x": 1823.52,
+        "y": 1206.72,
+        "width": 170.16,
+        "height": 20.4
+       },
+       "tiles": [
+        "r02c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c11",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "1",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0042",
+     "box": {
+      "x": 129.84,
+      "y": 1199.52,
+      "width": 7.68,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0113",
+       "text": "1",
+       "box": {
+        "x": 129.84,
+        "y": 1199.52,
+        "width": 7.68,
+        "height": 18.96
+       },
+       "tiles": [
+        "r02c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c12",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "SCALE: 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0043",
+     "box": {
+      "x": 170.64,
+      "y": 1186.32,
+      "width": 61.2,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0115",
+       "text": "SCALE: 1/2\"",
+       "box": {
+        "x": 170.64,
+        "y": 1186.32,
+        "width": 61.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r02c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c13",
+   "region": "detail title 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "text": "1/2\" = 1'-0\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0044",
+     "box": {
+      "x": 215.76,
+      "y": 1186.32,
+      "width": 45.6,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0116",
+       "text": "1/2\" = 1'-0\"",
+       "box": {
+        "x": 215.76,
+        "y": 1186.32,
+        "width": 45.6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r02c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c14",
+   "region": "detail title 3 GUARD RAIL DETAIL @ HIGH ROOF",
+   "text": "1-1/2\" = 1'-0\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0045",
+     "box": {
+      "x": 1612.8,
+      "y": 1186.32,
+      "width": 53.04,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0119",
+       "text": "1-1/2\" = 1'-0\"",
+       "box": {
+        "x": 1612.8,
+        "y": 1186.32,
+        "width": 53.04,
+        "height": 8.16
+       },
+       "tiles": [
+        "r02c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c15",
+   "region": "title block",
+   "text": "{PROFESSIONAL CERTIFICAT | ESSIONAL CERTIFICATION:} / {BY CERTIFY THAT THESE DOCUMENTS | I HEREBY CERTIFY THAT TH} / {PREPARED OR APPROVED BY ME, AND | WERE PREPARED OR APPR} / {AM A DULY LICENSED ARCHITECT | THAT I AM A DULY LICENSE} / {UNDER THE LAWS OF THE S | OR THE LAWS OF THE STATE OF DC} / LICENSE NO. ARC40001205 / {DISTRICT OF COLUMBIA | DISTRICT OF C} / WARREN NAGEY / No. ARC40001205 / LICENSED / ARCHITECT",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0052",
+     "box": {
+      "x": 2325.84,
+      "y": 858.72,
+      "width": 211.92000000000007,
+      "height": 216.72000000000003
+     },
+     "lines": [
+      {
+       "lid": "L0134",
+       "text": "PROFESSIONAL CERTIFICAT",
+       "box": {
+        "x": 2325.84,
+        "y": 1067.52,
+        "width": 126.96,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "ESSIONAL CERTIFICATION:"
+       ]
+      },
+      {
+       "lid": "L0138",
+       "text": "BY CERTIFY THAT THESE DOCUMENTS",
+       "box": {
+        "x": 2357.04,
+        "y": 1056,
+        "width": 180,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "I HEREBY CERTIFY THAT TH"
+       ]
+      },
+      {
+       "lid": "L0141",
+       "text": "PREPARED OR APPROVED BY ME, AND",
+       "box": {
+        "x": 2357.28,
+        "y": 1044.48,
+        "width": 180.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "WERE PREPARED OR APPR"
+       ]
+      },
+      {
+       "lid": "L0144",
+       "text": "AM A DULY LICENSED ARCHITECT",
+       "box": {
+        "x": 2358.24,
+        "y": 1033.44,
+        "width": 157.68,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "THAT I AM A DULY LICENSE"
+       ]
+      },
+      {
+       "lid": "L0148",
+       "text": "UNDER THE LAWS OF THE S",
+       "box": {
+        "x": 2325.84,
+        "y": 1022.16,
+        "width": 126.96,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "OR THE LAWS OF THE STATE OF DC"
+       ]
+      },
+      {
+       "lid": "L0152",
+       "text": "LICENSE NO. ARC40001205",
+       "box": {
+        "x": 2325.84,
+        "y": 1010.64,
+        "width": 125.52,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0160",
+       "text": "DISTRICT OF COLUMBIA",
+       "box": {
+        "x": 2382.24,
+        "y": 927.36,
+        "width": 110.4,
+        "height": 46.08
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "DISTRICT OF C"
+       ]
+      },
+      {
+       "lid": "L0164",
+       "text": "WARREN NAGEY",
+       "box": {
+        "x": 2401.44,
+        "y": 931.2,
+        "width": 72.72,
+        "height": 27.36
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0174",
+       "text": "No. ARC40001205",
+       "box": {
+        "x": 2402.16,
+        "y": 906.72,
+        "width": 72,
+        "height": 9.6
+       },
+       "tiles": [
+        "r03c12",
+        "r04c12",
+        "r03c11",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0175",
+       "text": "LICENSED",
+       "box": {
+        "x": 2411.52,
+        "y": 878.4,
+        "width": 59.52,
+        "height": 16.32
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0178",
+       "text": "ARCHITECT",
+       "box": {
+        "x": 2398.8,
+        "y": 858.72,
+        "width": 76.08,
+        "height": 23.28
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c16",
+   "region": "title block",
+   "text": "REVISIONS",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0072",
+     "box": {
+      "x": 2414.64,
+      "y": 814.32,
+      "width": 51.12,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0186",
+       "text": "REVISIONS",
+       "box": {
+        "x": 2414.64,
+        "y": 814.32,
+        "width": 51.12,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c17",
+   "region": "title block",
+   "text": "# / DESCRIPTION / DATE",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0074",
+     "box": {
+      "x": 2332.32,
+      "y": 795.84,
+      "width": 208.79999999999973,
+      "height": 8.159999999999968
+     },
+     "lines": [
+      {
+       "lid": "L0189",
+       "text": "#",
+       "box": {
+        "x": 2332.32,
+        "y": 795.84,
+        "width": 6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0190",
+       "text": "DESCRIPTION",
+       "box": {
+        "x": 2390.4,
+        "y": 796.32,
+        "width": 63.84,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0191",
+       "text": "DATE",
+       "box": {
+        "x": 2516.4,
+        "y": 796.32,
+        "width": 24.72,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c18",
+   "region": "title block",
+   "text": "FIRST ISSUE / 00 / 00",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 6.3,
+   "copies": [
+    {
+     "aid": "N0075",
+     "box": {
+      "x": 2329.92,
+      "y": 777.84,
+      "width": 203.51999999999998,
+      "height": 7.920000000000073
+     },
+     "lines": [
+      {
+       "lid": "L0194",
+       "text": "FIRST ISSUE",
+       "box": {
+        "x": 2393.28,
+        "y": 778.32,
+        "width": 57.84,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0195",
+       "text": "00",
+       "box": {
+        "x": 2523.6,
+        "y": 778.32,
+        "width": 9.84,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0193",
+       "text": "00",
+       "box": {
+        "x": 2329.92,
+        "y": 777.84,
+        "width": 10.8,
+        "height": 7.92
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c19",
+   "region": "title block",
+   "text": "01 PERMIT COMMEN",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0076",
+     "box": {
+      "x": 2330.64,
+      "y": 759.84,
+      "width": 122.16,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0197",
+       "text": "01 PERMIT COMMEN",
+       "box": {
+        "x": 2330.64,
+        "y": 759.84,
+        "width": 122.16,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c20",
+   "region": "title block",
+   "text": "PERMIT COMMENTS 10/29/25",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0077",
+     "box": {
+      "x": 2375.76,
+      "y": 760.32,
+      "width": 170.88,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0198",
+       "text": "PERMIT COMMENTS 10/29/25",
+       "box": {
+        "x": 2375.76,
+        "y": 760.32,
+        "width": 170.88,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c21",
+   "region": "title block",
+   "text": "02 PERMIT COMMEN",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0078",
+     "box": {
+      "x": 2330.16,
+      "y": 741.6,
+      "width": 122.64,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0199",
+       "text": "02 PERMIT COMMEN",
+       "box": {
+        "x": 2330.16,
+        "y": 741.6,
+        "width": 122.64,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c22",
+   "region": "title block",
+   "text": "PERMIT COMMENTS 12/16/25",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0079",
+     "box": {
+      "x": 2375.76,
+      "y": 742.32,
+      "width": 170.88,
+      "height": 7.44
+     },
+     "lines": [
+      {
+       "lid": "L0200",
+       "text": "PERMIT COMMENTS 12/16/25",
+       "box": {
+        "x": 2375.76,
+        "y": 742.32,
+        "width": 170.88,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c23",
+   "region": "title block",
+   "text": "03 PERMIT COMMEN",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0081",
+     "box": {
+      "x": 2329.92,
+      "y": 723.6,
+      "width": 122.88,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0203",
+       "text": "03 PERMIT COMMEN",
+       "box": {
+        "x": 2329.92,
+        "y": 723.6,
+        "width": 122.88,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c24",
+   "region": "title block",
+   "text": "PERMIT COMMENTS 02/16/26",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0082",
+     "box": {
+      "x": 2375.76,
+      "y": 723.84,
+      "width": 170.88,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0204",
+       "text": "PERMIT COMMENTS 02/16/26",
+       "box": {
+        "x": 2375.76,
+        "y": 723.84,
+        "width": 170.88,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c25",
+   "region": "title block",
+   "text": "04 PERMIT COMMEN",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0085",
+     "box": {
+      "x": 2329.92,
+      "y": 705.6,
+      "width": 122.88,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0208",
+       "text": "04 PERMIT COMMEN",
+       "box": {
+        "x": 2329.92,
+        "y": 705.6,
+        "width": 122.88,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11",
+        "r05c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c26",
+   "region": "title block",
+   "text": "PERMIT COMMENTS 07/17/26",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0086",
+     "box": {
+      "x": 2375.76,
+      "y": 705.84,
+      "width": 170.88,
+      "height": 7.44
+     },
+     "lines": [
+      {
+       "lid": "L0209",
+       "text": "PERMIT COMMENTS 07/17/26",
+       "box": {
+        "x": 2375.76,
+        "y": 705.84,
+        "width": 170.88,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12",
+        "r05c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c27",
+   "region": "title block",
+   "text": "{OWNER REVISIONS 10/07/26 | 05 OWNER REVISIC}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0087",
+     "box": {
+      "x": 2377.2,
+      "y": 687.6,
+      "width": 168,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0214",
+       "text": "OWNER REVISIONS 10/07/26",
+       "box": {
+        "x": 2377.2,
+        "y": 687.6,
+        "width": 168,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c12",
+        "r04c12",
+        "r04c11",
+        "r05c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "05 OWNER REVISIC"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c28",
+   "region": "title block",
+   "text": "confidential and proprietary property of ed or reproduced without written epared for use on this specific site in able for use on a different site or at ence or example on another project ects and engineers. Reproduction of other project is not authorized.",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0093",
+     "box": {
+      "x": 2487.84,
+      "y": 484.8,
+      "width": 13.44,
+      "height": 139.68
+     },
+     "lines": [
+      {
+       "lid": "L0224",
+       "text": "confidential and proprietary property of\ned or reproduced without written\nepared for use on this specific site in\nable for use on a different site or at\nence or example on another project\nects and engineers. Reproduction of\nother project is not authorized.",
+       "box": {
+        "x": 2487.84,
+        "y": 484.8,
+        "width": 13.44,
+        "height": 139.68
+       },
+       "tiles": [
+        "r05c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c29",
+   "region": "title block",
+   "text": "S USA, LLC",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0094",
+     "box": {
+      "x": 2459.28,
+      "y": 484.8,
+      "width": 20.88,
+      "height": 130.8
+     },
+     "lines": [
+      {
+       "lid": "L0225",
+       "text": "S USA, LLC",
+       "box": {
+        "x": 2459.28,
+        "y": 484.8,
+        "width": 20.88,
+        "height": 130.8
+       },
+       "tiles": [
+        "r05c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c30",
+   "region": "title block",
+   "text": "2 / A-3.00",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0097",
+     "box": {
+      "x": 2268.48,
+      "y": 533.76,
+      "width": 28.559999999999945,
+      "height": 21.120000000000005
+     },
+     "lines": [
+      {
+       "lid": "L0231",
+       "text": "2",
+       "box": {
+        "x": 2280,
+        "y": 547.92,
+        "width": 5.76,
+        "height": 6.96
+       },
+       "tiles": [
+        "r05c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0232",
+       "text": "A-3.00",
+       "box": {
+        "x": 2268.48,
+        "y": 533.76,
+        "width": 28.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c31",
+   "region": "title block",
+   "text": "SITE ADDRESS: PREPARED FOR:",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0098",
+     "box": {
+      "x": 2321.76,
+      "y": 283.2,
+      "width": 129.84,
+      "height": 79.68
+     },
+     "lines": [
+      {
+       "lid": "L0245",
+       "text": "SITE ADDRESS: PREPARED FOR:",
+       "box": {
+        "x": 2321.76,
+        "y": 283.2,
+        "width": 129.84,
+        "height": 79.68
+       },
+       "tiles": [
+        "r06c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c32",
+   "region": "title block",
+   "text": "75 NEW YORK AVENUE WASHINGTON DC SITE ID # 008-0003 NSN # 00650 McDonald's U These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or released without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or other purposes requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0100",
+     "box": {
+      "x": 2361.84,
+      "y": 301.92,
+      "width": 175.44,
+      "height": 216.48
+     },
+     "lines": [
+      {
+       "lid": "L0235",
+       "text": "75 NEW YORK AVENUE WASHINGTON DC SITE ID # 008-0003 NSN # 00650 McDonald's U These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or released without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or other purposes requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.",
+       "box": {
+        "x": 2361.84,
+        "y": 301.92,
+        "width": 175.44,
+        "height": 216.48
+       },
+       "tiles": [
+        "r06c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c33",
+   "region": "title block",
+   "text": "550",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0103",
+     "box": {
+      "x": 2407.2,
+      "y": 484.8,
+      "width": 9.36,
+      "height": 15.6
+     },
+     "lines": [
+      {
+       "lid": "L0238",
+       "text": "550",
+       "box": {
+        "x": 2407.2,
+        "y": 484.8,
+        "width": 9.36,
+        "height": 15.6
+       },
+       "tiles": [
+        "r05c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c34",
+   "region": "title block",
+   "text": "PREPA These Mo authoriz conjun a late require",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0111",
+     "box": {
+      "x": 2443.2,
+      "y": 281.76,
+      "width": 95.04,
+      "height": 35.04
+     },
+     "lines": [
+      {
+       "lid": "L0250",
+       "text": "PREPA These Mo authoriz conjun a late require",
+       "box": {
+        "x": 2443.2,
+        "y": 281.76,
+        "width": 95.04,
+        "height": 35.04
+       },
+       "tiles": [
+        "r07c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c35",
+   "region": "title block",
+   "text": "DRAWING NAME: / WALL SECTIONS",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0113",
+     "box": {
+      "x": 2324.4,
+      "y": 233.04,
+      "width": 165.36000000000013,
+      "height": 25.440000000000026
+     },
+     "lines": [
+      {
+       "lid": "L0253",
+       "text": "DRAWING NAME:",
+       "box": {
+        "x": 2324.4,
+        "y": 252,
+        "width": 54.72,
+        "height": 6.48
+       },
+       "tiles": [
+        "r07c11",
+        "r07c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0254",
+       "text": "WALL SECTIONS",
+       "box": {
+        "x": 2387.76,
+        "y": 233.04,
+        "width": 102,
+        "height": 10.32
+       },
+       "tiles": [
+        "r07c12",
+        "r07c11",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c36",
+   "region": "title block",
+   "text": "DRAWN BY: / DESIGN BY: / DATE: / {HFA 09/20/25 | HFA} / HFA / CHECKED BY: / {SCALE: | BY: SCALE:} / SHEET: / WGN / AS NOTED 24 OF 28 / PROJECT # / PAGE # / {16-25-95017 | 25-95017 A-3.06-00} / A",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0116",
+     "box": {
+      "x": 2324.4,
+      "y": 121.2,
+      "width": 209.03999999999996,
+      "height": 101.27999999999999
+     },
+     "lines": [
+      {
+       "lid": "L0259",
+       "text": "DRAWN BY:",
+       "box": {
+        "x": 2324.4,
+        "y": 216,
+        "width": 38.64,
+        "height": 6.48
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0260",
+       "text": "DESIGN BY:",
+       "box": {
+        "x": 2402.4,
+        "y": 216,
+        "width": 32.64,
+        "height": 6.48
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12",
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0261",
+       "text": "DATE:",
+       "box": {
+        "x": 2480.4,
+        "y": 216,
+        "width": 19.44,
+        "height": 6.48
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0262",
+       "text": "HFA 09/20/25",
+       "box": {
+        "x": 2403.6,
+        "y": 193.2,
+        "width": 126.48,
+        "height": 10.32
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12",
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "HFA"
+       ]
+      },
+      {
+       "lid": "L0263",
+       "text": "HFA",
+       "box": {
+        "x": 2325.6,
+        "y": 193.2,
+        "width": 25.2,
+        "height": 10.08
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0265",
+       "text": "CHECKED BY:",
+       "box": {
+        "x": 2324.4,
+        "y": 180.24,
+        "width": 46.08,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0266",
+       "text": "SCALE:",
+       "box": {
+        "x": 2402.4,
+        "y": 180.24,
+        "width": 21.6,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "BY: SCALE:"
+       ]
+      },
+      {
+       "lid": "L0267",
+       "text": "SHEET:",
+       "box": {
+        "x": 2480.4,
+        "y": 180.24,
+        "width": 17.52,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0269",
+       "text": "WGN",
+       "box": {
+        "x": 2325.84,
+        "y": 157.2,
+        "width": 26.16,
+        "height": 10.32
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0270",
+       "text": "AS NOTED 24 OF 28",
+       "box": {
+        "x": 2404.32,
+        "y": 157.2,
+        "width": 129.12,
+        "height": 10.32
+       },
+       "tiles": [
+        "r08c12",
+        "r07c12",
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0273",
+       "text": "PROJECT #",
+       "box": {
+        "x": 2324.4,
+        "y": 143.52,
+        "width": 38.64,
+        "height": 6.96
+       },
+       "tiles": [
+        "r08c11",
+        "r07c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0274",
+       "text": "PAGE #",
+       "box": {
+        "x": 2441.52,
+        "y": 144,
+        "width": 18.24,
+        "height": 6.48
+       },
+       "tiles": [
+        "r08c12",
+        "r07c12",
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0275",
+       "text": "16-25-95017",
+       "box": {
+        "x": 2325.84,
+        "y": 121.2,
+        "width": 98.64,
+        "height": 13.92
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "25-95017 A-3.06-00"
+       ]
+      },
+      {
+       "lid": "L0276",
+       "text": "A",
+       "box": {
+        "x": 2441.28,
+        "y": 121.44,
+        "width": 6.24,
+        "height": 12.24
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c37",
+   "region": "detail title 4 WALL SECTION @ HIGH ROOF",
+   "text": "WALL",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0120",
+     "box": {
+      "x": 170.4,
+      "y": 61.92,
+      "width": 64.8,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0277",
+       "text": "WALL",
+       "box": {
+        "x": 170.4,
+        "y": 61.92,
+        "width": 64.8,
+        "height": 18.96
+       },
+       "tiles": [
+        "r08c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c38",
+   "region": "detail title 4 WALL SECTION @ HIGH ROOF",
+   "text": "ALL SECTION @ HIG",
+   "technical": true,
+   "classes": [],
+   "uncertain": false,
+   "value": 1,
+   "copies": [
+    {
+     "aid": "N0121",
+     "box": {
+      "x": 201.6,
+      "y": 60.96,
+      "width": 235.2,
+      "height": 20.16
+     },
+     "lines": [
+      {
+       "lid": "L0278",
+       "text": "ALL SECTION @ HIG",
+       "box": {
+        "x": 201.6,
+        "y": 60.96,
+        "width": 235.2,
+        "height": 20.16
+       },
+       "tiles": [
+        "r08c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c39",
+   "region": "detail title 5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "5 WALL S / {SCALE: 3/4\" = 1' | 3/4\" = 1'-0\"}",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0123",
+     "box": {
+      "x": 1524.24,
+      "y": 40.32,
+      "width": 121.20000000000005,
+      "height": 40.559999999999995
+     },
+     "lines": [
+      {
+       "lid": "L0280",
+       "text": "5 WALL S",
+       "box": {
+        "x": 1524.24,
+        "y": 53.28,
+        "width": 110.88,
+        "height": 27.6
+       },
+       "tiles": [
+        "r08c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0286",
+       "text": "SCALE: 3/4\" = 1'",
+       "box": {
+        "x": 1566.72,
+        "y": 40.32,
+        "width": 78.72,
+        "height": 8.16
+       },
+       "tiles": [
+        "r08c07",
+        "r08c08"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "3/4\" = 1'-0\""
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c40",
+   "region": "detail title 5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "ALL SECTION @ NEW",
+   "technical": true,
+   "classes": [],
+   "uncertain": false,
+   "value": 1,
+   "copies": [
+    {
+     "aid": "N0124",
+     "box": {
+      "x": 1612.8,
+      "y": 60.96,
+      "width": 235.2,
+      "height": 20.16
+     },
+     "lines": [
+      {
+       "lid": "L0281",
+       "text": "ALL SECTION @ NEW",
+       "box": {
+        "x": 1612.8,
+        "y": 60.96,
+        "width": 235.2,
+        "height": 20.16
+       },
+       "tiles": [
+        "r08c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c41",
+   "region": "detail title 5 WALL SECTION @ NEW ORDER WINDOW",
+   "text": "EW ORDER WINDOW",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0125",
+     "box": {
+      "x": 1814.4,
+      "y": 61.68,
+      "width": 235.2,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0282",
+       "text": "EW ORDER WINDOW",
+       "box": {
+        "x": 1814.4,
+        "y": 61.68,
+        "width": 235.2,
+        "height": 19.44
+       },
+       "tiles": [
+        "r08c09",
+        "r08c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c42",
+   "region": "detail title 4 WALL SECTION @ HIGH ROOF",
+   "text": "4",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0126",
+     "box": {
+      "x": 127.44,
+      "y": 53.52,
+      "width": 13.44,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0283",
+       "text": "4",
+       "box": {
+        "x": 127.44,
+        "y": 53.52,
+        "width": 13.44,
+        "height": 18.96
+       },
+       "tiles": [
+        "r08c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c43",
+   "region": "detail title 4 WALL SECTION @ HIGH ROOF",
+   "text": "SCALE: 3/4\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0127",
+     "box": {
+      "x": 170.64,
+      "y": 40.32,
+      "width": 61.2,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0284",
+       "text": "SCALE: 3/4\"",
+       "box": {
+        "x": 170.64,
+        "y": 40.32,
+        "width": 61.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r08c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c44",
+   "region": "detail title 4 WALL SECTION @ HIGH ROOF",
+   "text": "3/4\" = 1'-0\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0128",
+     "box": {
+      "x": 215.28,
+      "y": 40.32,
+      "width": 45.84,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0285",
+       "text": "3/4\" = 1'-0\"",
+       "box": {
+        "x": 215.28,
+        "y": 40.32,
+        "width": 45.84,
+        "height": 8.16
+       },
+       "tiles": [
+        "r08c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c45",
+   "region": "title block",
+   "text": "REVISED PERMIT SE",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0129",
+     "box": {
+      "x": 2273.28,
+      "y": 18.96,
+      "width": 179.52,
+      "height": 14.64
+     },
+     "lines": [
+      {
+       "lid": "L0287",
+       "text": "REVISED PERMIT SE",
+       "box": {
+        "x": 2273.28,
+        "y": 18.96,
+        "width": 179.52,
+        "height": 14.64
+       },
+       "tiles": [
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c46",
+   "region": "title block",
+   "text": "PERMIT SET 10/15/2026",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0130",
+     "box": {
+      "x": 2357.28,
+      "y": 18.96,
+      "width": 201.6,
+      "height": 14.88
+     },
+     "lines": [
+      {
+       "lid": "L0288",
+       "text": "PERMIT SET 10/15/2026",
+       "box": {
+        "x": 2357.28,
+        "y": 18.96,
+        "width": 201.6,
+        "height": 14.88
+       },
+       "tiles": [
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "suppressedLines": [
+  {
+   "lid": "L0046",
+   "duplicateOf": "L0048"
+  },
+  {
+   "lid": "L0246",
+   "duplicateOf": "L0245"
+  },
+  {
+   "lid": "L0233",
+   "duplicateOf": "L0235"
+  },
+  {
+   "lid": "L0249",
+   "duplicateOf": "L0245"
+  },
+  {
+   "lid": "L0234",
+   "duplicateOf": "L0235"
+  },
+  {
+   "lid": "L0236",
+   "duplicateOf": "L0235"
+  }
+ ]
+}

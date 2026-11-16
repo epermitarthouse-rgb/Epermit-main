@@ -1,0 +1,130 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_01f6106f60ae5b0c016aec8f53600087d28b3350a3a9745278",
+ "latencyMs": 14234,
+ "inputTokens": 5040,
+ "outputTokens": 653,
+ "costUsd": 0.01913,
+ "userPromptChars": 3612,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet A-6.00-00 reviewed is part of a commercial project for McDonald's USA, LLC, located at 75 New York Avenue, Washington DC. It includes a door and hardware schedule, window types, and various general notes and revisions. Below are the preliminary observations based on visible content and coordination requirements.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing Door Hardware Specifications",
+   "observation": "The door hardware schedule lists various doors with standard hardware specifications. However, detailed specifications for certain hardware items, such as specific door closer models or finishes, are not visible.",
+   "drawing_evidence": "Sheet section: Door Hardware, General Notes mention hardware but details are non-specific.",
+   "drawing_location": "Section 2, Door Hardware",
+   "suggested_code_reference": null,
+   "recommendation": "Provide complete specifications for all door hardware to ensure compliance with accessibility and safety standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Missing Door Hardware Specifications",
+    "originalObservation": "The door hardware schedule lists various doors with standard hardware specifications. However, detailed specifications for certain hardware items, such as specific door closer models or finishes, are not visible.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Door Opening Force Note",
+   "observation": "The sheet includes a note stating that the opening force for all exterior push/pull doors shall not exceed 8.5 lb, and for interior doors shall not exceed 5 lb.",
+   "drawing_evidence": "Text near the top of the door schedule: 'THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB... INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB.'",
+   "drawing_location": "Near Door Schedule",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that all specified doors comply with the stated opening force requirements, which align with accessibility standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door Opening Force Note",
+    "originalObservation": "The sheet includes a note stating that the opening force for all exterior push/pull doors shall not exceed 8.5 lb, and for interior doors shall not exceed 5 lb.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Panic Hardware Requirement",
+   "observation": "Notes on the drawing specify the need for panic hardware on doors as noted on the schedule.",
+   "drawing_evidence": "General Notes: 'PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.'",
+   "drawing_location": "General Notes Section",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm panic hardware is correctly specified and installed as per general note requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Panic Hardware Requirement",
+    "originalObservation": "Notes on the drawing specify the need for panic hardware on doors as noted on the schedule.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Door Type Consolidation",
+   "observation": "The schedule lists similar hardware descriptions for different door types without clear differentiation, which may cause confusion during installation.",
+   "drawing_evidence": "Multiple door entries in the Door Schedule with similar descriptions but no differentiating criteria visible.",
+   "drawing_location": "Door Schedule",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify and consolidate door types and hardware descriptions to avoid installation errors.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Door Type Consolidation",
+    "originalObservation": "The schedule lists similar hardware descriptions for different door types without clear differentiation, which may cause confusion during installation.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Glazing Type Unspecified",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

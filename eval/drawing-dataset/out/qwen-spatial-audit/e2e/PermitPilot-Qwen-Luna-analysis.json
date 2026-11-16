@@ -1,0 +1,288 @@
+{
+ "schemaVersion": "supabase-analyzer-export.v1",
+ "exportedAt": "2026-11-17T12:00:00.000Z",
+ "project": {
+  "id": "experimental",
+  "name": "75 New York Ave & 1st St, Washington DC (Permit Rev 5)"
+ },
+ "run": {
+  "id": "qwen-luna-e2e-20261117",
+  "status": "completed",
+  "analysisMode": "both",
+  "analysisModeLabel": "Both — Base Code + Local Amendments",
+  "jurisdictionKey": "dc",
+  "jurisdictionLabel": "Washington, DC",
+  "projectType": "Commercial (General)",
+  "codeEdition": "2017",
+  "codeContext": "2017 District of Columbia Construction Codes (2015 IBC base)",
+  "sourceCoverage": "Five drawings: A-3.06, A-4.00, A-1.01, A-6.00, S-201 (82-sheet set index)",
+  "sourceLimitation": null,
+  "sheetCounts": {
+   "total": 5,
+   "uploaded": 5,
+   "queued": 0,
+   "processing": 0,
+   "completed": 5,
+   "failed": 0
+  },
+  "severityTotals": {
+   "all": 8,
+   "critical": 0,
+   "warning": 3,
+   "advisory": 5
+  },
+  "disciplineBreakdown": [
+   {
+    "discipline": "Architectural",
+    "sheetCount": 4,
+    "findingCount": 3
+   },
+   {
+    "discipline": "Structural",
+    "sheetCount": 1,
+    "findingCount": 5
+   }
+  ]
+ },
+ "sheets": [
+  {
+   "id": "job-A-3.06-00",
+   "ordinal": 1,
+   "sheetNumber": "A-3.06-00",
+   "title": "WALL SECTIONS",
+   "fileName": "A-3.06-00.pdf",
+   "status": "completed",
+   "discipline": {
+    "display": "Architectural",
+    "raw": "Architectural"
+   },
+   "summary": "The sheet contains high-roof guardrail details and wall sections at the high roof and new order window. No observations were raised for this drawing.",
+   "severityTotals": {
+    "all": 0,
+    "critical": 0,
+    "warning": 0,
+    "advisory": 0
+   },
+   "findings": []
+  },
+  {
+   "id": "job-A-4.00-00",
+   "ordinal": 2,
+   "sheetNumber": "A-4.00-00",
+   "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+   "fileName": "A-4.00-00.pdf",
+   "status": "completed",
+   "discipline": {
+    "display": "Architectural",
+    "raw": "Architectural"
+   },
+   "summary": "The sheet provides enlarged toilet room plans, accessory elevations and schedules, signage details, and a lavatory section. 1 observation for review.",
+   "severityTotals": {
+    "all": 1,
+    "critical": 0,
+    "warning": 1,
+    "advisory": 0
+   },
+   "findings": [
+    {
+     "id": "qf-a400-sign",
+     "findingIndex": 1,
+     "severity": "warning",
+     "title": "Conflicting signage mounting-height criteria",
+     "observation": "Detail 4 presents two different mounting criteria for the same tactile signage: the elevation indicates “48\" MIN. AFF. B. OF BRAILLE” and “60\" MAX. AFF. T. OF TACTILE,” while Signage Note 2 states that the sign mounting height is to be “60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN.” These criteria do not describe the same sign location and may produce incompatible mounting heights.",
+     "drawingEvidence": "Detail 4, TYP. SIGNAGE HEIGHT ELEVATION, shows “48\" MIN. AFF. B. OF BRAILLE” and “60\" MAX. AFF. T. OF TACTILE.” The adjacent Signage Notes state: “SIGN MOUNTING HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN.”",
+     "drawingLocation": "Detail 4 at the upper-right portion of the sheet: signage elevation and Signage Notes below/right of the elevation.",
+     "codeReference": null,
+     "recommendation": "Reconcile the Signage Note 2 centerline requirement with the dimensional limits shown in Detail 4, and identify one governing mounting-height criterion for the restroom and exit signage shown on this sheet. Confirm the final criterion against the applicable accessibility design basis before permit issuance. Review status: Requires professional verification.",
+     "category": "Accessibility / Signage Coordination",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "requires_professional_verification",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "job-A-1.01-00",
+   "ordinal": 3,
+   "sheetNumber": "A-1.01-00",
+   "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+   "fileName": "A-1.01-00.pdf",
+   "status": "completed",
+   "discipline": {
+    "display": "Architectural",
+    "raw": "Architectural"
+   },
+   "summary": "Architectural floor-plan sheet showing a 2nd floor alteration plan, basement alteration plan, general notes, keyed notes, and symbol legends. 2 observations for review.",
+   "severityTotals": {
+    "all": 2,
+    "critical": 0,
+    "warning": 0,
+    "advisory": 2
+   },
+   "findings": [
+    {
+     "id": "qf-a101-level",
+     "findingIndex": 1,
+     "severity": "advisory",
+     "title": "Floor designation differs between plan title and title block",
+     "observation": "The upper-left plan is titled \"2ND FLOOR ALTERATION FLOOR PLAN,\" while the title block identifies the drawing as \"MEZZANINE & BASEMENT FLOOR PLAN.\" The sheet therefore uses different designations for the same upper-level plan.",
+     "drawingEvidence": "Detail 1 caption reads \"2ND FLOOR ALTERATION FLOOR PLAN\"; the title block reads \"DRAWING NAME: MEZZANINE & BASEMENT FLOOR PLAN.\"",
+     "drawingLocation": "Detail 1 caption at upper-left plan; title block at lower-right of sheet.",
+     "codeReference": null,
+     "recommendation": "Confirm whether the depicted upper-level plan is the second floor or mezzanine, then revise the plan caption or title-block drawing name so the level designation is consistent throughout the permit set. Review status: Confirmed by drawing evidence.",
+     "category": "Sheet coordination",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "confirmed_by_drawing",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    },
+    {
+     "id": "qf-a101-a117",
+     "findingIndex": 2,
+     "severity": "advisory",
+     "title": "Accessibility standard edition cited in general notes should be verified",
+     "observation": "The accessibility general notes cite “ICC/ANSI A117.1-2003” for reach-range requirements. The cited edition should be reconciled with the accessibility standard applicable to this permit set so that the note does not create an ambiguous or outdated design basis.",
+     "drawingEvidence": "General Notes, Additional ADA Notes, item 4: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” Other notes also refer to ADA-compliant signage, hardware, and opening force requirements.",
+     "drawingLocation": "Detail 3, GENERAL NOTES, Additional ADA Notes, item 4",
+     "codeReference": null,
+     "recommendation": "Have the design professional verify the applicable accessibility standard edition for the 2017 DC Construction Codes permit basis and revise the general note if necessary; confirm that the self-service reach-range design is documented using that verified basis. Review status: Requires professional verification.",
+     "category": "Accessibility coordination",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "requires_professional_verification",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    }
+   ]
+  },
+  {
+   "id": "job-A-6.00-00",
+   "ordinal": 4,
+   "sheetNumber": "A-6.00-00",
+   "title": "DOOR & HARDWARE SCHEDULE",
+   "fileName": "A-6.00-00.pdf",
+   "status": "completed",
+   "discipline": {
+    "display": "Architectural",
+    "raw": "Architectural"
+   },
+   "summary": "The sheet contains door and hardware schedules, window types, general door notes, hardware selections, and related details. No observations were raised for this drawing.",
+   "severityTotals": {
+    "all": 0,
+    "critical": 0,
+    "warning": 0,
+    "advisory": 0
+   },
+   "findings": []
+  },
+  {
+   "id": "job-S-201.00",
+   "ordinal": 5,
+   "sheetNumber": "S-201.00",
+   "title": "WALL SECTIONS AND NOTES",
+   "fileName": "S-201.00.pdf",
+   "status": "completed",
+   "discipline": {
+    "display": "Structural",
+    "raw": "Structural"
+   },
+   "summary": "Structural wall sections and notes sheet reviewed. 5 observations for review.",
+   "severityTotals": {
+    "all": 5,
+    "critical": 0,
+    "warning": 2,
+    "advisory": 3
+   },
+   "findings": [
+    {
+     "id": "qf-s201-soil",
+     "findingIndex": 1,
+     "severity": "warning",
+     "title": "Conflicting soil pressure values appear in structural notes",
+     "observation": "The sheet states both an assumed allowable soil bearing capacity of 1,500 PSF and a minimum design soil pressure of 2,500 PSF. These values appear to address the same foundation design condition, but the governing basis or distinction between them is not stated.",
+     "drawingEvidence": "Under MASONRY AND FOUNDATION NOTES, item 1 states: \"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.\" Item 8 states: \"MINIMUM DESIGN SOIL PRESSURE 2,500 PSF, TO BOTTOM OF FOOTING DEPTH SHOWN ON DRAWINGS...\"",
+     "drawingLocation": "Structural notes block, MASONRY AND FOUNDATION NOTES, items 1 and 8, right half of sheet.",
+     "codeReference": null,
+     "recommendation": "Have the structural/geotechnical design team reconcile the 1,500 PSF allowable bearing capacity with the 2,500 PSF minimum design soil pressure, identify the governing value and its design basis, and revise the notes or supporting geotechnical documentation as needed. The applicable code/design basis needs professional verification. Review status: Requires professional verification.",
+     "category": "Geotechnical / foundation design coordination",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "requires_professional_verification",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    },
+    {
+     "id": "qf-s201-scale",
+     "findingIndex": 2,
+     "severity": "advisory",
+     "title": "Wall Section 2 scale notation is malformed",
+     "observation": "The scale label for Wall Section 2 is printed as “SCALE: 3/4\"1'-0\"” without the equals sign shown in the Wall Section 1 scale notation.",
+     "drawingEvidence": "Wall Section 1 is labeled “SCALE: 3/4\"=1'-0\"”; Wall Section 2 is labeled “SCALE: 3/4\"1'-0\".”",
+     "drawingLocation": "Bottom detail-title bands beneath Wall Sections 1 and 2.",
+     "codeReference": null,
+     "recommendation": "Correct the Wall Section 2 scale notation to clearly state the intended scale, or identify it as not to scale if that is the design intent. Review status: Confirmed by drawing evidence.",
+     "category": "Drafting and documentation",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "confirmed_by_drawing",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    },
+    {
+     "id": "qf-s201-of00",
+     "findingIndex": 3,
+     "severity": "advisory",
+     "title": "Sheet-count field appears incomplete",
+     "observation": "The title block includes the label \"SHEET:\" followed by \"OF 00,\" but no sheet number is printed before the sheet-count notation.",
+     "drawingEvidence": "Title block reads: \"SHEET: OF 00\"; the separate page field identifies the sheet as \"S-201.00.\"",
+     "drawingLocation": "Lower-right title block.",
+     "codeReference": null,
+     "recommendation": "Complete the title-block sheet-count field or confirm that the intended sheet-number and total-sheet information is shown consistently throughout the permit set. Review status: Confirmed by drawing evidence.",
+     "category": "Title block",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "confirmed_by_drawing",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    },
+    {
+     "id": "qf-s201-aci",
+     "findingIndex": 4,
+     "severity": "warning",
+     "title": "Concrete reference identifies an older ACI edition",
+     "observation": "The sheet’s Design Data states “INTERNATIONAL BUILDING CODE (IBC 2015),” while the Reinforced Concrete notes state “ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS.” The relationship between the adopted 2015 IBC concrete provisions and the older ACI edition is not explained on this sheet.",
+     "drawingEvidence": "Design Data item 1 reads “INTERNATIONAL BUILDING CODE (IBC 2015).” Reinforced Concrete note 1 reads “ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS.”",
+     "drawingLocation": "Right-side Structural Notes panel; Design Data and Reinforced Concrete sections.",
+     "codeReference": null,
+     "recommendation": "Have the structural engineer confirm the governing concrete design standard and revise the note if ACI 318-06 is not the intended standard for the 2015 IBC-based permit design. Review status: Requires professional verification.",
+     "category": "Structural design criteria",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "requires_professional_verification",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    },
+    {
+     "id": "qf-s201-1705",
+     "findingIndex": 5,
+     "severity": "advisory",
+     "title": "Cold-formed-steel special-inspection cross-reference requires verification",
+     "observation": "The special-inspections summary identifies cold-formed steel with the reference \"1705.3.4,\" while the sheet separately identifies light-gage steel framing and structural steel work.",
+     "drawingEvidence": "The special-inspections cloud lists: \"D. COLD-FORMED STEEL 1705.3.4.\" The light-gage steel notes identify light-gage framing and reference AISI cold-formed-steel standards.",
+     "drawingLocation": "Special Inspections (Structural) cloud, lower right; Light Gage Steel Notes, upper right",
+     "codeReference": null,
+     "recommendation": "Verify the printed 2015 IBC section designation and confirm that the special-inspection scope and statement cover the cold-formed-steel framing shown on this sheet. Revise the cross-reference if necessary. Review status: Preliminary concern.",
+     "category": "Special inspections",
+     "provenanceStatus": "experimental_qwen72b_gpt56luna",
+     "verificationStatus": "preliminary",
+     "jurisdictionKey": "dc",
+     "codeEdition": "2017",
+     "review": null
+    }
+   ]
+  }
+ ]
+}

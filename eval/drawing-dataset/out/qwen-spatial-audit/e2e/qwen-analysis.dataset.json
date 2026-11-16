@@ -1,0 +1,2215 @@
+{
+ "schema": "qsa.qwen-e2e-dataset.v1",
+ "note": "Experimental, local only. Not production. Findings are automated observations; statuses and audit are internal.",
+ "projectName": "75 New York Ave & 1st St, Washington DC (Permit Rev 5)",
+ "dataset": {
+  "run": {
+   "id": "qwen-luna-e2e-20261117",
+   "project_id": "experimental",
+   "created_by": "evaluation",
+   "status": "completed",
+   "jurisdiction_key": "dc",
+   "jurisdiction_label": "Washington, DC",
+   "project_type": "Commercial (General)",
+   "code_edition": "2017",
+   "code_context": "2017 District of Columbia Construction Codes (2015 IBC base)",
+   "analysis_mode": "both",
+   "source_coverage": "Five drawings: A-3.06, A-4.00, A-1.01, A-6.00, S-201 (82-sheet set index)",
+   "ai_provider": "openai",
+   "ai_model": "gpt-5.6-luna",
+   "total_sheets": 5,
+   "uploaded_sheets": 5,
+   "queued_sheets": 0,
+   "processing_sheets": 0,
+   "completed_sheets": 5,
+   "failed_sheets": 0,
+   "total_input_tokens": 285858,
+   "total_output_tokens": 23087,
+   "estimated_cost_usd": 0.1562,
+   "budget_limit_usd": 2,
+   "started_at": "2026-11-17T12:00:00.000Z",
+   "completed_at": "2026-11-17T12:00:00.000Z",
+   "cancelled_at": null,
+   "created_at": "2026-11-17T12:00:00.000Z",
+   "updated_at": "2026-11-17T12:00:00.000Z"
+  },
+  "jobs": [
+   {
+    "id": "job-A-3.06-00",
+    "run_id": "qwen-luna-e2e-20261117",
+    "project_id": "experimental",
+    "ordinal": 1,
+    "original_file_name": "A-3.06-00.pdf",
+    "object_path": "",
+    "file_size": 0,
+    "discipline": "Architectural",
+    "detected_sheet_number": "A-3.06-00",
+    "detected_sheet_title": "WALL SECTIONS",
+    "status": "completed",
+    "attempt_count": 1,
+    "max_attempts": 1,
+    "last_error": null,
+    "error_code": null,
+    "input_tokens": 61578,
+    "output_tokens": 3508,
+    "estimated_cost_usd": 0.0165,
+    "analysis_summary": "The sheet contains high-roof guardrail details and wall sections at the high roof and new order window. No observations were raised for this drawing.",
+    "created_at": "2026-11-17T12:00:00.000Z",
+    "updated_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "job-A-4.00-00",
+    "run_id": "qwen-luna-e2e-20261117",
+    "project_id": "experimental",
+    "ordinal": 2,
+    "original_file_name": "A-4.00-00.pdf",
+    "object_path": "",
+    "file_size": 0,
+    "discipline": "Architectural",
+    "detected_sheet_number": "A-4.00-00",
+    "detected_sheet_title": "ENLARGED TOILET PLANS & ADA DETAILS",
+    "status": "completed",
+    "attempt_count": 1,
+    "max_attempts": 1,
+    "last_error": null,
+    "error_code": null,
+    "input_tokens": 53682,
+    "output_tokens": 4770,
+    "estimated_cost_usd": 0.0165,
+    "analysis_summary": "The sheet provides enlarged toilet room plans, accessory elevations and schedules, signage details, and a lavatory section. 1 observation for review.",
+    "created_at": "2026-11-17T12:00:00.000Z",
+    "updated_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "job-A-1.01-00",
+    "run_id": "qwen-luna-e2e-20261117",
+    "project_id": "experimental",
+    "ordinal": 3,
+    "original_file_name": "A-1.01-00.pdf",
+    "object_path": "",
+    "file_size": 0,
+    "discipline": "Architectural",
+    "detected_sheet_number": "A-1.01-00",
+    "detected_sheet_title": "MEZZANINE & BASEMENT FLOOR PLAN",
+    "status": "completed",
+    "attempt_count": 1,
+    "max_attempts": 1,
+    "last_error": null,
+    "error_code": null,
+    "input_tokens": 72531,
+    "output_tokens": 4182,
+    "estimated_cost_usd": 0.0195,
+    "analysis_summary": "Architectural floor-plan sheet showing a 2nd floor alteration plan, basement alteration plan, general notes, keyed notes, and symbol legends. 2 observations for review.",
+    "created_at": "2026-11-17T12:00:00.000Z",
+    "updated_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "job-A-6.00-00",
+    "run_id": "qwen-luna-e2e-20261117",
+    "project_id": "experimental",
+    "ordinal": 4,
+    "original_file_name": "A-6.00-00.pdf",
+    "object_path": "",
+    "file_size": 0,
+    "discipline": "Architectural",
+    "detected_sheet_number": "A-6.00-00",
+    "detected_sheet_title": "DOOR & HARDWARE SCHEDULE",
+    "status": "completed",
+    "attempt_count": 1,
+    "max_attempts": 1,
+    "last_error": null,
+    "error_code": null,
+    "input_tokens": 50694,
+    "output_tokens": 2709,
+    "estimated_cost_usd": 0.0134,
+    "analysis_summary": "The sheet contains door and hardware schedules, window types, general door notes, hardware selections, and related details. No observations were raised for this drawing.",
+    "created_at": "2026-11-17T12:00:00.000Z",
+    "updated_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "job-S-201.00",
+    "run_id": "qwen-luna-e2e-20261117",
+    "project_id": "experimental",
+    "ordinal": 5,
+    "original_file_name": "S-201.00.pdf",
+    "object_path": "",
+    "file_size": 0,
+    "discipline": "Structural",
+    "detected_sheet_number": "S-201.00",
+    "detected_sheet_title": "WALL SECTIONS AND NOTES",
+    "status": "completed",
+    "attempt_count": 1,
+    "max_attempts": 1,
+    "last_error": null,
+    "error_code": null,
+    "input_tokens": 47373,
+    "output_tokens": 7918,
+    "estimated_cost_usd": 0.019,
+    "analysis_summary": "Structural wall sections and notes sheet reviewed. 5 observations for review.",
+    "created_at": "2026-11-17T12:00:00.000Z",
+    "updated_at": "2026-11-17T12:00:00.000Z"
+   }
+  ],
+  "findings": [
+   {
+    "id": "qf-s201-soil",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-S-201.00",
+    "finding_index": 1,
+    "category": "Geotechnical / foundation design coordination",
+    "severity": "warning",
+    "title": "Conflicting soil pressure values appear in structural notes",
+    "observation": "The sheet states both an assumed allowable soil bearing capacity of 1,500 PSF and a minimum design soil pressure of 2,500 PSF. These values appear to address the same foundation design condition, but the governing basis or distinction between them is not stated.",
+    "drawing_evidence": "Under MASONRY AND FOUNDATION NOTES, item 1 states: \"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.\" Item 8 states: \"MINIMUM DESIGN SOIL PRESSURE 2,500 PSF, TO BOTTOM OF FOOTING DEPTH SHOWN ON DRAWINGS...\"",
+    "drawing_location": "Structural notes block, MASONRY AND FOUNDATION NOTES, items 1 and 8, right half of sheet.",
+    "suggested_code_reference": null,
+    "recommendation": "Have the structural/geotechnical design team reconcile the 1,500 PSF allowable bearing capacity with the 2,500 PSF minimum design soil pressure, identify the governing value and its design basis, and revise the notes or supporting geotechnical documentation as needed. The applicable code/design basis needs professional verification. Review status: Requires professional verification.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "requires_professional_verification",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-s201-scale",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-S-201.00",
+    "finding_index": 2,
+    "category": "Drafting and documentation",
+    "severity": "advisory",
+    "title": "Wall Section 2 scale notation is malformed",
+    "observation": "The scale label for Wall Section 2 is printed as “SCALE: 3/4\"1'-0\"” without the equals sign shown in the Wall Section 1 scale notation.",
+    "drawing_evidence": "Wall Section 1 is labeled “SCALE: 3/4\"=1'-0\"”; Wall Section 2 is labeled “SCALE: 3/4\"1'-0\".”",
+    "drawing_location": "Bottom detail-title bands beneath Wall Sections 1 and 2.",
+    "suggested_code_reference": null,
+    "recommendation": "Correct the Wall Section 2 scale notation to clearly state the intended scale, or identify it as not to scale if that is the design intent. Review status: Confirmed by drawing evidence.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "confirmed_by_drawing",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-s201-of00",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-S-201.00",
+    "finding_index": 3,
+    "category": "Title block",
+    "severity": "advisory",
+    "title": "Sheet-count field appears incomplete",
+    "observation": "The title block includes the label \"SHEET:\" followed by \"OF 00,\" but no sheet number is printed before the sheet-count notation.",
+    "drawing_evidence": "Title block reads: \"SHEET: OF 00\"; the separate page field identifies the sheet as \"S-201.00.\"",
+    "drawing_location": "Lower-right title block.",
+    "suggested_code_reference": null,
+    "recommendation": "Complete the title-block sheet-count field or confirm that the intended sheet-number and total-sheet information is shown consistently throughout the permit set. Review status: Confirmed by drawing evidence.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "confirmed_by_drawing",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-s201-aci",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-S-201.00",
+    "finding_index": 4,
+    "category": "Structural design criteria",
+    "severity": "warning",
+    "title": "Concrete reference identifies an older ACI edition",
+    "observation": "The sheet’s Design Data states “INTERNATIONAL BUILDING CODE (IBC 2015),” while the Reinforced Concrete notes state “ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS.” The relationship between the adopted 2015 IBC concrete provisions and the older ACI edition is not explained on this sheet.",
+    "drawing_evidence": "Design Data item 1 reads “INTERNATIONAL BUILDING CODE (IBC 2015).” Reinforced Concrete note 1 reads “ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS.”",
+    "drawing_location": "Right-side Structural Notes panel; Design Data and Reinforced Concrete sections.",
+    "suggested_code_reference": null,
+    "recommendation": "Have the structural engineer confirm the governing concrete design standard and revise the note if ACI 318-06 is not the intended standard for the 2015 IBC-based permit design. Review status: Requires professional verification.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "requires_professional_verification",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-s201-1705",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-S-201.00",
+    "finding_index": 5,
+    "category": "Special inspections",
+    "severity": "advisory",
+    "title": "Cold-formed-steel special-inspection cross-reference requires verification",
+    "observation": "The special-inspections summary identifies cold-formed steel with the reference \"1705.3.4,\" while the sheet separately identifies light-gage steel framing and structural steel work.",
+    "drawing_evidence": "The special-inspections cloud lists: \"D. COLD-FORMED STEEL 1705.3.4.\" The light-gage steel notes identify light-gage framing and reference AISI cold-formed-steel standards.",
+    "drawing_location": "Special Inspections (Structural) cloud, lower right; Light Gage Steel Notes, upper right",
+    "suggested_code_reference": null,
+    "recommendation": "Verify the printed 2015 IBC section designation and confirm that the special-inspection scope and statement cover the cold-formed-steel framing shown on this sheet. Revise the cross-reference if necessary. Review status: Preliminary concern.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "preliminary",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-a101-level",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-A-1.01-00",
+    "finding_index": 1,
+    "category": "Sheet coordination",
+    "severity": "advisory",
+    "title": "Floor designation differs between plan title and title block",
+    "observation": "The upper-left plan is titled \"2ND FLOOR ALTERATION FLOOR PLAN,\" while the title block identifies the drawing as \"MEZZANINE & BASEMENT FLOOR PLAN.\" The sheet therefore uses different designations for the same upper-level plan.",
+    "drawing_evidence": "Detail 1 caption reads \"2ND FLOOR ALTERATION FLOOR PLAN\"; the title block reads \"DRAWING NAME: MEZZANINE & BASEMENT FLOOR PLAN.\"",
+    "drawing_location": "Detail 1 caption at upper-left plan; title block at lower-right of sheet.",
+    "suggested_code_reference": null,
+    "recommendation": "Confirm whether the depicted upper-level plan is the second floor or mezzanine, then revise the plan caption or title-block drawing name so the level designation is consistent throughout the permit set. Review status: Confirmed by drawing evidence.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "confirmed_by_drawing",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-a101-a117",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-A-1.01-00",
+    "finding_index": 2,
+    "category": "Accessibility coordination",
+    "severity": "advisory",
+    "title": "Accessibility standard edition cited in general notes should be verified",
+    "observation": "The accessibility general notes cite “ICC/ANSI A117.1-2003” for reach-range requirements. The cited edition should be reconciled with the accessibility standard applicable to this permit set so that the note does not create an ambiguous or outdated design basis.",
+    "drawing_evidence": "General Notes, Additional ADA Notes, item 4: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” Other notes also refer to ADA-compliant signage, hardware, and opening force requirements.",
+    "drawing_location": "Detail 3, GENERAL NOTES, Additional ADA Notes, item 4",
+    "suggested_code_reference": null,
+    "recommendation": "Have the design professional verify the applicable accessibility standard edition for the 2017 DC Construction Codes permit basis and revise the general note if necessary; confirm that the self-service reach-range design is documented using that verified basis. Review status: Requires professional verification.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "requires_professional_verification",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   },
+   {
+    "id": "qf-a400-sign",
+    "run_id": "qwen-luna-e2e-20261117",
+    "sheet_job_id": "job-A-4.00-00",
+    "finding_index": 1,
+    "category": "Accessibility / Signage Coordination",
+    "severity": "warning",
+    "title": "Conflicting signage mounting-height criteria",
+    "observation": "Detail 4 presents two different mounting criteria for the same tactile signage: the elevation indicates “48\" MIN. AFF. B. OF BRAILLE” and “60\" MAX. AFF. T. OF TACTILE,” while Signage Note 2 states that the sign mounting height is to be “60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN.” These criteria do not describe the same sign location and may produce incompatible mounting heights.",
+    "drawing_evidence": "Detail 4, TYP. SIGNAGE HEIGHT ELEVATION, shows “48\" MIN. AFF. B. OF BRAILLE” and “60\" MAX. AFF. T. OF TACTILE.” The adjacent Signage Notes state: “SIGN MOUNTING HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN.”",
+    "drawing_location": "Detail 4 at the upper-right portion of the sheet: signage elevation and Signage Notes below/right of the elevation.",
+    "suggested_code_reference": null,
+    "recommendation": "Reconcile the Signage Note 2 centerline requirement with the dimensional limits shown in Detail 4, and identify one governing mounting-height criterion for the restroom and exit signage shown on this sheet. Confirm the final criterion against the applicable accessibility design basis before permit issuance. Review status: Requires professional verification.",
+    "ai_provider": "openai",
+    "ai_model": "gpt-5.6-luna",
+    "jurisdiction_key": "dc",
+    "code_edition": "2017",
+    "provenance_status": "experimental_qwen72b_gpt56luna",
+    "verification_status": "requires_professional_verification",
+    "created_at": "2026-11-17T12:00:00.000Z"
+   }
+  ],
+  "reviews": []
+ },
+ "audit": {
+  "qf-s201-soil": {
+   "claimId": "S201-SOIL",
+   "status": "requires_professional_verification",
+   "statusLabel": "Requires professional verification",
+   "internalConfidence": "high",
+   "modelEvidenceStatus": "confirmed_by_drawing",
+   "findingType": "contradiction",
+   "relatedSheets": [],
+   "codeBasis": "Foundation design basis; the governing soil value is an engineering determination (code section not cited).",
+   "modelCitation": null,
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 2
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "e47",
+      "region": "STRUCTURAL NOTES",
+      "text": "ACITY OF SOIL IS 1,500 PSF.",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 1612.8,
+        "y": 626.4,
+        "width": 130.56,
+        "height": 9.12
+       }
+      ],
+      "tiles": [
+       "r05c08"
+      ]
+     },
+     {
+      "id": "e54",
+      "region": "STRUCTURAL NOTES",
+      "text": "DESIGN SOIL PRESSURE 2,500 PSF, TO BOTTO",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 1433.28,
+        "y": 456,
+        "width": 213.12,
+        "height": 9.36
+       }
+      ],
+      "tiles": [
+       "r06c07"
+      ]
+     },
+     {
+      "id": "o159",
+      "region": "STRUCTURAL NOTES",
+      "text": "8. / CONTRACTOR TO CARRY FOOTINGS TO FIRM",
+      "uncertain": false,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 1413.12,
+        "y": 468.48,
+        "width": 233.03999999999996,
+        "height": 8.160000000000025
+       }
+      ],
+      "tiles": [
+       "r06c06",
+       "r06c07"
+      ]
+     }
+    ],
+    "anyUncertain": false
+   },
+   "provenance": {
+    "runFile": "stage4/runs/S-201.00.L_spatial2.openrouter-72b.r2.json",
+    "responseId": "resp_0d9e4355784fbe4c016afb2f910bfc87d285e53c032c7abccc",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 2,
+    "evidenceSha": "56fe9d65065b567b",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "accepted",
+    "rules": [],
+    "publishedTitle": "Conflicting soil pressure values appear in structural notes",
+    "publishedSeverity": "warning"
+   },
+   "adjudication": {
+    "note": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' and note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' are both printed.",
+    "crops": [
+     "inspect/findings/S-201.00.soilnote1.png",
+     "inspect/findings/S-201.00.soil1.png"
+    ],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-s201-scale": {
+   "claimId": "S201-SCALE",
+   "status": "confirmed_by_drawing",
+   "statusLabel": "Confirmed by drawing evidence",
+   "internalConfidence": "high",
+   "modelEvidenceStatus": "confirmed_by_drawing",
+   "findingType": "missing_information",
+   "relatedSheets": [],
+   "codeBasis": "Drafting quality; no code requirement.",
+   "modelCitation": null,
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "c31",
+      "region": "detail title 1 WALL SECTION",
+      "text": "3/4\"=1'-0\"",
+      "uncertain": false,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 215.28,
+        "y": 40.32,
+        "width": 40.56,
+        "height": 8.16
+       }
+      ],
+      "tiles": [
+       "r08c01"
+      ]
+     },
+     {
+      "id": "c32",
+      "region": "detail title 2 WALL SECTION",
+      "text": "SCALE: 3/4\"1'-0\"",
+      "uncertain": false,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 830.16,
+        "y": 40.32,
+        "width": 79.92,
+        "height": 8.16
+       }
+      ],
+      "tiles": [
+       "r08c04"
+      ]
+     }
+    ],
+    "anyUncertain": false
+   },
+   "provenance": {
+    "runFile": "stage4/runs/S-201.00.L_spatial2.openrouter-72b.r1.json",
+    "responseId": "resp_0a5894097d60e6b9016afb2f74febc87d2b8e9a17ede3d0859",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 1,
+    "evidenceSha": "56fe9d65065b567b",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "accepted",
+    "rules": [],
+    "publishedTitle": "Wall Section 2 scale notation is malformed",
+    "publishedSeverity": "advisory"
+   },
+   "adjudication": {
+    "note": "Text layer prints '3/4\"1'-0\"' under detail 2 and '3/4\"=1'-0\"' under detail 1.",
+    "crops": [],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-s201-of00": {
+   "claimId": "S201-OF00",
+   "status": "confirmed_by_drawing",
+   "statusLabel": "Confirmed by drawing evidence",
+   "internalConfidence": "high",
+   "modelEvidenceStatus": "confirmed_by_drawing",
+   "findingType": "missing_information",
+   "relatedSheets": [],
+   "codeBasis": "Drafting quality; no code requirement.",
+   "modelCitation": null,
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "c21",
+      "region": "title block",
+      "text": "{CHECKED BY: | CHECKED BY: SCALE:} / ED BY: SCALE: / SHEET: / AS NOTED OF 00 / RAG",
+      "uncertain": true,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 2324.64,
+        "y": 156.96,
+        "width": 208.80000000000018,
+        "height": 29.52000000000001
+       }
+      ],
+      "tiles": [
+       "r08c11",
+       "r07c11",
+       "r07c12",
+       "r08c12"
+      ]
+     },
+     {
+      "id": "c23",
+      "region": "title block",
+      "text": "PAGE # / CT # / RP04 S-201.00",
+      "uncertain": false,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 2356.8,
+        "y": 123.12,
+        "width": 124.31999999999971,
+        "height": 26.400000000000006
+       }
+      ],
+      "tiles": [
+       "r08c12",
+       "r07c12",
+       "r08c11"
+      ]
+     }
+    ],
+    "anyUncertain": true
+   },
+   "provenance": {
+    "runFile": "stage4/runs/S-201.00.L_spatial2.openrouter-72b.r2.json",
+    "responseId": "resp_0d9e4355784fbe4c016afb2f910bfc87d285e53c032c7abccc",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 2,
+    "evidenceSha": "56fe9d65065b567b",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "accepted",
+    "rules": [],
+    "publishedTitle": "Sheet-count field appears incomplete",
+    "publishedSeverity": "advisory"
+   },
+   "adjudication": {
+    "note": "Text layer prints 'AS NOTED / OF 00' in the title block.",
+    "crops": [],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-s201-aci": {
+   "claimId": "S201-ACI",
+   "status": "requires_professional_verification",
+   "statusLabel": "Requires professional verification",
+   "internalConfidence": "high",
+   "modelEvidenceStatus": "requires_professional_verification",
+   "findingType": "code_requirement",
+   "relatedSheets": [],
+   "codeBasis": "Referenced-standard edition under the 2015 IBC base; requires code verification (code text not retrieved).",
+   "modelCitation": "2015 IBC base code — concrete provisions; precise section and referenced concrete-standard edition require verification.",
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 0
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "e4",
+      "region": "sheet",
+      "text": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 1415.04,
+        "y": 1490.88,
+        "width": 194.64,
+        "height": 9.6
+       }
+      ],
+      "tiles": [
+       "r01c07",
+       "r00c07",
+       "r00c06"
+      ]
+     },
+     {
+      "id": "e25",
+      "region": "sheet",
+      "text": "LL CONFORM TO ACI 318-06 CODE REQUIREMENT",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 2016,
+        "y": 1278.48,
+        "width": 235.2,
+        "height": 8.64
+       }
+      ],
+      "tiles": [
+       "r02c10",
+       "r02c11"
+      ]
+     }
+    ],
+    "anyUncertain": false
+   },
+   "provenance": {
+    "runFile": "stage4/runs/S-201.00.L_spatial2.openrouter-72b.r1.json",
+    "responseId": "resp_0a5894097d60e6b9016afb2f74febc87d2b8e9a17ede3d0859",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 1,
+    "evidenceSha": "56fe9d65065b567b",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "withheld",
+    "rules": [
+     "documented_requirement_restatement"
+    ]
+   },
+   "adjudication": {
+    "note": "Reinforced concrete note 1 prints 'ACI 318-06'; design data cites IBC 2015.",
+    "crops": [
+     "inspect/findings/S-201.00.aci0.png"
+    ],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-s201-1705": {
+   "claimId": "S201-1705",
+   "status": "preliminary",
+   "statusLabel": "Preliminary concern",
+   "internalConfidence": "medium",
+   "modelEvidenceStatus": "requires_professional_verification",
+   "findingType": "code_requirement",
+   "relatedSheets": [],
+   "codeBasis": "Special-inspection section numbering; requires code verification (code text not retrieved).",
+   "modelCitation": null,
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "e46",
+      "region": "STRUCTURAL NOTES",
+      "text": "IBC SECTION / 1705 / 1705.3 / 1705.4 / 1705.3.4",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 2040.48,
+        "y": 609.12,
+        "width": 62.88000000000011,
+        "height": 66.24000000000001
+       }
+      ],
+      "tiles": [
+       "r05c10"
+      ]
+     },
+     {
+      "id": "o84",
+      "region": "sheet",
+      "text": "7. LIGHT GAGE STEEL FRAMING / (AMERICAN IRON AND STEEL I / THE DESIGN OF LIGHT GAGE C / STEEL MEMBERS AND SDI COD / PRACTICE.",
+      "uncertain": false,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 1855.92,
+        "y": 1346.88,
+        "width": 193.67999999999984,
+        "height": 54.24000000000001
+       }
+      ],
+      "tiles": [
+       "r01c09"
+      ]
+     }
+    ],
+    "anyUncertain": false
+   },
+   "provenance": {
+    "runFile": "stage4/runs/S-201.00.L_spatial2.openrouter-72b.r3.json",
+    "responseId": "resp_0d30323251642aab016afb2fa5e03487d2a3034e7a8260d339",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 3,
+    "evidenceSha": "56fe9d65065b567b",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "accepted",
+    "rules": [],
+    "publishedTitle": "Cold-formed-steel special-inspection cross-reference requires verification",
+    "publishedSeverity": "advisory"
+   },
+   "adjudication": {
+    "note": "Cloud prints 'D. COLD-FORMED STEEL 1705.3.4'; correctness of the section depends on the code text.",
+    "crops": [
+     "inspect/findings/S-201.00.specialD.png"
+    ],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-a101-level": {
+   "claimId": "A101-LEVEL",
+   "status": "confirmed_by_drawing",
+   "statusLabel": "Confirmed by drawing evidence",
+   "internalConfidence": "high",
+   "modelEvidenceStatus": "confirmed_by_drawing",
+   "findingType": "contradiction",
+   "relatedSheets": [],
+   "codeBasis": "Drawing coordination. Whether the level is a mezzanine or a story affects code analysis and needs the designer.",
+   "modelCitation": null,
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "e13",
+      "region": "sheet",
+      "text": "2'-4\"",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 1028.4,
+        "y": 1368.96,
+        "width": 7.2,
+        "height": 10.56
+       }
+      ],
+      "tiles": [
+       "r01c05"
+      ]
+     },
+     {
+      "id": "c24",
+      "region": "title block",
+      "text": "DRAWING NAME: / {MEZZANINE & E | MEZZANINE & BASEMENT} / {FLOOR PLAN | FLOOR P} / DRAWN BY: / DESIGN BY: / DATE: / HFA / {HFA 09/20/25 | HFA} / CHECKED BY: / {SCALE: | BY: SCALE:} / SHEET: / WGN / AS NOTED 09 OF 28 / PROJECT # / PAGE # / {16-25-95017 | 25-95017 A-1.01-00} / A / A / PERMIT SET 10/15/2026",
+      "uncertain": true,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 2324.64,
+        "y": 18.96,
+        "width": 234.24000000000024,
+        "height": 239.28
+       }
+      ],
+      "tiles": [
+       "r07c11",
+       "r07c12",
+       "r08c12",
+       "r08c11"
+      ]
+     }
+    ],
+    "anyUncertain": true
+   },
+   "provenance": {
+    "runFile": "stage4/runs/A-1.01-00.L_spatial2.openrouter-72b.r3.json",
+    "responseId": "resp_0d37fd51c3cee9a4016afb2f41a03c87d280ffe766d8482656",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 3,
+    "evidenceSha": "734ded321a75bac0",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "accepted",
+    "rules": [],
+    "publishedTitle": "Floor designation differs between plan title and title block",
+    "publishedSeverity": "advisory"
+   },
+   "adjudication": {
+    "note": "Title block 'MEZZANINE & BASEMENT FLOOR PLAN'; plan titles '2ND FLOOR ALTERATION FLOOR PLAN' and 'BASEMENT ALTERATION FLOOR PLAN' (text layer).",
+    "crops": [],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-a101-a117": {
+   "claimId": "A101-A117",
+   "status": "requires_professional_verification",
+   "statusLabel": "Requires professional verification",
+   "internalConfidence": "medium",
+   "modelEvidenceStatus": "requires_professional_verification",
+   "findingType": "code_requirement",
+   "relatedSheets": [],
+   "codeBasis": "Accessibility standard edition referenced by the 2015 IBC base; requires code verification (code text not retrieved).",
+   "modelCitation": "ICC/ANSI A117.1-2009",
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "e52",
+      "region": "3 GENERAL NOTES",
+      "text": "4. ADJUST ALL S",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 555.36,
+        "y": 407.28,
+        "width": 83.04,
+        "height": 7.2
+       }
+      ],
+      "tiles": [
+       "r06c02"
+      ]
+     },
+     {
+      "id": "e54",
+      "region": "3 GENERAL NOTES",
+      "text": "(ICC/ANSI A117",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 575.76,
+        "y": 384.24,
+        "width": 62.4,
+        "height": 7.2
+       }
+      ],
+      "tiles": [
+       "r06c02"
+      ]
+     }
+    ],
+    "anyUncertain": false
+   },
+   "provenance": {
+    "runFile": "stage4/runs/A-1.01-00.L_spatial2.openrouter-72b.r1.json",
+    "responseId": "resp_0f44f83f970961b1016afb2f1fa0ac87d2a672f38ae82686fb",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 1,
+    "evidenceSha": "734ded321a75bac0",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "adjusted",
+    "rules": [
+     "unrecognized_reference"
+    ],
+    "publishedTitle": "Accessibility standard edition cited in general notes should be verified",
+    "publishedSeverity": "advisory"
+   },
+   "adjudication": {
+    "note": "General note 4 prints '(ICC/ANSI A117.1-2003)'.",
+    "crops": [
+     "inspect/findings/A-1.01-00.adanotes2.png"
+    ],
+    "by": "evaluator (not a licensed professional)"
+   }
+  },
+  "qf-a400-sign": {
+   "claimId": "A400-SIGN",
+   "status": "requires_professional_verification",
+   "statusLabel": "Requires professional verification",
+   "internalConfidence": "high",
+   "modelEvidenceStatus": "confirmed_by_drawing",
+   "findingType": "contradiction",
+   "relatedSheets": [],
+   "codeBasis": "Tactile sign mounting height (accessibility standard); requires code verification (code text not retrieved).",
+   "modelCitation": null,
+   "stability": {
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 2,
+     "published": 1
+    }
+   },
+   "ocr": {
+    "evidenceUnits": [
+     {
+      "id": "e39",
+      "region": "4 TYP. SIGNAGE HEIGHT ELEVATION",
+      "text": "48\" MIN. AFF. B. OF BRAILLE 60\" MAX. AFF. T. OF TACTILE",
+      "uncertain": false,
+      "inSummary": true,
+      "boxes": [
+       {
+        "x": 1932.72,
+        "y": 1167.36,
+        "width": 57.36,
+        "height": 28.32
+       }
+      ],
+      "tiles": [
+       "r02c09"
+      ]
+     },
+     {
+      "id": "o33",
+      "region": "4 TYP. SIGNAGE HEIGHT ELEVATION",
+      "text": "DOOR TO THE CENTERLINE OF THE SIGN. MOUNT",
+      "uncertain": false,
+      "inSummary": false,
+      "boxes": [
+       {
+        "x": 2016.24,
+        "y": 898.56,
+        "width": 234.48,
+        "height": 7.44
+       }
+      ],
+      "tiles": [
+       "r04c10"
+      ]
+     }
+    ],
+    "anyUncertain": false
+   },
+   "provenance": {
+    "runFile": "stage4/runs/A-4.00-00.L_spatial2.openrouter-72b.r2.json",
+    "responseId": "resp_05ad0412c82c54ea016afb2ef24d2087d2b58a637a2b0074dc",
+    "model": "gpt-5.6-luna",
+    "arm": "L_spatial2",
+    "rep": 2,
+    "evidenceSha": "d7c09873613f99ae",
+    "systemPromptSha": "b9235654637a5d01"
+   },
+   "productionValidator": {
+    "outcome": "adjusted",
+    "rules": [
+     "keynote_citation_mismatch"
+    ],
+    "publishedTitle": "Keynote citation needs confirmation",
+    "publishedSeverity": "advisory"
+   },
+   "adjudication": {
+    "note": "Signage note 2 'MOUNTING HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN'; detail 4 '48\" MIN. AFF. B. OF BRAILLE / 60\" MAX. AFF. T. OF TACTILE'.",
+    "crops": [
+     "inspect/findings/A-4.00-00.signnote.png",
+     "inspect/findings/A-4.00-00.signage2.png"
+    ],
+    "by": "evaluator (not a licensed professional)"
+   }
+  }
+ },
+ "excluded": [
+  {
+   "claim": "REV00",
+   "sheet": "*",
+   "adjudication": "'00 / FIRST ISSUE / 00' is the revision-table template on every sheet.",
+   "excludedFromClientView": "template placeholder, not a demonstrated error",
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 30,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 15,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 15,
+    "drafted": 6,
+    "published": 6
+   },
+   "L_av": {
+    "runs": 15,
+    "drafted": 0,
+    "published": 0
+   }
+  },
+  {
+   "claim": "A400-FLUSH",
+   "sheet": "A-4.00-00",
+   "adjudication": "Terminology only.",
+   "excludedFromClientView": "terminology only; no compliance consequence shown",
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 6,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "S201-REVTABLE",
+   "sheet": "S-201.00",
+   "adjudication": "Blank revision rows on a revised sheet.",
+   "excludedFromClientView": "administrative; low value",
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 0
+   }
+  }
+ ],
+ "statusLabels": {
+  "confirmed_by_drawing": "Confirmed by drawing evidence",
+  "preliminary": "Preliminary concern",
+  "requires_professional_verification": "Requires professional verification"
+ },
+ "crossSheet": {
+  "tally": {
+   "references": 39,
+   "byStatus": {
+    "detail_resolved": 21,
+    "not_in_82_sheet_index": 5,
+    "topic_resolved": 2,
+    "sheet_resolved": 10,
+    "detail_not_found_on_target": 1
+   },
+   "byKind": {
+    "detail_bubble": 20,
+    "sheet_note": 14,
+    "detail_callout_inline": 3,
+    "sheet_tag": 2
+   },
+   "bySource": {
+    "qwen": 39
+   }
+  },
+  "lookalikeSheetTokens": [
+   {
+    "sheet": "A-1.01-00",
+    "lid": "L0032",
+    "printed": "A-3.0I",
+    "uncertain": true,
+    "box": {
+     "x": 745.44,
+     "y": 1476,
+     "width": 23.04,
+     "height": 10.56
+    },
+    "checks": [
+     {
+      "printed": "A-3.0I",
+      "candidate": "A-3.01",
+      "sheetKey": "A-3.01",
+      "status": "resolved_by_sheet_index"
+     }
+    ]
+   },
+   {
+    "sheet": "A-1.01-00",
+    "lid": "L0040",
+    "printed": "A-4.0I",
+    "uncertain": true,
+    "box": {
+     "x": 683.04,
+     "y": 1451.52,
+     "width": 22.56,
+     "height": 8.64
+    },
+    "checks": [
+     {
+      "printed": "A-4.0I",
+      "candidate": "A-4.01",
+      "sheetKey": "A-4.01",
+      "status": "resolved_by_sheet_index"
+     }
+    ]
+   },
+   {
+    "sheet": "A-1.01-00",
+    "lid": "L0041",
+    "printed": "A-4.0I",
+    "uncertain": true,
+    "box": {
+     "x": 641.52,
+     "y": 1449.84,
+     "width": 21.6,
+     "height": 6.96
+    },
+    "checks": [
+     {
+      "printed": "A-4.0I",
+      "candidate": "A-4.01",
+      "sheetKey": "A-4.01",
+      "status": "resolved_by_sheet_index"
+     }
+    ]
+   },
+   {
+    "sheet": "A-1.01-00",
+    "lid": "L0344",
+    "printed": "A-I.03 FOR SCHEDULE.",
+    "uncertain": true,
+    "box": {
+     "x": 606,
+     "y": 337.92,
+     "width": 100.56,
+     "height": 8.4
+    },
+    "checks": [
+     {
+      "printed": "A-I.03",
+      "candidate": "A-1.03",
+      "sheetKey": "A-1.03",
+      "status": "resolved_by_sheet_index"
+     }
+    ]
+   }
+  ],
+  "pairs": [
+   {
+    "pairId": "P-R000",
+    "kind": "plan_to_detail",
+    "source": "A-3.06-00",
+    "sourceText": "A-3.06",
+    "target": "A-3.06-00.pdf",
+    "detail": "2 GUARD RAIL DETAIL @ HIGH ROOF",
+    "status": "detail_resolved",
+    "printed": "A-3.06",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R001",
+    "kind": "plan_to_detail",
+    "source": "A-3.06-00",
+    "sourceText": "A-3.06",
+    "target": "A-3.06-00.pdf",
+    "detail": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+    "status": "detail_resolved",
+    "printed": "A-3.06",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R002",
+    "kind": "plan_to_detail",
+    "source": "A-3.06-00",
+    "sourceText": "A-3.06",
+    "target": "A-3.06-00.pdf",
+    "detail": "3 GUARD RAIL DETAIL @ HIGH ROOF",
+    "status": "detail_resolved",
+    "printed": "A-3.06",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R003",
+    "kind": "plan_to_detail",
+    "source": "A-3.06-00",
+    "sourceText": "A-3.00",
+    "target": "A-3.00-00.pdf",
+    "detail": "1 PARAPET DETAIL @ ORDER",
+    "status": "detail_resolved",
+    "printed": "A-3.00",
+    "lookalike": [],
+    "bubblePrinted": "I"
+   },
+   {
+    "pairId": "P-R004",
+    "kind": "plan_to_detail",
+    "source": "A-3.06-00",
+    "sourceText": "A-3.00",
+    "target": "A-3.00-00.pdf",
+    "detail": "7 CANOPY DETAIL @ ORDER",
+    "status": "detail_resolved",
+    "printed": "A-3.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R005",
+    "kind": "plan_to_detail",
+    "source": "A-3.06-00",
+    "sourceText": "A-3.00",
+    "target": "A-3.00-00.pdf",
+    "detail": "3 WINDOW HEAD @ ORDER",
+    "status": "detail_resolved",
+    "printed": "A-3.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R007",
+    "kind": "plan_to_schedule",
+    "source": "A-4.00-00",
+    "sourceText": "T A-6.00 FOR DOOR SCHEDULE.",
+    "target": "A-6.00-00.pdf",
+    "detail": "1 DOOR SCHEDULE",
+    "status": "topic_resolved",
+    "printed": "T A-6.00 FOR DOOR SCHEDULE.",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R008",
+    "kind": "plan_to_detail",
+    "source": "A-4.00-00",
+    "sourceText": "A-4.00",
+    "target": "A-4.00-00.pdf",
+    "detail": "4 TYP. SIGNAGE HEIGHT ELEVATION",
+    "status": "detail_resolved",
+    "printed": "A-4.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R009",
+    "kind": "plan_to_detail",
+    "source": "A-4.00-00",
+    "sourceText": "A-4.00",
+    "target": "A-4.00-00.pdf",
+    "detail": "4 TYP. SIGNAGE HEIGHT ELEVATION",
+    "status": "detail_resolved",
+    "printed": "A-4.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R010",
+    "kind": "plan_to_detail",
+    "source": "A-4.00-00",
+    "sourceText": "A400",
+    "target": "A-4.00-00.pdf",
+    "detail": "8 LAVATORY SECTION",
+    "status": "detail_resolved",
+    "printed": "A400",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R012",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "ALUMINUM BATTENS - SEE A-3.01 FO",
+    "target": "A-3.01-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "ALUMINUM BATTENS - SEE A-3.01 FO",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R013",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "- SEE A-3.01 FOR ASSEMBLY NOTES, SEE",
+    "target": "A-3.01-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "- SEE A-3.01 FOR ASSEMBLY NOTES, SEE",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R014",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "2. SEE A-3.01 FOR",
+    "target": "A-3.01-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "2. SEE A-3.01 FOR",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R015",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "ES. SEE 6/A-1.00 FOR",
+    "target": "A-1.00-00.pdf",
+    "detail": null,
+    "status": "detail_not_found_on_target",
+    "printed": "ES. SEE 6/A-1.00 FOR",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R016",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "= WALL TYPES - SEE 5/A-1.00",
+    "target": "A-1.00-00.pdf",
+    "detail": "5 TYPICAL INTERIOR PARTITION",
+    "status": "detail_resolved",
+    "printed": "= WALL TYPES - SEE 5/A-1.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R018",
+    "kind": "plan_to_schedule",
+    "source": "A-1.01-00",
+    "sourceText": "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM",
+    "target": "A-6.00-00.pdf",
+    "detail": "1 DOOR SCHEDULE",
+    "status": "topic_resolved",
+    "printed": "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R019",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM",
+    "target": "A-6.01.00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R020",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "ULE SHEET A-6.00",
+    "target": "A-6.00-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "ULE SHEET A-6.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R021",
+    "kind": "plan_to_schedule",
+    "source": "A-1.01-00",
+    "sourceText": "A-I.03 FOR SCHEDULE.",
+    "target": "A-1.03-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "A-I.03 FOR SCHEDULE.",
+    "lookalike": [
+     "A-I.03 → A-1.03"
+    ],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R022",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "SHEET A-1.03",
+    "target": "A-1.03-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "SHEET A-1.03",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R023",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-2.00",
+    "target": "A-2.00-00.pdf",
+    "detail": "2 NON DRIVE THRU ELEVATION",
+    "status": "detail_resolved",
+    "printed": "A-2.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R024",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-3.0I",
+    "target": "A-3.01-00.pdf",
+    "detail": "1 WALL SECTION @ LEFT SIDE DINING THRU PIER",
+    "status": "detail_resolved",
+    "printed": "A-3.0I",
+    "lookalike": [
+     "A-3.0I → A-3.01"
+    ],
+    "bubblePrinted": "I"
+   },
+   {
+    "pairId": "P-R025",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-301",
+    "target": "A-3.01-00.pdf",
+    "detail": "2 WALL SECTION @ LEFT SIDE DINING GLAZING",
+    "status": "detail_resolved",
+    "printed": "A-301",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R026",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-4.0I",
+    "target": "A-4.01-00.pdf",
+    "detail": "9 MEZZANINE GLAZING @ PIER",
+    "status": "detail_resolved",
+    "printed": "A-4.0I",
+    "lookalike": [
+     "A-4.0I → A-4.01"
+    ],
+    "bubblePrinted": "q"
+   },
+   {
+    "pairId": "P-R027",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-4.0I",
+    "target": "A-4.01-00.pdf",
+    "detail": "10 BATTEN @ MEZZANINE",
+    "status": "detail_resolved",
+    "printed": "A-4.0I",
+    "lookalike": [
+     "A-4.0I → A-4.01"
+    ],
+    "bubblePrinted": "IO"
+   },
+   {
+    "pairId": "P-R028",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-3.02",
+    "target": "A-3.02-00.pdf",
+    "detail": "1 WALL SECTION @ RIGHT SIDE BATTEN",
+    "status": "detail_resolved",
+    "printed": "A-3.02",
+    "lookalike": [],
+    "bubblePrinted": "I"
+   },
+   {
+    "pairId": "P-R029",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-4.01",
+    "target": "A-4.01-00.pdf",
+    "detail": "11 BATTEN DETAIL @ MEZZANINE CORNER",
+    "status": "detail_resolved",
+    "printed": "A-4.01",
+    "lookalike": [],
+    "bubblePrinted": "II"
+   },
+   {
+    "pairId": "P-R030",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-3.00",
+    "target": "A-3.00-00.pdf",
+    "detail": "8 PROPOSED BUILDING SECTION",
+    "status": "detail_resolved",
+    "printed": "A-3.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R031",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-2.01",
+    "target": "A-2.01-00.pdf",
+    "detail": "1 REAR ELEVATION",
+    "status": "detail_resolved",
+    "printed": "A-2.01",
+    "lookalike": [],
+    "bubblePrinted": "I"
+   },
+   {
+    "pairId": "P-R032",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "A-2.00",
+    "target": "A-2.00-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "A-2.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R033",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-301",
+    "target": "A-3.01-00.pdf",
+    "detail": "2 WALL SECTION @ LEFT SIDE DINING GLAZING",
+    "status": "detail_resolved",
+    "printed": "A-301",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R034",
+    "kind": "note_to_sheet",
+    "source": "A-1.01-00",
+    "sourceText": "A-301",
+    "target": "A-3.01-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "A-301",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R035",
+    "kind": "plan_to_detail",
+    "source": "A-1.01-00",
+    "sourceText": "A-2.01",
+    "target": "A-2.01-00.pdf",
+    "detail": "2 DRIVE THRU ELEVATION",
+    "status": "detail_resolved",
+    "printed": "A-2.01",
+    "lookalike": [],
+    "bubblePrinted": null
+   },
+   {
+    "pairId": "P-R038",
+    "kind": "note_to_sheet",
+    "source": "A-6.00-00",
+    "sourceText": "AL NOTE 6, SHEET A-1.00",
+    "target": "A-1.00-00.pdf",
+    "detail": null,
+    "status": "sheet_resolved",
+    "printed": "AL NOTE 6, SHEET A-1.00",
+    "lookalike": [],
+    "bubblePrinted": null
+   }
+  ]
+ },
+ "comparison": {
+  "generatedAt": "2026-11-16T16:46:05.905Z",
+  "arms": {
+   "baseline_C_v2_4x3": {
+    "description": "Production Supabase Analyzer V2 prompt + validator, Apple Vision 4x3 v2 block, GPT-4o (saved runs)",
+    "runs": 30,
+    "published": 82,
+    "warningPlus": 23,
+    "E": 13,
+    "H": 1,
+    "U": 58,
+    "Q": 5,
+    "OK": 3,
+    "OKs": 1,
+    "unadjudicated": 1,
+    "warningPlusE": 6,
+    "warningPlusNotGenuine": 16,
+    "critical": 0,
+    "criticalE": 0,
+    "groundedQuotes": 26,
+    "notFoundQuotes": 47,
+    "genuineDetections": {
+     "G-S201-SDC": "2/9",
+     "G-S201-SCALE": "1/9",
+     "G-S201-OF00": "0/9"
+    },
+    "costUsd": 0.5683,
+    "inputTokens": 171882,
+    "outputTokens": 13857,
+    "meanLatencyS": 11.3
+   },
+   "L_av": {
+    "description": "Same production prompt + validator, Apple Vision 4x3 v2 block, GPT-5.6 Luna",
+    "runs": 15,
+    "published": 23,
+    "warningPlus": 6,
+    "E": 0,
+    "H": 0,
+    "U": 9,
+    "Q": 3,
+    "OK": 10,
+    "OKs": 1,
+    "unadjudicated": 0,
+    "warningPlusE": 0,
+    "warningPlusNotGenuine": 3,
+    "critical": 0,
+    "criticalE": 0,
+    "groundedQuotes": 6,
+    "notFoundQuotes": 11,
+    "genuineDetections": {
+     "G-S201-SDC": "0/3",
+     "G-S201-SCALE": "2/3",
+     "G-S201-OF00": "2/3"
+    },
+    "costUsd": 0.0653,
+    "inputTokens": 190749,
+    "outputTokens": 22634,
+    "meanLatencyS": 17.2
+   },
+   "L_spatial": {
+    "description": "Qwen 72B validated spatial block + question retrieval + cross-sheet pairs, GPT-5.6 Luna, first addendum",
+    "runs": 15,
+    "published": 4,
+    "warningPlus": 3,
+    "E": 0,
+    "H": 0,
+    "U": 0,
+    "Q": 0,
+    "OK": 4,
+    "OKs": 0,
+    "unadjudicated": 0,
+    "warningPlusE": 0,
+    "warningPlusNotGenuine": 0,
+    "critical": 0,
+    "criticalE": 0,
+    "groundedQuotes": 0,
+    "notFoundQuotes": 2,
+    "genuineDetections": {
+     "G-S201-SDC": "0/3",
+     "G-S201-SCALE": "0/3",
+     "G-S201-OF00": "0/3"
+    },
+    "costUsd": 0.0714,
+    "inputTokens": 281619,
+    "outputTokens": 12533,
+    "meanLatencyS": 12.3
+   },
+   "L_spatial2": {
+    "description": "As L_spatial + title-block/caption readings + drafting-defect instruction (changed after inspecting L_spatial on these drawings)",
+    "runs": 15,
+    "published": 20,
+    "warningPlus": 2,
+    "E": 0,
+    "H": 0,
+    "U": 0,
+    "Q": 9,
+    "OK": 11,
+    "OKs": 0,
+    "unadjudicated": 0,
+    "warningPlusE": 0,
+    "warningPlusNotGenuine": 0,
+    "critical": 0,
+    "criticalE": 0,
+    "groundedQuotes": 4,
+    "notFoundQuotes": 8,
+    "genuineDetections": {
+     "G-S201-SDC": "0/3",
+     "G-S201-SCALE": "3/3",
+     "G-S201-OF00": "3/3"
+    },
+    "costUsd": 0.0849,
+    "inputTokens": 285858,
+    "outputTokens": 23087,
+    "meanLatencyS": 17.6
+   }
+  },
+  "claims": [
+   {
+    "claim": "S201-SOIL",
+    "sheet": "S-201.00",
+    "adjudication": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' and note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' are both printed.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 2
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 0
+    }
+   },
+   {
+    "claim": "S201-SCALE",
+    "sheet": "S-201.00",
+    "adjudication": "Text layer prints '3/4\"1'-0\"' under detail 2 and '3/4\"=1'-0\"' under detail 1.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 2,
+     "published": 2
+    }
+   },
+   {
+    "claim": "S201-OF00",
+    "sheet": "S-201.00",
+    "adjudication": "Text layer prints 'AS NOTED / OF 00' in the title block.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 2,
+     "published": 2
+    }
+   },
+   {
+    "claim": "S201-ACI",
+    "sheet": "S-201.00",
+    "adjudication": "Reinforced concrete note 1 prints 'ACI 318-06'; design data cites IBC 2015.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 0
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   {
+    "claim": "S201-1705",
+    "sheet": "S-201.00",
+    "adjudication": "Cloud prints 'D. COLD-FORMED STEEL 1705.3.4'; correctness of the section depends on the code text.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   {
+    "claim": "S201-SDC",
+    "sheet": "S-201.00",
+    "adjudication": "SEISMIC USE GROUP and SEISMIC DESIGN CATEGORY are printed without values (crop S-201.00.seismic1.png). Not produced by any Luna arm.",
+    "excludedFromClientView": null,
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 3,
+     "published": 3
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    }
+   },
+   {
+    "claim": "A101-LEVEL",
+    "sheet": "A-1.01-00",
+    "adjudication": "Title block 'MEZZANINE & BASEMENT FLOOR PLAN'; plan titles '2ND FLOOR ALTERATION FLOOR PLAN' and 'BASEMENT ALTERATION FLOOR PLAN' (text layer).",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   {
+    "claim": "A101-A117",
+    "sheet": "A-1.01-00",
+    "adjudication": "General note 4 prints '(ICC/ANSI A117.1-2003)'.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 2,
+     "published": 2
+    }
+   },
+   {
+    "claim": "A101-TYPO",
+    "sheet": "A-1.01-00",
+    "adjudication": "Note 5 prints 'ADA COMPLAINT HARDWARE'. Produced only by the Apple Vision arm.",
+    "excludedFromClientView": null,
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 3,
+     "published": 3
+    }
+   },
+   {
+    "claim": "A400-SIGN",
+    "sheet": "A-4.00-00",
+    "adjudication": "Signage note 2 'MOUNTING HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN'; detail 4 '48\" MIN. AFF. B. OF BRAILLE / 60\" MAX. AFF. T. OF TACTILE'.",
+    "excludedFromClientView": null,
+    "inClientView": true,
+    "baselineGpt4o": {
+     "runs": 6,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 2,
+     "published": 1
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    }
+   },
+   {
+    "claim": "A400-NOTUSED",
+    "sheet": "A-4.00-00",
+    "adjudication": "Callout 8/A400 under detail 5 points to detail 8 LAVATORY SECTION, marked NOT USED. Produced only by the Apple Vision arm; the Qwen linker does not parse unhyphenated sheet tags.",
+    "excludedFromClientView": null,
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 6,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   {
+    "claim": "A600-A50",
+    "sheet": "A-6.00-00",
+    "adjudication": "'4/A5.0' printed; no A-5 series sheet in the 82-sheet set. Produced only by the Apple Vision arm.",
+    "excludedFromClientView": null,
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   {
+    "claim": "A600-D11",
+    "sheet": "A-6.00-00",
+    "adjudication": "Plausible (saved research): fire-rated gaskets at door #11 without a rating column. Not produced by any arm.",
+    "excludedFromClientView": null,
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    }
+   },
+   {
+    "claim": "REV00",
+    "sheet": "*",
+    "adjudication": "'00 / FIRST ISSUE / 00' is the revision-table template on every sheet.",
+    "excludedFromClientView": "template placeholder, not a demonstrated error",
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 30,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 15,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 15,
+     "drafted": 6,
+     "published": 6
+    },
+    "L_av": {
+     "runs": 15,
+     "drafted": 0,
+     "published": 0
+    }
+   },
+   {
+    "claim": "A400-FLUSH",
+    "sheet": "A-4.00-00",
+    "adjudication": "Terminology only.",
+    "excludedFromClientView": "terminology only; no compliance consequence shown",
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 6,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    }
+   },
+   {
+    "claim": "S201-REVTABLE",
+    "sheet": "S-201.00",
+    "adjudication": "Blank revision rows on a revised sheet.",
+    "excludedFromClientView": "administrative; low value",
+    "inClientView": false,
+    "baselineGpt4o": {
+     "runs": 9,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial": {
+     "runs": 3,
+     "drafted": 0,
+     "published": 0
+    },
+    "L_spatial2": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 1
+    },
+    "L_av": {
+     "runs": 3,
+     "drafted": 1,
+     "published": 0
+    }
+   }
+  ],
+  "cost": {
+   "lunaLedgerUsd": 0.2216,
+   "lunaCalls": 45,
+   "cap": 2,
+   "qwenOcrUsd": 1.0055,
+   "qwenOcrCalls": 564,
+   "qwenOcrWallMin": 17.5,
+   "qwenAnalysisPerDrawingUsd": 0.2063,
+   "baselinePerRunUsd": 0.0189
+  }
+ }
+}

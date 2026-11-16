@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842994-qX76vI4AOu2rOQ7cYbes",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 346, 200, 375],\n        \"text_content\": \"S 18\\\" LONG\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 420, 29, 444],\n        \"text_content\": \"IS\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 68, 862, 96],\n        \"text_content\": \"II.\",\n        \"text_content\": \"II.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 168, 862, 194],\n        \"text_content\": \"12.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 258, 862, 284],\n        \"text_content\": \"13.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 399, 862, 425],\n        \"text_content\": \"14.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 495, 862, 521],\n        \"text_content\": \"15.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 5,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 609, 862, 635],\n        \"text_content\": \"16.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 6,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 685, 862, 711],\n        \"text_content\": \"17.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 7,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 781, 862, 807],\n        \"text_content\": \"18.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 8,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 688,
+ "costUsd": 0.001921,
+ "reportedCostUsd": 0.0019208,
+ "latencyS": 16.93,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

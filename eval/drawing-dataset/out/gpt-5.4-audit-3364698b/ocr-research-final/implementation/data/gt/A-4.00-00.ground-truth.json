@@ -1,0 +1,1137 @@
+{
+ "sheet": "A-4.00-00",
+ "sha256": "1b94a7bfeb1f140675fb1f10ac52f01105ee0e04558c0c634d24193ea85eb074",
+ "scope": "windows",
+ "windows": [
+  {
+   "id": "W1",
+   "x": 100,
+   "y": 428,
+   "width": 983,
+   "height": 393,
+   "note": "detail 5 upper: restroom elevations with mounting heights"
+  }
+ ],
+ "source": "Visual transcription from images/gt/A-4.00-00-01..04.png (2.5 px/pt candidate overlays) and z-a4-1..3.png (8 px/pt). Window W1 only (detail 5, upper elevations).",
+ "rowRule": "One entry per printed text row inside the windows; rows of one callout, note, bubble or dimension share an annotation id, top to bottom (vertical text: left to right).",
+ "technicalRule": "Row text contains a digit, A.F.F, ELEV., MIN, V.I.F, TYP or @ (stage 04 rule).",
+ "rows": [
+  {
+   "gid": "A-4.00-00:R001",
+   "aid": "A-4.00-00:A01",
+   "text": "54\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 795.5109852215148,
+    "y": 782.533501451358,
+    "width": 36.43984846635294,
+    "height": 9.780375929156548
+   },
+   "vertical": false,
+   "candidates": [
+    "C005"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R002",
+   "aid": "A-4.00-00:A02",
+   "text": "FINISHED",
+   "technical": false,
+   "box": {
+    "x": 482.1865104758057,
+    "y": 779.8424409101432,
+    "width": 33.29338005671195,
+    "height": 9.320217820903508
+   },
+   "vertical": false,
+   "candidates": [
+    "C006"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R003",
+   "aid": "A-4.00-00:A02",
+   "text": "WALL",
+   "technical": false,
+   "box": {
+    "x": 481.15636361364545,
+    "y": 770.267292537091,
+    "width": 26.25959227508963,
+    "height": 8.768047382287705
+   },
+   "vertical": false,
+   "candidates": [
+    "C009"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R004",
+   "aid": "A-4.00-00:A03",
+   "text": "AUTOMATIC FLUSH",
+   "technical": false,
+   "box": {
+    "x": 599.8690915933091,
+    "y": 770.858252400466,
+    "width": 68.46545300596358,
+    "height": 9.245825237374902
+   },
+   "vertical": false,
+   "candidates": [
+    "C008"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R005",
+   "aid": "A-4.00-00:A03",
+   "text": "CONTROL",
+   "technical": false,
+   "box": {
+    "x": 599.8690911610909,
+    "y": 760.9138144794208,
+    "width": 36.12056298788514,
+    "height": 8.875700129489019
+   },
+   "vertical": false,
+   "candidates": [
+    "C010"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R006",
+   "aid": "A-4.00-00:A04",
+   "text": "42\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 795.5563634893635,
+    "y": 751.3067942111236,
+    "width": 36.374160411700245,
+    "height": 9.93281747371418
+   },
+   "vertical": false,
+   "candidates": [
+    "C011"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R007",
+   "aid": "A-4.00-00:A05",
+   "text": "12\"",
+   "technical": true,
+   "box": {
+    "x": 885.9163636965,
+    "y": 750.0241417206786,
+    "width": 15.778118913069648,
+    "height": 10.866163510454612
+   },
+   "vertical": false,
+   "candidates": [
+    "C012"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R008",
+   "aid": "A-4.00-00:A05",
+   "text": "MAX.",
+   "technical": false,
+   "box": {
+    "x": 881.6710347578919,
+    "y": 734.1483495012039,
+    "width": 25.07078325465352,
+    "height": 10.517687790203013
+   },
+   "vertical": false,
+   "candidates": [
+    "C013"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R009",
+   "aid": "A-4.00-00:A06",
+   "text": "VALVE LOCK BY HARDER LOCK",
+   "technical": false,
+   "box": {
+    "x": 590.3267400362902,
+    "y": 740.5607766402486,
+    "width": 122.88780653545518,
+    "height": 8.549902912621292
+   },
+   "vertical": false,
+   "candidates": [
+    "C014"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R010",
+   "aid": "A-4.00-00:A06",
+   "text": "(OPTIONAL - VERIFY WITH",
+   "technical": false,
+   "box": {
+    "x": 590.2909103203635,
+    "y": 729.1774757815922,
+    "width": 98.35636363636365,
+    "height": 9.245825229359298
+   },
+   "vertical": false,
+   "candidates": [
+    "C015"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R011",
+   "aid": "A-4.00-00:A06",
+   "text": "CONSTRUCTION MANAGER)",
+   "technical": false,
+   "box": {
+    "x": 591.3381820230909,
+    "y": 718.4900970377587,
+    "width": 98.35636363636377,
+    "height": 8.897864137786428
+   },
+   "vertical": false,
+   "candidates": [
+    "C018"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R012",
+   "aid": "A-4.00-00:A07",
+   "text": "40\"",
+   "technical": true,
+   "box": {
+    "x": 844.7345455480909,
+    "y": 724.9025243787185,
+    "width": 18.17454545454541,
+    "height": 10.314563088983846
+   },
+   "vertical": false,
+   "candidates": [
+    "C016"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R013",
+   "aid": "A-4.00-00:A08",
+   "text": "4\"",
+   "technical": true,
+   "box": {
+    "x": 539.4654545205091,
+    "y": 721.5099030685245,
+    "width": 8.552727272727338,
+    "height": 8.549902657814414
+   },
+   "vertical": false,
+   "candidates": [
+    "C017"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R014",
+   "aid": "A-4.00-00:A09",
+   "text": "FACE OF",
+   "technical": false,
+   "box": {
+    "x": 809,
+    "y": 704.5,
+    "width": 37,
+    "height": 8.2
+   },
+   "vertical": false,
+   "candidates": [
+    "C019"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R015",
+   "aid": "A-4.00-00:A09",
+   "text": "FINISHED WALL",
+   "technical": false,
+   "box": {
+    "x": 809.6,
+    "y": 693.7,
+    "width": 60.4,
+    "height": 9.5
+   },
+   "vertical": false,
+   "candidates": [
+    "C019"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R016",
+   "aid": "A-4.00-00:A10",
+   "text": "42\" (36\" MIN.)",
+   "technical": true,
+   "box": {
+    "x": 451.2226089750334,
+    "y": 701.0174756747184,
+    "width": 60.98102742869389,
+    "height": 10.312390007863769
+   },
+   "vertical": false,
+   "candidates": [
+    "C020"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R017",
+   "aid": "A-4.00-00:A11",
+   "text": "1C",
+   "technical": true,
+   "box": {
+    "x": 569.956363819,
+    "y": 678.4124271577475,
+    "width": 13.363636363636374,
+    "height": 8.015533980582632
+   },
+   "vertical": false,
+   "candidates": [
+    "C021"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R018",
+   "aid": "A-4.00-00:A12",
+   "text": "24\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 444.73147609780113,
+    "y": 675.6179532251849,
+    "width": 36.50060943716005,
+    "height": 9.863899613167519
+   },
+   "vertical": false,
+   "candidates": [
+    "C022"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R019",
+   "aid": "A-4.00-00:A13",
+   "text": "12\"",
+   "technical": true,
+   "box": {
+    "x": 508.44000004410003,
+    "y": 675.2062137071223,
+    "width": 15.501818181818237,
+    "height": 10.153009708737954
+   },
+   "vertical": false,
+   "candidates": [
+    "C023"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R020",
+   "aid": "A-4.00-00:A13",
+   "text": "MIN.",
+   "technical": true,
+   "box": {
+    "x": 506.85818194036364,
+    "y": 659.7095146089099,
+    "width": 17.105454545454506,
+    "height": 8.549902912621292
+   },
+   "vertical": false,
+   "candidates": [
+    "C026"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R021",
+   "aid": "A-4.00-00:A14",
+   "text": "2'-0\"",
+   "technical": true,
+   "box": {
+    "x": 655.4618170660356,
+    "y": 655.4345633419184,
+    "width": 9.621820220947257,
+    "height": 23.51223300970878
+   },
+   "vertical": true,
+   "candidates": [
+    "C024"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R022",
+   "aid": "A-4.00-00:A15",
+   "text": "ALTERNATIVE",
+   "technical": false,
+   "box": {
+    "x": 674.7054549349091,
+    "y": 666.1219418010097,
+    "width": 54.65710466343569,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C025"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R023",
+   "aid": "A-4.00-00:A15",
+   "text": "DISPENSER",
+   "technical": false,
+   "box": {
+    "x": 674.7020693779078,
+    "y": 657.5720388883883,
+    "width": 44.24275890197748,
+    "height": 7.481164941670045
+   },
+   "vertical": false,
+   "candidates": [
+    "C027"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R024",
+   "aid": "A-4.00-00:A15",
+   "text": "LOCATION",
+   "technical": false,
+   "box": {
+    "x": 673.2095740540682,
+    "y": 645.8640149721541,
+    "width": 44.69176271675326,
+    "height": 9.889745784434126
+   },
+   "vertical": false,
+   "candidates": [
+    "C028"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R025",
+   "aid": "A-4.00-00:A16",
+   "text": "1'-0\"",
+   "technical": true,
+   "box": {
+    "x": 936,
+    "y": 627,
+    "width": 9,
+    "height": 16
+   },
+   "vertical": true,
+   "candidates": []
+  },
+  {
+   "gid": "A-4.00-00:R026",
+   "aid": "A-4.00-00:A16",
+   "text": "MIN",
+   "technical": true,
+   "box": {
+    "x": 949.5054534800718,
+    "y": 624.4411651706852,
+    "width": 8.55272931185641,
+    "height": 17.099805825242697
+   },
+   "vertical": true,
+   "candidates": [
+    "C029"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R027",
+   "aid": "A-4.00-00:A17",
+   "text": "1B",
+   "technical": true,
+   "box": {
+    "x": 884.8472727192545,
+    "y": 630.8535921990044,
+    "width": 13.363636344927272,
+    "height": 8.736310781141697
+   },
+   "vertical": false,
+   "candidates": [
+    "C030"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R028",
+   "aid": "A-4.00-00:A18",
+   "text": "1A",
+   "technical": true,
+   "box": {
+    "x": 830.8800000133635,
+    "y": 630.8535923398834,
+    "width": 11.759999999999991,
+    "height": 8.549902912621405
+   },
+   "vertical": false,
+   "candidates": [
+    "C031"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R029",
+   "aid": "A-4.00-00:A19",
+   "text": "48\" MAX.",
+   "technical": true,
+   "box": {
+    "x": 382.73454336959816,
+    "y": 564.9646604842608,
+    "width": 10.9619612581659,
+    "height": 41.3079612133962
+   },
+   "vertical": true,
+   "candidates": [
+    "C036"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R030",
+   "aid": "A-4.00-00:A19",
+   "text": "TO TOP OF HOOK.",
+   "technical": false,
+   "box": {
+    "x": 399.90545145468815,
+    "y": 545.3545636717004,
+    "width": 9.665460641460072,
+    "height": 79.45941748336202
+   },
+   "vertical": true,
+   "candidates": [
+    "C032"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R031",
+   "aid": "A-4.00-00:A20",
+   "text": "COAT HOOK",
+   "technical": false,
+   "box": {
+    "x": 195.64363678236364,
+    "y": 603.0664078159741,
+    "width": 50.24727272727273,
+    "height": 9.618640781152067
+   },
+   "vertical": false,
+   "candidates": [
+    "C033"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R032",
+   "aid": "A-4.00-00:A21",
+   "text": "7\"-9\"",
+   "technical": true,
+   "box": {
+    "x": 823.3527272593635,
+    "y": 599.5122329963494,
+    "width": 24.58909090909094,
+    "height": 8.549902912621405
+   },
+   "vertical": false,
+   "candidates": [
+    "C034"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R033",
+   "aid": "A-4.00-00:A22",
+   "text": "TOP OF GRAB BAR",
+   "technical": false,
+   "box": {
+    "x": 621.2727231476963,
+    "y": 520.9600007303043,
+    "width": 9.621826338334586,
+    "height": 87.63650485436892
+   },
+   "vertical": true,
+   "candidates": [
+    "C035"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R034",
+   "aid": "A-4.00-00:A23",
+   "text": "24\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 836.2036360846704,
+    "y": 585.0656373573602,
+    "width": 40.625454545454545,
+    "height": 9.655909862333147
+   },
+   "vertical": false,
+   "candidates": [
+    "C037"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R035",
+   "aid": "A-4.00-00:A24",
+   "text": "2\" HOLD",
+   "technical": true,
+   "box": {
+    "x": 698.2690888241436,
+    "y": 548.5607770837747,
+    "width": 10.690912662439587,
+    "height": 37.77864066677171
+   },
+   "vertical": true,
+   "candidates": [
+    "C038"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R036",
+   "aid": "A-4.00-00:A25",
+   "text": "40\"",
+   "technical": true,
+   "box": {
+    "x": 633.0327261807763,
+    "y": 564.2438836319186,
+    "width": 10.690911118679082,
+    "height": 17.634174781709817
+   },
+   "vertical": true,
+   "candidates": [
+    "C039",
+    "C041"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R037",
+   "aid": "A-4.00-00:A26",
+   "text": "40\"",
+   "technical": true,
+   "box": {
+    "x": 653.8799988977081,
+    "y": 564.5918447963311,
+    "width": 11.760002039129063,
+    "height": 17.63417475728147
+   },
+   "vertical": false,
+   "candidates": [
+    "C040"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R038",
+   "aid": "A-4.00-00:A27",
+   "text": "42\" MAX.",
+   "technical": true,
+   "box": {
+    "x": 837.2509085830909,
+    "y": 569.1075243909668,
+    "width": 40.66909136345453,
+    "height": 9.37791251882095
+   },
+   "vertical": false,
+   "candidates": [
+    "C042"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R039",
+   "aid": "A-4.00-00:A28",
+   "text": "34\"",
+   "technical": true,
+   "box": {
+    "x": 672.56727161149,
+    "y": 556.4147574240518,
+    "width": 9.621820236983694,
+    "height": 17.795728183839515
+   },
+   "vertical": false,
+   "candidates": [
+    "C043",
+    "C045"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R040",
+   "aid": "A-4.00-00:A29",
+   "text": "34\"",
+   "technical": true,
+   "box": {
+    "x": 604.7018173302811,
+    "y": 556.4147573960611,
+    "width": 11.225456333319698,
+    "height": 17.099805825242697
+   },
+   "vertical": true,
+   "candidates": [
+    "C044",
+    "C046"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R041",
+   "aid": "A-4.00-00:A30",
+   "text": "29\"",
+   "technical": true,
+   "box": {
+    "x": 578.5309080026173,
+    "y": 545.727378770552,
+    "width": 11.716365675492739,
+    "height": 18.16854368932036
+   },
+   "vertical": false,
+   "candidates": [
+    "C047",
+    "C048"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R042",
+   "aid": "A-4.00-00:A31",
+   "text": "15\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 711.8473340780864,
+    "y": 526.8095854123237,
+    "width": 9.919939621978074,
+    "height": 32.27701686785747
+   },
+   "vertical": true,
+   "candidates": [
+    "C049"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R043",
+   "aid": "A-4.00-00:A32",
+   "text": "2",
+   "technical": true,
+   "box": {
+    "x": 767.7600000356363,
+    "y": 550.6982523024983,
+    "width": 6.414545454545532,
+    "height": 7.481165048543744
+   },
+   "vertical": false,
+   "candidates": [
+    "C050"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R044",
+   "aid": "A-4.00-00:A33",
+   "text": "18\"",
+   "technical": true,
+   "box": {
+    "x": 558.1745448645813,
+    "y": 537.1774753177814,
+    "width": 9.665455570364543,
+    "height": 12.824854907554595
+   },
+   "vertical": false,
+   "candidates": [
+    "C051"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R045",
+   "aid": "A-4.00-00:A34",
+   "text": "24\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 770.9514209013919,
+    "y": 528.1797014392226,
+    "width": 36.40857897388082,
+    "height": 10.120640837823657
+   },
+   "vertical": false,
+   "candidates": [
+    "C052"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R046",
+   "aid": "A-4.00-00:A35",
+   "text": "16-18",
+   "technical": true,
+   "box": {
+    "x": 512.1599997754909,
+    "y": 489.0842719114563,
+    "width": 25.701818753781936,
+    "height": 9.61864077669901
+   },
+   "vertical": false,
+   "candidates": [
+    "C053"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R047",
+   "aid": "A-4.00-00:A36",
+   "text": "FINISHED FLOOR",
+   "technical": false,
+   "box": {
+    "x": 607.3527267515456,
+    "y": 483.74058248610265,
+    "width": 83.43272719827257,
+    "height": 9.61864077669901
+   },
+   "vertical": false,
+   "candidates": [
+    "C054"
+   ]
+  },
+  {
+   "gid": "A-4.00-00:R048",
+   "aid": "A-4.00-00:A37",
+   "text": "2\"",
+   "technical": true,
+   "box": {
+    "x": 450.6,
+    "y": 597.5,
+    "width": 6.5,
+    "height": 7.5
+   },
+   "vertical": true,
+   "candidates": []
+  },
+  {
+   "gid": "A-4.00-00:R049",
+   "aid": "A-4.00-00:A37",
+   "text": "MIN.",
+   "technical": true,
+   "box": {
+    "x": 466,
+    "y": 593.7,
+    "width": 7,
+    "height": 13.8
+   },
+   "vertical": true,
+   "candidates": []
+  },
+  {
+   "gid": "A-4.00-00:R050",
+   "aid": "A-4.00-00:A38",
+   "text": "18\"",
+   "technical": true,
+   "box": {
+    "x": 803,
+    "y": 564,
+    "width": 5.5,
+    "height": 8.5
+   },
+   "vertical": true,
+   "candidates": []
+  }
+ ],
+ "annotations": [
+  {
+   "aid": "A-4.00-00:A01",
+   "rows": [
+    "A-4.00-00:R001"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A02",
+   "rows": [
+    "A-4.00-00:R002",
+    "A-4.00-00:R003"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A03",
+   "rows": [
+    "A-4.00-00:R004",
+    "A-4.00-00:R005"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A04",
+   "rows": [
+    "A-4.00-00:R006"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A05",
+   "rows": [
+    "A-4.00-00:R007",
+    "A-4.00-00:R008"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A06",
+   "rows": [
+    "A-4.00-00:R009",
+    "A-4.00-00:R010",
+    "A-4.00-00:R011"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A07",
+   "rows": [
+    "A-4.00-00:R012"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A08",
+   "rows": [
+    "A-4.00-00:R013"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A09",
+   "rows": [
+    "A-4.00-00:R014",
+    "A-4.00-00:R015"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A10",
+   "rows": [
+    "A-4.00-00:R016"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A11",
+   "rows": [
+    "A-4.00-00:R017"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A12",
+   "rows": [
+    "A-4.00-00:R018"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A13",
+   "rows": [
+    "A-4.00-00:R019",
+    "A-4.00-00:R020"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A14",
+   "rows": [
+    "A-4.00-00:R021"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A15",
+   "rows": [
+    "A-4.00-00:R022",
+    "A-4.00-00:R023",
+    "A-4.00-00:R024"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A16",
+   "rows": [
+    "A-4.00-00:R025",
+    "A-4.00-00:R026"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A17",
+   "rows": [
+    "A-4.00-00:R027"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A18",
+   "rows": [
+    "A-4.00-00:R028"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A19",
+   "rows": [
+    "A-4.00-00:R029",
+    "A-4.00-00:R030"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A20",
+   "rows": [
+    "A-4.00-00:R031"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A21",
+   "rows": [
+    "A-4.00-00:R032"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A22",
+   "rows": [
+    "A-4.00-00:R033"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A23",
+   "rows": [
+    "A-4.00-00:R034"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A24",
+   "rows": [
+    "A-4.00-00:R035"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A25",
+   "rows": [
+    "A-4.00-00:R036"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A26",
+   "rows": [
+    "A-4.00-00:R037"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A27",
+   "rows": [
+    "A-4.00-00:R038"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A28",
+   "rows": [
+    "A-4.00-00:R039"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A29",
+   "rows": [
+    "A-4.00-00:R040"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A30",
+   "rows": [
+    "A-4.00-00:R041"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A31",
+   "rows": [
+    "A-4.00-00:R042"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A32",
+   "rows": [
+    "A-4.00-00:R043"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A33",
+   "rows": [
+    "A-4.00-00:R044"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A34",
+   "rows": [
+    "A-4.00-00:R045"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A35",
+   "rows": [
+    "A-4.00-00:R046"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A36",
+   "rows": [
+    "A-4.00-00:R047"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-4.00-00:A37",
+   "rows": [
+    "A-4.00-00:R048",
+    "A-4.00-00:R049"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-4.00-00:A38",
+   "rows": [
+    "A-4.00-00:R050"
+   ],
+   "technical": true
+  }
+ ],
+ "noise": {
+  "textLayerEcho": [
+   {
+    "x": 984.8290908556363,
+    "y": 811.4702912354176,
+    "width": 27.839999705999958,
+    "height": 11.756116620634316
+   },
+   {
+    "x": 168.9163638074182,
+    "y": 812.1662136349826,
+    "width": 17.170909169309056,
+    "height": 10.68737871826022
+   },
+   {
+    "x": 206.334545424,
+    "y": 810.4015534820305,
+    "width": 17.105454545454563,
+    "height": 11.75611650485439
+   },
+   {
+    "x": 1026.5672725936363,
+    "y": 813.2349514028738,
+    "width": 10.690909090909145,
+    "height": 8.922718561109718
+   }
+  ],
+  "nonText": [
+   {
+    "x": 906.785454481309,
+    "y": 770.4854370535146,
+    "width": 12.82909090909095,
+    "height": 16.031067961165036
+   }
+  ]
+ },
+ "ambiguities": [
+  "A21 is printed 7\"-9\" (inch marks on both values) as drawn.",
+  "A22 TOP OF GRAB BAR is not joined to either 34\" dimension: the drawing does not make the target unambiguous.",
+  "A37 2\" / MIN. rows are drawn as rotated text beside the grab bar clearance; no OCR pass read them."
+ ]
+}

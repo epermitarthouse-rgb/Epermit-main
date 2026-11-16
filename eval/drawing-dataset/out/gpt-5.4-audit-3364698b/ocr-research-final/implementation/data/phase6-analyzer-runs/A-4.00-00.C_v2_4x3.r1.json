@@ -1,0 +1,59 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0e463146d2356d6d016aec8f0b24c887d2a32f179fe10a4b87",
+ "latencyMs": 8421,
+ "inputTokens": 5014,
+ "outputTokens": 344,
+ "costUsd": 0.015975,
+ "userPromptChars": 3584,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides detailed plans for toilet rooms, including fixtures and ADA compliance details.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Fixture Specifications",
+   "observation": "While the sheet provides a fixture schedule, there is no explicit specification of height for certain fixtures, which may be crucial for ADA compliance (such as mirror and hand dryer heights).",
+   "drawing_evidence": "The accessory schedule includes items like mirror and hand dryer but lacks explicit mounting height specifications.",
+   "drawing_location": "Toilet room accessory schedule, bottom right of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Include specific mounting heights for all ADA-related fixtures to ensure compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "generic_compliance_label"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Fixture Specifications",
+    "originalObservation": "While the sheet provides a fixture schedule, there is no explicit specification of height for certain fixtures, which may be crucial for ADA compliance (such as mirror and hand dryer heights).",
+    "originalCodeReference": "2017 DC Construction Codes local amendments, ADA guidelines.",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "generic_compliance_label"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Door Pressure Specification",
+   "originalSeverity": "warning",
+   "originalCodeReference": "2017 DC Construction Codes local amendments, ADA guidelines (for door opening pressure).",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

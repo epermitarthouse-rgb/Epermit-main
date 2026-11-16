@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842202-rpCqp65qK8TO3qvmoais",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 0, 204, 26], \"text_content\": \"E MOUNTED\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [28, 40, 266, 74], \"text_content\": \"P 626 SCHLAGE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [28, 93, 266, 127], \"text_content\": \"P 626 SCHLAGE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 140, 89, 172], \"text_content\": \"HLAGE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 234, 224, 266], \"text_content\": \"OKB N.GUARD\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 451, 92, 483], \"text_content\": \"HAGER\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 498, 49, 530], \"text_content\": \"CN\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 547, 130, 581], \"text_content\": \".DUPRIN\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 688, 89, 720], \"text_content\": \"N-JO\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 789, 36, 821], \"text_content\": \"RD\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 838, 28, 860], \"text_content\": \"D\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 921, 555, 953], \"text_content\": \"KB W/FLAP ON INSIDE N.GUARD\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [910, 5, 930, 37], \"text_content\": \"6\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [900, 62, 940, 90], \"text_content\": \"6A\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [910, 113, 930, 145], \"text_content\": \"7\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [900, 162, 940, 194], \"text_content\": \"10\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [900, 213, 940, 245], \"text_content\": \"11\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [900, 264, 940, 296], \"text_content\": \"12\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 1056,
+ "costUsd": 0.002289,
+ "reportedCostUsd": 0.0022888,
+ "latencyS": 19.44,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

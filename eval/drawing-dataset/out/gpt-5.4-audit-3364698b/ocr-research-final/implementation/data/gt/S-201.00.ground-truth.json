@@ -1,0 +1,1254 @@
+{
+ "sheet": "S-201.00",
+ "sha256": "d11fd02d8a3859796f6f64ce745ce95ae93872f60534e606619c8954e228face",
+ "scope": "windows",
+ "windows": [
+  {
+   "id": "W1",
+   "x": 1377,
+   "y": 1228,
+   "width": 473,
+   "height": 317,
+   "note": "design data and design criteria"
+  },
+  {
+   "id": "W2",
+   "x": 100,
+   "y": 628,
+   "width": 633,
+   "height": 633,
+   "note": "detail 1 callouts"
+  }
+ ],
+ "source": "Visual transcription from images/gt/S-201.00-01..05.png (2.5 px/pt candidate overlays) and z-s2-1..3.png (4.5 px/pt design-data zooms). Windows W1 (design data, notes-heavy) and W2 (detail 1 callouts). Each label: value line of the design criteria is one annotation; continuation lines (parenthetical qualifiers, 'OR ...' alternatives, system descriptions) share the annotation of the line they qualify.",
+ "rowRule": "One entry per printed text row inside the windows; rows of one callout, note, bubble or dimension share an annotation id, top to bottom (vertical text: left to right).",
+ "technicalRule": "Row text contains a digit, A.F.F, ELEV., MIN, V.I.F, TYP or @ (stage 04 rule).",
+ "rows": [
+  {
+   "gid": "S-201.00:R001",
+   "aid": "S-201.00:N00",
+   "text": "DESIGN DATA",
+   "technical": false,
+   "box": {
+    "x": 1413.621817665091,
+    "y": 1527.630367489045,
+    "width": 130.47272869818175,
+    "height": 16.659963666770864
+   },
+   "vertical": false,
+   "candidates": [
+    "C001"
+   ]
+  },
+  {
+   "gid": "S-201.00:R002",
+   "aid": "S-201.00:N01",
+   "text": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+   "technical": true,
+   "box": {
+    "x": 1411.5272711083635,
+    "y": 1502.0512652604457,
+    "width": 226.64727272727282,
+    "height": 10.657959183673483
+   },
+   "vertical": false,
+   "candidates": [
+    "C002"
+   ]
+  },
+  {
+   "gid": "S-201.00:R003",
+   "aid": "S-201.00:N02",
+   "text": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+   "technical": true,
+   "box": {
+    "x": 1412.552729157,
+    "y": 1489.2617144322612,
+    "width": 197.78181818181815,
+    "height": 11.723755102040741
+   },
+   "vertical": false,
+   "candidates": [
+    "C003"
+   ]
+  },
+  {
+   "gid": "S-201.00:R004",
+   "aid": "S-201.00:N03",
+   "text": "3. AMERICAN WOOD COUNCIL (AWC)",
+   "technical": true,
+   "box": {
+    "x": 1412.5745456959817,
+    "y": 1476.6718097914231,
+    "width": 176.3781799486094,
+    "height": 11.524108550611118
+   },
+   "vertical": false,
+   "candidates": [
+    "C004"
+   ]
+  },
+  {
+   "gid": "S-201.00:R005",
+   "aid": "S-201.00:N04",
+   "text": "DESIGN CRITERIA",
+   "technical": false,
+   "box": {
+    "x": 1412.5963619792726,
+    "y": 1449.0842717698488,
+    "width": 165.66545784894538,
+    "height": 16.03106808941334
+   },
+   "vertical": false,
+   "candidates": [
+    "C005"
+   ]
+  },
+  {
+   "gid": "S-201.00:R006",
+   "aid": "S-201.00:N05",
+   "text": "FLOOR LIVE LOAD: 100 PSF",
+   "technical": true,
+   "box": {
+    "x": 1425.3818172730907,
+    "y": 1422.3658251892816,
+    "width": 127.26545454545476,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C007"
+   ]
+  },
+  {
+   "gid": "S-201.00:R007",
+   "aid": "S-201.00:N06",
+   "text": "ROOF LIVE LOAD: 30 PSF",
+   "technical": true,
+   "box": {
+    "x": 1425.3818185292726,
+    "y": 1410.6097086042719,
+    "width": 126.15272727272713,
+    "height": 10.687378640776615
+   },
+   "vertical": false,
+   "candidates": [
+    "C008"
+   ]
+  },
+  {
+   "gid": "S-201.00:R008",
+   "aid": "S-201.00:N06",
+   "text": "(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+   "technical": false,
+   "box": {
+    "x": 1425.9316936186851,
+    "y": 1398.5824246746956,
+    "width": 209.84745434542583,
+    "height": 10.963278299136846
+   },
+   "vertical": false,
+   "candidates": [
+    "C011"
+   ]
+  },
+  {
+   "gid": "S-201.00:R009",
+   "aid": "S-201.00:N07",
+   "text": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+   "technical": true,
+   "box": {
+    "x": 1422.7309099568727,
+    "y": 1388.3526214821281,
+    "width": 169.47272691324565,
+    "height": 12.29048528593421
+   },
+   "vertical": false,
+   "candidates": [
+    "C012"
+   ]
+  },
+  {
+   "gid": "S-201.00:R010",
+   "aid": "S-201.00:N07",
+   "text": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+   "technical": true,
+   "box": {
+    "x": 1422.6308566913203,
+    "y": 1372.4361968441758,
+    "width": 170.16194524591629,
+    "height": 15.40305465734059
+   },
+   "vertical": false,
+   "candidates": [
+    "C015"
+   ]
+  },
+  {
+   "gid": "S-201.00:R011",
+   "aid": "S-201.00:N08",
+   "text": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+   "technical": true,
+   "box": {
+    "x": 1425,
+    "y": 1366,
+    "width": 153,
+    "height": 13
+   },
+   "vertical": false,
+   "candidates": [
+    "C015"
+   ]
+  },
+  {
+   "gid": "S-201.00:R012",
+   "aid": "S-201.00:N09",
+   "text": "SNOW EXPOSURE FACTOR: 0.7",
+   "technical": true,
+   "box": {
+    "x": 1425.4036373563636,
+    "y": 1354.153009757722,
+    "width": 138.9818181818182,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C018"
+   ]
+  },
+  {
+   "gid": "S-201.00:R013",
+   "aid": "S-201.00:N10",
+   "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+   "technical": true,
+   "box": {
+    "x": 1425.4036363636362,
+    "y": 1343.279223300971,
+    "width": 159.2945454545454,
+    "height": 9.805048623844641
+   },
+   "vertical": false,
+   "candidates": [
+    "C020"
+   ]
+  },
+  {
+   "gid": "S-201.00:R014",
+   "aid": "S-201.00:N11",
+   "text": "THERMAL FACTOR: 1",
+   "technical": true,
+   "box": {
+    "x": 1425.4036374821726,
+    "y": 1331.8959223902139,
+    "width": 99.42545454545461,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C022"
+   ]
+  },
+  {
+   "gid": "S-201.00:R015",
+   "aid": "S-201.00:N12",
+   "text": "WIND LOADING (IBC 2015)",
+   "technical": true,
+   "box": {
+    "x": 1425.4254548127271,
+    "y": 1318.0023300525568,
+    "width": 109.77592501329696,
+    "height": 11.162798244710757
+   },
+   "vertical": false,
+   "candidates": [
+    "C024"
+   ]
+  },
+  {
+   "gid": "S-201.00:R016",
+   "aid": "S-201.00:N13",
+   "text": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+   "technical": true,
+   "box": {
+    "x": 1425,
+    "y": 1305,
+    "width": 190,
+    "height": 13
+   },
+   "vertical": false,
+   "candidates": [
+    "C024"
+   ]
+  },
+  {
+   "gid": "S-201.00:R017",
+   "aid": "S-201.00:N14",
+   "text": "RISK CATEGORY II",
+   "technical": false,
+   "box": {
+    "x": 1425.4036371966363,
+    "y": 1293.7693203589592,
+    "width": 90.87272727272739,
+    "height": 11.221747584393597
+   },
+   "vertical": false,
+   "candidates": [
+    "C024"
+   ]
+  },
+  {
+   "gid": "S-201.00:R018",
+   "aid": "S-201.00:N15",
+   "text": "WIND EXPOSURE CATEGORY B",
+   "technical": false,
+   "box": {
+    "x": 1426.4945468764363,
+    "y": 1283.802718500039,
+    "width": 142.18909090909096,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C029"
+   ]
+  },
+  {
+   "gid": "S-201.00:R019",
+   "aid": "S-201.00:N16",
+   "text": "INTERNAL PRESSURE COEFFICIENT 0.25",
+   "technical": true,
+   "box": {
+    "x": 1424.3127259497273,
+    "y": 1272.0466018455613,
+    "width": 183.92727397543626,
+    "height": 13.234457863979742
+   },
+   "vertical": false,
+   "candidates": [
+    "C031",
+    "C032"
+   ]
+  },
+  {
+   "gid": "S-201.00:R020",
+   "aid": "S-201.00:N17",
+   "text": "COMPONENT AND CLADDING PRESSURE 30 PSF",
+   "technical": true,
+   "box": {
+    "x": 1425.4254528527272,
+    "y": 1261.359223238628,
+    "width": 203.1272727272726,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C034"
+   ]
+  },
+  {
+   "gid": "S-201.00:R021",
+   "aid": "S-201.00:N18",
+   "text": "SEISMIC LOADING (IBC 2015)",
+   "technical": true,
+   "box": {
+    "x": 1646.7709078507637,
+    "y": 1421.297087325204,
+    "width": 124.01454545454544,
+    "height": 12.824854294120314
+   },
+   "vertical": false,
+   "candidates": [
+    "C006"
+   ]
+  },
+  {
+   "gid": "S-201.00:R022",
+   "aid": "S-201.00:N19",
+   "text": "SEISMIC USE GROUP",
+   "technical": false,
+   "box": {
+    "x": 1647.8400005345454,
+    "y": 1410.609708844738,
+    "width": 85.48363615872722,
+    "height": 12.824854315495031
+   },
+   "vertical": false,
+   "candidates": [
+    "C009"
+   ]
+  },
+  {
+   "gid": "S-201.00:R023",
+   "aid": "S-201.00:N20",
+   "text": "Ss 0.133",
+   "technical": true,
+   "box": {
+    "x": 1644.589091122909,
+    "y": 1399.9223300169322,
+    "width": 54.67918426517849,
+    "height": 11.950490513784871
+   },
+   "vertical": false,
+   "candidates": [
+    "C010"
+   ]
+  },
+  {
+   "gid": "S-201.00:R024",
+   "aid": "S-201.00:N21",
+   "text": "S1 0.43",
+   "technical": true,
+   "box": {
+    "x": 1647.7963637127273,
+    "y": 1388.5390290498754,
+    "width": 49.62846422031885,
+    "height": 12.306099173149505
+   },
+   "vertical": false,
+   "candidates": [
+    "C013"
+   ]
+  },
+  {
+   "gid": "S-201.00:R025",
+   "aid": "S-201.00:N22",
+   "text": "Sds 0.142",
+   "technical": true,
+   "box": {
+    "x": 1647.8234194823267,
+    "y": 1377.4284233719352,
+    "width": 50.274533844055895,
+    "height": 10.788201169504646
+   },
+   "vertical": false,
+   "candidates": [
+    "C014"
+   ]
+  },
+  {
+   "gid": "S-201.00:R026",
+   "aid": "S-201.00:N23",
+   "text": "Sd1 0.069",
+   "technical": true,
+   "box": {
+    "x": 1674.5236360963636,
+    "y": 1367.1642717805362,
+    "width": 28.4315359810862,
+    "height": 9.787523081654172
+   },
+   "vertical": false,
+   "candidates": [
+    "C016"
+   ]
+  },
+  {
+   "gid": "S-201.00:R027",
+   "aid": "S-201.00:N24",
+   "text": "SITE CLASS D, ASSUMED",
+   "technical": false,
+   "box": {
+    "x": 1647.840001165309,
+    "y": 1352.8978642272932,
+    "width": 116.53090909090906,
+    "height": 14.962329797840994
+   },
+   "vertical": false,
+   "candidates": [
+    "C017"
+   ]
+  },
+  {
+   "gid": "S-201.00:R028",
+   "aid": "S-201.00:N25",
+   "text": "SEISMIC IMPORTANCE FACTOR 1.0",
+   "technical": true,
+   "box": {
+    "x": 1647.796364713091,
+    "y": 1344.3479611116118,
+    "width": 150.78545252659092,
+    "height": 10.687378640776615
+   },
+   "vertical": false,
+   "candidates": [
+    "C019"
+   ]
+  },
+  {
+   "gid": "S-201.00:R029",
+   "aid": "S-201.00:N26",
+   "text": "SEISMIC DESIGN CATEGORY",
+   "technical": false,
+   "box": {
+    "x": 1647.8399987037274,
+    "y": 1332.964660140738,
+    "width": 118.66909090909098,
+    "height": 10.314563293825131
+   },
+   "vertical": false,
+   "candidates": [
+    "C021"
+   ]
+  },
+  {
+   "gid": "S-201.00:R030",
+   "aid": "S-201.00:N27",
+   "text": "BASIC SEISMIC FORCE RESISTING SYSTEM:",
+   "technical": false,
+   "box": {
+    "x": 1647.7963656809998,
+    "y": 1321.2085438229128,
+    "width": 180.6763636363637,
+    "height": 10.68737844305997
+   },
+   "vertical": false,
+   "candidates": [
+    "C023"
+   ]
+  },
+  {
+   "gid": "S-201.00:R031",
+   "aid": "S-201.00:N27",
+   "text": "ORD. PLAIN REINF MASONRY",
+   "technical": false,
+   "box": {
+    "x": 1687.3527260646545,
+    "y": 1310.5211649862008,
+    "width": 120.80727272727268,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C025"
+   ]
+  },
+  {
+   "gid": "S-201.00:R032",
+   "aid": "S-201.00:N28",
+   "text": "Cs= 0.095",
+   "technical": true,
+   "box": {
+    "x": 1676.6908234737161,
+    "y": 1300.8337997218252,
+    "width": 44.91160694693667,
+    "height": 9.687365446951617
+   },
+   "vertical": false,
+   "candidates": [
+    "C026"
+   ]
+  },
+  {
+   "gid": "S-201.00:R033",
+   "aid": "S-201.00:N29",
+   "text": "R= 1.5",
+   "technical": true,
+   "box": {
+    "x": 1751.5200001985454,
+    "y": 1301.5984466515617,
+    "width": 25.6581818181819,
+    "height": 8.736310608617032
+   },
+   "vertical": false,
+   "candidates": [
+    "C027"
+   ]
+  },
+  {
+   "gid": "S-201.00:R034",
+   "aid": "S-201.00:N30",
+   "text": "DESIGN BASE SHEAR 57 KIPS",
+   "technical": true,
+   "box": {
+    "x": 1647.7963628969092,
+    "y": 1287.7048544357283,
+    "width": 133.63636399094548,
+    "height": 12.128931897227176
+   },
+   "vertical": false,
+   "candidates": [
+    "C028"
+   ]
+  },
+  {
+   "gid": "S-201.00:R035",
+   "aid": "S-201.00:N31",
+   "text": "ANALYSIS PROCEDURE:",
+   "technical": false,
+   "box": {
+    "x": 1647.8399987571818,
+    "y": 1277.0174756613594,
+    "width": 99.38182066745458,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C030"
+   ]
+  },
+  {
+   "gid": "S-201.00:R036",
+   "aid": "S-201.00:N31",
+   "text": "EQUIVALENT LATERAL FORCE PROCEDURE",
+   "technical": false,
+   "box": {
+    "x": 1648.9090896338182,
+    "y": 1265.6341747172041,
+    "width": 178.53818181818178,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C033"
+   ]
+  },
+  {
+   "gid": "S-201.00:R037",
+   "aid": "S-201.00:N32",
+   "text": "RISK CATEGORY II",
+   "technical": false,
+   "box": {
+    "x": 1647.6517240825885,
+    "y": 1255.6471797449753,
+    "width": 82.9551698822022,
+    "height": 11.02769215969056
+   },
+   "vertical": false,
+   "candidates": [
+    "C035"
+   ]
+  },
+  {
+   "gid": "S-201.00:R038",
+   "aid": "S-201.00:N33",
+   "text": "STEEL NOTES",
+   "technical": false,
+   "box": {
+    "x": 1411.690344076543,
+    "y": 1224.4005302820865,
+    "width": 125.9460201332422,
+    "height": 17.721411518923333
+   },
+   "vertical": false,
+   "candidates": [
+    "C036"
+   ]
+  },
+  {
+   "gid": "S-201.00:R039",
+   "aid": "S-201.00:K01",
+   "text": "(2)#10 SCREWS",
+   "technical": true,
+   "box": {
+    "x": 470.46545401090907,
+    "y": 1179.0664077046474,
+    "width": 67.3963634973818,
+    "height": 9.991456319585495
+   },
+   "vertical": false,
+   "candidates": [
+    "C037"
+   ]
+  },
+  {
+   "gid": "S-201.00:R040",
+   "aid": "S-201.00:K02",
+   "text": "600S162-43 MIL @ 16\" O/C",
+   "technical": true,
+   "box": {
+    "x": 546.358313370118,
+    "y": 1149.7960002313557,
+    "width": 42.963373135653455,
+    "height": 11.516349268052181
+   },
+   "vertical": false,
+   "candidates": [
+    "C038"
+   ]
+  },
+  {
+   "gid": "S-201.00:R041",
+   "aid": "S-201.00:K03",
+   "text": "CONNECTION 1",
+   "technical": true,
+   "box": {
+    "x": 586.216552904107,
+    "y": 1097.1464078204272,
+    "width": 71.89448219604492,
+    "height": 13.503658283339291
+   },
+   "vertical": false,
+   "candidates": [
+    "C039"
+   ]
+  },
+  {
+   "gid": "S-201.00:R042",
+   "aid": "S-201.00:K04",
+   "text": "CONNECTION 2 AT",
+   "technical": true,
+   "box": {
+    "x": 225.57818246345454,
+    "y": 962.6718447013851,
+    "width": 83.3890909090909,
+    "height": 11.942524280750831
+   },
+   "vertical": false,
+   "candidates": [
+    "C040"
+   ]
+  },
+  {
+   "gid": "S-201.00:R043",
+   "aid": "S-201.00:K04",
+   "text": "EACH WOOD TRUSS",
+   "technical": false,
+   "box": {
+    "x": 225.07636450767268,
+    "y": 951.4500971728777,
+    "width": 87.13090841738187,
+    "height": 10.153009682019388
+   },
+   "vertical": false,
+   "candidates": [
+    "C041"
+   ]
+  },
+  {
+   "gid": "S-201.00:R044",
+   "aid": "S-201.00:K05",
+   "text": "600S162-43 MIL @ 16\" O/C",
+   "technical": true,
+   "box": {
+    "x": 180.65793461651518,
+    "y": 913.6444840978224,
+    "width": 129.04137537231443,
+    "height": 14.946726457399109
+   },
+   "vertical": false,
+   "candidates": [
+    "C042"
+   ]
+  },
+  {
+   "gid": "S-201.00:R045",
+   "aid": "S-201.00:K06",
+   "text": "2X4 REPAIR",
+   "technical": true,
+   "box": {
+    "x": 198.85090982590907,
+    "y": 881.3787918237869,
+    "width": 57.38839857446317,
+    "height": 12.011499491785912
+   },
+   "vertical": false,
+   "candidates": [
+    "C043"
+   ]
+  },
+  {
+   "gid": "S-201.00:R046",
+   "aid": "S-201.00:K06",
+   "text": "SEE TYPICAL SECTION",
+   "technical": false,
+   "box": {
+    "x": 196.59366904134873,
+    "y": 870.1424563849695,
+    "width": 106.38,
+    "height": 12.817052549087862
+   },
+   "vertical": false,
+   "candidates": [
+    "C044"
+   ]
+  },
+  {
+   "gid": "S-201.00:R047",
+   "aid": "S-201.00:K07",
+   "text": "CONNECTION 3",
+   "technical": true,
+   "box": {
+    "x": 213.8181822916364,
+    "y": 807.8912620748516,
+    "width": 66.28363636363633,
+    "height": 10.687378747650428
+   },
+   "vertical": false,
+   "candidates": [
+    "C045"
+   ]
+  },
+  {
+   "gid": "S-201.00:R048",
+   "aid": "S-201.00:K07",
+   "text": "EACH STUD",
+   "technical": false,
+   "box": {
+    "x": 212.7490907888182,
+    "y": 796.1351457780194,
+    "width": 52.40599932758141,
+    "height": 11.161756571084197
+   },
+   "vertical": false,
+   "candidates": [
+    "C046"
+   ]
+  },
+  {
+   "gid": "S-201.00:R049",
+   "aid": "S-201.00:K08",
+   "text": "EXISTING ROOF",
+   "technical": false,
+   "box": {
+    "x": 460.84363578454554,
+    "y": 781.1728155963236,
+    "width": 70.60363753072716,
+    "height": 9.991456301773496
+   },
+   "vertical": false,
+   "candidates": [
+    "C047"
+   ]
+  },
+  {
+   "gid": "S-201.00:R050",
+   "aid": "S-201.00:K08",
+   "text": "TRUSS",
+   "technical": false,
+   "box": {
+    "x": 460.86206891669246,
+    "y": 769.7198451214417,
+    "width": 28.890658302580277,
+    "height": 9.757979416338003
+   },
+   "vertical": false,
+   "candidates": [
+    "C048"
+   ]
+  },
+  {
+   "gid": "S-201.00:R051",
+   "aid": "S-201.00:K09",
+   "text": "600T150-43, 33 KSI",
+   "technical": true,
+   "box": {
+    "x": 192.5018170459091,
+    "y": 764.0730096642071,
+    "width": 90.87272765136368,
+    "height": 11.75611650485439
+   },
+   "vertical": false,
+   "candidates": [
+    "C049"
+   ]
+  },
+  {
+   "gid": "S-201.00:R052",
+   "aid": "S-201.00:K09",
+   "text": "TYPICAL TOP",
+   "technical": false,
+   "box": {
+    "x": 193.53565415945056,
+    "y": 753.4035814964191,
+    "width": 60.93151381748308,
+    "height": 10.669428265755755
+   },
+   "vertical": false,
+   "candidates": [
+    "C050"
+   ]
+  },
+  {
+   "gid": "S-201.00:R053",
+   "aid": "S-201.00:K09",
+   "text": "AND BOTTOM OF STUDS",
+   "technical": false,
+   "box": {
+    "x": 192.43636441527272,
+    "y": 741.6295146165437,
+    "width": 108.04570379696409,
+    "height": 11.921000878251562
+   },
+   "vertical": false,
+   "candidates": [
+    "C052"
+   ]
+  },
+  {
+   "gid": "S-201.00:R054",
+   "aid": "S-201.00:K10",
+   "text": "EXISTING W21X19 STEEL BEAM",
+   "technical": true,
+   "box": {
+    "x": 488.53753205148683,
+    "y": 736.8385597022336,
+    "width": 46.17584564208988,
+    "height": 10.650647707448456
+   },
+   "vertical": false,
+   "candidates": [
+    "C053"
+   ]
+  },
+  {
+   "gid": "S-201.00:R055",
+   "aid": "S-201.00:K11",
+   "text": "CONNECTION 4",
+   "technical": true,
+   "box": {
+    "x": 235.20000000381822,
+    "y": 699.3095181926177,
+    "width": 66.85090965905454,
+    "height": 11.513006083043933
+   },
+   "vertical": false,
+   "candidates": [
+    "C054"
+   ]
+  }
+ ],
+ "annotations": [
+  {
+   "aid": "S-201.00:N00",
+   "rows": [
+    "S-201.00:R001"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N01",
+   "rows": [
+    "S-201.00:R002"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N02",
+   "rows": [
+    "S-201.00:R003"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N03",
+   "rows": [
+    "S-201.00:R004"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N04",
+   "rows": [
+    "S-201.00:R005"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N05",
+   "rows": [
+    "S-201.00:R006"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N06",
+   "rows": [
+    "S-201.00:R007",
+    "S-201.00:R008"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N07",
+   "rows": [
+    "S-201.00:R009",
+    "S-201.00:R010"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N08",
+   "rows": [
+    "S-201.00:R011"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N09",
+   "rows": [
+    "S-201.00:R012"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N10",
+   "rows": [
+    "S-201.00:R013"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N11",
+   "rows": [
+    "S-201.00:R014"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N12",
+   "rows": [
+    "S-201.00:R015"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N13",
+   "rows": [
+    "S-201.00:R016"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N14",
+   "rows": [
+    "S-201.00:R017"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N15",
+   "rows": [
+    "S-201.00:R018"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N16",
+   "rows": [
+    "S-201.00:R019"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N17",
+   "rows": [
+    "S-201.00:R020"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N18",
+   "rows": [
+    "S-201.00:R021"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N19",
+   "rows": [
+    "S-201.00:R022"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N20",
+   "rows": [
+    "S-201.00:R023"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N21",
+   "rows": [
+    "S-201.00:R024"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N22",
+   "rows": [
+    "S-201.00:R025"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N23",
+   "rows": [
+    "S-201.00:R026"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N24",
+   "rows": [
+    "S-201.00:R027"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N25",
+   "rows": [
+    "S-201.00:R028"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N26",
+   "rows": [
+    "S-201.00:R029"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N27",
+   "rows": [
+    "S-201.00:R030",
+    "S-201.00:R031"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N28",
+   "rows": [
+    "S-201.00:R032"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N29",
+   "rows": [
+    "S-201.00:R033"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N30",
+   "rows": [
+    "S-201.00:R034"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:N31",
+   "rows": [
+    "S-201.00:R035",
+    "S-201.00:R036"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N32",
+   "rows": [
+    "S-201.00:R037"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:N33",
+   "rows": [
+    "S-201.00:R038"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:K01",
+   "rows": [
+    "S-201.00:R039"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K02",
+   "rows": [
+    "S-201.00:R040"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K03",
+   "rows": [
+    "S-201.00:R041"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K04",
+   "rows": [
+    "S-201.00:R042",
+    "S-201.00:R043"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K05",
+   "rows": [
+    "S-201.00:R044"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K06",
+   "rows": [
+    "S-201.00:R045",
+    "S-201.00:R046"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K07",
+   "rows": [
+    "S-201.00:R047",
+    "S-201.00:R048"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K08",
+   "rows": [
+    "S-201.00:R049",
+    "S-201.00:R050"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "S-201.00:K09",
+   "rows": [
+    "S-201.00:R051",
+    "S-201.00:R052",
+    "S-201.00:R053"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K10",
+   "rows": [
+    "S-201.00:R054"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "S-201.00:K11",
+   "rows": [
+    "S-201.00:R055"
+   ],
+   "technical": true
+  }
+ ],
+ "noise": {
+  "textLayerEcho": [],
+  "nonText": [
+   {
+    "x": 358.14545429956365,
+    "y": 750.1794176093204,
+    "width": 24.654545820709018,
+    "height": 10.687378640776728
+   }
+  ]
+ },
+ "ambiguities": [
+  "The sheet font draws the digit 1 like a capital I. Rows are recorded by meaning (S1, Sd1, 115 MPH, 17.5 PSF, IBC 2015, #10, W21X19); an OCR read of SI or Sdl is scored as wrong because the downstream value differs.",
+  "RISK CATEGORY ii (wind) is printed with lowercase-looking glyphs and recorded as II.",
+  "SEISMIC DESIGN CATEGORY and SEISMIC USE GROUP have no printed value.",
+  "Cs= 0.095 and R= 1.5 share a printed line but are separate quantities, so they are separate annotations.",
+  "FLAT ROOF SNOW LOAD (C015) and BASIC WIND SPEED (C024) have no exact OCR read; their boxes are manual, taken from the median of the mis-read members' boxes."
+ ]
+}

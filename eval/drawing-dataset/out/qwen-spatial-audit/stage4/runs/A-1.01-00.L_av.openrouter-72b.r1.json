@@ -1,0 +1,104 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "L_av",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_023fceae47d7df7c016afb2d7fce6087d2a1ee09e9684501ff",
+ "latencyMs": 17022,
+ "inputTokens": 12667,
+ "outputTokens": 1454,
+ "reasoningTokens": 981,
+ "costUsd": 0.004278199999999999,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-1.01-00.pdf",
+  "evidenceSha": "b686320b2f1bf2c3",
+  "userPromptChars": 9372,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-1.01-00\",\"detected_sheet_title\":\"MEZZANINE & BASEMENT FLOOR PLAN\",\"discipline\":\"Architectural\",\"summary\":\"Architectural alteration floor plan sheet for the 2nd floor/mezzanine and basement. The sheet includes plan dimensions, fire-rated wall and door notes, accessibility notes, and references to other indexed architectural sheets. Two sheet-local coordination items were identified.\",\"findings\":[{\"category\":\"conflicting information\",\"severity\":\"warning\",\"title\":\"Level designation differs between title block and plan view\",\"observation\":\"The title block identifies the drawing as “MEZZANINE & BASEMENT FLOOR PLAN,” while the left plan is titled “2ND FLOOR ALTERATION FLOOR PLAN.” The sheet does not visibly explain whether the 2nd floor and mezzanine designations refer to the same level.\",\"drawing_evidence\":\"Title block at lower right: “MEZZANINE & BASEMENT FLOOR PLAN.” Plan 1 title at lower left: “2ND FLOOR ALTERATION FLOOR PLAN.”\",\"drawing_location\":\"Lower-right title block and title below Plan 1 at the lower-left portion of the sheet.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Clarify the level designation in the title block and Plan 1, or add a note stating that the 2nd floor and mezzanine designations are equivalent for this project.\"},{\"category\":\"actual discrepancy\",\"severity\":\"advisory\",\"title\":\"Accessibility hardware note contains an apparent drafting error\",\"observation\":\"General Note 5 states “REPLACE OR ADD ADA COMPLAINT HARDWARE,” which appears to use “COMPLAINT” rather than “COMPLIANT.” The wording could create ambiguity regarding the intended hardware requirement.\",\"drawing_evidence\":\"General Notes, right-hand column, Note 5: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.”\",\"drawing_location\":\"General Notes panel, lower-left area of sheet, right-hand column, Note 5.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Correct the note to “ADA COMPLIANT HARDWARE” and confirm that the referenced A-1.03 door hardware schedule uses the same terminology and requirement.\"}]}",
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "Architectural alteration floor plan sheet for the 2nd floor/mezzanine and basement. The sheet includes plan dimensions, fire-rated wall and door notes, accessibility notes, and references to other indexed architectural sheets. Two sheet-local coordination items were identified.",
+ "drafts": [
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Level designation differs between title block and plan view",
+   "observation": "The title block identifies the drawing as “MEZZANINE & BASEMENT FLOOR PLAN,” while the left plan is titled “2ND FLOOR ALTERATION FLOOR PLAN.” The sheet does not visibly explain whether the 2nd floor and mezzanine designations refer to the same level.",
+   "drawing_evidence": "Title block at lower right: “MEZZANINE & BASEMENT FLOOR PLAN.” Plan 1 title at lower left: “2ND FLOOR ALTERATION FLOOR PLAN.”",
+   "drawing_location": "Lower-right title block and title below Plan 1 at the lower-left portion of the sheet.",
+   "suggested_code_reference": "",
+   "recommendation": "Clarify the level designation in the title block and Plan 1, or add a note stating that the 2nd floor and mezzanine designations are equivalent for this project."
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "advisory",
+   "title": "Accessibility hardware note contains an apparent drafting error",
+   "observation": "General Note 5 states “REPLACE OR ADD ADA COMPLAINT HARDWARE,” which appears to use “COMPLAINT” rather than “COMPLIANT.” The wording could create ambiguity regarding the intended hardware requirement.",
+   "drawing_evidence": "General Notes, right-hand column, Note 5: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.”",
+   "drawing_location": "General Notes panel, lower-left area of sheet, right-hand column, Note 5.",
+   "suggested_code_reference": "",
+   "recommendation": "Correct the note to “ADA COMPLIANT HARDWARE” and confirm that the referenced A-1.03 door hardware schedule uses the same terminology and requirement."
+  }
+ ],
+ "published": [
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Level designation differs between title block and plan view",
+   "observation": "The title block identifies the drawing as “MEZZANINE & BASEMENT FLOOR PLAN,” while the left plan is titled “2ND FLOOR ALTERATION FLOOR PLAN.” The sheet does not visibly explain whether the 2nd floor and mezzanine designations refer to the same level.",
+   "drawing_evidence": "Title block at lower right: “MEZZANINE & BASEMENT FLOOR PLAN.” Plan 1 title at lower left: “2ND FLOOR ALTERATION FLOOR PLAN.”",
+   "drawing_location": "Lower-right title block and title below Plan 1 at the lower-left portion of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify the level designation in the title block and Plan 1, or add a note stating that the 2nd floor and mezzanine designations are equivalent for this project.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Level designation differs between title block and plan view",
+    "originalObservation": "The title block identifies the drawing as “MEZZANINE & BASEMENT FLOOR PLAN,” while the left plan is titled “2ND FLOOR ALTERATION FLOOR PLAN.” The sheet does not visibly explain whether the 2nd floor and mezzanine designations refer to the same level.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "advisory",
+   "title": "Accessibility hardware note contains an apparent drafting error",
+   "observation": "General Note 5 states “REPLACE OR ADD ADA COMPLAINT HARDWARE,” which appears to use “COMPLAINT” rather than “COMPLIANT.” The wording could create ambiguity regarding the intended hardware requirement.",
+   "drawing_evidence": "General Notes, right-hand column, Note 5: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.”",
+   "drawing_location": "General Notes panel, lower-left area of sheet, right-hand column, Note 5.",
+   "suggested_code_reference": null,
+   "recommendation": "Correct the note to “ADA COMPLIANT HARDWARE” and confirm that the referenced A-1.03 door hardware schedule uses the same terminology and requirement.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Accessibility hardware note contains an apparent drafting error",
+    "originalObservation": "General Note 5 states “REPLACE OR ADD ADA COMPLAINT HARDWARE,” which appears to use “COMPLAINT” rather than “COMPLIANT.” The wording could create ambiguity regarding the intended hardware requirement.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

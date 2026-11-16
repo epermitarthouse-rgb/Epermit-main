@@ -1,0 +1,5653 @@
+{
+ "backend": "openrouter-72b",
+ "capUsd": 3.0,
+ "elapsedS": 1047.1,
+ "ledgerSettledUsd": 1.005513,
+ "providerUsageUsd": 0.9603994,
+ "meanUsdPerCall": 0.0017804795737122558,
+ "remainingCalls": 0,
+ "estimatedRemainingUsd": 0.0,
+ "counts": {
+  "completed": 563,
+  "failed": 0,
+  "skipped": 0,
+  "cachedBefore": 1
+ },
+ "completed": [
+  {
+   "tile": "A-3.06-00/r00c07",
+   "priority": 0,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 3.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c04",
+   "priority": 0,
+   "usd": 0.001309,
+   "reportedUsd": 0.0013088,
+   "in": 1541,
+   "out": 76,
+   "latencyS": 3.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c00",
+   "priority": 0,
+   "usd": 0.001377,
+   "reportedUsd": 0.0013768,
+   "in": 1541,
+   "out": 144,
+   "latencyS": 6.16,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c03",
+   "priority": 0,
+   "usd": 0.001546,
+   "reportedUsd": 0.0015458,
+   "in": 1541,
+   "out": 313,
+   "latencyS": 11.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c11",
+   "priority": 0,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 0.72,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c12",
+   "priority": 0,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 1.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c08",
+   "priority": 0,
+   "usd": 0.00152,
+   "reportedUsd": 0.0015198,
+   "in": 1541,
+   "out": 287,
+   "latencyS": 10.42,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c02",
+   "priority": 0,
+   "usd": 0.001647,
+   "reportedUsd": 0.0016468,
+   "in": 1541,
+   "out": 414,
+   "latencyS": 14.56,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c01",
+   "priority": 0,
+   "usd": 0.001655,
+   "reportedUsd": 0.0016548,
+   "in": 1541,
+   "out": 422,
+   "latencyS": 14.87,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c00",
+   "priority": 0,
+   "usd": 0.001317,
+   "reportedUsd": 0.0013168,
+   "in": 1541,
+   "out": 84,
+   "latencyS": 2.75,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c10",
+   "priority": 0,
+   "usd": 0.001669,
+   "reportedUsd": 0.0016688,
+   "in": 1541,
+   "out": 436,
+   "latencyS": 13.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c04",
+   "priority": 0,
+   "usd": 0.001361,
+   "reportedUsd": 0.0013608,
+   "in": 1541,
+   "out": 128,
+   "latencyS": 3.59,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c01",
+   "priority": 0,
+   "usd": 0.001512,
+   "reportedUsd": 0.0015118,
+   "in": 1541,
+   "out": 279,
+   "latencyS": 6.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c05",
+   "priority": 0,
+   "usd": 0.00193,
+   "reportedUsd": 0.0019298,
+   "in": 1541,
+   "out": 697,
+   "latencyS": 20.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c07",
+   "priority": 0,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 2.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c09",
+   "priority": 0,
+   "usd": 0.001943,
+   "reportedUsd": 0.0019428,
+   "in": 1541,
+   "out": 710,
+   "latencyS": 20.05,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c02",
+   "priority": 0,
+   "usd": 0.001705,
+   "reportedUsd": 0.0017048,
+   "in": 1541,
+   "out": 472,
+   "latencyS": 10.81,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c03",
+   "priority": 0,
+   "usd": 0.001749,
+   "reportedUsd": 0.0017488,
+   "in": 1541,
+   "out": 516,
+   "latencyS": 11.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c11",
+   "priority": 0,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 2.89,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c12",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r00c06",
+   "priority": 0,
+   "usd": 0.002324,
+   "reportedUsd": 0.0023238,
+   "in": 1541,
+   "out": 1091,
+   "latencyS": 28.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c02",
+   "priority": 0,
+   "usd": 0.001309,
+   "reportedUsd": 0.0013088,
+   "in": 1541,
+   "out": 76,
+   "latencyS": 2.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c01",
+   "priority": 0,
+   "usd": 0.001385,
+   "reportedUsd": 0.0013848,
+   "in": 1541,
+   "out": 152,
+   "latencyS": 5.19,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c03",
+   "priority": 0,
+   "usd": 0.001378,
+   "reportedUsd": 0.0013778,
+   "in": 1541,
+   "out": 145,
+   "latencyS": 4.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c00",
+   "priority": 0,
+   "usd": 0.001511,
+   "reportedUsd": 0.0015108,
+   "in": 1541,
+   "out": 278,
+   "latencyS": 9.04,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c08",
+   "priority": 0,
+   "usd": 0.001936,
+   "reportedUsd": 0.0019358,
+   "in": 1541,
+   "out": 703,
+   "latencyS": 18.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c06",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 3.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c10",
+   "priority": 0,
+   "usd": 0.001902,
+   "reportedUsd": 0.0019018,
+   "in": 1541,
+   "out": 669,
+   "latencyS": 17.29,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c06",
+   "priority": 0,
+   "usd": 0.001983,
+   "reportedUsd": 0.0019828,
+   "in": 1541,
+   "out": 750,
+   "latencyS": 20.61,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c05",
+   "priority": 0,
+   "usd": 0.00138,
+   "reportedUsd": 0.0013798,
+   "in": 1541,
+   "out": 147,
+   "latencyS": 5.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c10",
+   "priority": 0,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 2.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c05",
+   "priority": 0,
+   "usd": 0.002161,
+   "reportedUsd": 0.0021608,
+   "in": 1541,
+   "out": 928,
+   "latencyS": 24.04,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c04",
+   "priority": 0,
+   "usd": 0.001585,
+   "reportedUsd": 0.0015848,
+   "in": 1541,
+   "out": 352,
+   "latencyS": 10.54,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c09",
+   "priority": 0,
+   "usd": 0.001444,
+   "reportedUsd": 0.0014438,
+   "in": 1541,
+   "out": 211,
+   "latencyS": 5.46,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c00",
+   "priority": 0,
+   "usd": 0.001378,
+   "reportedUsd": 0.0013778,
+   "in": 1541,
+   "out": 145,
+   "latencyS": 3.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c07",
+   "priority": 0,
+   "usd": 0.001663,
+   "reportedUsd": 0.0016628,
+   "in": 1541,
+   "out": 430,
+   "latencyS": 9.57,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c02",
+   "priority": 0,
+   "usd": 0.001358,
+   "reportedUsd": 0.0013578,
+   "in": 1541,
+   "out": 125,
+   "latencyS": 2.87,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c04",
+   "priority": 0,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 1.98,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c08",
+   "priority": 0,
+   "usd": 0.001513,
+   "reportedUsd": 0.0015128,
+   "in": 1541,
+   "out": 280,
+   "latencyS": 11.26,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c11",
+   "priority": 0,
+   "usd": 0.001742,
+   "reportedUsd": 0.0017418,
+   "in": 1541,
+   "out": 509,
+   "latencyS": 11.14,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c03",
+   "priority": 0,
+   "usd": 0.001521,
+   "reportedUsd": 0.0015208,
+   "in": 1541,
+   "out": 288,
+   "latencyS": 5.61,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r01c09",
+   "priority": 0,
+   "usd": 0.002553,
+   "reportedUsd": 0.0025528,
+   "in": 1541,
+   "out": 1320,
+   "latencyS": 30.4,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r02c12",
+   "priority": 0,
+   "usd": 0.001761,
+   "reportedUsd": 0.0017608,
+   "in": 1541,
+   "out": 528,
+   "latencyS": 10.68,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c07",
+   "priority": 0,
+   "usd": 0.001388,
+   "reportedUsd": 0.0013878,
+   "in": 1541,
+   "out": 155,
+   "latencyS": 4.0,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c01",
+   "priority": 0,
+   "usd": 0.001866,
+   "reportedUsd": 0.0018658,
+   "in": 1541,
+   "out": 633,
+   "latencyS": 12.9,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c09",
+   "priority": 0,
+   "usd": 0.00137,
+   "reportedUsd": 0.0013698,
+   "in": 1541,
+   "out": 137,
+   "latencyS": 4.34,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c05",
+   "priority": 0,
+   "usd": 0.001674,
+   "reportedUsd": 0.0016738,
+   "in": 1541,
+   "out": 441,
+   "latencyS": 9.64,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c06",
+   "priority": 0,
+   "usd": 0.001616,
+   "reportedUsd": 0.0016158,
+   "in": 1541,
+   "out": 383,
+   "latencyS": 8.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c08",
+   "priority": 0,
+   "usd": 0.001596,
+   "reportedUsd": 0.0015958,
+   "in": 1541,
+   "out": 363,
+   "latencyS": 8.61,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c00",
+   "priority": 0,
+   "usd": 0.001383,
+   "reportedUsd": 0.0013828,
+   "in": 1541,
+   "out": 150,
+   "latencyS": 4.54,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c04",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 1.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c10",
+   "priority": 0,
+   "usd": 0.001673,
+   "reportedUsd": 0.0016728,
+   "in": 1541,
+   "out": 440,
+   "latencyS": 10.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c02",
+   "priority": 0,
+   "usd": 0.001449,
+   "reportedUsd": 0.0014488,
+   "in": 1541,
+   "out": 216,
+   "latencyS": 5.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c05",
+   "priority": 0,
+   "usd": 0.001374,
+   "reportedUsd": 0.0013738,
+   "in": 1541,
+   "out": 141,
+   "latencyS": 3.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c03",
+   "priority": 0,
+   "usd": 0.001569,
+   "reportedUsd": 0.0015688,
+   "in": 1541,
+   "out": 336,
+   "latencyS": 7.79,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c09",
+   "priority": 0,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 2.05,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c06",
+   "priority": 0,
+   "usd": 0.00143,
+   "reportedUsd": 0.0014298,
+   "in": 1541,
+   "out": 197,
+   "latencyS": 5.04,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c10",
+   "priority": 0,
+   "usd": 0.001302,
+   "reportedUsd": 0.0013018,
+   "in": 1541,
+   "out": 69,
+   "latencyS": 3.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c07",
+   "priority": 0,
+   "usd": 0.001524,
+   "reportedUsd": 0.0015238,
+   "in": 1541,
+   "out": 291,
+   "latencyS": 7.27,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c01",
+   "priority": 0,
+   "usd": 0.001807,
+   "reportedUsd": 0.0018068,
+   "in": 1541,
+   "out": 574,
+   "latencyS": 13.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c00",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 1.95,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c08",
+   "priority": 0,
+   "usd": 0.001545,
+   "reportedUsd": 0.0015448,
+   "in": 1541,
+   "out": 312,
+   "latencyS": 7.92,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c12",
+   "priority": 0,
+   "usd": 0.002055,
+   "reportedUsd": 0.0020548,
+   "in": 1541,
+   "out": 822,
+   "latencyS": 19.03,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c04",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.73,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c01",
+   "priority": 0,
+   "usd": 0.001374,
+   "reportedUsd": 0.0013738,
+   "in": 1541,
+   "out": 141,
+   "latencyS": 4.33,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c02",
+   "priority": 0,
+   "usd": 0.001444,
+   "reportedUsd": 0.0014438,
+   "in": 1541,
+   "out": 211,
+   "latencyS": 6.35,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c06",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.66,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c05",
+   "priority": 0,
+   "usd": 0.001367,
+   "reportedUsd": 0.0013668,
+   "in": 1541,
+   "out": 134,
+   "latencyS": 5.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c07",
+   "priority": 0,
+   "usd": 0.001382,
+   "reportedUsd": 0.0013818,
+   "in": 1541,
+   "out": 149,
+   "latencyS": 5.73,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r03c11",
+   "priority": 0,
+   "usd": 0.002375,
+   "reportedUsd": 0.0023748,
+   "in": 1541,
+   "out": 1142,
+   "latencyS": 28.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c03",
+   "priority": 0,
+   "usd": 0.001573,
+   "reportedUsd": 0.0015728,
+   "in": 1541,
+   "out": 340,
+   "latencyS": 10.6,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c09",
+   "priority": 0,
+   "usd": 0.001377,
+   "reportedUsd": 0.0013768,
+   "in": 1541,
+   "out": 144,
+   "latencyS": 4.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c08",
+   "priority": 0,
+   "usd": 0.001447,
+   "reportedUsd": 0.0014468,
+   "in": 1541,
+   "out": 214,
+   "latencyS": 8.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c01",
+   "priority": 0,
+   "usd": 0.001381,
+   "reportedUsd": 0.0013808,
+   "in": 1541,
+   "out": 148,
+   "latencyS": 4.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c10",
+   "priority": 0,
+   "usd": 0.001444,
+   "reportedUsd": 0.0014438,
+   "in": 1541,
+   "out": 211,
+   "latencyS": 6.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c02",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.18,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c00",
+   "priority": 0,
+   "usd": 0.001459,
+   "reportedUsd": 0.0014588,
+   "in": 1541,
+   "out": 226,
+   "latencyS": 6.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c04",
+   "priority": 0,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c07",
+   "priority": 0,
+   "usd": 0.001303,
+   "reportedUsd": 0.0006884,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c09",
+   "priority": 0,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 1.75,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c01",
+   "priority": 0,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 1.87,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c00",
+   "priority": 0,
+   "usd": 0.001388,
+   "reportedUsd": 0.0013878,
+   "in": 1541,
+   "out": 155,
+   "latencyS": 6.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c02",
+   "priority": 0,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 4.85,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c12",
+   "priority": 0,
+   "usd": 0.001789,
+   "reportedUsd": 0.0017888,
+   "in": 1541,
+   "out": 556,
+   "latencyS": 17.97,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c04",
+   "priority": 0,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 3.82,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c05",
+   "priority": 0,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 1.33,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c03",
+   "priority": 0,
+   "usd": 0.001364,
+   "reportedUsd": 0.0013638,
+   "in": 1541,
+   "out": 131,
+   "latencyS": 6.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r05c11",
+   "priority": 0,
+   "usd": 0.001919,
+   "reportedUsd": 0.0019188,
+   "in": 1541,
+   "out": 686,
+   "latencyS": 23.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c11",
+   "priority": 0,
+   "usd": 0.001615,
+   "reportedUsd": 0.0016148,
+   "in": 1541,
+   "out": 382,
+   "latencyS": 16.54,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c11",
+   "priority": 0,
+   "usd": 0.002476,
+   "reportedUsd": 0.0024758,
+   "in": 1541,
+   "out": 1243,
+   "latencyS": 38.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c06",
+   "priority": 0,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 8.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c07",
+   "priority": 0,
+   "usd": 0.001382,
+   "reportedUsd": 0.0013818,
+   "in": 1541,
+   "out": 149,
+   "latencyS": 8.05,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c09",
+   "priority": 0,
+   "usd": 0.001365,
+   "reportedUsd": 0.0013648,
+   "in": 1541,
+   "out": 132,
+   "latencyS": 6.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c10",
+   "priority": 0,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 5.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r06c12",
+   "priority": 0,
+   "usd": 0.001749,
+   "reportedUsd": 0.0017488,
+   "in": 1541,
+   "out": 516,
+   "latencyS": 21.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c08",
+   "priority": 0,
+   "usd": 0.001453,
+   "reportedUsd": 0.0014528,
+   "in": 1541,
+   "out": 220,
+   "latencyS": 9.96,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c02",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c01",
+   "priority": 0,
+   "usd": 0.001382,
+   "reportedUsd": 0.0013818,
+   "in": 1541,
+   "out": 149,
+   "latencyS": 3.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c03",
+   "priority": 0,
+   "usd": 0.001429,
+   "reportedUsd": 0.0014288,
+   "in": 1541,
+   "out": 196,
+   "latencyS": 4.52,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c04",
+   "priority": 0,
+   "usd": 0.001405,
+   "reportedUsd": 0.0007904,
+   "in": 1541,
+   "out": 172,
+   "latencyS": 3.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c06",
+   "priority": 0,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 1.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r04c12",
+   "priority": 0,
+   "usd": 0.002506,
+   "reportedUsd": 0.0025058,
+   "in": 1541,
+   "out": 1273,
+   "latencyS": 47.29,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c05",
+   "priority": 0,
+   "usd": 0.001429,
+   "reportedUsd": 0.0008144,
+   "in": 1541,
+   "out": 196,
+   "latencyS": 5.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c10",
+   "priority": 0,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 2.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c00",
+   "priority": 0,
+   "usd": 0.001597,
+   "reportedUsd": 0.0015968,
+   "in": 1541,
+   "out": 364,
+   "latencyS": 8.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c09",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 3.03,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c08",
+   "priority": 0,
+   "usd": 0.00159,
+   "reportedUsd": 0.0015898,
+   "in": 1541,
+   "out": 357,
+   "latencyS": 12.08,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c00",
+   "priority": 0,
+   "usd": 0.00151,
+   "reportedUsd": 0.0015098,
+   "in": 1541,
+   "out": 277,
+   "latencyS": 9.68,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c07",
+   "priority": 0,
+   "usd": 0.001658,
+   "reportedUsd": 0.0016578,
+   "in": 1541,
+   "out": 425,
+   "latencyS": 13.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c01",
+   "priority": 0,
+   "usd": 0.001582,
+   "reportedUsd": 0.0015818,
+   "in": 1541,
+   "out": 349,
+   "latencyS": 11.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c11",
+   "priority": 0,
+   "usd": 0.002342,
+   "reportedUsd": 0.0023418,
+   "in": 1541,
+   "out": 1109,
+   "latencyS": 30.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c00",
+   "priority": 0,
+   "usd": 0.001309,
+   "reportedUsd": 0.0013088,
+   "in": 1541,
+   "out": 76,
+   "latencyS": 2.47,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c11",
+   "priority": 0,
+   "usd": 0.002133,
+   "reportedUsd": 0.0021328,
+   "in": 1541,
+   "out": 900,
+   "latencyS": 23.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c01",
+   "priority": 0,
+   "usd": 0.001446,
+   "reportedUsd": 0.0014458,
+   "in": 1541,
+   "out": 213,
+   "latencyS": 5.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r08c12",
+   "priority": 0,
+   "usd": 0.00234,
+   "reportedUsd": 0.0023398,
+   "in": 1541,
+   "out": 1107,
+   "latencyS": 27.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/r07c12",
+   "priority": 0,
+   "usd": 0.002794,
+   "reportedUsd": 0.0027938,
+   "in": 1541,
+   "out": 1561,
+   "latencyS": 37.66,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c02",
+   "priority": 0,
+   "usd": 0.002178,
+   "reportedUsd": 0.0021778,
+   "in": 1541,
+   "out": 945,
+   "latencyS": 20.81,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c03",
+   "priority": 0,
+   "usd": 0.002229,
+   "reportedUsd": 0.0022288,
+   "in": 1541,
+   "out": 996,
+   "latencyS": 21.47,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c05",
+   "priority": 0,
+   "usd": 0.002201,
+   "reportedUsd": 0.0022008,
+   "in": 1541,
+   "out": 968,
+   "latencyS": 19.94,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c04",
+   "priority": 0,
+   "usd": 0.002284,
+   "reportedUsd": 0.0022838,
+   "in": 1541,
+   "out": 1051,
+   "latencyS": 22.13,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c04",
+   "priority": 0,
+   "usd": 0.001652,
+   "reportedUsd": 0.0016518,
+   "in": 1541,
+   "out": 419,
+   "latencyS": 8.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c00",
+   "priority": 0,
+   "usd": 0.001725,
+   "reportedUsd": 0.0017248,
+   "in": 1541,
+   "out": 492,
+   "latencyS": 10.06,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c02",
+   "priority": 0,
+   "usd": 0.002087,
+   "reportedUsd": 0.0020868,
+   "in": 1541,
+   "out": 854,
+   "latencyS": 17.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c03",
+   "priority": 0,
+   "usd": 0.001472,
+   "reportedUsd": 0.0014718,
+   "in": 1541,
+   "out": 239,
+   "latencyS": 9.91,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c01",
+   "priority": 0,
+   "usd": 0.001966,
+   "reportedUsd": 0.0019658,
+   "in": 1541,
+   "out": 733,
+   "latencyS": 13.35,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c02",
+   "priority": 0,
+   "usd": 0.00198,
+   "reportedUsd": 0.0019798,
+   "in": 1541,
+   "out": 747,
+   "latencyS": 13.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c03",
+   "priority": 0,
+   "usd": 0.002368,
+   "reportedUsd": 0.0023678,
+   "in": 1541,
+   "out": 1135,
+   "latencyS": 20.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c00",
+   "priority": 0,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 7.26,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c01",
+   "priority": 0,
+   "usd": 0.001587,
+   "reportedUsd": 0.0015868,
+   "in": 1541,
+   "out": 354,
+   "latencyS": 7.15,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c00",
+   "priority": 0,
+   "usd": 0.001368,
+   "reportedUsd": 0.0013678,
+   "in": 1541,
+   "out": 135,
+   "latencyS": 3.73,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c02",
+   "priority": 0,
+   "usd": 0.001646,
+   "reportedUsd": 0.0016458,
+   "in": 1541,
+   "out": 413,
+   "latencyS": 8.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c03",
+   "priority": 0,
+   "usd": 0.001593,
+   "reportedUsd": 0.0015928,
+   "in": 1541,
+   "out": 360,
+   "latencyS": 8.03,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c06",
+   "priority": 0,
+   "usd": 0.001507,
+   "reportedUsd": 0.0015068,
+   "in": 1541,
+   "out": 274,
+   "latencyS": 6.17,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c04",
+   "priority": 0,
+   "usd": 0.001705,
+   "reportedUsd": 0.0017048,
+   "in": 1541,
+   "out": 472,
+   "latencyS": 9.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c02",
+   "priority": 0,
+   "usd": 0.001482,
+   "reportedUsd": 0.0014818,
+   "in": 1541,
+   "out": 249,
+   "latencyS": 5.17,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c05",
+   "priority": 0,
+   "usd": 0.001745,
+   "reportedUsd": 0.0017448,
+   "in": 1541,
+   "out": 512,
+   "latencyS": 10.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c01",
+   "priority": 0,
+   "usd": 0.00161,
+   "reportedUsd": 0.0016098,
+   "in": 1541,
+   "out": 377,
+   "latencyS": 7.6,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c00",
+   "priority": 0,
+   "usd": 0.001361,
+   "reportedUsd": 0.0013608,
+   "in": 1541,
+   "out": 128,
+   "latencyS": 2.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c01",
+   "priority": 0,
+   "usd": 0.001298,
+   "reportedUsd": 0.0012978,
+   "in": 1541,
+   "out": 65,
+   "latencyS": 1.65,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c06",
+   "priority": 0,
+   "usd": 0.001439,
+   "reportedUsd": 0.0014388,
+   "in": 1541,
+   "out": 206,
+   "latencyS": 4.35,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c05",
+   "priority": 0,
+   "usd": 0.00266,
+   "reportedUsd": 0.0026598,
+   "in": 1541,
+   "out": 1427,
+   "latencyS": 26.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c02",
+   "priority": 0,
+   "usd": 0.001365,
+   "reportedUsd": 0.0013648,
+   "in": 1541,
+   "out": 132,
+   "latencyS": 3.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c03",
+   "priority": 0,
+   "usd": 0.001452,
+   "reportedUsd": 0.0014518,
+   "in": 1541,
+   "out": 219,
+   "latencyS": 4.89,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c00",
+   "priority": 0,
+   "usd": 0.0013,
+   "reportedUsd": 0.0012998,
+   "in": 1541,
+   "out": 67,
+   "latencyS": 2.03,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c05",
+   "priority": 0,
+   "usd": 0.001927,
+   "reportedUsd": 0.0019268,
+   "in": 1541,
+   "out": 694,
+   "latencyS": 13.51,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c06",
+   "priority": 0,
+   "usd": 0.00159,
+   "reportedUsd": 0.0015898,
+   "in": 1541,
+   "out": 357,
+   "latencyS": 6.57,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c04",
+   "priority": 0,
+   "usd": 0.002174,
+   "reportedUsd": 0.0021738,
+   "in": 1541,
+   "out": 941,
+   "latencyS": 17.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c01",
+   "priority": 0,
+   "usd": 0.00158,
+   "reportedUsd": 0.0015798,
+   "in": 1541,
+   "out": 347,
+   "latencyS": 6.33,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c02",
+   "priority": 0,
+   "usd": 0.001539,
+   "reportedUsd": 0.0015388,
+   "in": 1541,
+   "out": 306,
+   "latencyS": 5.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c05",
+   "priority": 0,
+   "usd": 0.001921,
+   "reportedUsd": 0.0019208,
+   "in": 1541,
+   "out": 688,
+   "latencyS": 12.15,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c03",
+   "priority": 0,
+   "usd": 0.002489,
+   "reportedUsd": 0.0024888,
+   "in": 1541,
+   "out": 1256,
+   "latencyS": 22.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c04",
+   "priority": 0,
+   "usd": 0.001535,
+   "reportedUsd": 0.0015348,
+   "in": 1541,
+   "out": 302,
+   "latencyS": 5.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c00",
+   "priority": 0,
+   "usd": 0.001301,
+   "reportedUsd": 0.0013008,
+   "in": 1541,
+   "out": 68,
+   "latencyS": 1.96,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c05",
+   "priority": 0,
+   "usd": 0.003921,
+   "reportedUsd": 0.0039208,
+   "in": 1541,
+   "out": 2688,
+   "latencyS": 48.72,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c01",
+   "priority": 0,
+   "usd": 0.001417,
+   "reportedUsd": 0.0014168,
+   "in": 1541,
+   "out": 184,
+   "latencyS": 4.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c05",
+   "priority": 0,
+   "usd": 0.001504,
+   "reportedUsd": 0.0015038,
+   "in": 1541,
+   "out": 271,
+   "latencyS": 5.89,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c03",
+   "priority": 0,
+   "usd": 0.001707,
+   "reportedUsd": 0.0017068,
+   "in": 1541,
+   "out": 474,
+   "latencyS": 9.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c04",
+   "priority": 0,
+   "usd": 0.001377,
+   "reportedUsd": 0.0013768,
+   "in": 1541,
+   "out": 144,
+   "latencyS": 3.51,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c03",
+   "priority": 0,
+   "usd": 0.001514,
+   "reportedUsd": 0.0015138,
+   "in": 1541,
+   "out": 281,
+   "latencyS": 6.3,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c05",
+   "priority": 0,
+   "usd": 0.001523,
+   "reportedUsd": 0.0015228,
+   "in": 1541,
+   "out": 290,
+   "latencyS": 6.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c02",
+   "priority": 0,
+   "usd": 0.001664,
+   "reportedUsd": 0.0016638,
+   "in": 1541,
+   "out": 431,
+   "latencyS": 9.42,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c04",
+   "priority": 0,
+   "usd": 0.002522,
+   "reportedUsd": 0.0025218,
+   "in": 1541,
+   "out": 1289,
+   "latencyS": 24.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c09",
+   "priority": 0,
+   "usd": 0.002056,
+   "reportedUsd": 0.0020558,
+   "in": 1541,
+   "out": 823,
+   "latencyS": 15.35,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c06",
+   "priority": 0,
+   "usd": 0.002289,
+   "reportedUsd": 0.0022888,
+   "in": 1541,
+   "out": 1056,
+   "latencyS": 19.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c06",
+   "priority": 0,
+   "usd": 0.002664,
+   "reportedUsd": 0.0026638,
+   "in": 1541,
+   "out": 1431,
+   "latencyS": 26.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c07",
+   "priority": 0,
+   "usd": 0.002544,
+   "reportedUsd": 0.0025438,
+   "in": 1541,
+   "out": 1311,
+   "latencyS": 23.87,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c08",
+   "priority": 0,
+   "usd": 0.001598,
+   "reportedUsd": 0.0015978,
+   "in": 1541,
+   "out": 365,
+   "latencyS": 7.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c08",
+   "priority": 0,
+   "usd": 0.002868,
+   "reportedUsd": 0.0028678,
+   "in": 1541,
+   "out": 1635,
+   "latencyS": 29.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c06",
+   "priority": 0,
+   "usd": 0.002315,
+   "reportedUsd": 0.0023148,
+   "in": 1541,
+   "out": 1082,
+   "latencyS": 20.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c07",
+   "priority": 0,
+   "usd": 0.003341,
+   "reportedUsd": 0.0033408,
+   "in": 1541,
+   "out": 2108,
+   "latencyS": 38.42,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c00",
+   "priority": 0,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.56,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c01",
+   "priority": 0,
+   "usd": 0.001296,
+   "reportedUsd": 0.0012958,
+   "in": 1541,
+   "out": 63,
+   "latencyS": 1.64,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c07",
+   "priority": 0,
+   "usd": 0.002347,
+   "reportedUsd": 0.0023468,
+   "in": 1541,
+   "out": 1114,
+   "latencyS": 19.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c08",
+   "priority": 0,
+   "usd": 0.003665,
+   "reportedUsd": 0.0036648,
+   "in": 1541,
+   "out": 2432,
+   "latencyS": 43.51,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c09",
+   "priority": 0,
+   "usd": 0.003375,
+   "reportedUsd": 0.0033748,
+   "in": 1541,
+   "out": 2142,
+   "latencyS": 37.57,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c03",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 1.88,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c02",
+   "priority": 0,
+   "usd": 0.001462,
+   "reportedUsd": 0.0014618,
+   "in": 1541,
+   "out": 229,
+   "latencyS": 4.65,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c09",
+   "priority": 0,
+   "usd": 0.002395,
+   "reportedUsd": 0.0023948,
+   "in": 1541,
+   "out": 1162,
+   "latencyS": 20.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c08",
+   "priority": 0,
+   "usd": 0.002164,
+   "reportedUsd": 0.0021638,
+   "in": 1541,
+   "out": 931,
+   "latencyS": 15.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c00",
+   "priority": 0,
+   "usd": 0.001525,
+   "reportedUsd": 0.0015248,
+   "in": 1541,
+   "out": 292,
+   "latencyS": 5.68,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c01",
+   "priority": 0,
+   "usd": 0.00146,
+   "reportedUsd": 0.0014598,
+   "in": 1541,
+   "out": 227,
+   "latencyS": 4.68,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c02",
+   "priority": 0,
+   "usd": 0.001298,
+   "reportedUsd": 0.0012978,
+   "in": 1541,
+   "out": 65,
+   "latencyS": 1.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c06",
+   "priority": 0,
+   "usd": 0.002527,
+   "reportedUsd": 0.0025268,
+   "in": 1541,
+   "out": 1294,
+   "latencyS": 22.1,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c03",
+   "priority": 0,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.17,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c02",
+   "priority": 0,
+   "usd": 0.001454,
+   "reportedUsd": 0.0014538,
+   "in": 1541,
+   "out": 221,
+   "latencyS": 4.66,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c09",
+   "priority": 0,
+   "usd": 0.002868,
+   "reportedUsd": 0.0028678,
+   "in": 1541,
+   "out": 1635,
+   "latencyS": 29.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c08",
+   "priority": 0,
+   "usd": 0.002399,
+   "reportedUsd": 0.0023988,
+   "in": 1541,
+   "out": 1166,
+   "latencyS": 21.73,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c00",
+   "priority": 0,
+   "usd": 0.001792,
+   "reportedUsd": 0.0017918,
+   "in": 1541,
+   "out": 559,
+   "latencyS": 11.51,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c00",
+   "priority": 0,
+   "usd": 0.001308,
+   "reportedUsd": 0.0013078,
+   "in": 1541,
+   "out": 75,
+   "latencyS": 2.03,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c01",
+   "priority": 0,
+   "usd": 0.001864,
+   "reportedUsd": 0.0018638,
+   "in": 1541,
+   "out": 631,
+   "latencyS": 12.34,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c07",
+   "priority": 0,
+   "usd": 0.002566,
+   "reportedUsd": 0.0025658,
+   "in": 1541,
+   "out": 1333,
+   "latencyS": 24.92,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c01",
+   "priority": 0,
+   "usd": 0.001385,
+   "reportedUsd": 0.0013848,
+   "in": 1541,
+   "out": 152,
+   "latencyS": 4.99,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c03",
+   "priority": 0,
+   "usd": 0.001634,
+   "reportedUsd": 0.0016338,
+   "in": 1541,
+   "out": 401,
+   "latencyS": 9.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c03",
+   "priority": 0,
+   "usd": 0.001413,
+   "reportedUsd": 0.0014128,
+   "in": 1541,
+   "out": 180,
+   "latencyS": 5.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/overview",
+   "priority": 1,
+   "usd": 0.00135,
+   "reportedUsd": 0.0013502,
+   "in": 1414,
+   "out": 219,
+   "latencyS": 5.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c06",
+   "priority": 0,
+   "usd": 0.002918,
+   "reportedUsd": 0.0029178,
+   "in": 1541,
+   "out": 1685,
+   "latencyS": 33.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/overview",
+   "priority": 1,
+   "usd": 0.001441,
+   "reportedUsd": 0.0014412,
+   "in": 1414,
+   "out": 310,
+   "latencyS": 7.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/overview",
+   "priority": 1,
+   "usd": 0.001346,
+   "reportedUsd": 0.0013462,
+   "in": 1414,
+   "out": 215,
+   "latencyS": 5.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-3.06-00/overview",
+   "priority": 1,
+   "usd": 0.001519,
+   "reportedUsd": 0.0015192,
+   "in": 1414,
+   "out": 388,
+   "latencyS": 10.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/overview",
+   "priority": 1,
+   "usd": 0.001623,
+   "reportedUsd": 0.0016232,
+   "in": 1414,
+   "out": 492,
+   "latencyS": 12.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c09",
+   "priority": 0,
+   "usd": 0.003039,
+   "reportedUsd": 0.0030388,
+   "in": 1541,
+   "out": 1806,
+   "latencyS": 35.85,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c04",
+   "priority": 2,
+   "usd": 0.001508,
+   "reportedUsd": 0.0015078,
+   "in": 1541,
+   "out": 275,
+   "latencyS": 5.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c07",
+   "priority": 2,
+   "usd": 0.001299,
+   "reportedUsd": 0.0012988,
+   "in": 1541,
+   "out": 66,
+   "latencyS": 3.26,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c05",
+   "priority": 2,
+   "usd": 0.001592,
+   "reportedUsd": 0.0015918,
+   "in": 1541,
+   "out": 359,
+   "latencyS": 8.47,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c02",
+   "priority": 2,
+   "usd": 0.001684,
+   "reportedUsd": 0.0016838,
+   "in": 1541,
+   "out": 451,
+   "latencyS": 10.57,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c06",
+   "priority": 2,
+   "usd": 0.001656,
+   "reportedUsd": 0.0016558,
+   "in": 1541,
+   "out": 423,
+   "latencyS": 9.48,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c03",
+   "priority": 2,
+   "usd": 0.001851,
+   "reportedUsd": 0.0018508,
+   "in": 1541,
+   "out": 618,
+   "latencyS": 13.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c00",
+   "priority": 2,
+   "usd": 0.002083,
+   "reportedUsd": 0.0020828,
+   "in": 1541,
+   "out": 850,
+   "latencyS": 17.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c12",
+   "priority": 2,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 0.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c11",
+   "priority": 2,
+   "usd": 0.001439,
+   "reportedUsd": 0.0014388,
+   "in": 1541,
+   "out": 206,
+   "latencyS": 4.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c01",
+   "priority": 2,
+   "usd": 0.001929,
+   "reportedUsd": 0.0019288,
+   "in": 1541,
+   "out": 696,
+   "latencyS": 15.33,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c00",
+   "priority": 2,
+   "usd": 0.001299,
+   "reportedUsd": 0.0012988,
+   "in": 1541,
+   "out": 66,
+   "latencyS": 2.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c01",
+   "priority": 2,
+   "usd": 0.0013,
+   "reportedUsd": 0.0012998,
+   "in": 1541,
+   "out": 67,
+   "latencyS": 2.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c02",
+   "priority": 2,
+   "usd": 0.001376,
+   "reportedUsd": 0.0013758,
+   "in": 1541,
+   "out": 143,
+   "latencyS": 3.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c10",
+   "priority": 2,
+   "usd": 0.001766,
+   "reportedUsd": 0.0017658,
+   "in": 1541,
+   "out": 533,
+   "latencyS": 10.88,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c04",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 7.46,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c03",
+   "priority": 2,
+   "usd": 0.001356,
+   "reportedUsd": 0.0013558,
+   "in": 1541,
+   "out": 123,
+   "latencyS": 8.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c09",
+   "priority": 2,
+   "usd": 0.001994,
+   "reportedUsd": 0.0019938,
+   "in": 1541,
+   "out": 761,
+   "latencyS": 15.14,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c07",
+   "priority": 2,
+   "usd": 0.001584,
+   "reportedUsd": 0.0015838,
+   "in": 1541,
+   "out": 351,
+   "latencyS": 8.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c06",
+   "priority": 2,
+   "usd": 0.001709,
+   "reportedUsd": 0.0017088,
+   "in": 1541,
+   "out": 476,
+   "latencyS": 10.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c12",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c00",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c01",
+   "priority": 2,
+   "usd": 0.001309,
+   "reportedUsd": 0.0013088,
+   "in": 1541,
+   "out": 76,
+   "latencyS": 2.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c02",
+   "priority": 2,
+   "usd": 0.001308,
+   "reportedUsd": 0.0013078,
+   "in": 1541,
+   "out": 75,
+   "latencyS": 2.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r00c08",
+   "priority": 2,
+   "usd": 0.002489,
+   "reportedUsd": 0.0024888,
+   "in": 1541,
+   "out": 1256,
+   "latencyS": 27.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c11",
+   "priority": 2,
+   "usd": 0.001631,
+   "reportedUsd": 0.0016308,
+   "in": 1541,
+   "out": 398,
+   "latencyS": 9.81,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c04",
+   "priority": 2,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 3.27,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c03",
+   "priority": 2,
+   "usd": 0.001443,
+   "reportedUsd": 0.0014428,
+   "in": 1541,
+   "out": 210,
+   "latencyS": 5.65,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c05",
+   "priority": 2,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 2.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c08",
+   "priority": 2,
+   "usd": 0.001978,
+   "reportedUsd": 0.0019778,
+   "in": 1541,
+   "out": 745,
+   "latencyS": 18.42,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c09",
+   "priority": 2,
+   "usd": 0.001918,
+   "reportedUsd": 0.0019178,
+   "in": 1541,
+   "out": 685,
+   "latencyS": 17.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c10",
+   "priority": 2,
+   "usd": 0.001975,
+   "reportedUsd": 0.0019748,
+   "in": 1541,
+   "out": 742,
+   "latencyS": 18.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c06",
+   "priority": 2,
+   "usd": 0.001595,
+   "reportedUsd": 0.0015948,
+   "in": 1541,
+   "out": 362,
+   "latencyS": 9.91,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c00",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0006884,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c07",
+   "priority": 2,
+   "usd": 0.00173,
+   "reportedUsd": 0.0017298,
+   "in": 1541,
+   "out": 497,
+   "latencyS": 12.98,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c10",
+   "priority": 2,
+   "usd": 0.001553,
+   "reportedUsd": 0.0015528,
+   "in": 1541,
+   "out": 320,
+   "latencyS": 7.82,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c01",
+   "priority": 2,
+   "usd": 0.001447,
+   "reportedUsd": 0.0014468,
+   "in": 1541,
+   "out": 214,
+   "latencyS": 6.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c08",
+   "priority": 2,
+   "usd": 0.001907,
+   "reportedUsd": 0.0019068,
+   "in": 1541,
+   "out": 674,
+   "latencyS": 18.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c05",
+   "priority": 2,
+   "usd": 0.0013,
+   "reportedUsd": 0.0012998,
+   "in": 1541,
+   "out": 67,
+   "latencyS": 2.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c03",
+   "priority": 2,
+   "usd": 0.001566,
+   "reportedUsd": 0.0015658,
+   "in": 1541,
+   "out": 333,
+   "latencyS": 9.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c02",
+   "priority": 2,
+   "usd": 0.001578,
+   "reportedUsd": 0.0015778,
+   "in": 1541,
+   "out": 345,
+   "latencyS": 9.94,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c04",
+   "priority": 2,
+   "usd": 0.001409,
+   "reportedUsd": 0.0014088,
+   "in": 1541,
+   "out": 176,
+   "latencyS": 5.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c11",
+   "priority": 2,
+   "usd": 0.001954,
+   "reportedUsd": 0.0019538,
+   "in": 1541,
+   "out": 721,
+   "latencyS": 18.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c12",
+   "priority": 2,
+   "usd": 0.001761,
+   "reportedUsd": 0.0017608,
+   "in": 1541,
+   "out": 528,
+   "latencyS": 20.61,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c07",
+   "priority": 2,
+   "usd": 0.001521,
+   "reportedUsd": 0.0015208,
+   "in": 1541,
+   "out": 288,
+   "latencyS": 10.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r02c09",
+   "priority": 2,
+   "usd": 0.002524,
+   "reportedUsd": 0.0025238,
+   "in": 1541,
+   "out": 1291,
+   "latencyS": 37.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c06",
+   "priority": 2,
+   "usd": 0.001764,
+   "reportedUsd": 0.0017638,
+   "in": 1541,
+   "out": 531,
+   "latencyS": 17.71,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c07",
+   "priority": 2,
+   "usd": 0.001819,
+   "reportedUsd": 0.0018188,
+   "in": 1541,
+   "out": 586,
+   "latencyS": 19.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c12",
+   "priority": 2,
+   "usd": 0.002055,
+   "reportedUsd": 0.0020548,
+   "in": 1541,
+   "out": 822,
+   "latencyS": 27.48,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c08",
+   "priority": 2,
+   "usd": 0.002407,
+   "reportedUsd": 0.0024068,
+   "in": 1541,
+   "out": 1174,
+   "latencyS": 37.7,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c10",
+   "priority": 2,
+   "usd": 0.002424,
+   "reportedUsd": 0.0024238,
+   "in": 1541,
+   "out": 1191,
+   "latencyS": 37.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c09",
+   "priority": 2,
+   "usd": 0.002502,
+   "reportedUsd": 0.0025018,
+   "in": 1541,
+   "out": 1269,
+   "latencyS": 39.7,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c06",
+   "priority": 2,
+   "usd": 0.00227,
+   "reportedUsd": 0.0022698,
+   "in": 1541,
+   "out": 1037,
+   "latencyS": 29.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r03c11",
+   "priority": 2,
+   "usd": 0.002649,
+   "reportedUsd": 0.0026488,
+   "in": 1541,
+   "out": 1416,
+   "latencyS": 42.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c10",
+   "priority": 2,
+   "usd": 0.001745,
+   "reportedUsd": 0.0017448,
+   "in": 1541,
+   "out": 512,
+   "latencyS": 12.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c09",
+   "priority": 2,
+   "usd": 0.001755,
+   "reportedUsd": 0.0017548,
+   "in": 1541,
+   "out": 522,
+   "latencyS": 12.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c08",
+   "priority": 2,
+   "usd": 0.001975,
+   "reportedUsd": 0.0019748,
+   "in": 1541,
+   "out": 742,
+   "latencyS": 17.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c09",
+   "priority": 2,
+   "usd": 0.001653,
+   "reportedUsd": 0.0016528,
+   "in": 1541,
+   "out": 420,
+   "latencyS": 10.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r01c05",
+   "priority": 2,
+   "usd": 0.005329,
+   "reportedUsd": 0.0053288,
+   "in": 1541,
+   "out": 4096,
+   "latencyS": 106.0,
+   "finish": "length"
+  },
+  {
+   "tile": "A-4.00-00/r05c08",
+   "priority": 2,
+   "usd": 0.001901,
+   "reportedUsd": 0.0019008,
+   "in": 1541,
+   "out": 668,
+   "latencyS": 16.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c12",
+   "priority": 2,
+   "usd": 0.002506,
+   "reportedUsd": 0.0025058,
+   "in": 1541,
+   "out": 1273,
+   "latencyS": 31.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c11",
+   "priority": 2,
+   "usd": 0.001721,
+   "reportedUsd": 0.0017208,
+   "in": 1541,
+   "out": 488,
+   "latencyS": 13.95,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c10",
+   "priority": 2,
+   "usd": 0.00186,
+   "reportedUsd": 0.0018598,
+   "in": 1541,
+   "out": 627,
+   "latencyS": 22.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c12",
+   "priority": 2,
+   "usd": 0.001734,
+   "reportedUsd": 0.0017338,
+   "in": 1541,
+   "out": 501,
+   "latencyS": 13.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r04c11",
+   "priority": 2,
+   "usd": 0.00287,
+   "reportedUsd": 0.0028698,
+   "in": 1541,
+   "out": 1637,
+   "latencyS": 39.7,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c09",
+   "priority": 2,
+   "usd": 0.001449,
+   "reportedUsd": 0.0014488,
+   "in": 1541,
+   "out": 216,
+   "latencyS": 4.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c10",
+   "priority": 2,
+   "usd": 0.001369,
+   "reportedUsd": 0.0013688,
+   "in": 1541,
+   "out": 136,
+   "latencyS": 3.65,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c07",
+   "priority": 2,
+   "usd": 0.002787,
+   "reportedUsd": 0.0027868,
+   "in": 1541,
+   "out": 1554,
+   "latencyS": 37.09,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c11",
+   "priority": 2,
+   "usd": 0.001663,
+   "reportedUsd": 0.0016628,
+   "in": 1541,
+   "out": 430,
+   "latencyS": 11.68,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c08",
+   "priority": 2,
+   "usd": 0.002031,
+   "reportedUsd": 0.0020308,
+   "in": 1541,
+   "out": 798,
+   "latencyS": 19.45,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c12",
+   "priority": 2,
+   "usd": 0.001734,
+   "reportedUsd": 0.0017338,
+   "in": 1541,
+   "out": 501,
+   "latencyS": 14.3,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c00",
+   "priority": 2,
+   "usd": 0.001858,
+   "reportedUsd": 0.0018578,
+   "in": 1541,
+   "out": 625,
+   "latencyS": 16.31,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r05c06",
+   "priority": 2,
+   "usd": 0.003391,
+   "reportedUsd": 0.0033908,
+   "in": 1541,
+   "out": 2158,
+   "latencyS": 53.26,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c04",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 6.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c03",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 9.13,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c02",
+   "priority": 2,
+   "usd": 0.001727,
+   "reportedUsd": 0.0017268,
+   "in": 1541,
+   "out": 494,
+   "latencyS": 15.95,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c09",
+   "priority": 2,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 2.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c10",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.68,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c08",
+   "priority": 2,
+   "usd": 0.001496,
+   "reportedUsd": 0.0014958,
+   "in": 1541,
+   "out": 263,
+   "latencyS": 9.1,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c07",
+   "priority": 2,
+   "usd": 0.003,
+   "reportedUsd": 0.0029998,
+   "in": 1541,
+   "out": 1767,
+   "latencyS": 47.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c01",
+   "priority": 2,
+   "usd": 0.002457,
+   "reportedUsd": 0.0024568,
+   "in": 1541,
+   "out": 1224,
+   "latencyS": 35.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c06",
+   "priority": 2,
+   "usd": 0.002424,
+   "reportedUsd": 0.0024238,
+   "in": 1541,
+   "out": 1191,
+   "latencyS": 33.94,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c00",
+   "priority": 2,
+   "usd": 0.001729,
+   "reportedUsd": 0.0017288,
+   "in": 1541,
+   "out": 496,
+   "latencyS": 14.52,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c05",
+   "priority": 2,
+   "usd": 0.002618,
+   "reportedUsd": 0.0026178,
+   "in": 1541,
+   "out": 1385,
+   "latencyS": 39.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c03",
+   "priority": 2,
+   "usd": 0.001368,
+   "reportedUsd": 0.0013678,
+   "in": 1541,
+   "out": 135,
+   "latencyS": 3.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c11",
+   "priority": 2,
+   "usd": 0.002349,
+   "reportedUsd": 0.0023488,
+   "in": 1541,
+   "out": 1116,
+   "latencyS": 31.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c01",
+   "priority": 2,
+   "usd": 0.002131,
+   "reportedUsd": 0.0021308,
+   "in": 1541,
+   "out": 898,
+   "latencyS": 25.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r06c06",
+   "priority": 2,
+   "usd": 0.004256,
+   "reportedUsd": 0.0042558,
+   "in": 1541,
+   "out": 3023,
+   "latencyS": 81.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c04",
+   "priority": 2,
+   "usd": 0.001429,
+   "reportedUsd": 0.0014288,
+   "in": 1541,
+   "out": 196,
+   "latencyS": 10.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c02",
+   "priority": 2,
+   "usd": 0.001839,
+   "reportedUsd": 0.0018388,
+   "in": 1541,
+   "out": 606,
+   "latencyS": 16.89,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c10",
+   "priority": 2,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 3.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c09",
+   "priority": 2,
+   "usd": 0.001379,
+   "reportedUsd": 0.0013788,
+   "in": 1541,
+   "out": 146,
+   "latencyS": 5.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c12",
+   "priority": 2,
+   "usd": 0.002799,
+   "reportedUsd": 0.0027988,
+   "in": 1541,
+   "out": 1566,
+   "latencyS": 42.99,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c07",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 3.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c08",
+   "priority": 2,
+   "usd": 0.001572,
+   "reportedUsd": 0.0015718,
+   "in": 1541,
+   "out": 339,
+   "latencyS": 11.08,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r07c07",
+   "priority": 2,
+   "usd": 0.003269,
+   "reportedUsd": 0.0032688,
+   "in": 1541,
+   "out": 2036,
+   "latencyS": 57.65,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c07",
+   "priority": 2,
+   "usd": 0.001747,
+   "reportedUsd": 0.0017468,
+   "in": 1541,
+   "out": 514,
+   "latencyS": 15.18,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c08",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0006884,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 2.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c09",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0006884,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.96,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c10",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0006884,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c06",
+   "priority": 2,
+   "usd": 0.002003,
+   "reportedUsd": 0.0020028,
+   "in": 1541,
+   "out": 770,
+   "latencyS": 20.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c12",
+   "priority": 2,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 1.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c07",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 3.32,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r00c11",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 6.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c10",
+   "priority": 2,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 5.98,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c11",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 4.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c09",
+   "priority": 2,
+   "usd": 0.001383,
+   "reportedUsd": 0.0013828,
+   "in": 1541,
+   "out": 150,
+   "latencyS": 7.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c07",
+   "priority": 2,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 2.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c09",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 3.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c08",
+   "priority": 2,
+   "usd": 0.001577,
+   "reportedUsd": 0.0015768,
+   "in": 1541,
+   "out": 344,
+   "latencyS": 12.59,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r01c12",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 7.5,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c05",
+   "priority": 2,
+   "usd": 0.002406,
+   "reportedUsd": 0.0024058,
+   "in": 1541,
+   "out": 1173,
+   "latencyS": 41.31,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c00",
+   "priority": 2,
+   "usd": 0.001366,
+   "reportedUsd": 0.0013658,
+   "in": 1541,
+   "out": 133,
+   "latencyS": 5.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c10",
+   "priority": 2,
+   "usd": 0.001588,
+   "reportedUsd": 0.0015878,
+   "in": 1541,
+   "out": 355,
+   "latencyS": 12.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c11",
+   "priority": 2,
+   "usd": 0.002135,
+   "reportedUsd": 0.0021348,
+   "in": 1541,
+   "out": 902,
+   "latencyS": 29.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c01",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 3.83,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c02",
+   "priority": 2,
+   "usd": 0.001298,
+   "reportedUsd": 0.0012978,
+   "in": 1541,
+   "out": 65,
+   "latencyS": 3.45,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c08",
+   "priority": 2,
+   "usd": 0.001719,
+   "reportedUsd": 0.0017188,
+   "in": 1541,
+   "out": 486,
+   "latencyS": 16.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c11",
+   "priority": 2,
+   "usd": 0.001742,
+   "reportedUsd": 0.0017418,
+   "in": 1541,
+   "out": 509,
+   "latencyS": 14.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-4.00-00/r08c12",
+   "priority": 2,
+   "usd": 0.002344,
+   "reportedUsd": 0.0023438,
+   "in": 1541,
+   "out": 1111,
+   "latencyS": 33.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r02c12",
+   "priority": 2,
+   "usd": 0.001761,
+   "reportedUsd": 0.0017608,
+   "in": 1541,
+   "out": 528,
+   "latencyS": 15.82,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c07",
+   "priority": 2,
+   "usd": 0.001437,
+   "reportedUsd": 0.0014368,
+   "in": 1541,
+   "out": 204,
+   "latencyS": 5.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c08",
+   "priority": 2,
+   "usd": 0.001364,
+   "reportedUsd": 0.0013638,
+   "in": 1541,
+   "out": 131,
+   "latencyS": 3.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c06",
+   "priority": 2,
+   "usd": 0.001564,
+   "reportedUsd": 0.0015638,
+   "in": 1541,
+   "out": 331,
+   "latencyS": 7.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c10",
+   "priority": 2,
+   "usd": 0.001374,
+   "reportedUsd": 0.0013738,
+   "in": 1541,
+   "out": 141,
+   "latencyS": 3.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c00",
+   "priority": 2,
+   "usd": 0.001369,
+   "reportedUsd": 0.0013688,
+   "in": 1541,
+   "out": 136,
+   "latencyS": 4.04,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c09",
+   "priority": 2,
+   "usd": 0.001587,
+   "reportedUsd": 0.0015868,
+   "in": 1541,
+   "out": 354,
+   "latencyS": 8.3,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c05",
+   "priority": 2,
+   "usd": 0.001842,
+   "reportedUsd": 0.0018418,
+   "in": 1541,
+   "out": 609,
+   "latencyS": 14.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c03",
+   "priority": 2,
+   "usd": 0.001992,
+   "reportedUsd": 0.0019918,
+   "in": 1541,
+   "out": 759,
+   "latencyS": 19.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c01",
+   "priority": 2,
+   "usd": 0.001651,
+   "reportedUsd": 0.0016508,
+   "in": 1541,
+   "out": 418,
+   "latencyS": 11.81,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c11",
+   "priority": 2,
+   "usd": 0.002046,
+   "reportedUsd": 0.0020458,
+   "in": 1541,
+   "out": 813,
+   "latencyS": 21.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c04",
+   "priority": 2,
+   "usd": 0.002412,
+   "reportedUsd": 0.0024118,
+   "in": 1541,
+   "out": 1179,
+   "latencyS": 29.07,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r03c12",
+   "priority": 2,
+   "usd": 0.002055,
+   "reportedUsd": 0.0020548,
+   "in": 1541,
+   "out": 822,
+   "latencyS": 22.42,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c02",
+   "priority": 2,
+   "usd": 0.001903,
+   "reportedUsd": 0.0019028,
+   "in": 1541,
+   "out": 670,
+   "latencyS": 19.52,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c08",
+   "priority": 2,
+   "usd": 0.001302,
+   "reportedUsd": 0.0013018,
+   "in": 1541,
+   "out": 69,
+   "latencyS": 3.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c10",
+   "priority": 2,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 2.35,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c03",
+   "priority": 2,
+   "usd": 0.002008,
+   "reportedUsd": 0.0020078,
+   "in": 1541,
+   "out": 775,
+   "latencyS": 22.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c09",
+   "priority": 2,
+   "usd": 0.001525,
+   "reportedUsd": 0.0015248,
+   "in": 1541,
+   "out": 292,
+   "latencyS": 9.15,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c06",
+   "priority": 2,
+   "usd": 0.001852,
+   "reportedUsd": 0.0018518,
+   "in": 1541,
+   "out": 619,
+   "latencyS": 17.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c05",
+   "priority": 2,
+   "usd": 0.002061,
+   "reportedUsd": 0.0020608,
+   "in": 1541,
+   "out": 828,
+   "latencyS": 21.56,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c04",
+   "priority": 2,
+   "usd": 0.002299,
+   "reportedUsd": 0.0022988,
+   "in": 1541,
+   "out": 1066,
+   "latencyS": 29.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c03",
+   "priority": 2,
+   "usd": 0.001587,
+   "reportedUsd": 0.0015868,
+   "in": 1541,
+   "out": 354,
+   "latencyS": 14.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c00",
+   "priority": 2,
+   "usd": 0.001925,
+   "reportedUsd": 0.0019248,
+   "in": 1541,
+   "out": 692,
+   "latencyS": 23.1,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c04",
+   "priority": 2,
+   "usd": 0.001668,
+   "reportedUsd": 0.0016678,
+   "in": 1541,
+   "out": 435,
+   "latencyS": 15.71,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c01",
+   "priority": 2,
+   "usd": 0.001675,
+   "reportedUsd": 0.0016748,
+   "in": 1541,
+   "out": 442,
+   "latencyS": 21.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c05",
+   "priority": 2,
+   "usd": 0.001679,
+   "reportedUsd": 0.0016788,
+   "in": 1541,
+   "out": 446,
+   "latencyS": 17.15,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c02",
+   "priority": 2,
+   "usd": 0.001869,
+   "reportedUsd": 0.0018688,
+   "in": 1541,
+   "out": 636,
+   "latencyS": 23.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c09",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 5.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c08",
+   "priority": 2,
+   "usd": 0.001309,
+   "reportedUsd": 0.0013088,
+   "in": 1541,
+   "out": 76,
+   "latencyS": 5.23,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c10",
+   "priority": 2,
+   "usd": 0.001429,
+   "reportedUsd": 0.0014288,
+   "in": 1541,
+   "out": 196,
+   "latencyS": 6.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c07",
+   "priority": 2,
+   "usd": 0.001584,
+   "reportedUsd": 0.0015838,
+   "in": 1541,
+   "out": 351,
+   "latencyS": 12.54,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c12",
+   "priority": 2,
+   "usd": 0.002506,
+   "reportedUsd": 0.0025058,
+   "in": 1541,
+   "out": 1273,
+   "latencyS": 42.15,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c06",
+   "priority": 2,
+   "usd": 0.001893,
+   "reportedUsd": 0.0018928,
+   "in": 1541,
+   "out": 660,
+   "latencyS": 21.57,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c12",
+   "priority": 2,
+   "usd": 0.001733,
+   "reportedUsd": 0.0017328,
+   "in": 1541,
+   "out": 500,
+   "latencyS": 15.1,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r05c11",
+   "priority": 2,
+   "usd": 0.001786,
+   "reportedUsd": 0.0017858,
+   "in": 1541,
+   "out": 553,
+   "latencyS": 15.95,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c05",
+   "priority": 2,
+   "usd": 0.001449,
+   "reportedUsd": 0.0014488,
+   "in": 1541,
+   "out": 216,
+   "latencyS": 7.16,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r04c11",
+   "priority": 2,
+   "usd": 0.002476,
+   "reportedUsd": 0.0024758,
+   "in": 1541,
+   "out": 1243,
+   "latencyS": 52.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c04",
+   "priority": 2,
+   "usd": 0.001592,
+   "reportedUsd": 0.0015918,
+   "in": 1541,
+   "out": 359,
+   "latencyS": 10.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c08",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 3.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c06",
+   "priority": 2,
+   "usd": 0.001669,
+   "reportedUsd": 0.0016688,
+   "in": 1541,
+   "out": 436,
+   "latencyS": 12.83,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c07",
+   "priority": 2,
+   "usd": 0.001536,
+   "reportedUsd": 0.0015358,
+   "in": 1541,
+   "out": 303,
+   "latencyS": 10.4,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c11",
+   "priority": 2,
+   "usd": 0.001616,
+   "reportedUsd": 0.0016158,
+   "in": 1541,
+   "out": 383,
+   "latencyS": 12.99,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c01",
+   "priority": 2,
+   "usd": 0.002337,
+   "reportedUsd": 0.0023368,
+   "in": 1541,
+   "out": 1104,
+   "latencyS": 33.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c01",
+   "priority": 2,
+   "usd": 0.001669,
+   "reportedUsd": 0.0016688,
+   "in": 1541,
+   "out": 436,
+   "latencyS": 14.33,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c00",
+   "priority": 2,
+   "usd": 0.002899,
+   "reportedUsd": 0.0028988,
+   "in": 1541,
+   "out": 1666,
+   "latencyS": 48.34,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c04",
+   "priority": 2,
+   "usd": 0.001302,
+   "reportedUsd": 0.0013018,
+   "in": 1541,
+   "out": 69,
+   "latencyS": 1.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c12",
+   "priority": 2,
+   "usd": 0.00202,
+   "reportedUsd": 0.0020198,
+   "in": 1541,
+   "out": 787,
+   "latencyS": 23.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c05",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 1.66,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c07",
+   "priority": 2,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 1.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c08",
+   "priority": 2,
+   "usd": 0.001236,
+   "reportedUsd": 0.0012358,
+   "in": 1541,
+   "out": 3,
+   "latencyS": 0.83,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c03",
+   "priority": 2,
+   "usd": 0.00168,
+   "reportedUsd": 0.0016798,
+   "in": 1541,
+   "out": 447,
+   "latencyS": 13.9,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c03",
+   "priority": 2,
+   "usd": 0.002389,
+   "reportedUsd": 0.0023888,
+   "in": 1541,
+   "out": 1156,
+   "latencyS": 41.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c06",
+   "priority": 2,
+   "usd": 0.001366,
+   "reportedUsd": 0.0013658,
+   "in": 1541,
+   "out": 133,
+   "latencyS": 5.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c02",
+   "priority": 2,
+   "usd": 0.001371,
+   "reportedUsd": 0.0013708,
+   "in": 1541,
+   "out": 138,
+   "latencyS": 4.45,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c03",
+   "priority": 2,
+   "usd": 0.0013,
+   "reportedUsd": 0.0012998,
+   "in": 1541,
+   "out": 67,
+   "latencyS": 1.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c01",
+   "priority": 2,
+   "usd": 0.001515,
+   "reportedUsd": 0.0015148,
+   "in": 1541,
+   "out": 282,
+   "latencyS": 7.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c00",
+   "priority": 2,
+   "usd": 0.002405,
+   "reportedUsd": 0.0024048,
+   "in": 1541,
+   "out": 1172,
+   "latencyS": 32.82,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c05",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 2.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c02",
+   "priority": 2,
+   "usd": 0.002255,
+   "reportedUsd": 0.0022548,
+   "in": 1541,
+   "out": 1022,
+   "latencyS": 26.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c07",
+   "priority": 2,
+   "usd": 0.001308,
+   "reportedUsd": 0.0013078,
+   "in": 1541,
+   "out": 75,
+   "latencyS": 1.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c09",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c00",
+   "priority": 2,
+   "usd": 0.001799,
+   "reportedUsd": 0.0017988,
+   "in": 1541,
+   "out": 566,
+   "latencyS": 13.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c04",
+   "priority": 2,
+   "usd": 0.001512,
+   "reportedUsd": 0.0015118,
+   "in": 1541,
+   "out": 279,
+   "latencyS": 6.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r06c02",
+   "priority": 2,
+   "usd": 0.003426,
+   "reportedUsd": 0.0034258,
+   "in": 1541,
+   "out": 2193,
+   "latencyS": 60.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c10",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 1.19,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c08",
+   "priority": 2,
+   "usd": 0.001364,
+   "reportedUsd": 0.0013638,
+   "in": 1541,
+   "out": 131,
+   "latencyS": 3.48,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c06",
+   "priority": 2,
+   "usd": 0.001512,
+   "reportedUsd": 0.0015118,
+   "in": 1541,
+   "out": 279,
+   "latencyS": 6.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c07",
+   "priority": 2,
+   "usd": 0.00136,
+   "reportedUsd": 0.0013598,
+   "in": 1541,
+   "out": 127,
+   "latencyS": 3.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c06",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 14.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c09",
+   "priority": 2,
+   "usd": 0.001538,
+   "reportedUsd": 0.0015378,
+   "in": 1541,
+   "out": 305,
+   "latencyS": 16.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c11",
+   "priority": 2,
+   "usd": 0.001302,
+   "reportedUsd": 0.0013018,
+   "in": 1541,
+   "out": 69,
+   "latencyS": 3.51,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c12",
+   "priority": 2,
+   "usd": 0.001239,
+   "reportedUsd": 0.0012388,
+   "in": 1541,
+   "out": 6,
+   "latencyS": 1.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c06",
+   "priority": 2,
+   "usd": 0.001301,
+   "reportedUsd": 0.0013008,
+   "in": 1541,
+   "out": 68,
+   "latencyS": 2.31,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c11",
+   "priority": 2,
+   "usd": 0.002409,
+   "reportedUsd": 0.0024088,
+   "in": 1541,
+   "out": 1176,
+   "latencyS": 37.36,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c10",
+   "priority": 2,
+   "usd": 0.001657,
+   "reportedUsd": 0.0016568,
+   "in": 1541,
+   "out": 424,
+   "latencyS": 19.6,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r00c08",
+   "priority": 2,
+   "usd": 0.001777,
+   "reportedUsd": 0.0017768,
+   "in": 1541,
+   "out": 544,
+   "latencyS": 22.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r07c12",
+   "priority": 2,
+   "usd": 0.002548,
+   "reportedUsd": 0.0025478,
+   "in": 1541,
+   "out": 1315,
+   "latencyS": 39.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c07",
+   "priority": 2,
+   "usd": 0.001444,
+   "reportedUsd": 0.0014438,
+   "in": 1541,
+   "out": 211,
+   "latencyS": 5.28,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c11",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 3.61,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r02c00",
+   "priority": 2,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 3.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c12",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 3.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c10",
+   "priority": 2,
+   "usd": 0.001358,
+   "reportedUsd": 0.0013578,
+   "in": 1541,
+   "out": 125,
+   "latencyS": 6.18,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c09",
+   "priority": 2,
+   "usd": 0.00159,
+   "reportedUsd": 0.0015898,
+   "in": 1541,
+   "out": 357,
+   "latencyS": 11.16,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c11",
+   "priority": 2,
+   "usd": 0.002133,
+   "reportedUsd": 0.0021328,
+   "in": 1541,
+   "out": 900,
+   "latencyS": 32.82,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c02",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.81,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c03",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0006254,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 2.19,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c04",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0006254,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.85,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c05",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0006254,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.66,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c01",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 5.05,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-1.01-00/r08c12",
+   "priority": 2,
+   "usd": 0.002211,
+   "reportedUsd": 0.0022108,
+   "in": 1541,
+   "out": 978,
+   "latencyS": 37.4,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c06",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0006254,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.62,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c07",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0006254,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c08",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0006254,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c00",
+   "priority": 2,
+   "usd": 0.0013,
+   "reportedUsd": 0.0012998,
+   "in": 1541,
+   "out": 67,
+   "latencyS": 8.1,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r02c10",
+   "priority": 2,
+   "usd": 0.001443,
+   "reportedUsd": 0.0014428,
+   "in": 1541,
+   "out": 210,
+   "latencyS": 13.72,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r02c11",
+   "priority": 2,
+   "usd": 0.001742,
+   "reportedUsd": 0.0017418,
+   "in": 1541,
+   "out": 509,
+   "latencyS": 18.11,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r02c12",
+   "priority": 2,
+   "usd": 0.001761,
+   "reportedUsd": 0.0017608,
+   "in": 1541,
+   "out": 528,
+   "latencyS": 18.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r01c08",
+   "priority": 2,
+   "usd": 0.001957,
+   "reportedUsd": 0.0019568,
+   "in": 1541,
+   "out": 724,
+   "latencyS": 30.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c09",
+   "priority": 2,
+   "usd": 0.002027,
+   "reportedUsd": 0.0020268,
+   "in": 1541,
+   "out": 794,
+   "latencyS": 29.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c10",
+   "priority": 2,
+   "usd": 0.002248,
+   "reportedUsd": 0.0022478,
+   "in": 1541,
+   "out": 1015,
+   "latencyS": 42.16,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c01",
+   "priority": 2,
+   "usd": 0.002197,
+   "reportedUsd": 0.0021968,
+   "in": 1541,
+   "out": 964,
+   "latencyS": 41.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c11",
+   "priority": 2,
+   "usd": 0.002457,
+   "reportedUsd": 0.0024568,
+   "in": 1541,
+   "out": 1224,
+   "latencyS": 50.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r03c12",
+   "priority": 2,
+   "usd": 0.002055,
+   "reportedUsd": 0.0020548,
+   "in": 1541,
+   "out": 822,
+   "latencyS": 52.34,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c03",
+   "priority": 2,
+   "usd": 0.002255,
+   "reportedUsd": 0.0022548,
+   "in": 1541,
+   "out": 1022,
+   "latencyS": 42.48,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c02",
+   "priority": 2,
+   "usd": 0.002555,
+   "reportedUsd": 0.0025548,
+   "in": 1541,
+   "out": 1322,
+   "latencyS": 58.71,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c00",
+   "priority": 2,
+   "usd": 0.002751,
+   "reportedUsd": 0.0027508,
+   "in": 1541,
+   "out": 1518,
+   "latencyS": 65.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c04",
+   "priority": 2,
+   "usd": 0.002098,
+   "reportedUsd": 0.0020978,
+   "in": 1541,
+   "out": 865,
+   "latencyS": 44.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c10",
+   "priority": 2,
+   "usd": 0.001998,
+   "reportedUsd": 0.0019978,
+   "in": 1541,
+   "out": 765,
+   "latencyS": 33.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c05",
+   "priority": 2,
+   "usd": 0.002264,
+   "reportedUsd": 0.0022638,
+   "in": 1541,
+   "out": 1031,
+   "latencyS": 43.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c12",
+   "priority": 2,
+   "usd": 0.002506,
+   "reportedUsd": 0.0025058,
+   "in": 1541,
+   "out": 1273,
+   "latencyS": 46.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c04",
+   "priority": 2,
+   "usd": 0.002028,
+   "reportedUsd": 0.0020278,
+   "in": 1541,
+   "out": 795,
+   "latencyS": 20.92,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r04c11",
+   "priority": 2,
+   "usd": 0.002891,
+   "reportedUsd": 0.0028908,
+   "in": 1541,
+   "out": 1658,
+   "latencyS": 56.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c01",
+   "priority": 2,
+   "usd": 0.002633,
+   "reportedUsd": 0.0026328,
+   "in": 1541,
+   "out": 1400,
+   "latencyS": 45.99,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c12",
+   "priority": 2,
+   "usd": 0.001733,
+   "reportedUsd": 0.0017328,
+   "in": 1541,
+   "out": 500,
+   "latencyS": 17.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c03",
+   "priority": 2,
+   "usd": 0.00293,
+   "reportedUsd": 0.0029298,
+   "in": 1541,
+   "out": 1697,
+   "latencyS": 54.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c00",
+   "priority": 2,
+   "usd": 0.003493,
+   "reportedUsd": 0.0034928,
+   "in": 1541,
+   "out": 2260,
+   "latencyS": 74.04,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c05",
+   "priority": 2,
+   "usd": 0.002799,
+   "reportedUsd": 0.0027988,
+   "in": 1541,
+   "out": 1566,
+   "latencyS": 44.03,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c02",
+   "priority": 2,
+   "usd": 0.00326,
+   "reportedUsd": 0.0032598,
+   "in": 1541,
+   "out": 2027,
+   "latencyS": 60.88,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c10",
+   "priority": 2,
+   "usd": 0.002405,
+   "reportedUsd": 0.0024048,
+   "in": 1541,
+   "out": 1172,
+   "latencyS": 33.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r05c11",
+   "priority": 2,
+   "usd": 0.002187,
+   "reportedUsd": 0.0021868,
+   "in": 1541,
+   "out": 954,
+   "latencyS": 28.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c07",
+   "priority": 2,
+   "usd": 0.001601,
+   "reportedUsd": 0.0016008,
+   "in": 1541,
+   "out": 368,
+   "latencyS": 9.34,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c06",
+   "priority": 2,
+   "usd": 0.001653,
+   "reportedUsd": 0.0016528,
+   "in": 1541,
+   "out": 420,
+   "latencyS": 11.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c05",
+   "priority": 2,
+   "usd": 0.001994,
+   "reportedUsd": 0.0019938,
+   "in": 1541,
+   "out": 761,
+   "latencyS": 18.19,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c08",
+   "priority": 2,
+   "usd": 0.001583,
+   "reportedUsd": 0.0015828,
+   "in": 1541,
+   "out": 350,
+   "latencyS": 8.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c04",
+   "priority": 2,
+   "usd": 0.002087,
+   "reportedUsd": 0.0020868,
+   "in": 1541,
+   "out": 854,
+   "latencyS": 21.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c10",
+   "priority": 2,
+   "usd": 0.001386,
+   "reportedUsd": 0.0013858,
+   "in": 1541,
+   "out": 153,
+   "latencyS": 5.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c01",
+   "priority": 2,
+   "usd": 0.002688,
+   "reportedUsd": 0.0026878,
+   "in": 1541,
+   "out": 1455,
+   "latencyS": 34.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c11",
+   "priority": 2,
+   "usd": 0.001663,
+   "reportedUsd": 0.0016628,
+   "in": 1541,
+   "out": 430,
+   "latencyS": 9.67,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c02",
+   "priority": 2,
+   "usd": 0.002749,
+   "reportedUsd": 0.0027488,
+   "in": 1541,
+   "out": 1516,
+   "latencyS": 35.38,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c03",
+   "priority": 2,
+   "usd": 0.002773,
+   "reportedUsd": 0.0027728,
+   "in": 1541,
+   "out": 1540,
+   "latencyS": 35.83,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c09",
+   "priority": 2,
+   "usd": 0.002369,
+   "reportedUsd": 0.0023688,
+   "in": 1541,
+   "out": 1136,
+   "latencyS": 24.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c05",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c12",
+   "priority": 2,
+   "usd": 0.002182,
+   "reportedUsd": 0.0021818,
+   "in": 1541,
+   "out": 949,
+   "latencyS": 19.75,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c04",
+   "priority": 2,
+   "usd": 0.001617,
+   "reportedUsd": 0.0016168,
+   "in": 1541,
+   "out": 384,
+   "latencyS": 9.55,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c06",
+   "priority": 2,
+   "usd": 0.001472,
+   "reportedUsd": 0.0014718,
+   "in": 1541,
+   "out": 239,
+   "latencyS": 6.59,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c09",
+   "priority": 2,
+   "usd": 0.001418,
+   "reportedUsd": 0.0014178,
+   "in": 1541,
+   "out": 185,
+   "latencyS": 3.61,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c03",
+   "priority": 2,
+   "usd": 0.001993,
+   "reportedUsd": 0.0019928,
+   "in": 1541,
+   "out": 760,
+   "latencyS": 15.76,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c02",
+   "priority": 2,
+   "usd": 0.002177,
+   "reportedUsd": 0.0021768,
+   "in": 1541,
+   "out": 944,
+   "latencyS": 19.45,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c00",
+   "priority": 2,
+   "usd": 0.00256,
+   "reportedUsd": 0.0025598,
+   "in": 1541,
+   "out": 1327,
+   "latencyS": 26.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c01",
+   "priority": 2,
+   "usd": 0.002447,
+   "reportedUsd": 0.0024468,
+   "in": 1541,
+   "out": 1214,
+   "latencyS": 24.75,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c10",
+   "priority": 2,
+   "usd": 0.001506,
+   "reportedUsd": 0.0015058,
+   "in": 1541,
+   "out": 273,
+   "latencyS": 5.73,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c08",
+   "priority": 2,
+   "usd": 0.001836,
+   "reportedUsd": 0.0018358,
+   "in": 1541,
+   "out": 603,
+   "latencyS": 12.31,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c07",
+   "priority": 2,
+   "usd": 0.002009,
+   "reportedUsd": 0.0020088,
+   "in": 1541,
+   "out": 776,
+   "latencyS": 16.7,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c04",
+   "priority": 2,
+   "usd": 0.001305,
+   "reportedUsd": 0.0013048,
+   "in": 1541,
+   "out": 72,
+   "latencyS": 2.05,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c03",
+   "priority": 2,
+   "usd": 0.00149,
+   "reportedUsd": 0.0014898,
+   "in": 1541,
+   "out": 257,
+   "latencyS": 5.18,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c05",
+   "priority": 2,
+   "usd": 0.001405,
+   "reportedUsd": 0.0014048,
+   "in": 1541,
+   "out": 172,
+   "latencyS": 3.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c06",
+   "priority": 2,
+   "usd": 0.001299,
+   "reportedUsd": 0.0012988,
+   "in": 1541,
+   "out": 66,
+   "latencyS": 1.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c02",
+   "priority": 2,
+   "usd": 0.001635,
+   "reportedUsd": 0.0016348,
+   "in": 1541,
+   "out": 402,
+   "latencyS": 9.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c09",
+   "priority": 2,
+   "usd": 0.001378,
+   "reportedUsd": 0.0013778,
+   "in": 1541,
+   "out": 145,
+   "latencyS": 2.9,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c11",
+   "priority": 2,
+   "usd": 0.002343,
+   "reportedUsd": 0.0023428,
+   "in": 1541,
+   "out": 1110,
+   "latencyS": 22.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r06c00",
+   "priority": 2,
+   "usd": 0.005329,
+   "reportedUsd": 0.0053288,
+   "in": 1541,
+   "out": 4096,
+   "latencyS": 89.41,
+   "finish": "length"
+  },
+  {
+   "tile": "A-6.00-00/r08c01",
+   "priority": 2,
+   "usd": 0.002143,
+   "reportedUsd": 0.0021428,
+   "in": 1541,
+   "out": 910,
+   "latencyS": 18.52,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c10",
+   "priority": 2,
+   "usd": 0.001506,
+   "reportedUsd": 0.0015058,
+   "in": 1541,
+   "out": 273,
+   "latencyS": 5.88,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c00",
+   "priority": 2,
+   "usd": 0.002363,
+   "reportedUsd": 0.0023628,
+   "in": 1541,
+   "out": 1130,
+   "latencyS": 23.09,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c08",
+   "priority": 2,
+   "usd": 0.001762,
+   "reportedUsd": 0.0017618,
+   "in": 1541,
+   "out": 529,
+   "latencyS": 10.35,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c03",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c02",
+   "priority": 2,
+   "usd": 0.001351,
+   "reportedUsd": 0.0013508,
+   "in": 1541,
+   "out": 118,
+   "latencyS": 2.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c04",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.6,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c05",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0006884,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 1.63,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c07",
+   "priority": 2,
+   "usd": 0.00207,
+   "reportedUsd": 0.0020698,
+   "in": 1541,
+   "out": 837,
+   "latencyS": 15.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c12",
+   "priority": 2,
+   "usd": 0.00124,
+   "reportedUsd": 0.0012398,
+   "in": 1541,
+   "out": 7,
+   "latencyS": 0.78,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r07c12",
+   "priority": 2,
+   "usd": 0.002787,
+   "reportedUsd": 0.0027868,
+   "in": 1541,
+   "out": 1554,
+   "latencyS": 30.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c11",
+   "priority": 2,
+   "usd": 0.001745,
+   "reportedUsd": 0.0017448,
+   "in": 1541,
+   "out": 512,
+   "latencyS": 9.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c00",
+   "priority": 2,
+   "usd": 0.002098,
+   "reportedUsd": 0.0020978,
+   "in": 1541,
+   "out": 865,
+   "latencyS": 15.72,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c11",
+   "priority": 2,
+   "usd": 0.002133,
+   "reportedUsd": 0.0021328,
+   "in": 1541,
+   "out": 900,
+   "latencyS": 16.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c03",
+   "priority": 2,
+   "usd": 0.001303,
+   "reportedUsd": 0.0013028,
+   "in": 1541,
+   "out": 70,
+   "latencyS": 3.24,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c11",
+   "priority": 2,
+   "usd": 0.001307,
+   "reportedUsd": 0.0013068,
+   "in": 1541,
+   "out": 74,
+   "latencyS": 3.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c01",
+   "priority": 2,
+   "usd": 0.002167,
+   "reportedUsd": 0.0021668,
+   "in": 1541,
+   "out": 934,
+   "latencyS": 18.88,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c12",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.17,
+   "finish": "stop"
+  },
+  {
+   "tile": "A-6.00-00/r08c12",
+   "priority": 2,
+   "usd": 0.00234,
+   "reportedUsd": 0.0023398,
+   "in": 1541,
+   "out": 1107,
+   "latencyS": 22.08,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c00",
+   "priority": 2,
+   "usd": 0.001988,
+   "reportedUsd": 0.0019878,
+   "in": 1541,
+   "out": 755,
+   "latencyS": 15.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c05",
+   "priority": 2,
+   "usd": 0.001395,
+   "reportedUsd": 0.0013948,
+   "in": 1541,
+   "out": 162,
+   "latencyS": 3.79,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c04",
+   "priority": 2,
+   "usd": 0.001458,
+   "reportedUsd": 0.0014578,
+   "in": 1541,
+   "out": 225,
+   "latencyS": 4.94,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r00c10",
+   "priority": 2,
+   "usd": 0.002172,
+   "reportedUsd": 0.0021718,
+   "in": 1541,
+   "out": 939,
+   "latencyS": 19.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c05",
+   "priority": 2,
+   "usd": 0.001364,
+   "reportedUsd": 0.0013638,
+   "in": 1541,
+   "out": 131,
+   "latencyS": 5.12,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c01",
+   "priority": 2,
+   "usd": 0.002195,
+   "reportedUsd": 0.0021948,
+   "in": 1541,
+   "out": 962,
+   "latencyS": 21.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c12",
+   "priority": 2,
+   "usd": 0.00151,
+   "reportedUsd": 0.0015098,
+   "in": 1541,
+   "out": 277,
+   "latencyS": 8.17,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c04",
+   "priority": 2,
+   "usd": 0.001605,
+   "reportedUsd": 0.0016048,
+   "in": 1541,
+   "out": 372,
+   "latencyS": 10.91,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r01c10",
+   "priority": 2,
+   "usd": 0.002135,
+   "reportedUsd": 0.0021348,
+   "in": 1541,
+   "out": 902,
+   "latencyS": 22.54,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c11",
+   "priority": 2,
+   "usd": 0.002033,
+   "reportedUsd": 0.0020328,
+   "in": 1541,
+   "out": 800,
+   "latencyS": 18.41,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r02c10",
+   "priority": 2,
+   "usd": 0.002287,
+   "reportedUsd": 0.0022868,
+   "in": 1541,
+   "out": 1054,
+   "latencyS": 23.48,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c11",
+   "priority": 2,
+   "usd": 0.001717,
+   "reportedUsd": 0.0017168,
+   "in": 1541,
+   "out": 484,
+   "latencyS": 9.9,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c08",
+   "priority": 2,
+   "usd": 0.002165,
+   "reportedUsd": 0.0021648,
+   "in": 1541,
+   "out": 932,
+   "latencyS": 19.19,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c10",
+   "priority": 2,
+   "usd": 0.002002,
+   "reportedUsd": 0.0020018,
+   "in": 1541,
+   "out": 769,
+   "latencyS": 14.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c12",
+   "priority": 2,
+   "usd": 0.001762,
+   "reportedUsd": 0.0017618,
+   "in": 1541,
+   "out": 529,
+   "latencyS": 10.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c05",
+   "priority": 2,
+   "usd": 0.001451,
+   "reportedUsd": 0.0014508,
+   "in": 1541,
+   "out": 218,
+   "latencyS": 4.59,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c09",
+   "priority": 2,
+   "usd": 0.00237,
+   "reportedUsd": 0.0023698,
+   "in": 1541,
+   "out": 1137,
+   "latencyS": 22.25,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c06",
+   "priority": 2,
+   "usd": 0.002711,
+   "reportedUsd": 0.0027108,
+   "in": 1541,
+   "out": 1478,
+   "latencyS": 35.84,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c04",
+   "priority": 2,
+   "usd": 0.001782,
+   "reportedUsd": 0.0017818,
+   "in": 1541,
+   "out": 549,
+   "latencyS": 17.92,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c10",
+   "priority": 2,
+   "usd": 0.001872,
+   "reportedUsd": 0.0018718,
+   "in": 1541,
+   "out": 639,
+   "latencyS": 17.75,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c09",
+   "priority": 2,
+   "usd": 0.001964,
+   "reportedUsd": 0.0019638,
+   "in": 1541,
+   "out": 731,
+   "latencyS": 19.69,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c08",
+   "priority": 2,
+   "usd": 0.001945,
+   "reportedUsd": 0.0019448,
+   "in": 1541,
+   "out": 712,
+   "latencyS": 22.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r03c07",
+   "priority": 2,
+   "usd": 0.003222,
+   "reportedUsd": 0.0032218,
+   "in": 1541,
+   "out": 1989,
+   "latencyS": 44.46,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c05",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.26,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c12",
+   "priority": 2,
+   "usd": 0.001887,
+   "reportedUsd": 0.0018868,
+   "in": 1541,
+   "out": 654,
+   "latencyS": 14.29,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c11",
+   "priority": 2,
+   "usd": 0.002003,
+   "reportedUsd": 0.0020028,
+   "in": 1541,
+   "out": 770,
+   "latencyS": 16.73,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c04",
+   "priority": 2,
+   "usd": 0.001553,
+   "reportedUsd": 0.0015528,
+   "in": 1541,
+   "out": 320,
+   "latencyS": 8.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c06",
+   "priority": 2,
+   "usd": 0.002322,
+   "reportedUsd": 0.0023218,
+   "in": 1541,
+   "out": 1089,
+   "latencyS": 34.26,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c10",
+   "priority": 2,
+   "usd": 0.001741,
+   "reportedUsd": 0.0017408,
+   "in": 1541,
+   "out": 508,
+   "latencyS": 14.1,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c11",
+   "priority": 2,
+   "usd": 0.001786,
+   "reportedUsd": 0.0017858,
+   "in": 1541,
+   "out": 553,
+   "latencyS": 14.55,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c00",
+   "priority": 2,
+   "usd": 0.001373,
+   "reportedUsd": 0.0013728,
+   "in": 1541,
+   "out": 140,
+   "latencyS": 2.99,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r04c07",
+   "priority": 2,
+   "usd": 0.003011,
+   "reportedUsd": 0.0030108,
+   "in": 1541,
+   "out": 1778,
+   "latencyS": 44.48,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c09",
+   "priority": 2,
+   "usd": 0.002007,
+   "reportedUsd": 0.0020068,
+   "in": 1541,
+   "out": 774,
+   "latencyS": 19.4,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c03",
+   "priority": 2,
+   "usd": 0.001304,
+   "reportedUsd": 0.0013038,
+   "in": 1541,
+   "out": 71,
+   "latencyS": 2.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c02",
+   "priority": 2,
+   "usd": 0.001309,
+   "reportedUsd": 0.0013088,
+   "in": 1541,
+   "out": 76,
+   "latencyS": 2.19,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c01",
+   "priority": 2,
+   "usd": 0.001375,
+   "reportedUsd": 0.0013748,
+   "in": 1541,
+   "out": 142,
+   "latencyS": 3.99,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c05",
+   "priority": 2,
+   "usd": 0.001314,
+   "reportedUsd": 0.0013138,
+   "in": 1541,
+   "out": 81,
+   "latencyS": 2.33,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c08",
+   "priority": 2,
+   "usd": 0.002209,
+   "reportedUsd": 0.0022088,
+   "in": 1541,
+   "out": 976,
+   "latencyS": 25.07,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c04",
+   "priority": 2,
+   "usd": 0.001377,
+   "reportedUsd": 0.0013768,
+   "in": 1541,
+   "out": 144,
+   "latencyS": 4.44,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c12",
+   "priority": 2,
+   "usd": 0.001892,
+   "reportedUsd": 0.0018918,
+   "in": 1541,
+   "out": 659,
+   "latencyS": 17.77,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c00",
+   "priority": 2,
+   "usd": 0.001368,
+   "reportedUsd": 0.0013678,
+   "in": 1541,
+   "out": 135,
+   "latencyS": 2.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c06",
+   "priority": 2,
+   "usd": 0.00171,
+   "reportedUsd": 0.0017098,
+   "in": 1541,
+   "out": 477,
+   "latencyS": 10.3,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c01",
+   "priority": 2,
+   "usd": 0.00137,
+   "reportedUsd": 0.0013698,
+   "in": 1541,
+   "out": 137,
+   "latencyS": 2.9,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c02",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 1.85,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c03",
+   "priority": 2,
+   "usd": 0.001302,
+   "reportedUsd": 0.0013018,
+   "in": 1541,
+   "out": 69,
+   "latencyS": 1.64,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c12",
+   "priority": 2,
+   "usd": 0.001746,
+   "reportedUsd": 0.0017458,
+   "in": 1541,
+   "out": 513,
+   "latencyS": 10.49,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c04",
+   "priority": 2,
+   "usd": 0.001323,
+   "reportedUsd": 0.0013228,
+   "in": 1541,
+   "out": 90,
+   "latencyS": 2.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c05",
+   "priority": 2,
+   "usd": 0.001454,
+   "reportedUsd": 0.0014538,
+   "in": 1541,
+   "out": 221,
+   "latencyS": 6.72,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c06",
+   "priority": 2,
+   "usd": 0.002979,
+   "reportedUsd": 0.0029788,
+   "in": 1541,
+   "out": 1746,
+   "latencyS": 41.4,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c11",
+   "priority": 2,
+   "usd": 0.001663,
+   "reportedUsd": 0.0016628,
+   "in": 1541,
+   "out": 430,
+   "latencyS": 17.4,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c09",
+   "priority": 2,
+   "usd": 0.001302,
+   "reportedUsd": 0.0013018,
+   "in": 1541,
+   "out": 69,
+   "latencyS": 2.95,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r05c07",
+   "priority": 2,
+   "usd": 0.003122,
+   "reportedUsd": 0.0031218,
+   "in": 1541,
+   "out": 1889,
+   "latencyS": 45.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c10",
+   "priority": 2,
+   "usd": 0.001236,
+   "reportedUsd": 0.0012358,
+   "in": 1541,
+   "out": 3,
+   "latencyS": 5.89,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c06",
+   "priority": 2,
+   "usd": 0.001921,
+   "reportedUsd": 0.0019208,
+   "in": 1541,
+   "out": 688,
+   "latencyS": 16.93,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c08",
+   "priority": 2,
+   "usd": 0.002573,
+   "reportedUsd": 0.0025728,
+   "in": 1541,
+   "out": 1340,
+   "latencyS": 30.58,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c00",
+   "priority": 2,
+   "usd": 0.00151,
+   "reportedUsd": 0.0015098,
+   "in": 1541,
+   "out": 277,
+   "latencyS": 5.89,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c03",
+   "priority": 2,
+   "usd": 0.001299,
+   "reportedUsd": 0.0012988,
+   "in": 1541,
+   "out": 66,
+   "latencyS": 2.43,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c02",
+   "priority": 2,
+   "usd": 0.001306,
+   "reportedUsd": 0.0013058,
+   "in": 1541,
+   "out": 73,
+   "latencyS": 2.57,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c01",
+   "priority": 2,
+   "usd": 0.001378,
+   "reportedUsd": 0.0013778,
+   "in": 1541,
+   "out": 145,
+   "latencyS": 4.98,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c08",
+   "priority": 2,
+   "usd": 0.002075,
+   "reportedUsd": 0.0020748,
+   "in": 1541,
+   "out": 842,
+   "latencyS": 20.2,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c05",
+   "priority": 2,
+   "usd": 0.001451,
+   "reportedUsd": 0.0014508,
+   "in": 1541,
+   "out": 218,
+   "latencyS": 5.53,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c04",
+   "priority": 2,
+   "usd": 0.001528,
+   "reportedUsd": 0.0015278,
+   "in": 1541,
+   "out": 295,
+   "latencyS": 7.51,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r06c07",
+   "priority": 2,
+   "usd": 0.00299,
+   "reportedUsd": 0.0029898,
+   "in": 1541,
+   "out": 1757,
+   "latencyS": 41.21,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c07",
+   "priority": 2,
+   "usd": 0.002467,
+   "reportedUsd": 0.0024668,
+   "in": 1541,
+   "out": 1234,
+   "latencyS": 30.39,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c11",
+   "priority": 2,
+   "usd": 0.002332,
+   "reportedUsd": 0.0023318,
+   "in": 1541,
+   "out": 1099,
+   "latencyS": 25.75,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c09",
+   "priority": 2,
+   "usd": 0.001429,
+   "reportedUsd": 0.0014288,
+   "in": 1541,
+   "out": 196,
+   "latencyS": 5.02,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c10",
+   "priority": 2,
+   "usd": 0.001429,
+   "reportedUsd": 0.0014288,
+   "in": 1541,
+   "out": 196,
+   "latencyS": 4.86,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c08",
+   "priority": 2,
+   "usd": 0.001815,
+   "reportedUsd": 0.0018148,
+   "in": 1541,
+   "out": 582,
+   "latencyS": 12.01,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r07c12",
+   "priority": 2,
+   "usd": 0.002726,
+   "reportedUsd": 0.0027258,
+   "in": 1541,
+   "out": 1493,
+   "latencyS": 31.95,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c06",
+   "priority": 2,
+   "usd": 0.002316,
+   "reportedUsd": 0.0023158,
+   "in": 1541,
+   "out": 1083,
+   "latencyS": 21.8,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c11",
+   "priority": 2,
+   "usd": 0.002128,
+   "reportedUsd": 0.0021278,
+   "in": 1541,
+   "out": 895,
+   "latencyS": 16.74,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c07",
+   "priority": 2,
+   "usd": 0.002566,
+   "reportedUsd": 0.0025658,
+   "in": 1541,
+   "out": 1333,
+   "latencyS": 26.9,
+   "finish": "stop"
+  },
+  {
+   "tile": "S-201.00/r08c12",
+   "priority": 2,
+   "usd": 0.002337,
+   "reportedUsd": 0.0023368,
+   "in": 1541,
+   "out": 1104,
+   "latencyS": 20.34,
+   "finish": "stop"
+  }
+ ],
+ "failed": [],
+ "skipped": [],
+ "cachedBefore": [
+  "S-201.00/r01c07"
+ ]
+}

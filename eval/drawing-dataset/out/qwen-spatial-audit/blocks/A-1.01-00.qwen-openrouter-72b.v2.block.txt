@@ -1,0 +1,83 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-1.01-00 source=qwen-openrouter-72b annotations=349 technical=131 shown=78 independentlyVerified=false
+- STAIR TOWER "B" / 113
+- A-2.00
+- I / ?A-3.0I
+- SEE KITCHEN DRAWINGS FOR / EQUIPMENT IN THIS AREA TYP.
+- ?A-4.0I
+- ?A-4.0I
+- A-3.02
+- 3'-4"
+- ?4'-7 1/2"
+- 8'-3"
+- q 1/2"
+- ?3'-5 1/2"
+- 9 1/2" 3'-10"
+- A-4.01
+- 2'-4"
+- 2'-4"
+- A-3.00 (ctx?)
+- 3'-2"
+- A-2.01
+- A-2.00
+- ?27'-6 1/2"
+- 3'-6" (ctx?)
+- 27'-6"
+- 6"
+- 3'-6" (ctx?)
+- NEW 45 MIN / F.P.S.C. DOOR. (ctx?)
+- MIN.
+- 6'-6" (ctx?)
+- THIS AREA W/ / MCDONALD'S ACM (TYP.) (ctx?)
+- 109
+- MIN. (ctx?)
+- 6'-9" / MIN.
+- 28'-9"
+- 4'-3"
+- 4" METAL STUDS @ 16" / FIRE STOPPED TO BOT / STRUCTURE AS PER UL N (ctx?)
+- @ 16" O.C. MIN. / TO BOTTOM OF / PER UL NO. U305. (ctx?)
+- COORDINATE FINISHES IN / THIS AREA W/ / MCDONALD'S ACM (TYP.)
+- 1/2" FC "X" GYP. BD., I L (ctx?)
+- 9 1/2"
+- 9"
+- 9 1/2"
+- ?6'-11 1/2" (ctx?)
+- ?8'-2 1/2" (ctx?)
+- 8'-2" (ctx?)
+- 8'-3" (ctx?)
+- 8'-3" (ctx?)
+- A-301
+- A-3
+- 9 1/2"
+- 2 / A-2.01
+- A-301
+- NOTE: / INTERIOR 1 HR RATED PARTITION / CORNER GUARDS AT ALL EXTERI (ctx?)
+- 1. EXTERIOR DIMENS / ?EXTERIOR FACE ( / DIMENSIONS ARE (ctx?)
+- NEW STOREFRONT SYSTEM - SEE A- / {ELEVATIONS FOR LOCATIONS & SPE | IS & SPECS} (ctx?)
+- - SEE A-3.01 FOR ASSEMBLY NOTES, SEE (ctx?)
+- ES. SEE 6/A-1.00 FOR 2. G.C. TO INSTAL / ARE TYPE 'A' UNLESS ASSISTANCE" (ctx?)
+- 01 FOR EXTERIOR WALL ASSEMBLY TYPES. SE / PARTITION TYPES. INTERIOR PARTITIONS ARE T (ctx?)
+- 2. SEE A-3.01 FOR (ctx?)
+- = WALL TYPES - SEE 5/A-1.00
+- RIOR ELEVATIONS FOR WINDOW TYPES (ctx?)
+- T A-6.00 FOR DOOR AND A-6.01 FOR ROOM (ctx?)
+- A-1.01-00
+- ULE SHEET A-6.00
+- T ALL SELF SERVICE ITEMS TO BE WITHIN / {SSIBILITY REACH RANGE REQUIREMENTS | ACCESSIBILITY} / ?NSI AII7.I-2003). (ctx?)
+- 6. GC TO PROVIDE / LOCATIONS AND / LOCAL CODES. S / PERMA-SIGN - / 1-800-214-876 (ctx?)
+- CE OR ADD ADA COMPLAINT HARDWARE ON / OORS ALONG ADA ACCESSIBLE ROUTE. SEE / A-I.03 FOR SCHEDULE. (ctx?)
+- = WINDOW TYPE - SEE ELEVATIONS
+- SHEET A-1.03 (ctx?)
+- 6. ENSURE THAT / COMPLIANT. T (ctx?)
+- 7. MAXIMUM OCCUPA / FURNISHED AND (ctx?)
+- BOARD BACKING 48" IN (ctx?)
+- 8. ALL HANDSINK L / HEIGHT A.F.F. (ctx?)
+- PERIOD FROM 90 DEGREES OPEN TO 12 DEGREES / {ATCH SHALL BE AT LEAST 5 SECONDS. | FROM LATCH SHA} (ctx?)
+- 1/4"
+- SCALE: 1/4" = 1'-0"
+- 1/4" = 1'-0"
+- ALUMINUM BATTENS - SEE A-3.01 FO (ctx?)
+- -3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR
+omitted: 271 annotations (56 technical: numeric 50, value 1, datum 3, reference 2; 215 other) by budget; not shown is not absent

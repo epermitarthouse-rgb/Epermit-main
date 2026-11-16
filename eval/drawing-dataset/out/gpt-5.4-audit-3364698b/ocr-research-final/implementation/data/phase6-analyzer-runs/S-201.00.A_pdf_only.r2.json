@@ -1,0 +1,71 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "A_pdf_only",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0ed08368d419e6d9016aec8f6bfe7087d2a37cca8ae624c2b0",
+ "latencyMs": 6523,
+ "inputTokens": 3536,
+ "outputTokens": 240,
+ "costUsd": 0.01124,
+ "userPromptChars": 422,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet provides structural wall sections and associated notes for a McDonald's project located at 75 New York Avenue, Washington DC.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Incomplete Sheet Numbering",
+   "observation": "The sheet is listed as \"OF 00\" which indicates no total number of sheets is provided.",
+   "drawing_evidence": "Title block shows AS NOTED OF 00",
+   "drawing_location": "Bottom right corner of the sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Verify the total number of sheets and ensure correct pagination is reflected.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Incomplete Sheet Numbering",
+    "originalObservation": "The sheet is listed as \"OF 00\" which indicates no total number of sheets is provided.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "No Scale Shown for Structural Notes",
+   "observation": "The structural notes section indicates \"NO SCALE\" which might lead to ambiguity in understanding dimensional relationships.",
+   "drawing_evidence": "Structural notes section labeled as SCALE: NO SCALE.",
+   "drawing_location": "Right side of the sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify if a specific scale applies or confirm no scaling is necessary for compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "No Scale Shown for Structural Notes",
+    "originalObservation": "The structural notes section indicates \"NO SCALE\" which might lead to ambiguity in understanding dimensional relationships.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

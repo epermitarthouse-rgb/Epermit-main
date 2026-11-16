@@ -1,0 +1,27 @@
+{
+ "version": "qsa.stage3.v1",
+ "backend": "local-3b",
+ "subset": true,
+ "generatedAt": "2026-11-16T13:30:19.702Z",
+ "sheetIndex": {
+  "pdfs": 82,
+  "withDetailTitles": 41,
+  "detailTitles": 194
+ },
+ "primaryRead": [
+  "S-201.00"
+ ],
+ "references": [],
+ "pairs": [],
+ "comparisons": {
+  "openingForces": [],
+  "doorMarks": null
+ },
+ "targeted": [],
+ "tally": {
+  "references": 0,
+  "byStatus": {},
+  "byKind": {},
+  "bySource": {}
+ }
+}

@@ -1,0 +1,561 @@
+{
+ "generatedAt": "2026-11-16T16:46:05.905Z",
+ "arms": {
+  "baseline_C_v2_4x3": {
+   "description": "Production Supabase Analyzer V2 prompt + validator, Apple Vision 4x3 v2 block, GPT-4o (saved runs)",
+   "runs": 30,
+   "published": 82,
+   "warningPlus": 23,
+   "E": 13,
+   "H": 1,
+   "U": 58,
+   "Q": 5,
+   "OK": 3,
+   "OKs": 1,
+   "unadjudicated": 1,
+   "warningPlusE": 6,
+   "warningPlusNotGenuine": 16,
+   "critical": 0,
+   "criticalE": 0,
+   "groundedQuotes": 26,
+   "notFoundQuotes": 47,
+   "genuineDetections": {
+    "G-S201-SDC": "2/9",
+    "G-S201-SCALE": "1/9",
+    "G-S201-OF00": "0/9"
+   },
+   "costUsd": 0.5683,
+   "inputTokens": 171882,
+   "outputTokens": 13857,
+   "meanLatencyS": 11.3
+  },
+  "L_av": {
+   "description": "Same production prompt + validator, Apple Vision 4x3 v2 block, GPT-5.6 Luna",
+   "runs": 15,
+   "published": 23,
+   "warningPlus": 6,
+   "E": 0,
+   "H": 0,
+   "U": 9,
+   "Q": 3,
+   "OK": 10,
+   "OKs": 1,
+   "unadjudicated": 0,
+   "warningPlusE": 0,
+   "warningPlusNotGenuine": 3,
+   "critical": 0,
+   "criticalE": 0,
+   "groundedQuotes": 6,
+   "notFoundQuotes": 11,
+   "genuineDetections": {
+    "G-S201-SDC": "0/3",
+    "G-S201-SCALE": "2/3",
+    "G-S201-OF00": "2/3"
+   },
+   "costUsd": 0.0653,
+   "inputTokens": 190749,
+   "outputTokens": 22634,
+   "meanLatencyS": 17.2
+  },
+  "L_spatial": {
+   "description": "Qwen 72B validated spatial block + question retrieval + cross-sheet pairs, GPT-5.6 Luna, first addendum",
+   "runs": 15,
+   "published": 4,
+   "warningPlus": 3,
+   "E": 0,
+   "H": 0,
+   "U": 0,
+   "Q": 0,
+   "OK": 4,
+   "OKs": 0,
+   "unadjudicated": 0,
+   "warningPlusE": 0,
+   "warningPlusNotGenuine": 0,
+   "critical": 0,
+   "criticalE": 0,
+   "groundedQuotes": 0,
+   "notFoundQuotes": 2,
+   "genuineDetections": {
+    "G-S201-SDC": "0/3",
+    "G-S201-SCALE": "0/3",
+    "G-S201-OF00": "0/3"
+   },
+   "costUsd": 0.0714,
+   "inputTokens": 281619,
+   "outputTokens": 12533,
+   "meanLatencyS": 12.3
+  },
+  "L_spatial2": {
+   "description": "As L_spatial + title-block/caption readings + drafting-defect instruction (changed after inspecting L_spatial on these drawings)",
+   "runs": 15,
+   "published": 20,
+   "warningPlus": 2,
+   "E": 0,
+   "H": 0,
+   "U": 0,
+   "Q": 9,
+   "OK": 11,
+   "OKs": 0,
+   "unadjudicated": 0,
+   "warningPlusE": 0,
+   "warningPlusNotGenuine": 0,
+   "critical": 0,
+   "criticalE": 0,
+   "groundedQuotes": 4,
+   "notFoundQuotes": 8,
+   "genuineDetections": {
+    "G-S201-SDC": "0/3",
+    "G-S201-SCALE": "3/3",
+    "G-S201-OF00": "3/3"
+   },
+   "costUsd": 0.0849,
+   "inputTokens": 285858,
+   "outputTokens": 23087,
+   "meanLatencyS": 17.6
+  }
+ },
+ "claims": [
+  {
+   "claim": "S201-SOIL",
+   "sheet": "S-201.00",
+   "adjudication": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' and note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' are both printed.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 3,
+    "published": 3
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 3,
+    "published": 2
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 0
+   }
+  },
+  {
+   "claim": "S201-SCALE",
+   "sheet": "S-201.00",
+   "adjudication": "Text layer prints '3/4\"1'-0\"' under detail 2 and '3/4\"=1'-0\"' under detail 1.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 3,
+    "published": 3
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 2,
+    "published": 2
+   }
+  },
+  {
+   "claim": "S201-OF00",
+   "sheet": "S-201.00",
+   "adjudication": "Text layer prints 'AS NOTED / OF 00' in the title block.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 3,
+    "published": 3
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 2,
+    "published": 2
+   }
+  },
+  {
+   "claim": "S201-ACI",
+   "sheet": "S-201.00",
+   "adjudication": "Reinforced concrete note 1 prints 'ACI 318-06'; design data cites IBC 2015.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 0
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "S201-1705",
+   "sheet": "S-201.00",
+   "adjudication": "Cloud prints 'D. COLD-FORMED STEEL 1705.3.4'; correctness of the section depends on the code text.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "S201-SDC",
+   "sheet": "S-201.00",
+   "adjudication": "SEISMIC USE GROUP and SEISMIC DESIGN CATEGORY are printed without values (crop S-201.00.seismic1.png). Not produced by any Luna arm.",
+   "excludedFromClientView": null,
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 3,
+    "published": 3
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   }
+  },
+  {
+   "claim": "A101-LEVEL",
+   "sheet": "A-1.01-00",
+   "adjudication": "Title block 'MEZZANINE & BASEMENT FLOOR PLAN'; plan titles '2ND FLOOR ALTERATION FLOOR PLAN' and 'BASEMENT ALTERATION FLOOR PLAN' (text layer).",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "A101-A117",
+   "sheet": "A-1.01-00",
+   "adjudication": "General note 4 prints '(ICC/ANSI A117.1-2003)'.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 2,
+    "published": 2
+   }
+  },
+  {
+   "claim": "A101-TYPO",
+   "sheet": "A-1.01-00",
+   "adjudication": "Note 5 prints 'ADA COMPLAINT HARDWARE'. Produced only by the Apple Vision arm.",
+   "excludedFromClientView": null,
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 3,
+    "published": 3
+   }
+  },
+  {
+   "claim": "A400-SIGN",
+   "sheet": "A-4.00-00",
+   "adjudication": "Signage note 2 'MOUNTING HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN'; detail 4 '48\" MIN. AFF. B. OF BRAILLE / 60\" MAX. AFF. T. OF TACTILE'.",
+   "excludedFromClientView": null,
+   "inClientView": true,
+   "baselineGpt4o": {
+    "runs": 6,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 2,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   }
+  },
+  {
+   "claim": "A400-NOTUSED",
+   "sheet": "A-4.00-00",
+   "adjudication": "Callout 8/A400 under detail 5 points to detail 8 LAVATORY SECTION, marked NOT USED. Produced only by the Apple Vision arm; the Qwen linker does not parse unhyphenated sheet tags.",
+   "excludedFromClientView": null,
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 6,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "A600-A50",
+   "sheet": "A-6.00-00",
+   "adjudication": "'4/A5.0' printed; no A-5 series sheet in the 82-sheet set. Produced only by the Apple Vision arm.",
+   "excludedFromClientView": null,
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "A600-D11",
+   "sheet": "A-6.00-00",
+   "adjudication": "Plausible (saved research): fire-rated gaskets at door #11 without a rating column. Not produced by any arm.",
+   "excludedFromClientView": null,
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   }
+  },
+  {
+   "claim": "REV00",
+   "sheet": "*",
+   "adjudication": "'00 / FIRST ISSUE / 00' is the revision-table template on every sheet.",
+   "excludedFromClientView": "template placeholder, not a demonstrated error",
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 30,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 15,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 15,
+    "drafted": 6,
+    "published": 6
+   },
+   "L_av": {
+    "runs": 15,
+    "drafted": 0,
+    "published": 0
+   }
+  },
+  {
+   "claim": "A400-FLUSH",
+   "sheet": "A-4.00-00",
+   "adjudication": "Terminology only.",
+   "excludedFromClientView": "terminology only; no compliance consequence shown",
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 6,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   }
+  },
+  {
+   "claim": "S201-REVTABLE",
+   "sheet": "S-201.00",
+   "adjudication": "Blank revision rows on a revised sheet.",
+   "excludedFromClientView": "administrative; low value",
+   "inClientView": false,
+   "baselineGpt4o": {
+    "runs": 9,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial": {
+    "runs": 3,
+    "drafted": 0,
+    "published": 0
+   },
+   "L_spatial2": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 1
+   },
+   "L_av": {
+    "runs": 3,
+    "drafted": 1,
+    "published": 0
+   }
+  }
+ ],
+ "cost": {
+  "lunaLedgerUsd": 0.2216,
+  "lunaCalls": 45,
+  "cap": 2,
+  "qwenOcrUsd": 1.0055,
+  "qwenOcrCalls": 564,
+  "qwenOcrWallMin": 17.5,
+  "qwenAnalysisPerDrawingUsd": 0.2063,
+  "baselinePerRunUsd": 0.0189
+ }
+}

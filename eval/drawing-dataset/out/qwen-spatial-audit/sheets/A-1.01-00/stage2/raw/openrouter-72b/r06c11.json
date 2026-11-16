@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842602-QNZUNX0gtwMDHfQZ6VdH",
+ "text": "```json\n[\n    {\"bbox_2d\": [436, 658, 482, 987], \"text_content\": \"SITE ADDRESS:\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [593, 0, 696, 524], \"text_content\": \"75 NEW YORK AVEN\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [664, 0, 700, 456], \"text_content\": \"WASHINGTON DC\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [725, 0, 766, 460], \"text_content\": \"SITE ID # 008-0003\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [788, 69, 830, 385], \"text_content\": \"NSN # 00650\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [934, 518, 973, 987], \"text_content\": \"PREPARED FOR:\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 383,
+ "costUsd": 0.001616,
+ "reportedCostUsd": 0.0016158,
+ "latencyS": 12.99,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842260-2HnR9OHqKe8luPi6IzQH",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 734, 68, 756],\n        \"text_content\": \"REAM\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [906, 709, 980, 734],\n        \"text_content\": \"PRO\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [912, 763, 980, 788],\n        \"text_content\": \"JOIN\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [912, 810, 980, 835],\n        \"text_content\": \"JUST\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [848, 892, 980, 922],\n        \"text_content\": \"WINDOW\",\n        \"category\": \"label\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [855, 939, 980, 969],\n        \"text_content\": \"ABLE T\",\n        \"category\": \"label\",\n        \"group\": 5,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 401,
+ "costUsd": 0.001634,
+ "reportedCostUsd": 0.0016338,
+ "latencyS": 9.93,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

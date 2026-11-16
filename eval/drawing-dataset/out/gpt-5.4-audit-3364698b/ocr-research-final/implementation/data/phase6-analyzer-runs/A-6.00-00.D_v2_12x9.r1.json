@@ -1,0 +1,75 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "D_v2_12x9",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_09e4714f071bc9ac016aec8f5e517c87d28d06d02621051abe",
+ "latencyMs": 6287,
+ "inputTokens": 5133,
+ "outputTokens": 283,
+ "costUsd": 0.0156625,
+ "userPromptChars": 3622,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides door and hardware scheduling, window types, and related notes. It includes general notes, a detailed door schedule, and specific mechanical details.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing Fire Rating Information",
+   "observation": "The door schedule does not list fire rating information for doors where applicable.",
+   "drawing_evidence": "Observed in the door schedule section labeled 'DOOR SCHEDULE', where each door entry lacks a column or note specifying fire ratings.",
+   "drawing_location": "Lower right section of the sheet in the door schedule table.",
+   "suggested_code_reference": null,
+   "recommendation": "Include fire rating information in the door schedule for compliance and coordination with fire safety requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Missing Fire Rating Information",
+    "originalObservation": "The door schedule does not list fire rating information for doors where applicable.",
+    "originalCodeReference": "2015 IBC Table 716.5",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Handing and Swing Directions",
+   "observation": "Door schedule does not explicitly indicate door handing and swing direction.",
+   "drawing_evidence": "The door schedule entries list door types and sizes but do not specify handing or swing directions.",
+   "drawing_location": "In the door schedule on the lower right of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure door handing and swing directions are clearly marked in the schedule or corresponding notes.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Handing and Swing Directions",
+    "originalObservation": "Door schedule does not explicitly indicate door handing and swing direction.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

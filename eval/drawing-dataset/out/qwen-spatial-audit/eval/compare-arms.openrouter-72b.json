@@ -1,0 +1,6370 @@
+{
+ "generatedAt": "2026-11-16T16:26:27.281Z",
+ "backend": "openrouter-72b",
+ "scorer": "stage3-evidence-eval.v1 (unchanged)",
+ "totals": {
+  "av": {
+   "technicalRows": 232,
+   "exact": 69,
+   "exactContradicted": 1,
+   "uncertain": 0,
+   "uncertainCorrectFlagged": 0,
+   "incorrect": 17,
+   "partial": 12,
+   "inMerge": 17,
+   "missed": 117,
+   "completeTechnicalAnnotations": 50,
+   "technicalAnnotations": 170,
+   "boxOnRow": 76,
+   "textFound": 121,
+   "unsupportedReadings": 10
+  },
+  "qwen": {
+   "technicalRows": 232,
+   "exact": 123,
+   "exactContradicted": 7,
+   "uncertain": 19,
+   "uncertainCorrectFlagged": 17,
+   "incorrect": 18,
+   "partial": 19,
+   "inMerge": 0,
+   "missed": 53,
+   "completeTechnicalAnnotations": 86,
+   "technicalAnnotations": 170,
+   "boxOnRow": 134,
+   "textFound": 188,
+   "unsupportedReadings": 91
+  },
+  "check": {
+   "technicalRows": 232,
+   "exact": 123,
+   "exactContradicted": 7,
+   "uncertain": 19,
+   "uncertainCorrectFlagged": 17,
+   "incorrect": 18,
+   "partial": 19,
+   "inMerge": 0,
+   "missed": 53,
+   "completeTechnicalAnnotations": 86,
+   "technicalAnnotations": 170,
+   "boxOnRow": 134,
+   "textFound": 188,
+   "unsupportedReadings": 91
+  },
+  "boxes": {
+   "technicalRows": 232,
+   "exact": 139,
+   "exactContradicted": 2,
+   "uncertain": 23,
+   "uncertainCorrectFlagged": 21,
+   "incorrect": 16,
+   "partial": 20,
+   "inMerge": 0,
+   "missed": 34,
+   "completeTechnicalAnnotations": 103,
+   "technicalAnnotations": 170,
+   "boxOnRow": 144,
+   "textFound": 182,
+   "unsupportedReadings": 74
+  },
+  "validated": {
+   "technicalRows": 232,
+   "exact": 141,
+   "exactContradicted": 2,
+   "uncertain": 30,
+   "uncertainCorrectFlagged": 20,
+   "incorrect": 7,
+   "partial": 20,
+   "inMerge": 0,
+   "missed": 34,
+   "completeTechnicalAnnotations": 103,
+   "technicalAnnotations": 170,
+   "boxOnRow": 145,
+   "textFound": 182,
+   "unsupportedReadings": 74
+  }
+ },
+ "evidenceTotals": {
+  "av": {
+   "retainedExact": 67,
+   "retainedOfOcrExact": 57,
+   "ocrExact": 69,
+   "readings": 196,
+   "technicalReadings": 70,
+   "maxChars": 3196,
+   "precision": 0.357,
+   "recallOfOcrExact": 0.826,
+   "recallOf232": 0.289,
+   "incorrectInBlock": 2,
+   "uncertainInBlock": 13
+  },
+  "qwen": {
+   "retainedExact": 95,
+   "retainedOfOcrExact": 89,
+   "ocrExact": 123,
+   "readings": 267,
+   "technicalReadings": 99,
+   "maxChars": 3198,
+   "precision": 0.371,
+   "recallOfOcrExact": 0.724,
+   "recallOf232": 0.409,
+   "incorrectInBlock": 8,
+   "uncertainInBlock": 10
+  },
+  "validated": {
+   "retainedExact": 116,
+   "retainedOfOcrExact": 102,
+   "ocrExact": 141,
+   "readings": 254,
+   "technicalReadings": 123,
+   "maxChars": 3195,
+   "precision": 0.484,
+   "recallOfOcrExact": 0.723,
+   "recallOf232": 0.5,
+   "incorrectInBlock": 5,
+   "uncertainInBlock": 8
+  },
+  "spatial": {
+   "retainedExact": 132,
+   "retainedOfOcrExact": 128,
+   "ocrExact": 141,
+   "readings": 300,
+   "technicalReadings": 152,
+   "maxChars": 3118,
+   "precision": 0.507,
+   "recallOfOcrExact": 0.908,
+   "recallOf232": 0.569,
+   "incorrectInBlock": 6,
+   "uncertainInBlock": 22
+  }
+ },
+ "results": [
+  {
+   "sheet": "A-3.06-00",
+   "gtTechnicalRows": 72,
+   "ocr": {
+    "av": {
+     "rows": {
+      "technicalRows": 72,
+      "exact": 33,
+      "exactContradicted": 1,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 6,
+      "partial": 3,
+      "inMerge": 0,
+      "missed": 30,
+      "completeTechnicalAnnotations": 20,
+      "technicalAnnotations": 49
+     },
+     "placement": {
+      "technicalRowsTextFound": 45,
+      "boxOnRow": 33,
+      "misplaced": [
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0,
+        "dyPt": 1,
+        "dxPt": 154
+       },
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0,
+        "dyPt": 121,
+        "dxPt": 249
+       },
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0,
+        "dyPt": 65,
+        "dxPt": 249
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": -334,
+        "dxPt": 2010
+       },
+       {
+        "truth": "A-3.06",
+        "read": "A-3.06",
+        "overlap": 0,
+        "dyPt": 171,
+        "dxPt": -72
+       },
+       {
+        "truth": "-1-1/4\" PIPE RAILING. PAINT",
+        "read": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+        "overlap": 0,
+        "dyPt": -39,
+        "dxPt": -509
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": -214,
+        "dxPt": 1342
+       },
+       {
+        "truth": "A-3.06",
+        "read": "A-3.06",
+        "overlap": 0,
+        "dyPt": 291,
+        "dxPt": -741
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": 57,
+        "dxPt": -1831
+       },
+       {
+        "truth": "A-3.00",
+        "read": "A-3.00/",
+        "overlap": 0,
+        "dyPt": 313,
+        "dxPt": 349
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": 510,
+        "dxPt": 476
+       },
+       {
+        "truth": "A-3.00",
+        "read": "A-3.00/",
+        "overlap": 0,
+        "dyPt": 603,
+        "dxPt": -315
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-3.06-00:R005",
+       "truth": "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4070",
+       "read": [
+        "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010",
+        "_THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R013",
+       "truth": "1-1/4\" PIPE RAILING. PAINT PEX-I",
+       "read": [
+        "- I-I/4\" PIPE RA",
+        "I-1/4\" PIPE RAILING. PAINT PEX-I"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R110",
+       "truth": "T/ BLOCKING @ PARAPET",
+       "read": [
+        "7/ BLOCKING & PARAPET"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R109",
+       "truth": "29'-0\" A.F.F. (V.I.F.)",
+       "read": [
+        "29'-0\" A.F.F. V."
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R127",
+       "truth": "2'-10\"",
+       "read": [
+        "2'-10'"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R169",
+       "truth": "ELEV. + 10'-8\"",
+       "read": [
+        "EV. + 10'-1"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [
+      {
+       "gid": "A-3.06-00:R042",
+       "truth": "POSITIONED 1/4\" FROM THE TOP",
+       "read": [
+        "POSITIONED I/",
+        "POSITIONED 1/4\" FROM THE TOP"
+       ]
+      }
+     ],
+     "unsupportedReadings": [
+      "M",
+      "2 G",
+      "3 G",
+      "1",
+      "H",
+      "3",
+      "B",
+      "#",
+      "1",
+      "4"
+     ],
+     "noMatchReadings": 11
+    },
+    "qwen": {
+     "rows": {
+      "technicalRows": 72,
+      "exact": 43,
+      "exactContradicted": 1,
+      "uncertain": 6,
+      "uncertainCorrectFlagged": 5,
+      "incorrect": 2,
+      "partial": 14,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 27,
+      "technicalAnnotations": 49
+     },
+     "placement": {
+      "technicalRowsTextFound": 54,
+      "boxOnRow": 47,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -5
+       },
+       {
+        "truth": "A-3.06",
+        "read": "A-3.06",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -1
+       },
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0.5,
+        "dyPt": 11,
+        "dxPt": 0
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": 53,
+        "dxPt": -1831
+       },
+       {
+        "truth": "A-3.00",
+        "read": "A-3.00",
+        "overlap": 0,
+        "dyPt": -18,
+        "dxPt": -2
+       },
+       {
+        "truth": "1:12 MIN.",
+        "read": "1:12 MIN.",
+        "overlap": 0.24,
+        "dyPt": -6,
+        "dxPt": 3
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": 844,
+        "dxPt": -1535
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-3.06-00:R002",
+       "truth": "A-3.06",
+       "read": [
+        "2"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R228",
+       "truth": "ELEV. + 0'-0\"",
+       "read": [
+        "ELEV. + O'-O\""
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-3.06-00:R015",
+       "truth": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+       "read": [
+        "I-1/4\" PIPE RAILING. PAINT TO MATCH [conflict]",
+        "I-I/4 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R030",
+       "truth": "-GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+       "read": [
+        "GUAR [conflict]",
+        "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R034",
+       "truth": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "read": [
+        "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA [conflict]",
+        "PRE [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R063b",
+       "truth": "T.O. ROOF MEMBRANE",
+       "read": [
+        "T.O. ROOF MEMBRANE [conflict]",
+        "T.O. [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R076",
+       "truth": "3",
+       "read": [
+        "3 [conflict]",
+        "A-3.06 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R145",
+       "truth": "EXIST. ROOF @ H.P.",
+       "read": [
+        "EXIST. ROOF @ H.P. [conflict]",
+        "EXIST. 6' [conflict]",
+        "ROOF"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "A-3.06-00:R040",
+       "truth": "3'-6\"",
+       "read": [
+        "31-6\"",
+        "3'-6\""
+       ]
+      }
+     ],
+     "unsupportedReadings": [
+      "HEIGHT FROM DECK MEMBRANE",
+      "3'-6\"MIN HEIGHT T.O. ROOF DECK M",
+      "MIN. ABOVE DECK MI",
+      "|",
+      "3",
+      "@",
+      "2",
+      "3 SCALE:",
+      "1",
+      "I",
+      "t. 410.837.",
+      "i",
+      "OR THE LAWS OF THE STATE OF DC",
+      "LICENSE NO. ARC40001205",
+      "DISTRICT OF COLUMBIA",
+      "DISTRICT OF C",
+      "WARREN NAGEY",
+      "WARREN N",
+      "No. ARC40001205",
+      "X",
+      "1",
+      "1",
+      "#",
+      "PERMIT COMMENTS 10/29/25",
+      "01 PERMIT COMMEN",
+      "PERMIT COMMENTS 12/16/25",
+      "02 PERMIT COMMEN",
+      "PERMIT COMMENTS 02/16/26",
+      "03 PERMIT COMMEN",
+      "PERMIT COMMENTS 07/17/26",
+      "04 PERMIT COMMEN",
+      "OWNER REVISIONS 10/07/26",
+      "05 OWNER REVISIC",
+      "X",
+      "X",
+      "3",
+      "confidential and proprietary property of ed or reproduced without written epared for use on this specific site in able for use on a different site or at ence or example on another project ects and engineers. Reproduction of other project is not authorized.",
+      "AVENUE ON DC -0003 50",
+      "|",
+      "75 NEW YORK AVEN SITE ID # 008-0003",
+      "75 NEW YORK AVENUE NSN # 00650",
+      "<>",
+      "WASHINGTON DC NSN # 00650",
+      "IIII",
+      "These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or released without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or other purposes requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.",
+      "These Mo authoriz",
+      "a late require",
+      "|",
+      "1",
+      "S New York Ave & 1st St, Wash DC SECTIONS.DWG",
+      "1",
+      "24 OF 28",
+      "008-0003 75 New York Ave & 1st St, Wash DC SECT",
+      "A",
+      "A",
+      "5",
+      "4"
+     ],
+     "noMatchReadings": 145
+    },
+    "check": {
+     "rows": {
+      "technicalRows": 72,
+      "exact": 43,
+      "exactContradicted": 1,
+      "uncertain": 6,
+      "uncertainCorrectFlagged": 5,
+      "incorrect": 2,
+      "partial": 14,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 27,
+      "technicalAnnotations": 49
+     },
+     "placement": {
+      "technicalRowsTextFound": 54,
+      "boxOnRow": 47,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -5
+       },
+       {
+        "truth": "A-3.06",
+        "read": "A-3.06",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -1
+       },
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0.5,
+        "dyPt": 11,
+        "dxPt": 0
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": 53,
+        "dxPt": -1831
+       },
+       {
+        "truth": "A-3.00",
+        "read": "A-3.00",
+        "overlap": 0,
+        "dyPt": -18,
+        "dxPt": -2
+       },
+       {
+        "truth": "1:12 MIN.",
+        "read": "1:12 MIN.",
+        "overlap": 0.24,
+        "dyPt": -6,
+        "dxPt": 3
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": 844,
+        "dxPt": -1535
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-3.06-00:R002",
+       "truth": "A-3.06",
+       "read": [
+        "2"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R228",
+       "truth": "ELEV. + 0'-0\"",
+       "read": [
+        "ELEV. + O'-O\""
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-3.06-00:R015",
+       "truth": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+       "read": [
+        "I-1/4\" PIPE RAILING. PAINT TO MATCH [conflict]",
+        "I-I/4 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R030",
+       "truth": "-GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+       "read": [
+        "GUAR [conflict]",
+        "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R034",
+       "truth": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "read": [
+        "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA [conflict]",
+        "PRE [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R063b",
+       "truth": "T.O. ROOF MEMBRANE",
+       "read": [
+        "T.O. ROOF MEMBRANE [conflict]",
+        "T.O. [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R076",
+       "truth": "3",
+       "read": [
+        "3 [conflict]",
+        "A-3.06 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R145",
+       "truth": "EXIST. ROOF @ H.P.",
+       "read": [
+        "EXIST. ROOF @ H.P. [conflict]",
+        "EXIST. 6' [conflict]",
+        "ROOF"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "A-3.06-00:R040",
+       "truth": "3'-6\"",
+       "read": [
+        "31-6\"",
+        "3'-6\""
+       ]
+      }
+     ],
+     "unsupportedReadings": [
+      "HEIGHT FROM DECK MEMBRANE",
+      "3'-6\"MIN HEIGHT T.O. ROOF DECK M",
+      "MIN. ABOVE DECK MI",
+      "|",
+      "3",
+      "@",
+      "2",
+      "3 SCALE:",
+      "1",
+      "I",
+      "t. 410.837.",
+      "i",
+      "OR THE LAWS OF THE STATE OF DC",
+      "LICENSE NO. ARC40001205",
+      "DISTRICT OF COLUMBIA",
+      "DISTRICT OF C",
+      "WARREN NAGEY",
+      "WARREN N",
+      "No. ARC40001205",
+      "X",
+      "1",
+      "1",
+      "#",
+      "PERMIT COMMENTS 10/29/25",
+      "01 PERMIT COMMEN",
+      "PERMIT COMMENTS 12/16/25",
+      "02 PERMIT COMMEN",
+      "PERMIT COMMENTS 02/16/26",
+      "03 PERMIT COMMEN",
+      "PERMIT COMMENTS 07/17/26",
+      "04 PERMIT COMMEN",
+      "OWNER REVISIONS 10/07/26",
+      "05 OWNER REVISIC",
+      "X",
+      "X",
+      "3",
+      "confidential and proprietary property of ed or reproduced without written epared for use on this specific site in able for use on a different site or at ence or example on another project ects and engineers. Reproduction of other project is not authorized.",
+      "AVENUE ON DC -0003 50",
+      "|",
+      "75 NEW YORK AVEN SITE ID # 008-0003",
+      "75 NEW YORK AVENUE NSN # 00650",
+      "<>",
+      "WASHINGTON DC NSN # 00650",
+      "IIII",
+      "These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or released without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or other purposes requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.",
+      "These Mo authoriz",
+      "a late require",
+      "|",
+      "1",
+      "S New York Ave & 1st St, Wash DC SECTIONS.DWG",
+      "1",
+      "24 OF 28",
+      "008-0003 75 New York Ave & 1st St, Wash DC SECT",
+      "A",
+      "A",
+      "5",
+      "4"
+     ],
+     "noMatchReadings": 145
+    },
+    "boxes": {
+     "rows": {
+      "technicalRows": 72,
+      "exact": 44,
+      "exactContradicted": 0,
+      "uncertain": 7,
+      "uncertainCorrectFlagged": 6,
+      "incorrect": 2,
+      "partial": 12,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 28,
+      "technicalAnnotations": 49
+     },
+     "placement": {
+      "technicalRowsTextFound": 53,
+      "boxOnRow": 48,
+      "misplaced": [
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0.5,
+        "dyPt": 11,
+        "dxPt": 0
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": 56,
+        "dxPt": -1833
+       },
+       {
+        "truth": "A-3.00",
+        "read": "A-3.00",
+        "overlap": 0.49,
+        "dyPt": 4,
+        "dxPt": -2
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 504,
+        "dxPt": 1162
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": 844,
+        "dxPt": -1535
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-3.06-00:R021",
+       "truth": "T.O. ROOF DECK MEMBRANE",
+       "read": [
+        "HEIGHT FROM DECK MEMBRANE",
+        "3'-6\"MIN HEIGHT T.O. ROOF DECK M"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R228",
+       "truth": "ELEV. + 0'-0\"",
+       "read": [
+        "ELEV. + O'-O\""
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-3.06-00:R015",
+       "truth": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+       "read": [
+        "I-1/4\" PIPE RAILING. PAINT TO MATCH [conflict]",
+        "I-I/4 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R030",
+       "truth": "-GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+       "read": [
+        "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO [conflict]",
+        "GUAR [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R034",
+       "truth": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "read": [
+        "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA [conflict]",
+        "PRE [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R063b",
+       "truth": "T.O. ROOF MEMBRANE",
+       "read": [
+        "T.O. ROOF MEMBRANE [conflict]",
+        "T.O. [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R076",
+       "truth": "3",
+       "read": [
+        "3 [conflict]",
+        "A-3.06 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R145",
+       "truth": "EXIST. ROOF @ H.P.",
+       "read": [
+        "EXIST. ROOF @ H.P. [conflict]",
+        "EXIST. ROOF 6' [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R153",
+       "truth": "A-3.00",
+       "read": [
+        "A-3.00 [conflict]",
+        "3.00 [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "|",
+      "3",
+      "2 GUARD RAIL",
+      "1",
+      "3",
+      "SCALE: 1/2\"",
+      "SCALE: 3/4\" = 1'-0\"",
+      "SCALE: 1-1/2\"=",
+      "I",
+      "t. 410.837.",
+      "i",
+      "OR THE LAWS OF THE STATE OF DC",
+      "LICENSE NO. ARC40001205",
+      "DISTRICT OF COLUMBIA",
+      "DISTRICT OF C",
+      "WARREN NAGEY",
+      "No. ARC40001205",
+      "1",
+      "1",
+      "X",
+      "#",
+      "01 PERMIT COMMEN",
+      "PERMIT COMMENTS 10/29/25",
+      "02 PERMIT COMMEN",
+      "PERMIT COMMENTS 12/16/25",
+      "03 PERMIT COMMEN",
+      "PERMIT COMMENTS 02/16/26",
+      "04 PERMIT COMMEN",
+      "PERMIT COMMENTS 07/17/26",
+      "OWNER REVISIONS 10/07/26",
+      "05 OWNER REVISIC",
+      "X",
+      "X",
+      "3",
+      "AVENUE ON DC -0003 50",
+      "75 NEW YORK AVEN WASHINGTON DC SITE ID # 008-0003 NSN # 00650",
+      "75 NEW YORK AVENUE WASHINGTON DC SITE ID # 008-0003 NSN # 00650 McDonald's U These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or released without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or other purposes requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.",
+      "|",
+      "550",
+      "<>",
+      "IIII",
+      "|",
+      "PREPA These Mo authoriz conjun a late require",
+      "S New York Ave & 1st St, Wash DC SECTIONS.DWG",
+      "1",
+      "008-0003 75 New York Ave & 1st St, Wash DC SECT",
+      "(",
+      "HFA 09/20/25",
+      "AS NOTED 24 OF 28",
+      "1",
+      "25-95017 A-3.06-00",
+      "A",
+      "5 WALL S",
+      "4",
+      "SCALE: 3/4\"",
+      "SCALE: 3/4\" = 1'"
+     ],
+     "noMatchReadings": 114
+    },
+    "validated": {
+     "rows": {
+      "technicalRows": 72,
+      "exact": 44,
+      "exactContradicted": 0,
+      "uncertain": 8,
+      "uncertainCorrectFlagged": 6,
+      "incorrect": 1,
+      "partial": 12,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 28,
+      "technicalAnnotations": 49
+     },
+     "placement": {
+      "technicalRowsTextFound": 53,
+      "boxOnRow": 48,
+      "misplaced": [
+       {
+        "truth": "EQ",
+        "read": "EQ",
+        "overlap": 0.5,
+        "dyPt": 11,
+        "dxPt": 0
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": 56,
+        "dxPt": -1833
+       },
+       {
+        "truth": "A-3.00",
+        "read": "A-3.00",
+        "overlap": 0.49,
+        "dyPt": 4,
+        "dxPt": -2
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 504,
+        "dxPt": 1162
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": 844,
+        "dxPt": -1535
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-3.06-00:R021",
+       "truth": "T.O. ROOF DECK MEMBRANE",
+       "read": [
+        "HEIGHT FROM DECK MEMBRANE",
+        "3'-6\"MIN HEIGHT T.O. ROOF DECK M"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-3.06-00:R015",
+       "truth": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+       "read": [
+        "I-1/4\" PIPE RAILING. PAINT TO MATCH [conflict]",
+        "I-I/4 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R030",
+       "truth": "-GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+       "read": [
+        "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO [conflict]",
+        "GUAR [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R034",
+       "truth": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "read": [
+        "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA [conflict]",
+        "PRE [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R063b",
+       "truth": "T.O. ROOF MEMBRANE",
+       "read": [
+        "T.O. ROOF MEMBRANE [conflict]",
+        "T.O. [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R076",
+       "truth": "3",
+       "read": [
+        "3 [conflict]",
+        "A-3.06 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R145",
+       "truth": "EXIST. ROOF @ H.P.",
+       "read": [
+        "EXIST. ROOF @ H.P. [conflict]",
+        "EXIST. ROOF 6' [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R153",
+       "truth": "A-3.00",
+       "read": [
+        "A-3.00 [conflict]",
+        "3.00 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-3.06-00:R228",
+       "truth": "ELEV. + 0'-0\"",
+       "read": [
+        "ELEV. + O'-O\" [uncertain]"
+       ]
+      }
+     ],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "|",
+      "3",
+      "2 GUARD RAIL",
+      "1",
+      "3",
+      "SCALE: 1/2\"",
+      "SCALE: 3/4\" = 1'-0\"",
+      "SCALE: 1-1/2\"=",
+      "I",
+      "t. 410.837.",
+      "i",
+      "OR THE LAWS OF THE STATE OF DC",
+      "LICENSE NO. ARC40001205",
+      "DISTRICT OF COLUMBIA",
+      "DISTRICT OF C",
+      "WARREN NAGEY",
+      "No. ARC40001205",
+      "1",
+      "1",
+      "X",
+      "#",
+      "01 PERMIT COMMEN",
+      "PERMIT COMMENTS 10/29/25",
+      "02 PERMIT COMMEN",
+      "PERMIT COMMENTS 12/16/25",
+      "03 PERMIT COMMEN",
+      "PERMIT COMMENTS 02/16/26",
+      "04 PERMIT COMMEN",
+      "PERMIT COMMENTS 07/17/26",
+      "OWNER REVISIONS 10/07/26",
+      "05 OWNER REVISIC",
+      "X",
+      "X",
+      "3",
+      "AVENUE ON DC -0003 50",
+      "75 NEW YORK AVEN WASHINGTON DC SITE ID # 008-0003 NSN # 00650",
+      "75 NEW YORK AVENUE WASHINGTON DC SITE ID # 008-0003 NSN # 00650 McDonald's U These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or released without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or other purposes requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.",
+      "|",
+      "550",
+      "<>",
+      "IIII",
+      "|",
+      "PREPA These Mo authoriz conjun a late require",
+      "S New York Ave & 1st St, Wash DC SECTIONS.DWG",
+      "1",
+      "008-0003 75 New York Ave & 1st St, Wash DC SECT",
+      "(",
+      "HFA 09/20/25",
+      "AS NOTED 24 OF 28",
+      "1",
+      "25-95017 A-3.06-00",
+      "A",
+      "5 WALL S",
+      "4",
+      "SCALE: 3/4\"",
+      "SCALE: 3/4\" = 1'"
+     ],
+     "noMatchReadings": 114
+    }
+   },
+   "evidence": {
+    "av": {
+     "chars": 3120,
+     "units": 71,
+     "retainedExact": 32,
+     "retainedOfOcrExact": 32,
+     "ocrExact": 33,
+     "readings": 111,
+     "technicalReadings": 33,
+     "precision": 0.297,
+     "recallOfOcrExact": 0.97,
+     "rows": {
+      "technicalRows": 72,
+      "exact": 32,
+      "exactContradicted": 0,
+      "uncertain": 6,
+      "uncertainCorrectFlagged": 1,
+      "incorrect": 2,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 30,
+      "completeTechnicalAnnotations": 20,
+      "technicalAnnotations": 49
+     },
+     "exactGids": [
+      "A-3.06-00:R002",
+      "A-3.06-00:R004",
+      "A-3.06-00:R011",
+      "A-3.06-00:R027",
+      "A-3.06-00:R021",
+      "A-3.06-00:R015",
+      "A-3.06-00:R030",
+      "A-3.06-00:R034",
+      "A-3.06-00:R063a",
+      "A-3.06-00:R063b",
+      "A-3.06-00:R045",
+      "A-3.06-00:R023",
+      "A-3.06-00:R077a",
+      "A-3.06-00:R112",
+      "A-3.06-00:R114",
+      "A-3.06-00:R101",
+      "A-3.06-00:R115",
+      "A-3.06-00:R148",
+      "A-3.06-00:R149",
+      "A-3.06-00:R132",
+      "A-3.06-00:R136",
+      "A-3.06-00:R180",
+      "A-3.06-00:R138",
+      "A-3.06-00:R119",
+      "A-3.06-00:R122",
+      "A-3.06-00:R193",
+      "A-3.06-00:R194",
+      "A-3.06-00:R179",
+      "A-3.06-00:R182",
+      "A-3.06-00:R184",
+      "A-3.06-00:R212",
+      "A-3.06-00:R216"
+     ]
+    },
+    "qwen": {
+     "chars": 3155,
+     "units": 73,
+     "retainedExact": 47,
+     "retainedOfOcrExact": 43,
+     "ocrExact": 43,
+     "readings": 134,
+     "technicalReadings": 48,
+     "precision": 0.358,
+     "recallOfOcrExact": 1,
+     "rows": {
+      "technicalRows": 72,
+      "exact": 47,
+      "exactContradicted": 1,
+      "uncertain": 2,
+      "uncertainCorrectFlagged": 1,
+      "incorrect": 2,
+      "partial": 9,
+      "inMerge": 0,
+      "missed": 12,
+      "completeTechnicalAnnotations": 26,
+      "technicalAnnotations": 49
+     },
+     "exactGids": [
+      "A-3.06-00:R012",
+      "A-3.06-00:R011",
+      "A-3.06-00:R054+R049",
+      "A-3.06-00:R050",
+      "A-3.06-00:R059",
+      "A-3.06-00:R030",
+      "A-3.06-00:R034",
+      "A-3.06-00:R063a",
+      "A-3.06-00:R063b",
+      "A-3.06-00:R045",
+      "A-3.06-00:R040",
+      "A-3.06-00:R108",
+      "A-3.06-00:R076",
+      "A-3.06-00:R080",
+      "A-3.06-00:R109",
+      "A-3.06-00:R111",
+      "A-3.06-00:R104",
+      "A-3.06-00:R107",
+      "A-3.06-00:R112",
+      "A-3.06-00:R114",
+      "A-3.06-00:R115",
+      "A-3.06-00:R148",
+      "A-3.06-00:R132",
+      "A-3.06-00:R134+R135",
+      "A-3.06-00:R136",
+      "A-3.06-00:R147",
+      "A-3.06-00:R180",
+      "A-3.06-00:R138",
+      "A-3.06-00:R127",
+      "A-3.06-00:R142",
+      "A-3.06-00:R119",
+      "A-3.06-00:R150",
+      "A-3.06-00:R153",
+      "A-3.06-00:R167",
+      "A-3.06-00:R169",
+      "A-3.06-00:R193",
+      "A-3.06-00:R194",
+      "A-3.06-00:R179",
+      "A-3.06-00:R182",
+      "A-3.06-00:R197",
+      "A-3.06-00:R198",
+      "A-3.06-00:R184",
+      "A-3.06-00:R202",
+      "A-3.06-00:R203",
+      "A-3.06-00:R212",
+      "A-3.06-00:R216",
+      "A-3.06-00:R224"
+     ]
+    },
+    "validated": {
+     "chars": 3165,
+     "units": 67,
+     "retainedExact": 49,
+     "retainedOfOcrExact": 44,
+     "ocrExact": 44,
+     "readings": 126,
+     "technicalReadings": 51,
+     "precision": 0.405,
+     "recallOfOcrExact": 1,
+     "rows": {
+      "technicalRows": 72,
+      "exact": 49,
+      "exactContradicted": 0,
+      "uncertain": 2,
+      "uncertainCorrectFlagged": 1,
+      "incorrect": 2,
+      "partial": 10,
+      "inMerge": 0,
+      "missed": 9,
+      "completeTechnicalAnnotations": 28,
+      "technicalAnnotations": 49
+     },
+     "exactGids": [
+      "A-3.06-00:R001",
+      "A-3.06-00:R002",
+      "A-3.06-00:R012",
+      "A-3.06-00:R011",
+      "A-3.06-00:R054+R049",
+      "A-3.06-00:R050",
+      "A-3.06-00:R059",
+      "A-3.06-00:R030",
+      "A-3.06-00:R034",
+      "A-3.06-00:R063a",
+      "A-3.06-00:R063b",
+      "A-3.06-00:R045",
+      "A-3.06-00:R040",
+      "A-3.06-00:R108",
+      "A-3.06-00:R076",
+      "A-3.06-00:R080",
+      "A-3.06-00:R109",
+      "A-3.06-00:R111",
+      "A-3.06-00:R104",
+      "A-3.06-00:R107",
+      "A-3.06-00:R112",
+      "A-3.06-00:R114",
+      "A-3.06-00:R115",
+      "A-3.06-00:R148",
+      "A-3.06-00:R132",
+      "A-3.06-00:R136",
+      "A-3.06-00:R147",
+      "A-3.06-00:R180",
+      "A-3.06-00:R138",
+      "A-3.06-00:R141",
+      "A-3.06-00:R127",
+      "A-3.06-00:R142",
+      "A-3.06-00:R119",
+      "A-3.06-00:R150",
+      "A-3.06-00:R153",
+      "A-3.06-00:R167",
+      "A-3.06-00:R169",
+      "A-3.06-00:R193",
+      "A-3.06-00:R194",
+      "A-3.06-00:R179",
+      "A-3.06-00:R182",
+      "A-3.06-00:R197",
+      "A-3.06-00:R198",
+      "A-3.06-00:R184",
+      "A-3.06-00:R202",
+      "A-3.06-00:R203",
+      "A-3.06-00:R212",
+      "A-3.06-00:R216",
+      "A-3.06-00:R224"
+     ]
+    },
+    "spatial": {
+     "chars": 3118,
+     "units": 54,
+     "retainedExact": 45,
+     "retainedOfOcrExact": 41,
+     "ocrExact": 44,
+     "readings": 129,
+     "technicalReadings": 49,
+     "precision": 0.38,
+     "recallOfOcrExact": 0.932,
+     "rows": {
+      "technicalRows": 72,
+      "exact": 45,
+      "exactContradicted": 0,
+      "uncertain": 5,
+      "uncertainCorrectFlagged": 2,
+      "incorrect": 2,
+      "partial": 8,
+      "inMerge": 0,
+      "missed": 12,
+      "completeTechnicalAnnotations": 27,
+      "technicalAnnotations": 49
+     },
+     "exactGids": [
+      "A-3.06-00:R001",
+      "A-3.06-00:R002",
+      "A-3.06-00:R012",
+      "A-3.06-00:R011",
+      "A-3.06-00:R054+R049",
+      "A-3.06-00:R050",
+      "A-3.06-00:R059",
+      "A-3.06-00:R030",
+      "A-3.06-00:R034",
+      "A-3.06-00:R063a",
+      "A-3.06-00:R063b",
+      "A-3.06-00:R040",
+      "A-3.06-00:R108",
+      "A-3.06-00:R080",
+      "A-3.06-00:R109",
+      "A-3.06-00:R111",
+      "A-3.06-00:R104",
+      "A-3.06-00:R107",
+      "A-3.06-00:R112",
+      "A-3.06-00:R114",
+      "A-3.06-00:R115",
+      "A-3.06-00:R148",
+      "A-3.06-00:R132",
+      "A-3.06-00:R136",
+      "A-3.06-00:R147",
+      "A-3.06-00:R180",
+      "A-3.06-00:R138",
+      "A-3.06-00:R141",
+      "A-3.06-00:R127",
+      "A-3.06-00:R142",
+      "A-3.06-00:R119",
+      "A-3.06-00:R150",
+      "A-3.06-00:R153",
+      "A-3.06-00:R167",
+      "A-3.06-00:R169",
+      "A-3.06-00:R193",
+      "A-3.06-00:R194",
+      "A-3.06-00:R179",
+      "A-3.06-00:R182",
+      "A-3.06-00:R197",
+      "A-3.06-00:R198",
+      "A-3.06-00:R184",
+      "A-3.06-00:R212",
+      "A-3.06-00:R216",
+      "A-3.06-00:R224"
+     ]
+    }
+   },
+   "retrieval": [
+    {
+     "query": "guard rail height minimum",
+     "qwenV2Block": [
+      {
+       "expect": "3'-6\"MIN HEIGHT FROM",
+       "found": false
+      },
+      {
+       "expect": "3'-6\"",
+       "found": true
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "3'-6\"MIN HEIGHT FROM",
+       "found": false
+      },
+      {
+       "expect": "3'-6\"",
+       "found": true
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "3'-6\"MIN HEIGHT FROM",
+       "found": false
+      },
+      {
+       "expect": "3'-6\"",
+       "found": true
+      }
+     ],
+     "retrievedChars": 1131,
+     "retrievedUnits": 10
+    },
+    {
+     "query": "guard rail sphere passage",
+     "qwenV2Block": [
+      {
+       "expect": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "found": true
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "found": true
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+       "found": true
+      }
+     ],
+     "retrievedChars": 1169,
+     "retrievedUnits": 9
+    }
+   ],
+   "validation": {
+    "tally": {
+     "tokensChecked": 6,
+     "corrected_text_layer": 0,
+     "corrected_overlap_tile": 0,
+     "flagged_ambiguous": 6,
+     "confirmed_text_layer": 0,
+     "flagged_text_layer_disagrees": 0,
+     "conflicts_resolved": 0,
+     "linesFlagged": 6,
+     "linesCorrected": 0
+    },
+    "correctedLines": [],
+    "flaggedLines": [
+     {
+      "lid": "L0002",
+      "text": "I-1/4\" PIPE RAILING. PAI",
+      "checks": [
+       {
+        "token": "I-1/4\"",
+        "candidate": "1-1/4\"",
+        "reason": "dimension_or_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0004",
+      "text": "O\" BEYOND EACH END OF EQUIPMENT",
+      "checks": [
+       {
+        "token": "O\"",
+        "candidate": "0\"",
+        "reason": "dimension_or_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0012",
+      "text": "I-1/4\" PIPE RAIL",
+      "checks": [
+       {
+        "token": "I-1/4\"",
+        "candidate": "1-1/4\"",
+        "reason": "dimension_or_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0015",
+      "text": "I-1/4\" PIPE RAILING. PAINT TO MATCH",
+      "checks": [
+       {
+        "token": "I-1/4\"",
+        "candidate": "1-1/4\"",
+        "reason": "dimension_or_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0243",
+      "text": "IIII",
+      "checks": [
+       {
+        "token": "IIII",
+        "candidate": "1111",
+        "reason": "room_or_door_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0272",
+      "text": "ELEV. + O'-O\"",
+      "checks": [
+       {
+        "token": "O'-O\"",
+        "candidate": "0'-0\"",
+        "reason": "dimension_or_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     }
+    ]
+   },
+   "changes": {
+    "boxPolicy": [
+     {
+      "truth": "2",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "A-3.06",
+      "before": "wrong",
+      "after": "exact"
+     },
+     {
+      "truth": "3'-6\"",
+      "before": "exact",
+      "after": "none"
+     },
+     {
+      "truth": "1:12 MIN.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "A-3.00",
+      "before": "exact",
+      "after": "exact_marked"
+     }
+    ],
+    "validation": [],
+    "evidenceOnlyInValidatedV2": [
+     "-4x4 WOOD BLOCKING",
+     "3",
+     "2",
+     "A-3.00"
+    ],
+    "evidenceOnlyInSpatial": [],
+    "spatialExactNotExactInOcr": [
+     {
+      "truth": "-GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+      "ocrState": "exact_marked"
+     },
+     {
+      "truth": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+      "ocrState": "exact_marked"
+     },
+     {
+      "truth": "T.O. ROOF MEMBRANE",
+      "ocrState": "exact_marked"
+     },
+     {
+      "truth": "A-3.00",
+      "ocrState": "exact_marked"
+     }
+    ],
+    "spatialSeamResolvedShown": [
+     {
+      "text": "A-3.00",
+      "cut": [
+       "3.00"
+      ]
+     },
+     {
+      "text": "NEW METAL PARAPET CAP.",
+      "cut": [
+       "NEW"
+      ]
+     },
+     {
+      "text": "T.O. ROOF MEMBRANE",
+      "cut": [
+       "T.O."
+      ]
+     },
+     {
+      "text": "DIAGONAL BRACING, SEE",
+      "cut": [
+       "SEE"
+      ]
+     },
+     {
+      "text": "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+      "cut": [
+       "GUAR"
+      ]
+     },
+     {
+      "text": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+      "cut": [
+       "PRE"
+      ]
+     }
+    ]
+   },
+   "blockChars": {
+    "av": 3120,
+    "qwen": 3155,
+    "validated": 3165,
+    "spatial": 3118
+   }
+  },
+  {
+   "sheet": "A-4.00-00",
+   "gtTechnicalRows": 33,
+   "ocr": {
+    "av": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 13,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 0,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 19,
+      "completeTechnicalAnnotations": 11,
+      "technicalAnnotations": 30
+     },
+     "placement": {
+      "technicalRowsTextFound": 21,
+      "boxOnRow": 13,
+      "misplaced": [
+       {
+        "truth": "12\"",
+        "read": "12\"",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": 377
+       },
+       {
+        "truth": "2'-0\"",
+        "read": "12'-0\"",
+        "overlap": 0,
+        "dyPt": 928,
+        "dxPt": -95
+       },
+       {
+        "truth": "MIN",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 557,
+        "dxPt": 984
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 215
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 193
+       },
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": 281,
+        "dxPt": 179
+       },
+       {
+        "truth": "2\"",
+        "read": "12\"",
+        "overlap": 0,
+        "dyPt": 154,
+        "dxPt": 440
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 589,
+        "dxPt": 1468
+       }
+      ]
+     },
+     "incorrectRows": [],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [],
+     "noMatchReadings": 0
+    },
+    "qwen": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 15,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 2,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 16,
+      "completeTechnicalAnnotations": 15,
+      "technicalAnnotations": 30
+     },
+     "placement": {
+      "technicalRowsTextFound": 29,
+      "boxOnRow": 15,
+      "misplaced": [
+       {
+        "truth": "4\"",
+        "read": "4\"",
+        "overlap": 0,
+        "dyPt": 708,
+        "dxPt": 150
+       },
+       {
+        "truth": "12\"",
+        "read": "12\"",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": 379
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 710,
+        "dxPt": 1693
+       },
+       {
+        "truth": "2'-0\"",
+        "read": "12'-0\"",
+        "overlap": 0,
+        "dyPt": 927,
+        "dxPt": -94
+       },
+       {
+        "truth": "MIN",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 741,
+        "dxPt": 1255
+       },
+       {
+        "truth": "24\" MIN.",
+        "read": "24\" MIN.",
+        "overlap": 0,
+        "dyPt": 91,
+        "dxPt": -393
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 215
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 193
+       },
+       {
+        "truth": "34\"",
+        "read": "34\"",
+        "overlap": 0,
+        "dyPt": 27,
+        "dxPt": 9
+       },
+       {
+        "truth": "34\"",
+        "read": "34\"",
+        "overlap": 0,
+        "dyPt": 27,
+        "dxPt": 76
+       },
+       {
+        "truth": "15\" MIN.",
+        "read": "15\" MIN.",
+        "overlap": 0.2,
+        "dyPt": 10,
+        "dxPt": -9
+       },
+       {
+        "truth": "2\"",
+        "read": "2\"",
+        "overlap": 0,
+        "dyPt": 734,
+        "dxPt": 1305
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 774,
+        "dxPt": 1739
+       },
+       {
+        "truth": "18\"",
+        "read": "18\"",
+        "overlap": 0,
+        "dyPt": -25,
+        "dxPt": 6
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-4.00-00:R019",
+       "truth": "12\"",
+       "read": [
+        "MIN."
+       ]
+      },
+      {
+       "gid": "A-4.00-00:R035",
+       "truth": "2\" HOLD",
+       "read": [
+        "2\" MIN."
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "LE: 3/8\" = 1'-0\"",
+      "FINISHEI"
+     ],
+     "noMatchReadings": 21
+    },
+    "check": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 15,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 2,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 16,
+      "completeTechnicalAnnotations": 15,
+      "technicalAnnotations": 30
+     },
+     "placement": {
+      "technicalRowsTextFound": 29,
+      "boxOnRow": 15,
+      "misplaced": [
+       {
+        "truth": "4\"",
+        "read": "4\"",
+        "overlap": 0,
+        "dyPt": 708,
+        "dxPt": 150
+       },
+       {
+        "truth": "12\"",
+        "read": "12\"",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": 379
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 710,
+        "dxPt": 1693
+       },
+       {
+        "truth": "2'-0\"",
+        "read": "12'-0\"",
+        "overlap": 0,
+        "dyPt": 927,
+        "dxPt": -94
+       },
+       {
+        "truth": "MIN",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 741,
+        "dxPt": 1255
+       },
+       {
+        "truth": "24\" MIN.",
+        "read": "24\" MIN.",
+        "overlap": 0,
+        "dyPt": 91,
+        "dxPt": -393
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 215
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 193
+       },
+       {
+        "truth": "34\"",
+        "read": "34\"",
+        "overlap": 0,
+        "dyPt": 27,
+        "dxPt": 9
+       },
+       {
+        "truth": "34\"",
+        "read": "34\"",
+        "overlap": 0,
+        "dyPt": 27,
+        "dxPt": 76
+       },
+       {
+        "truth": "15\" MIN.",
+        "read": "15\" MIN.",
+        "overlap": 0.2,
+        "dyPt": 10,
+        "dxPt": -9
+       },
+       {
+        "truth": "2\"",
+        "read": "2\"",
+        "overlap": 0,
+        "dyPt": 734,
+        "dxPt": 1305
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 774,
+        "dxPt": 1739
+       },
+       {
+        "truth": "18\"",
+        "read": "18\"",
+        "overlap": 0,
+        "dyPt": -25,
+        "dxPt": 6
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-4.00-00:R019",
+       "truth": "12\"",
+       "read": [
+        "MIN."
+       ]
+      },
+      {
+       "gid": "A-4.00-00:R035",
+       "truth": "2\" HOLD",
+       "read": [
+        "2\" MIN."
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "LE: 3/8\" = 1'-0\"",
+      "FINISHEI"
+     ],
+     "noMatchReadings": 21
+    },
+    "boxes": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 22,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 1,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 8,
+      "completeTechnicalAnnotations": 20,
+      "technicalAnnotations": 30
+     },
+     "placement": {
+      "technicalRowsTextFound": 29,
+      "boxOnRow": 21,
+      "misplaced": [
+       {
+        "truth": "MIN",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 724,
+        "dxPt": 1254
+       },
+       {
+        "truth": "48\" MAX.",
+        "read": "48\" MAX. AFF",
+        "overlap": 0,
+        "dyPt": -373,
+        "dxPt": -1
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 215
+       },
+       {
+        "truth": "34\"",
+        "read": "34\"",
+        "overlap": 0,
+        "dyPt": 3,
+        "dxPt": 9
+       },
+       {
+        "truth": "15\" MIN.",
+        "read": "15\" MIN.",
+        "overlap": 0,
+        "dyPt": 10,
+        "dxPt": -12
+       },
+       {
+        "truth": "2\"",
+        "read": "2\"",
+        "overlap": 0,
+        "dyPt": 742,
+        "dxPt": 1301
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 757,
+        "dxPt": 1738
+       },
+       {
+        "truth": "18\"",
+        "read": "18\"",
+        "overlap": 0,
+        "dyPt": -24,
+        "dxPt": -242
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-4.00-00:R025",
+       "truth": "1'-0\"",
+       "read": [
+        "MIN."
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "SCALE: 3/8\"",
+      "SCALE: 3/8\"",
+      "LE: 3/8\" = 1'-0\""
+     ],
+     "noMatchReadings": 10
+    },
+    "validated": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 22,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 1,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 8,
+      "completeTechnicalAnnotations": 20,
+      "technicalAnnotations": 30
+     },
+     "placement": {
+      "technicalRowsTextFound": 29,
+      "boxOnRow": 21,
+      "misplaced": [
+       {
+        "truth": "MIN",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 724,
+        "dxPt": 1254
+       },
+       {
+        "truth": "48\" MAX.",
+        "read": "48\" MAX. AFF",
+        "overlap": 0,
+        "dyPt": -373,
+        "dxPt": -1
+       },
+       {
+        "truth": "40\"",
+        "read": "40\"",
+        "overlap": 0,
+        "dyPt": 157,
+        "dxPt": 215
+       },
+       {
+        "truth": "34\"",
+        "read": "34\"",
+        "overlap": 0,
+        "dyPt": 3,
+        "dxPt": 9
+       },
+       {
+        "truth": "15\" MIN.",
+        "read": "15\" MIN.",
+        "overlap": 0,
+        "dyPt": 10,
+        "dxPt": -12
+       },
+       {
+        "truth": "2\"",
+        "read": "2\"",
+        "overlap": 0,
+        "dyPt": 742,
+        "dxPt": 1301
+       },
+       {
+        "truth": "MIN.",
+        "read": "MIN.",
+        "overlap": 0,
+        "dyPt": 757,
+        "dxPt": 1738
+       },
+       {
+        "truth": "18\"",
+        "read": "18\"",
+        "overlap": 0,
+        "dyPt": -24,
+        "dxPt": -242
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-4.00-00:R025",
+       "truth": "1'-0\"",
+       "read": [
+        "MIN."
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "SCALE: 3/8\"",
+      "SCALE: 3/8\"",
+      "LE: 3/8\" = 1'-0\""
+     ],
+     "noMatchReadings": 10
+    }
+   },
+   "evidence": {
+    "av": {
+     "chars": 3157,
+     "units": 45,
+     "retainedExact": 12,
+     "retainedOfOcrExact": 12,
+     "ocrExact": 13,
+     "readings": 15,
+     "technicalReadings": 12,
+     "precision": 0.8,
+     "recallOfOcrExact": 0.923,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 12,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 0,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 20,
+      "completeTechnicalAnnotations": 10,
+      "technicalAnnotations": 30
+     },
+     "exactGids": [
+      "A-4.00-00:R001",
+      "A-4.00-00:R006",
+      "A-4.00-00:R007",
+      "A-4.00-00:R012",
+      "A-4.00-00:R016",
+      "A-4.00-00:R018",
+      "A-4.00-00:R020",
+      "A-4.00-00:R029",
+      "A-4.00-00:R034",
+      "A-4.00-00:R035",
+      "A-4.00-00:R042",
+      "A-4.00-00:R045"
+     ]
+    },
+    "qwen": {
+     "chars": 3181,
+     "units": 92,
+     "retainedExact": 10,
+     "retainedOfOcrExact": 10,
+     "ocrExact": 15,
+     "readings": 25,
+     "technicalReadings": 10,
+     "precision": 0.4,
+     "recallOfOcrExact": 0.667,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 10,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 2,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 21,
+      "completeTechnicalAnnotations": 9,
+      "technicalAnnotations": 30
+     },
+     "exactGids": [
+      "A-4.00-00:R001",
+      "A-4.00-00:R006",
+      "A-4.00-00:R007",
+      "A-4.00-00:R012",
+      "A-4.00-00:R016",
+      "A-4.00-00:R018",
+      "A-4.00-00:R029",
+      "A-4.00-00:R041",
+      "A-4.00-00:R044",
+      "A-4.00-00:R045"
+     ]
+    },
+    "validated": {
+     "chars": 3180,
+     "units": 95,
+     "retainedExact": 17,
+     "retainedOfOcrExact": 17,
+     "ocrExact": 22,
+     "readings": 30,
+     "technicalReadings": 17,
+     "precision": 0.567,
+     "recallOfOcrExact": 0.773,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 17,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 2,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 13,
+      "completeTechnicalAnnotations": 15,
+      "technicalAnnotations": 30
+     },
+     "exactGids": [
+      "A-4.00-00:R001",
+      "A-4.00-00:R006",
+      "A-4.00-00:R007",
+      "A-4.00-00:R012",
+      "A-4.00-00:R013",
+      "A-4.00-00:R016",
+      "A-4.00-00:R018",
+      "A-4.00-00:R019",
+      "A-4.00-00:R020",
+      "A-4.00-00:R021",
+      "A-4.00-00:R034",
+      "A-4.00-00:R037",
+      "A-4.00-00:R040",
+      "A-4.00-00:R041",
+      "A-4.00-00:R044",
+      "A-4.00-00:R045",
+      "A-4.00-00:R048"
+     ]
+    },
+    "spatial": {
+     "chars": 3085,
+     "units": 103,
+     "retainedExact": 22,
+     "retainedOfOcrExact": 22,
+     "ocrExact": 22,
+     "readings": 41,
+     "technicalReadings": 22,
+     "precision": 0.537,
+     "recallOfOcrExact": 1,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 22,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 1,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 8,
+      "completeTechnicalAnnotations": 20,
+      "technicalAnnotations": 30
+     },
+     "exactGids": [
+      "A-4.00-00:R001",
+      "A-4.00-00:R006",
+      "A-4.00-00:R007",
+      "A-4.00-00:R012",
+      "A-4.00-00:R013",
+      "A-4.00-00:R016",
+      "A-4.00-00:R017",
+      "A-4.00-00:R018",
+      "A-4.00-00:R019",
+      "A-4.00-00:R020",
+      "A-4.00-00:R021",
+      "A-4.00-00:R027",
+      "A-4.00-00:R028",
+      "A-4.00-00:R034",
+      "A-4.00-00:R037",
+      "A-4.00-00:R040",
+      "A-4.00-00:R041",
+      "A-4.00-00:R043",
+      "A-4.00-00:R044",
+      "A-4.00-00:R045",
+      "A-4.00-00:R046",
+      "A-4.00-00:R048"
+     ]
+    }
+   },
+   "retrieval": [],
+   "validation": {
+    "tally": {
+     "tokensChecked": 2,
+     "corrected_text_layer": 0,
+     "corrected_overlap_tile": 0,
+     "flagged_ambiguous": 2,
+     "confirmed_text_layer": 0,
+     "flagged_text_layer_disagrees": 0,
+     "conflicts_resolved": 0,
+     "linesFlagged": 2,
+     "linesCorrected": 0
+    },
+    "correctedLines": [],
+    "flaggedLines": [
+     {
+      "lid": "L0091",
+      "text": "q\"",
+      "checks": [
+       {
+        "token": "q\"",
+        "candidate": "9\"",
+        "reason": "dimension_or_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0228",
+      "text": "OOR TO THE CENTERLINE OF THE SIGN. MOU",
+      "checks": [
+       {
+        "token": "OOR",
+        "candidate": "00R",
+        "reason": "room_or_door_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     }
+    ]
+   },
+   "changes": {
+    "boxPolicy": [
+     {
+      "truth": "4\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "12\"",
+      "before": "wrong",
+      "after": "exact"
+     },
+     {
+      "truth": "MIN.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "2'-0\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "48\" MAX.",
+      "before": "exact",
+      "after": "none"
+     },
+     {
+      "truth": "24\" MIN.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "40\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "34\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "2\"",
+      "before": "none",
+      "after": "exact"
+     }
+    ],
+    "validation": [],
+    "evidenceOnlyInValidatedV2": [],
+    "evidenceOnlyInSpatial": [
+     "1C",
+     "1B",
+     "1A",
+     "2",
+     "16-18"
+    ],
+    "spatialExactNotExactInOcr": [],
+    "spatialSeamResolvedShown": [
+     {
+      "text": "4\" MAX.",
+      "cut": [
+       "4\""
+      ]
+     },
+     {
+      "text": "New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26",
+      "cut": [
+       "15/26"
+      ]
+     }
+    ]
+   },
+   "blockChars": {
+    "av": 3157,
+    "qwen": 3181,
+    "validated": 3180,
+    "spatial": 3085
+   }
+  },
+  {
+   "sheet": "A-1.01-00",
+   "gtTechnicalRows": 33,
+   "ocr": {
+    "av": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 3,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 1,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 29,
+      "completeTechnicalAnnotations": 2,
+      "technicalAnnotations": 23
+     },
+     "placement": {
+      "technicalRowsTextFound": 9,
+      "boxOnRow": 3,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -1075,
+        "dxPt": 677
+       },
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -897,
+        "dxPt": 576
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01,",
+        "overlap": 0,
+        "dyPt": 0,
+        "dxPt": -40
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -612,
+        "dxPt": -26
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -611,
+        "dxPt": -186
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01,",
+        "overlap": 0,
+        "dyPt": 69,
+        "dxPt": -435
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-1.01-00:R070",
+       "truth": "NEW 1 HR. FIRE",
+       "read": [
+        "NEW I HR. FIRE"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [],
+     "noMatchReadings": 0
+    },
+    "qwen": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 8,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 9,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 15,
+      "completeTechnicalAnnotations": 4,
+      "technicalAnnotations": 23
+     },
+     "placement": {
+      "technicalRowsTextFound": 27,
+      "boxOnRow": 9,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -10,
+        "dxPt": 0
+       },
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": 168,
+        "dxPt": -101
+       },
+       {
+        "truth": "A-301",
+        "read": "A-301",
+        "overlap": 0,
+        "dyPt": -700,
+        "dxPt": 107
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -518,
+        "dxPt": -364
+       },
+       {
+        "truth": "10",
+        "read": "109",
+        "overlap": 0,
+        "dyPt": -407,
+        "dxPt": 1152
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -62,
+        "dxPt": 435
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -62,
+        "dxPt": 395
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -499,
+        "dxPt": -215
+       },
+       {
+        "truth": "A-3.02",
+        "read": "A-3.02",
+        "overlap": 0.23,
+        "dyPt": -9,
+        "dxPt": -1
+       },
+       {
+        "truth": "3'-5 1/2\"",
+        "read": "3'-5 1/2\"",
+        "overlap": 0,
+        "dyPt": -11,
+        "dxPt": 1
+       },
+       {
+        "truth": "3'-4\"",
+        "read": "3'-4\"",
+        "overlap": 0.41,
+        "dyPt": 5,
+        "dxPt": 0
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -613,
+        "dxPt": -23
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -612,
+        "dxPt": -184
+       },
+       {
+        "truth": "11",
+        "read": "113",
+        "overlap": 0,
+        "dyPt": 244,
+        "dxPt": -538
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0.41,
+        "dyPt": 7,
+        "dxPt": 0
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -248,
+        "dxPt": 241
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -216,
+        "dxPt": -939
+       },
+       {
+        "truth": "A-2.00",
+        "read": "A-2.00",
+        "overlap": 0,
+        "dyPt": 489,
+        "dxPt": -615
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-1.01-00:R025",
+       "truth": "A-3.01",
+       "read": [
+        "A-3.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R028",
+       "truth": "A-4.01",
+       "read": [
+        "IO"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R029",
+       "truth": "9",
+       "read": [
+        "q"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R030",
+       "truth": "A-4.01",
+       "read": [
+        "A-4.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R033",
+       "truth": "A-3.02",
+       "read": [
+        "I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R046",
+       "truth": "11",
+       "read": [
+        "A-4.01"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R069",
+       "truth": "101B",
+       "read": [
+        "IOIB"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R070",
+       "truth": "NEW 1 HR. FIRE",
+       "read": [
+        "NEW I HR."
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R075",
+       "truth": "1",
+       "read": [
+        "A-2.00"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "I",
+      "2",
+      "2",
+      "A-30I OP",
+      "A-301 OPP.",
+      "A-4.0I",
+      "3'-4\"",
+      "q 1/2\"",
+      "3'-5 1/2\"",
+      "|",
+      "|",
+      "9 1/2\" 3'-10\"",
+      "A",
+      "2'-4\"",
+      "2'-4\"",
+      "A",
+      "A",
+      "C",
+      "C",
+      "A",
+      "A"
+     ],
+     "noMatchReadings": 31
+    },
+    "check": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 8,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 9,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 15,
+      "completeTechnicalAnnotations": 4,
+      "technicalAnnotations": 23
+     },
+     "placement": {
+      "technicalRowsTextFound": 27,
+      "boxOnRow": 9,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -10,
+        "dxPt": 0
+       },
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": 168,
+        "dxPt": -101
+       },
+       {
+        "truth": "A-301",
+        "read": "A-301",
+        "overlap": 0,
+        "dyPt": -700,
+        "dxPt": 107
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -518,
+        "dxPt": -364
+       },
+       {
+        "truth": "10",
+        "read": "109",
+        "overlap": 0,
+        "dyPt": -407,
+        "dxPt": 1152
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -62,
+        "dxPt": 435
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -62,
+        "dxPt": 395
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -499,
+        "dxPt": -215
+       },
+       {
+        "truth": "A-3.02",
+        "read": "A-3.02",
+        "overlap": 0.23,
+        "dyPt": -9,
+        "dxPt": -1
+       },
+       {
+        "truth": "3'-5 1/2\"",
+        "read": "3'-5 1/2\"",
+        "overlap": 0,
+        "dyPt": -11,
+        "dxPt": 1
+       },
+       {
+        "truth": "3'-4\"",
+        "read": "3'-4\"",
+        "overlap": 0.41,
+        "dyPt": 5,
+        "dxPt": 0
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -613,
+        "dxPt": -23
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -612,
+        "dxPt": -184
+       },
+       {
+        "truth": "11",
+        "read": "113",
+        "overlap": 0,
+        "dyPt": 244,
+        "dxPt": -538
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0.41,
+        "dyPt": 7,
+        "dxPt": 0
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -248,
+        "dxPt": 241
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -216,
+        "dxPt": -939
+       },
+       {
+        "truth": "A-2.00",
+        "read": "A-2.00",
+        "overlap": 0,
+        "dyPt": 489,
+        "dxPt": -615
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-1.01-00:R025",
+       "truth": "A-3.01",
+       "read": [
+        "A-3.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R028",
+       "truth": "A-4.01",
+       "read": [
+        "IO"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R029",
+       "truth": "9",
+       "read": [
+        "q"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R030",
+       "truth": "A-4.01",
+       "read": [
+        "A-4.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R033",
+       "truth": "A-3.02",
+       "read": [
+        "I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R046",
+       "truth": "11",
+       "read": [
+        "A-4.01"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R069",
+       "truth": "101B",
+       "read": [
+        "IOIB"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R070",
+       "truth": "NEW 1 HR. FIRE",
+       "read": [
+        "NEW I HR."
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R075",
+       "truth": "1",
+       "read": [
+        "A-2.00"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "I",
+      "2",
+      "2",
+      "A-30I OP",
+      "A-301 OPP.",
+      "A-4.0I",
+      "3'-4\"",
+      "q 1/2\"",
+      "3'-5 1/2\"",
+      "|",
+      "|",
+      "9 1/2\" 3'-10\"",
+      "A",
+      "2'-4\"",
+      "2'-4\"",
+      "A",
+      "A",
+      "C",
+      "C",
+      "A",
+      "A"
+     ],
+     "noMatchReadings": 31
+    },
+    "boxes": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 16,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 9,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 9,
+      "technicalAnnotations": 23
+     },
+     "placement": {
+      "technicalRowsTextFound": 27,
+      "boxOnRow": 15,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0.46,
+        "dyPt": -1,
+        "dxPt": 4
+       },
+       {
+        "truth": "A-301",
+        "read": "A-301",
+        "overlap": 0,
+        "dyPt": -702,
+        "dxPt": 31
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -532,
+        "dxPt": -361
+       },
+       {
+        "truth": "10",
+        "read": "109",
+        "overlap": 0,
+        "dyPt": -407,
+        "dxPt": 1152
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -69,
+        "dxPt": 435
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -70,
+        "dxPt": 395
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -513,
+        "dxPt": -213
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -613,
+        "dxPt": -26
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -612,
+        "dxPt": -187
+       },
+       {
+        "truth": "11",
+        "read": "113",
+        "overlap": 0,
+        "dyPt": 245,
+        "dxPt": -538
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -262,
+        "dxPt": 244
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -230,
+        "dxPt": -937
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-1.01-00:R022",
+       "truth": "A-301",
+       "read": [
+        "A-30I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R025",
+       "truth": "A-3.01",
+       "read": [
+        "A-3.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R028",
+       "truth": "A-4.01",
+       "read": [
+        "A-4.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R029",
+       "truth": "9",
+       "read": [
+        "q"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R030",
+       "truth": "A-4.01",
+       "read": [
+        "A-4.0I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R032",
+       "truth": "1",
+       "read": [
+        "I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R046",
+       "truth": "11",
+       "read": [
+        "II"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R069",
+       "truth": "101B",
+       "read": [
+        "IOIB"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R070",
+       "truth": "NEW 1 HR. FIRE",
+       "read": [
+        "NEW I HR.",
+        "RESISTIVE"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "|",
+      "|",
+      "I",
+      "2",
+      "q 1/2\"",
+      "A",
+      "A",
+      "I",
+      "C",
+      "A",
+      "A"
+     ],
+     "noMatchReadings": 18
+    },
+    "validated": {
+     "rows": {
+      "technicalRows": 33,
+      "exact": 17,
+      "exactContradicted": 0,
+      "uncertain": 4,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 4,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 9,
+      "technicalAnnotations": 23
+     },
+     "placement": {
+      "technicalRowsTextFound": 27,
+      "boxOnRow": 16,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0.46,
+        "dyPt": -1,
+        "dxPt": 4
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -532,
+        "dxPt": -361
+       },
+       {
+        "truth": "10",
+        "read": "109",
+        "overlap": 0,
+        "dyPt": -407,
+        "dxPt": 1152
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -69,
+        "dxPt": 435
+       },
+       {
+        "truth": "A-4.01",
+        "read": "A-4.01",
+        "overlap": 0,
+        "dyPt": -70,
+        "dxPt": 395
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -513,
+        "dxPt": -213
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -613,
+        "dxPt": -26
+       },
+       {
+        "truth": "9 1/2\"",
+        "read": "9 1/2\"",
+        "overlap": 0,
+        "dyPt": -612,
+        "dxPt": -187
+       },
+       {
+        "truth": "11",
+        "read": "113",
+        "overlap": 0,
+        "dyPt": 245,
+        "dxPt": -538
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -262,
+        "dxPt": 244
+       },
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -230,
+        "dxPt": -937
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-1.01-00:R029",
+       "truth": "9",
+       "read": [
+        "q"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R032",
+       "truth": "1",
+       "read": [
+        "I"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R046",
+       "truth": "11",
+       "read": [
+        "II"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R070",
+       "truth": "NEW 1 HR. FIRE",
+       "read": [
+        "NEW I HR. [uncertain]",
+        "RESISTIVE"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-1.01-00:R025",
+       "truth": "A-3.01",
+       "read": [
+        "A-3.0I [uncertain]"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R028",
+       "truth": "A-4.01",
+       "read": [
+        "A-4.0I [uncertain]"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R030",
+       "truth": "A-4.01",
+       "read": [
+        "A-4.0I [uncertain]"
+       ]
+      },
+      {
+       "gid": "A-1.01-00:R069",
+       "truth": "101B",
+       "read": [
+        "IOIB [uncertain]"
+       ]
+      }
+     ],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "|",
+      "|",
+      "I",
+      "2",
+      "q 1/2\"",
+      "A",
+      "A",
+      "I",
+      "C",
+      "A",
+      "A"
+     ],
+     "noMatchReadings": 18
+    }
+   },
+   "evidence": {
+    "av": {
+     "chars": 3118,
+     "units": 72,
+     "retainedExact": 3,
+     "retainedOfOcrExact": 3,
+     "ocrExact": 3,
+     "readings": 11,
+     "technicalReadings": 3,
+     "precision": 0.273,
+     "recallOfOcrExact": 1,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 3,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 0,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 30,
+      "completeTechnicalAnnotations": 2,
+      "technicalAnnotations": 23
+     },
+     "exactGids": [
+      "A-1.01-00:R028",
+      "A-1.01-00:R038",
+      "A-1.01-00:R039"
+     ]
+    },
+    "qwen": {
+     "chars": 3167,
+     "units": 78,
+     "retainedExact": 5,
+     "retainedOfOcrExact": 5,
+     "ocrExact": 8,
+     "readings": 21,
+     "technicalReadings": 6,
+     "precision": 0.286,
+     "recallOfOcrExact": 0.625,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 5,
+      "exactContradicted": 0,
+      "uncertain": 3,
+      "uncertainCorrectFlagged": 1,
+      "incorrect": 2,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 22,
+      "completeTechnicalAnnotations": 3,
+      "technicalAnnotations": 23
+     },
+     "exactGids": [
+      "A-1.01-00:R004",
+      "A-1.01-00:R006",
+      "A-1.01-00:R039",
+      "A-1.01-00:R061",
+      "A-1.01-00:R067"
+     ]
+    },
+    "validated": {
+     "chars": 3164,
+     "units": 71,
+     "retainedExact": 13,
+     "retainedOfOcrExact": 13,
+     "ocrExact": 17,
+     "readings": 19,
+     "technicalReadings": 16,
+     "precision": 0.842,
+     "recallOfOcrExact": 0.765,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 13,
+      "exactContradicted": 0,
+      "uncertain": 3,
+      "uncertainCorrectFlagged": 2,
+      "incorrect": 0,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 16,
+      "completeTechnicalAnnotations": 8,
+      "technicalAnnotations": 23
+     },
+     "exactGids": [
+      "A-1.01-00:R005",
+      "A-1.01-00:R006",
+      "A-1.01-00:R022",
+      "A-1.01-00:R033",
+      "A-1.01-00:R035",
+      "A-1.01-00:R038",
+      "A-1.01-00:R039",
+      "A-1.01-00:R047",
+      "A-1.01-00:R048",
+      "A-1.01-00:R060",
+      "A-1.01-00:R061",
+      "A-1.01-00:R067",
+      "A-1.01-00:R076"
+     ]
+    },
+    "spatial": {
+     "chars": 3116,
+     "units": 76,
+     "retainedExact": 14,
+     "retainedOfOcrExact": 14,
+     "ocrExact": 17,
+     "readings": 31,
+     "technicalReadings": 14,
+     "precision": 0.452,
+     "recallOfOcrExact": 0.824,
+     "rows": {
+      "technicalRows": 33,
+      "exact": 14,
+      "exactContradicted": 0,
+      "uncertain": 4,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 2,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 12,
+      "completeTechnicalAnnotations": 7,
+      "technicalAnnotations": 23
+     },
+     "exactGids": [
+      "A-1.01-00:R004",
+      "A-1.01-00:R005",
+      "A-1.01-00:R006",
+      "A-1.01-00:R033",
+      "A-1.01-00:R034",
+      "A-1.01-00:R036",
+      "A-1.01-00:R039",
+      "A-1.01-00:R047",
+      "A-1.01-00:R048",
+      "A-1.01-00:R060",
+      "A-1.01-00:R061",
+      "A-1.01-00:R065",
+      "A-1.01-00:R067",
+      "A-1.01-00:R076"
+     ]
+    }
+   },
+   "retrieval": [
+    {
+     "query": "fire rated partition",
+     "qwenV2Block": [
+      {
+       "expect": "NEW 1 HR. FIRE",
+       "found": false
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "NEW 1 HR. FIRE",
+       "found": false
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "NEW 1 HR. FIRE",
+       "found": false
+      }
+     ],
+     "retrievedChars": 908,
+     "retrievedUnits": 7
+    }
+   ],
+   "validation": {
+    "tally": {
+     "tokensChecked": 10,
+     "corrected_text_layer": 0,
+     "corrected_overlap_tile": 1,
+     "flagged_ambiguous": 9,
+     "confirmed_text_layer": 0,
+     "flagged_text_layer_disagrees": 0,
+     "conflicts_resolved": 0,
+     "linesFlagged": 9,
+     "linesCorrected": 1
+    },
+    "correctedLines": [
+     {
+      "lid": "L0033",
+      "ocr": "A-30I",
+      "text": "A-301",
+      "checks": [
+       {
+        "token": "A-30I",
+        "candidate": "A-301",
+        "reason": "sheet_reference",
+        "status": "corrected_overlap_tile"
+       }
+      ]
+     }
+    ],
+    "flaggedLines": [
+     {
+      "lid": "L0032",
+      "text": "A-3.0I",
+      "checks": [
+       {
+        "token": "A-3.0I",
+        "candidate": "A-3.01",
+        "reason": "sheet_reference",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0040",
+      "text": "A-4.0I",
+      "checks": [
+       {
+        "token": "A-4.0I",
+        "candidate": "A-4.01",
+        "reason": "sheet_reference",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0041",
+      "text": "A-4.0I",
+      "checks": [
+       {
+        "token": "A-4.0I",
+        "candidate": "A-4.01",
+        "reason": "sheet_reference",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0049",
+      "text": "q 1/2\"",
+      "checks": [
+       {
+        "token": "q",
+        "candidate": "9",
+        "reason": "digit_before_fraction",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0101",
+      "text": "NEW I HR.",
+      "checks": [
+       {
+        "token": "I",
+        "candidate": "1",
+        "reason": "number_before_unit",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0106",
+      "text": "IOIB",
+      "checks": [
+       {
+        "token": "IOIB",
+        "candidate": "101B",
+        "reason": "room_or_door_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0149",
+      "text": "NEW I HR. FIRE",
+      "checks": [
+       {
+        "token": "I",
+        "candidate": "1",
+        "reason": "number_before_unit",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0275",
+      "text": "I. G.C. TO INSTA",
+      "checks": [
+       {
+        "token": "I.",
+        "candidate": "1.",
+        "reason": "list_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0344",
+      "text": "A-I.03 FOR SCHEDULE.",
+      "checks": [
+       {
+        "token": "A-I.03",
+        "candidate": "A-1.03",
+        "reason": "sheet_reference",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     }
+    ]
+   },
+   "changes": {
+    "boxPolicy": [
+     {
+      "truth": "2",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "A-3.02",
+      "before": "wrong",
+      "after": "exact"
+     },
+     {
+      "truth": "3'-5 1/2\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "3'-4\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "3'-10\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "A-4.01",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "2'-4\"",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "A-2.00",
+      "before": "none",
+      "after": "exact"
+     }
+    ],
+    "validation": [
+     {
+      "truth": "A-301",
+      "before": "wrong",
+      "after": "exact"
+     }
+    ],
+    "evidenceOnlyInValidatedV2": [
+     "A-301",
+     "3'-4\"",
+     "3'-10\""
+    ],
+    "evidenceOnlyInSpatial": [
+     "113",
+     "3'-5 1/2\"",
+     "4'-7 1/2\"",
+     "112"
+    ],
+    "spatialExactNotExactInOcr": [],
+    "spatialSeamResolvedShown": [
+     {
+      "text": "ES. SEE 6/A-1.00 FOR 2. G.C. TO INSTAL",
+      "cut": [
+       "ES. SEE 6/A-1.00 FOR"
+      ]
+     },
+     {
+      "text": "New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26",
+      "cut": [
+       "15/26"
+      ]
+     },
+     {
+      "text": "SEE KITCHEN DRAWINGS FOR",
+      "cut": [
+       "SEE"
+      ]
+     },
+     {
+      "text": "EQUIPMENT IN THIS AREA TYP.",
+      "cut": [
+       "EQUI"
+      ]
+     }
+    ]
+   },
+   "blockChars": {
+    "av": 3118,
+    "qwen": 3167,
+    "validated": 3164,
+    "spatial": 3116
+   }
+  },
+  {
+   "sheet": "A-6.00-00",
+   "gtTechnicalRows": 60,
+   "ocr": {
+    "av": {
+     "rows": {
+      "technicalRows": 60,
+      "exact": 8,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 1,
+      "partial": 2,
+      "inMerge": 17,
+      "missed": 32,
+      "completeTechnicalAnnotations": 5,
+      "technicalAnnotations": 35
+     },
+     "placement": {
+      "technicalRowsTextFound": 31,
+      "boxOnRow": 15,
+      "misplaced": [
+       {
+        "truth": "1",
+        "read": "1",
+        "overlap": 0,
+        "dyPt": -26,
+        "dxPt": 1081
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": -115,
+        "dxPt": -1
+       },
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -714,
+        "dxPt": -1297
+       },
+       {
+        "truth": "A1",
+        "read": "A1",
+        "overlap": 0,
+        "dyPt": -491,
+        "dxPt": -11
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": 379,
+        "dxPt": 933
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": -76,
+        "dxPt": -1
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 13,
+        "dxPt": 2
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 76,
+        "dxPt": -90
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 103,
+        "dxPt": -75
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 146,
+        "dxPt": -90
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 76,
+        "dxPt": -260
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 103,
+        "dxPt": -245
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 68,
+        "dxPt": -444
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 90,
+        "dxPt": -426
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 68,
+        "dxPt": -740
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 89,
+        "dxPt": -722
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-6.00-00:R072",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "12 S.C. WOOD W/ LAM. 3'-0\"x6'-8'x1 3/4"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [],
+     "noMatchReadings": 0
+    },
+    "qwen": {
+     "rows": {
+      "technicalRows": 60,
+      "exact": 37,
+      "exactContradicted": 3,
+      "uncertain": 7,
+      "uncertainCorrectFlagged": 7,
+      "incorrect": 2,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 14,
+      "completeTechnicalAnnotations": 16,
+      "technicalAnnotations": 35
+     },
+     "placement": {
+      "technicalRowsTextFound": 53,
+      "boxOnRow": 41,
+      "misplaced": [
+       {
+        "truth": "A1",
+        "read": "A1",
+        "overlap": 0,
+        "dyPt": -490,
+        "dxPt": -12
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "2\"JAMB & HEAD",
+        "overlap": 0,
+        "dyPt": -25,
+        "dxPt": -4
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "2\"JAMB & HEAD",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -4
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 38,
+        "dxPt": -3
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 114,
+        "dxPt": -3
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 127,
+        "dxPt": -1
+       },
+       {
+        "truth": "(NOTE 11)",
+        "read": "(NOTE 11)",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": 0
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 76,
+        "dxPt": -1
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "2\"JAMB & HEAD",
+        "overlap": 0.01,
+        "dyPt": 12,
+        "dxPt": 2
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": -259
+       },
+       {
+        "truth": "2'-6\"",
+        "read": "2'-6\"",
+        "overlap": 0.34,
+        "dyPt": -9,
+        "dxPt": -2
+       },
+       {
+        "truth": "2'-6\"",
+        "read": "2'-6\"",
+        "overlap": 0.33,
+        "dyPt": 15,
+        "dxPt": -1
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-6.00-00:R069",
+       "truth": "(NOTE 11)",
+       "read": [
+        "2\"JAMB & HEAD"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R075",
+       "truth": "2\"JAMB & HEAD",
+       "read": [
+        "(NOTE 11)"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-6.00-00:R051",
+       "truth": "2'-6\"x4'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "2'-6\"x4'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R055",
+       "truth": "7",
+       "read": [
+        "7 [conflict]",
+        "6A [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R057",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x6'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R063",
+       "truth": "3'-0\"x7'-0\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x7'-0\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R068",
+       "truth": "3'-0\"x7'-0\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x7'-0\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R072",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x6'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R085",
+       "truth": "V.I.F.",
+       "read": [
+        "V.I.F. [conflict]",
+        "V.I. [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "A-6.00-00:R061",
+       "truth": "10",
+       "read": [
+        "10",
+        "7"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R067",
+       "truth": "11",
+       "read": [
+        "10",
+        "11"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R070",
+       "truth": "12",
+       "read": [
+        "12",
+        "11"
+       ]
+      }
+     ],
+     "unsupportedReadings": [
+      "B",
+      "D",
+      "E",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "G H.M.",
+      "3/4\" H"
+     ],
+     "noMatchReadings": 29
+    },
+    "check": {
+     "rows": {
+      "technicalRows": 60,
+      "exact": 37,
+      "exactContradicted": 3,
+      "uncertain": 7,
+      "uncertainCorrectFlagged": 7,
+      "incorrect": 2,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 14,
+      "completeTechnicalAnnotations": 16,
+      "technicalAnnotations": 35
+     },
+     "placement": {
+      "technicalRowsTextFound": 53,
+      "boxOnRow": 41,
+      "misplaced": [
+       {
+        "truth": "A1",
+        "read": "A1",
+        "overlap": 0,
+        "dyPt": -490,
+        "dxPt": -12
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "2\"JAMB & HEAD",
+        "overlap": 0,
+        "dyPt": -25,
+        "dxPt": -4
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "2\"JAMB & HEAD",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -4
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 38,
+        "dxPt": -3
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 114,
+        "dxPt": -3
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 127,
+        "dxPt": -1
+       },
+       {
+        "truth": "(NOTE 11)",
+        "read": "(NOTE 11)",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": 0
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 76,
+        "dxPt": -1
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "2\"JAMB & HEAD",
+        "overlap": 0.01,
+        "dyPt": 12,
+        "dxPt": 2
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": -259
+       },
+       {
+        "truth": "2'-6\"",
+        "read": "2'-6\"",
+        "overlap": 0.34,
+        "dyPt": -9,
+        "dxPt": -2
+       },
+       {
+        "truth": "2'-6\"",
+        "read": "2'-6\"",
+        "overlap": 0.33,
+        "dyPt": 15,
+        "dxPt": -1
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-6.00-00:R069",
+       "truth": "(NOTE 11)",
+       "read": [
+        "2\"JAMB & HEAD"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R075",
+       "truth": "2\"JAMB & HEAD",
+       "read": [
+        "(NOTE 11)"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-6.00-00:R051",
+       "truth": "2'-6\"x4'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "2'-6\"x4'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R055",
+       "truth": "7",
+       "read": [
+        "7 [conflict]",
+        "6A [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R057",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x6'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R063",
+       "truth": "3'-0\"x7'-0\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x7'-0\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R068",
+       "truth": "3'-0\"x7'-0\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x7'-0\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R072",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x6'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R085",
+       "truth": "V.I.F.",
+       "read": [
+        "V.I.F. [conflict]",
+        "V.I. [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "A-6.00-00:R061",
+       "truth": "10",
+       "read": [
+        "10",
+        "7"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R067",
+       "truth": "11",
+       "read": [
+        "10",
+        "11"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R070",
+       "truth": "12",
+       "read": [
+        "12",
+        "11"
+       ]
+      }
+     ],
+     "unsupportedReadings": [
+      "B",
+      "D",
+      "E",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "G H.M.",
+      "3/4\" H"
+     ],
+     "noMatchReadings": 29
+    },
+    "boxes": {
+     "rows": {
+      "technicalRows": 60,
+      "exact": 37,
+      "exactContradicted": 0,
+      "uncertain": 10,
+      "uncertainCorrectFlagged": 10,
+      "incorrect": 1,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 11,
+      "completeTechnicalAnnotations": 22,
+      "technicalAnnotations": 35
+     },
+     "placement": {
+      "technicalRowsTextFound": 47,
+      "boxOnRow": 37,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -715,
+        "dxPt": -1297
+       },
+       {
+        "truth": "A1",
+        "read": "A1",
+        "overlap": 0,
+        "dyPt": -490,
+        "dxPt": -12
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": -546,
+        "dxPt": -809
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "H.M. 2\"JAMB & HEAD",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -18
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 38,
+        "dxPt": 0
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0.23,
+        "dyPt": -8,
+        "dxPt": 1
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 77,
+        "dxPt": 2
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": -259
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 146,
+        "dxPt": -259
+       },
+       {
+        "truth": "2'-6\"",
+        "read": "2'-6\"",
+        "overlap": 0,
+        "dyPt": -3,
+        "dxPt": 299
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-6.00-00:R091",
+       "truth": "2'-6\"",
+       "read": [
+        "2'-0\""
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-6.00-00:R016",
+       "truth": "2",
+       "read": [
+        "2 ALUM. [conflict]",
+        "2 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R032",
+       "truth": "4A",
+       "read": [
+        "4A H.M. [conflict]",
+        "4A [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R043",
+       "truth": "6",
+       "read": [
+        "6 S.C. WOOD W/ LAM. [conflict]",
+        "6 [conflict]",
+        "6 S.C. WOOD W/ LAM. 3'-0\"x4'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R051",
+       "truth": "2'-6\"x4'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "2'-6\"x4'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R054",
+       "truth": "2\"JAMB & HEAD",
+       "read": [
+        "H.M. 2\"JAMB & HEAD [conflict]",
+        "3/4\" D H.M. 2\"JAMB & HEAD [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R055",
+       "truth": "7",
+       "read": [
+        "7 [conflict]",
+        "7 S.C. WOOD W/ LAM. 3'-0\"x6'-8\"x1 3/4\" [conflict]",
+        "7 S.C. WOOD W/ LAM. [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R057",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x6'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R060",
+       "truth": "2\"JAMB & HEAD",
+       "read": [
+        "H.M. 2\"JAMB & HEAD [conflict]",
+        "3/4\" C H.M. 2\"JAMB & HEAD [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R061",
+       "truth": "10",
+       "read": [
+        "10 H.M. [conflict]",
+        "10 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R063",
+       "truth": "3'-0\"x7'-0\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x7'-0\"x1 3/4\" [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "B",
+      "D",
+      "11 H.M.",
+      "12 S.C. WOOD W/ LAM. 3'-0\"x6'-8\"x1 3/4\""
+     ],
+     "noMatchReadings": 6
+    },
+    "validated": {
+     "rows": {
+      "technicalRows": 60,
+      "exact": 37,
+      "exactContradicted": 0,
+      "uncertain": 10,
+      "uncertainCorrectFlagged": 10,
+      "incorrect": 1,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 11,
+      "completeTechnicalAnnotations": 22,
+      "technicalAnnotations": 35
+     },
+     "placement": {
+      "technicalRowsTextFound": 47,
+      "boxOnRow": 37,
+      "misplaced": [
+       {
+        "truth": "2",
+        "read": "2",
+        "overlap": 0,
+        "dyPt": -715,
+        "dxPt": -1297
+       },
+       {
+        "truth": "A1",
+        "read": "A1",
+        "overlap": 0,
+        "dyPt": -490,
+        "dxPt": -12
+       },
+       {
+        "truth": "3",
+        "read": "3",
+        "overlap": 0,
+        "dyPt": -546,
+        "dxPt": -809
+       },
+       {
+        "truth": "2\"JAMB & HEAD",
+        "read": "H.M. 2\"JAMB & HEAD",
+        "overlap": 0,
+        "dyPt": -12,
+        "dxPt": -18
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 38,
+        "dxPt": 0
+       },
+       {
+        "truth": "3'-0\"x7'-0\"x1 3/4\"",
+        "read": "3'-0\"x7'-0\"x1 3/4\"",
+        "overlap": 0.23,
+        "dyPt": -8,
+        "dxPt": 1
+       },
+       {
+        "truth": "3'-0\"x6'-8\"x1 3/4\"",
+        "read": "3'-0\"x6'-8\"x1 3/4\"",
+        "overlap": 0,
+        "dyPt": 77,
+        "dxPt": 2
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 75,
+        "dxPt": -259
+       },
+       {
+        "truth": "V.I.F.",
+        "read": "V.I.F.",
+        "overlap": 0,
+        "dyPt": 146,
+        "dxPt": -259
+       },
+       {
+        "truth": "2'-6\"",
+        "read": "2'-6\"",
+        "overlap": 0,
+        "dyPt": -3,
+        "dxPt": 299
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "A-6.00-00:R091",
+       "truth": "2'-6\"",
+       "read": [
+        "2'-0\""
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "A-6.00-00:R016",
+       "truth": "2",
+       "read": [
+        "2 ALUM. [conflict]",
+        "2 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R032",
+       "truth": "4A",
+       "read": [
+        "4A H.M. [conflict]",
+        "4A [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R043",
+       "truth": "6",
+       "read": [
+        "6 S.C. WOOD W/ LAM. [conflict]",
+        "6 [conflict]",
+        "6 S.C. WOOD W/ LAM. 3'-0\"x4'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R051",
+       "truth": "2'-6\"x4'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "2'-6\"x4'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R054",
+       "truth": "2\"JAMB & HEAD",
+       "read": [
+        "H.M. 2\"JAMB & HEAD [conflict]",
+        "3/4\" D H.M. 2\"JAMB & HEAD [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R055",
+       "truth": "7",
+       "read": [
+        "7 [conflict]",
+        "7 S.C. WOOD W/ LAM. 3'-0\"x6'-8\"x1 3/4\" [conflict]",
+        "7 S.C. WOOD W/ LAM. [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R057",
+       "truth": "3'-0\"x6'-8\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x6'-8\"x1 3/4\" [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R060",
+       "truth": "2\"JAMB & HEAD",
+       "read": [
+        "H.M. 2\"JAMB & HEAD [conflict]",
+        "3/4\" C H.M. 2\"JAMB & HEAD [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R061",
+       "truth": "10",
+       "read": [
+        "10 H.M. [conflict]",
+        "10 [conflict]"
+       ]
+      },
+      {
+       "gid": "A-6.00-00:R063",
+       "truth": "3'-0\"x7'-0\"x1 3/4\"",
+       "read": [
+        "3/4\" [conflict]",
+        "3'-0\"x7'-0\"x1 3/4\" [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [],
+     "unsupportedReadings": [
+      "B",
+      "D",
+      "11 H.M.",
+      "12 S.C. WOOD W/ LAM. 3'-0\"x6'-8\"x1 3/4\""
+     ],
+     "noMatchReadings": 6
+    }
+   },
+   "evidence": {
+    "av": {
+     "chars": 3196,
+     "units": 43,
+     "retainedExact": 15,
+     "retainedOfOcrExact": 5,
+     "ocrExact": 8,
+     "readings": 39,
+     "technicalReadings": 17,
+     "precision": 0.436,
+     "recallOfOcrExact": 0.625,
+     "rows": {
+      "technicalRows": 60,
+      "exact": 15,
+      "exactContradicted": 0,
+      "uncertain": 3,
+      "uncertainCorrectFlagged": 2,
+      "incorrect": 0,
+      "partial": 2,
+      "inMerge": 1,
+      "missed": 39,
+      "completeTechnicalAnnotations": 2,
+      "technicalAnnotations": 35
+     },
+     "exactGids": [
+      "A-6.00-00:R026",
+      "A-6.00-00:R027",
+      "A-6.00-00:R031",
+      "A-6.00-00:R036",
+      "A-6.00-00:R037",
+      "A-6.00-00:R042",
+      "A-6.00-00:R048",
+      "A-6.00-00:R049",
+      "A-6.00-00:R054",
+      "A-6.00-00:R055",
+      "A-6.00-00:R061",
+      "A-6.00-00:R063",
+      "A-6.00-00:R075",
+      "A-6.00-00:R077",
+      "A-6.00-00:R088"
+     ]
+    },
+    "qwen": {
+     "chars": 3198,
+     "units": 37,
+     "retainedExact": 16,
+     "retainedOfOcrExact": 15,
+     "ocrExact": 37,
+     "readings": 32,
+     "technicalReadings": 16,
+     "precision": 0.5,
+     "recallOfOcrExact": 0.405,
+     "rows": {
+      "technicalRows": 60,
+      "exact": 16,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 1,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 43,
+      "completeTechnicalAnnotations": 0,
+      "technicalAnnotations": 35
+     },
+     "exactGids": [
+      "A-6.00-00:R010",
+      "A-6.00-00:R012",
+      "A-6.00-00:R016",
+      "A-6.00-00:R018",
+      "A-6.00-00:R019",
+      "A-6.00-00:R022",
+      "A-6.00-00:R024",
+      "A-6.00-00:R027",
+      "A-6.00-00:R029",
+      "A-6.00-00:R034",
+      "A-6.00-00:R037",
+      "A-6.00-00:R039",
+      "A-6.00-00:R043",
+      "A-6.00-00:R045",
+      "A-6.00-00:R063",
+      "A-6.00-00:R066"
+     ]
+    },
+    "validated": {
+     "chars": 3195,
+     "units": 46,
+     "retainedExact": 19,
+     "retainedOfOcrExact": 11,
+     "ocrExact": 37,
+     "readings": 30,
+     "technicalReadings": 20,
+     "precision": 0.667,
+     "recallOfOcrExact": 0.297,
+     "rows": {
+      "technicalRows": 60,
+      "exact": 19,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 0,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 41,
+      "completeTechnicalAnnotations": 2,
+      "technicalAnnotations": 35
+     },
+     "exactGids": [
+      "A-6.00-00:R012",
+      "A-6.00-00:R016",
+      "A-6.00-00:R018",
+      "A-6.00-00:R024",
+      "A-6.00-00:R029",
+      "A-6.00-00:R032",
+      "A-6.00-00:R034",
+      "A-6.00-00:R037",
+      "A-6.00-00:R039",
+      "A-6.00-00:R043",
+      "A-6.00-00:R045",
+      "A-6.00-00:R055",
+      "A-6.00-00:R057",
+      "A-6.00-00:R060",
+      "A-6.00-00:R061",
+      "A-6.00-00:R063",
+      "A-6.00-00:R066",
+      "A-6.00-00:R086",
+      "A-6.00-00:R098"
+     ]
+    },
+    "spatial": {
+     "chars": 3071,
+     "units": 142,
+     "retainedExact": 35,
+     "retainedOfOcrExact": 35,
+     "ocrExact": 37,
+     "readings": 70,
+     "technicalReadings": 49,
+     "precision": 0.7,
+     "recallOfOcrExact": 0.946,
+     "rows": {
+      "technicalRows": 60,
+      "exact": 35,
+      "exactContradicted": 0,
+      "uncertain": 8,
+      "uncertainCorrectFlagged": 8,
+      "incorrect": 1,
+      "partial": 1,
+      "inMerge": 0,
+      "missed": 15,
+      "completeTechnicalAnnotations": 21,
+      "technicalAnnotations": 35
+     },
+     "exactGids": [
+      "A-6.00-00:R010",
+      "A-6.00-00:R012",
+      "A-6.00-00:R018",
+      "A-6.00-00:R024",
+      "A-6.00-00:R029",
+      "A-6.00-00:R034",
+      "A-6.00-00:R037",
+      "A-6.00-00:R039",
+      "A-6.00-00:R045",
+      "A-6.00-00:R066",
+      "A-6.00-00:R068",
+      "A-6.00-00:R069",
+      "A-6.00-00:R070",
+      "A-6.00-00:R075",
+      "A-6.00-00:R076",
+      "A-6.00-00:R077",
+      "A-6.00-00:R078",
+      "A-6.00-00:R079",
+      "A-6.00-00:R080",
+      "A-6.00-00:R081",
+      "A-6.00-00:R082",
+      "A-6.00-00:R083",
+      "A-6.00-00:R085",
+      "A-6.00-00:R086",
+      "A-6.00-00:R087",
+      "A-6.00-00:R088",
+      "A-6.00-00:R089",
+      "A-6.00-00:R090",
+      "A-6.00-00:R095",
+      "A-6.00-00:R098",
+      "A-6.00-00:R100",
+      "A-6.00-00:R103",
+      "A-6.00-00:R105",
+      "A-6.00-00:R106",
+      "A-6.00-00:R108"
+     ]
+    }
+   },
+   "retrieval": [
+    {
+     "query": "door 11 note",
+     "qwenV2Block": [
+      {
+       "expect": "(NOTE 11)",
+       "found": false
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "(NOTE 11)",
+       "found": true
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "(NOTE 11)",
+       "found": true
+      }
+     ],
+     "retrievedChars": 1179,
+     "retrievedUnits": 13
+    },
+    {
+     "query": "jamb head frame",
+     "qwenV2Block": [
+      {
+       "expect": "2\"JAMB & HEAD",
+       "found": true
+      },
+      {
+       "expect": "2\"JAMB 4\"HD",
+       "found": true
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "2\"JAMB & HEAD",
+       "found": true
+      },
+      {
+       "expect": "2\"JAMB 4\"HD",
+       "found": true
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "2\"JAMB & HEAD",
+       "found": true
+      },
+      {
+       "expect": "2\"JAMB 4\"HD",
+       "found": false
+      }
+     ],
+     "retrievedChars": 268,
+     "retrievedUnits": 5
+    }
+   ],
+   "validation": {
+    "tally": {
+     "tokensChecked": 2,
+     "corrected_text_layer": 0,
+     "corrected_overlap_tile": 0,
+     "flagged_ambiguous": 2,
+     "confirmed_text_layer": 0,
+     "flagged_text_layer_disagrees": 0,
+     "conflicts_resolved": 1,
+     "linesFlagged": 2,
+     "linesCorrected": 0
+    },
+    "correctedLines": [],
+    "flaggedLines": [
+     {
+      "lid": "L0356",
+      "text": "- BENJAMIN MOORE \"MIDNIGHT OIL 1631\"",
+      "checks": [
+       {
+        "token": "OIL",
+        "candidate": "01L",
+        "reason": "room_or_door_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0555",
+      "text": "OOR HARDWARE",
+      "checks": [
+       {
+        "token": "OOR",
+        "candidate": "00R",
+        "reason": "room_or_door_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     }
+    ]
+   },
+   "changes": {
+    "boxPolicy": [
+     {
+      "truth": "2",
+      "before": "exact",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "A1",
+      "before": "exact",
+      "after": "none"
+     },
+     {
+      "truth": "3",
+      "before": "exact",
+      "after": "none"
+     },
+     {
+      "truth": "4",
+      "before": "exact",
+      "after": "none"
+     },
+     {
+      "truth": "4A",
+      "before": "exact",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "6",
+      "before": "exact",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "2\"JAMB & HEAD",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "6A",
+      "before": "exact",
+      "after": "none"
+     },
+     {
+      "truth": "2\"JAMB & HEAD",
+      "before": "exact",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "2\"JAMB & HEAD",
+      "before": "exact",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "10",
+      "before": "exact_contradicted",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "3'-0\"x7'-0\"x1 3/4\"",
+      "before": "exact_marked",
+      "after": "exact"
+     },
+     {
+      "truth": "(NOTE 11)",
+      "before": "wrong",
+      "after": "exact"
+     },
+     {
+      "truth": "2\"JAMB & HEAD",
+      "before": "wrong",
+      "after": "exact"
+     },
+     {
+      "truth": "V.I.F.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "V.I.F.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "V.I.F.",
+      "before": "exact_marked",
+      "after": "exact"
+     },
+     {
+      "truth": "V.I.F.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "V.I.F.",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "2'-6\"",
+      "before": "none",
+      "after": "exact"
+     }
+    ],
+    "validation": [],
+    "evidenceOnlyInValidatedV2": [
+     "2",
+     "4A",
+     "6",
+     "7",
+     "3'-0\"x6'-8\"x1 3/4\"",
+     "2\"JAMB & HEAD",
+     "10",
+     "3'-0\"x7'-0\"x1 3/4\""
+    ],
+    "evidenceOnlyInSpatial": [
+     "1",
+     "3'-0\"x7'-0\"x1 3/4\"",
+     "(NOTE 11)",
+     "12",
+     "2\"JAMB & HEAD",
+     "W1",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "W2",
+     "V.I.F.",
+     "4 1/2\"",
+     "V.I.F.",
+     "W3",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "W4",
+     "W5",
+     "2\"",
+     "V.I.F.",
+     "V.I.F.",
+     "2'-6\""
+    ],
+    "spatialExactNotExactInOcr": [],
+    "spatialSeamResolvedShown": [
+     {
+      "text": "10. 1 EA SWEEP 101VA 36\" N.GUARD",
+      "cut": [
+       "10. 1"
+      ]
+     }
+    ]
+   },
+   "blockChars": {
+    "av": 3196,
+    "qwen": 3198,
+    "validated": 3195,
+    "spatial": 3071
+   }
+  },
+  {
+   "sheet": "S-201.00",
+   "gtTechnicalRows": 34,
+   "ocr": {
+    "av": {
+     "rows": {
+      "technicalRows": 34,
+      "exact": 12,
+      "exactContradicted": 0,
+      "uncertain": 0,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 9,
+      "partial": 6,
+      "inMerge": 0,
+      "missed": 7,
+      "completeTechnicalAnnotations": 12,
+      "technicalAnnotations": 33
+     },
+     "placement": {
+      "technicalRowsTextFound": 15,
+      "boxOnRow": 12,
+      "misplaced": [
+       {
+        "truth": "(2)#10 SCREWS",
+        "read": "(2)#10 SCREWS",
+        "overlap": 0,
+        "dyPt": 21,
+        "dxPt": 657
+       },
+       {
+        "truth": "CONNECTION 2 AT",
+        "read": "CONNECTION 2 AT",
+        "overlap": 0,
+        "dyPt": 20,
+        "dxPt": 655
+       },
+       {
+        "truth": "600T150-43, 33 KSI",
+        "read": "600T150-43,33 KSI",
+        "overlap": 0,
+        "dyPt": 436,
+        "dxPt": 657
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "S-201.00:R009",
+       "truth": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+       "read": [
+        "(GROUND SNOW LOAD:"
+       ]
+      },
+      {
+       "gid": "S-201.00:R026",
+       "truth": "Sd1 0.069",
+       "read": [
+        "Sdl 0.069"
+       ]
+      },
+      {
+       "gid": "S-201.00:R034",
+       "truth": "DESIGN BASE SHEAR 57 KIPS",
+       "read": [
+        "DESIGN BASE SHEAR 15T KIPS3"
+       ]
+      },
+      {
+       "gid": "S-201.00:R040",
+       "truth": "600S162-43 MIL @ 16\" O/C",
+       "read": [
+        "6005162-43 MIL @ 16\" O/C"
+       ]
+      },
+      {
+       "gid": "S-201.00:R041",
+       "truth": "CONNECTION 1",
+       "read": [
+        "- CONNECTION I",
+        "CONNECTION I"
+       ]
+      },
+      {
+       "gid": "S-201.00:R042",
+       "truth": "CONNECTION 2 AT",
+       "read": [
+        "CONNECTION 2 A1"
+       ]
+      },
+      {
+       "gid": "S-201.00:R044",
+       "truth": "600S162-43 MIL @ 16\" O/C",
+       "read": [
+        "6005162-43 MIL @ 16\" OIC-"
+       ]
+      },
+      {
+       "gid": "S-201.00:R051",
+       "truth": "600T150-43, 33 KSI",
+       "read": [
+        "600T150-43, 33 KSl"
+       ]
+      },
+      {
+       "gid": "S-201.00:R054",
+       "truth": "EXISTING W21X19 STEEL BEAM",
+       "read": [
+        "EXISTING W2IXI9 STEEL BEAM"
+       ]
+      }
+     ],
+     "uncertainRows": [],
+     "contradictedRows": [],
+     "unsupportedReadings": [],
+     "noMatchReadings": 1
+    },
+    "qwen": {
+     "rows": {
+      "technicalRows": 34,
+      "exact": 20,
+      "exactContradicted": 3,
+      "uncertain": 6,
+      "uncertainCorrectFlagged": 5,
+      "incorrect": 3,
+      "partial": 4,
+      "inMerge": 0,
+      "missed": 1,
+      "completeTechnicalAnnotations": 24,
+      "technicalAnnotations": 33
+     },
+     "placement": {
+      "technicalRowsTextFound": 25,
+      "boxOnRow": 22,
+      "misplaced": [
+       {
+        "truth": "CONNECTION 1",
+        "read": "CONNECTION 1:",
+        "overlap": 0,
+        "dyPt": 536,
+        "dxPt": -423
+       },
+       {
+        "truth": "600S162-43 MIL @ 16\" O/C",
+        "read": "600S162-43 MIL @ 16\" O/C",
+        "overlap": 0,
+        "dyPt": 234,
+        "dxPt": 278
+       },
+       {
+        "truth": "2X4 REPAIR",
+        "read": "2X4 REPAIR",
+        "overlap": 0,
+        "dyPt": 34,
+        "dxPt": 632
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "S-201.00:R002",
+       "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+       "read": [
+        "I. INTERNATIONAL BUILDING CODE (IBC 2015)"
+       ]
+      },
+      {
+       "gid": "S-201.00:R024",
+       "truth": "S1 0.43",
+       "read": [
+        "SI 0.43"
+       ]
+      },
+      {
+       "gid": "S-201.00:R026",
+       "truth": "Sd1 0.069",
+       "read": [
+        "Sdl 0.069"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "S-201.00:R011",
+       "truth": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+       "read": [
+        "FLAT ROOF SNOW LOAD: 17.5 PSF [conflict]",
+        "GRO [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R016",
+       "truth": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+       "read": [
+        "BASIC WIND SPEED (3 SECOND GUST) 115 MPH [conflict]",
+        "RISK [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R034",
+       "truth": "DESIGN BASE SHEAR 57 KIPS",
+       "read": [
+        "DESIGN BASE SHEAR 57 KIPS [conflict]",
+        "DESIGN BASE SHEAR {57 KIPS} [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R044",
+       "truth": "600S162-43 MIL @ 16\" O/C",
+       "read": [
+        "OSI62-43 MIL @ 16\" O/C [conflict]",
+        "6005102-43 [conflict]",
+        "5162-45 MILE @ 16 [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R045",
+       "truth": "2X4 REPAIR",
+       "read": [
+        "2X4 REF [conflict]",
+        "2X4 REPAIR [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R054",
+       "truth": "EXISTING W21X19 STEEL BEAM",
+       "read": [
+        "EXISTING W21X19 STEEL BEAM [conflict]",
+        "REAM [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "S-201.00:R003",
+       "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+       "read": [
+        "AMERICAN CONCRETE INSTITUTE (ACI) [conflict]",
+        "2. AM [conflict]",
+        "2. AMERICAN CONCRETE INSTITUTE (ACI) [conflict]",
+        "3.",
+        "2.",
+        "2."
+       ]
+      },
+      {
+       "gid": "S-201.00:R010",
+       "truth": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+       "read": [
+        "OR 30 PSF EQUIVALENT UNIFORM LOAD [conflict]",
+        "(NO [conflict]",
+        "SNO"
+       ]
+      },
+      {
+       "gid": "S-201.00:R015",
+       "truth": "WIND LOADING (IBC 2015)",
+       "read": [
+        "WIND LOADING (IBC 2015) [conflict]",
+        "THE [conflict]",
+        "BAS"
+       ]
+      }
+     ],
+     "unsupportedReadings": [],
+     "noMatchReadings": 2
+    },
+    "check": {
+     "rows": {
+      "technicalRows": 34,
+      "exact": 20,
+      "exactContradicted": 3,
+      "uncertain": 6,
+      "uncertainCorrectFlagged": 5,
+      "incorrect": 3,
+      "partial": 4,
+      "inMerge": 0,
+      "missed": 1,
+      "completeTechnicalAnnotations": 24,
+      "technicalAnnotations": 33
+     },
+     "placement": {
+      "technicalRowsTextFound": 25,
+      "boxOnRow": 22,
+      "misplaced": [
+       {
+        "truth": "CONNECTION 1",
+        "read": "CONNECTION 1:",
+        "overlap": 0,
+        "dyPt": 536,
+        "dxPt": -423
+       },
+       {
+        "truth": "600S162-43 MIL @ 16\" O/C",
+        "read": "600S162-43 MIL @ 16\" O/C",
+        "overlap": 0,
+        "dyPt": 234,
+        "dxPt": 278
+       },
+       {
+        "truth": "2X4 REPAIR",
+        "read": "2X4 REPAIR",
+        "overlap": 0,
+        "dyPt": 34,
+        "dxPt": 632
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "S-201.00:R002",
+       "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+       "read": [
+        "I. INTERNATIONAL BUILDING CODE (IBC 2015)"
+       ]
+      },
+      {
+       "gid": "S-201.00:R024",
+       "truth": "S1 0.43",
+       "read": [
+        "SI 0.43"
+       ]
+      },
+      {
+       "gid": "S-201.00:R026",
+       "truth": "Sd1 0.069",
+       "read": [
+        "Sdl 0.069"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "S-201.00:R011",
+       "truth": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+       "read": [
+        "FLAT ROOF SNOW LOAD: 17.5 PSF [conflict]",
+        "GRO [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R016",
+       "truth": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+       "read": [
+        "BASIC WIND SPEED (3 SECOND GUST) 115 MPH [conflict]",
+        "RISK [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R034",
+       "truth": "DESIGN BASE SHEAR 57 KIPS",
+       "read": [
+        "DESIGN BASE SHEAR 57 KIPS [conflict]",
+        "DESIGN BASE SHEAR {57 KIPS} [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R044",
+       "truth": "600S162-43 MIL @ 16\" O/C",
+       "read": [
+        "OSI62-43 MIL @ 16\" O/C [conflict]",
+        "6005102-43 [conflict]",
+        "5162-45 MILE @ 16 [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R045",
+       "truth": "2X4 REPAIR",
+       "read": [
+        "2X4 REF [conflict]",
+        "2X4 REPAIR [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R054",
+       "truth": "EXISTING W21X19 STEEL BEAM",
+       "read": [
+        "EXISTING W21X19 STEEL BEAM [conflict]",
+        "REAM [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "S-201.00:R003",
+       "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+       "read": [
+        "AMERICAN CONCRETE INSTITUTE (ACI) [conflict]",
+        "2. AM [conflict]",
+        "2. AMERICAN CONCRETE INSTITUTE (ACI) [conflict]",
+        "3.",
+        "2.",
+        "2."
+       ]
+      },
+      {
+       "gid": "S-201.00:R010",
+       "truth": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+       "read": [
+        "OR 30 PSF EQUIVALENT UNIFORM LOAD [conflict]",
+        "(NO [conflict]",
+        "SNO"
+       ]
+      },
+      {
+       "gid": "S-201.00:R015",
+       "truth": "WIND LOADING (IBC 2015)",
+       "read": [
+        "WIND LOADING (IBC 2015) [conflict]",
+        "THE [conflict]",
+        "BAS"
+       ]
+      }
+     ],
+     "unsupportedReadings": [],
+     "noMatchReadings": 2
+    },
+    "boxes": {
+     "rows": {
+      "technicalRows": 34,
+      "exact": 20,
+      "exactContradicted": 2,
+      "uncertain": 6,
+      "uncertainCorrectFlagged": 5,
+      "incorrect": 3,
+      "partial": 4,
+      "inMerge": 0,
+      "missed": 1,
+      "completeTechnicalAnnotations": 24,
+      "technicalAnnotations": 33
+     },
+     "placement": {
+      "technicalRowsTextFound": 26,
+      "boxOnRow": 23,
+      "misplaced": [
+       {
+        "truth": "CONNECTION 1",
+        "read": "CONNECTION 1:",
+        "overlap": 0,
+        "dyPt": 536,
+        "dxPt": -423
+       },
+       {
+        "truth": "600S162-43 MIL @ 16\" O/C",
+        "read": "600S162-43 MIL @ 16\" O/C",
+        "overlap": 0,
+        "dyPt": 234,
+        "dxPt": 285
+       },
+       {
+        "truth": "2X4 REPAIR",
+        "read": "2X4 REPAIR",
+        "overlap": 0,
+        "dyPt": 34,
+        "dxPt": 632
+       }
+      ]
+     },
+     "incorrectRows": [
+      {
+       "gid": "S-201.00:R002",
+       "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+       "read": [
+        "I. INTERNATIONAL BUILDING CODE (IBC 2015)"
+       ]
+      },
+      {
+       "gid": "S-201.00:R024",
+       "truth": "S1 0.43",
+       "read": [
+        "SI 0.43"
+       ]
+      },
+      {
+       "gid": "S-201.00:R026",
+       "truth": "Sd1 0.069",
+       "read": [
+        "Sdl 0.069"
+       ]
+      }
+     ],
+     "uncertainRows": [
+      {
+       "gid": "S-201.00:R011",
+       "truth": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+       "read": [
+        "FLAT ROOF SNOW LOAD: 17.5 PSF [conflict]",
+        "GRO [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R015",
+       "truth": "WIND LOADING (IBC 2015)",
+       "read": [
+        "WIND LOADING (IBC 2015) [conflict]",
+        "THE [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R034",
+       "truth": "DESIGN BASE SHEAR 57 KIPS",
+       "read": [
+        "DESIGN BASE SHEAR 57 KIPS [conflict]",
+        "DESIGN BASE SHEAR {57 KIPS} [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R044",
+       "truth": "600S162-43 MIL @ 16\" O/C",
+       "read": [
+        "OSI62-43 MIL @ 16\" O/C [conflict]",
+        "6005102-43 [conflict]",
+        "5162-45 MILE @ 16 [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R045",
+       "truth": "2X4 REPAIR",
+       "read": [
+        "2X4 REF [conflict]",
+        "2X4 REPAIR [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R054",
+       "truth": "EXISTING W21X19 STEEL BEAM",
+       "read": [
+        "EXISTING W21X19 STEEL BEAM [conflict]",
+        "REAM [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "S-201.00:R003",
+       "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+       "read": [
+        "3.",
+        "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+        "2."
+       ]
+      },
+      {
+       "gid": "S-201.00:R010",
+       "truth": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+       "read": [
+        "OR 30 PSF EQUIVALENT UNIFORM LOAD [conflict]",
+        "(NO [conflict]",
+        "SNO"
+       ]
+      }
+     ],
+     "unsupportedReadings": [],
+     "noMatchReadings": 2
+    },
+    "validated": {
+     "rows": {
+      "technicalRows": 34,
+      "exact": 21,
+      "exactContradicted": 2,
+      "uncertain": 8,
+      "uncertainCorrectFlagged": 4,
+      "incorrect": 0,
+      "partial": 4,
+      "inMerge": 0,
+      "missed": 1,
+      "completeTechnicalAnnotations": 24,
+      "technicalAnnotations": 33
+     },
+     "placement": {
+      "technicalRowsTextFound": 26,
+      "boxOnRow": 23,
+      "misplaced": [
+       {
+        "truth": "CONNECTION 1",
+        "read": "CONNECTION 1:",
+        "overlap": 0,
+        "dyPt": 536,
+        "dxPt": -423
+       },
+       {
+        "truth": "600S162-43 MIL @ 16\" O/C",
+        "read": "600S162-43 MIL @ 16\" O/C",
+        "overlap": 0,
+        "dyPt": 234,
+        "dxPt": 285
+       },
+       {
+        "truth": "2X4 REPAIR",
+        "read": "2X4 REPAIR",
+        "overlap": 0,
+        "dyPt": 34,
+        "dxPt": 632
+       }
+      ]
+     },
+     "incorrectRows": [],
+     "uncertainRows": [
+      {
+       "gid": "S-201.00:R002",
+       "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+       "read": [
+        "I. INTERNATIONAL BUILDING CODE (IBC 2015) [uncertain]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R011",
+       "truth": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+       "read": [
+        "FLAT ROOF SNOW LOAD: 17.5 PSF [conflict]",
+        "GRO [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R015",
+       "truth": "WIND LOADING (IBC 2015)",
+       "read": [
+        "WIND LOADING (IBC 2015) [conflict]",
+        "THE [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R024",
+       "truth": "S1 0.43",
+       "read": [
+        "SI 0.43 [uncertain]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R026",
+       "truth": "Sd1 0.069",
+       "read": [
+        "Sdl 0.069 [uncertain]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R044",
+       "truth": "600S162-43 MIL @ 16\" O/C",
+       "read": [
+        "OSI62-43 MIL @ 16\" O/C [conflict]",
+        "6005102-43 [conflict]",
+        "5162-45 MILE @ 16 [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R045",
+       "truth": "2X4 REPAIR",
+       "read": [
+        "2X4 REF [conflict]",
+        "2X4 REPAIR [conflict]"
+       ]
+      },
+      {
+       "gid": "S-201.00:R054",
+       "truth": "EXISTING W21X19 STEEL BEAM",
+       "read": [
+        "EXISTING W21X19 STEEL BEAM [conflict]",
+        "REAM [conflict]"
+       ]
+      }
+     ],
+     "contradictedRows": [
+      {
+       "gid": "S-201.00:R003",
+       "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+       "read": [
+        "3.",
+        "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+        "2."
+       ]
+      },
+      {
+       "gid": "S-201.00:R010",
+       "truth": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+       "read": [
+        "OR 30 PSF EQUIVALENT UNIFORM LOAD [conflict]",
+        "(NO [conflict]",
+        "SNO"
+       ]
+      }
+     ],
+     "unsupportedReadings": [],
+     "noMatchReadings": 2
+    }
+   },
+   "evidence": {
+    "av": {
+     "chars": 3178,
+     "units": 30,
+     "retainedExact": 5,
+     "retainedOfOcrExact": 5,
+     "ocrExact": 12,
+     "readings": 20,
+     "technicalReadings": 5,
+     "precision": 0.25,
+     "recallOfOcrExact": 0.417,
+     "rows": {
+      "technicalRows": 34,
+      "exact": 5,
+      "exactContradicted": 0,
+      "uncertain": 4,
+      "uncertainCorrectFlagged": 0,
+      "incorrect": 0,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 23,
+      "completeTechnicalAnnotations": 5,
+      "technicalAnnotations": 33
+     },
+     "exactGids": [
+      "S-201.00:R007",
+      "S-201.00:R021",
+      "S-201.00:R025",
+      "S-201.00:R028",
+      "S-201.00:R032"
+     ]
+    },
+    "qwen": {
+     "chars": 3184,
+     "units": 56,
+     "retainedExact": 17,
+     "retainedOfOcrExact": 16,
+     "ocrExact": 20,
+     "readings": 55,
+     "technicalReadings": 19,
+     "precision": 0.345,
+     "recallOfOcrExact": 0.8,
+     "rows": {
+      "technicalRows": 34,
+      "exact": 17,
+      "exactContradicted": 2,
+      "uncertain": 5,
+      "uncertainCorrectFlagged": 2,
+      "incorrect": 1,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 9,
+      "completeTechnicalAnnotations": 18,
+      "technicalAnnotations": 33
+     },
+     "exactGids": [
+      "S-201.00:R003",
+      "S-201.00:R004",
+      "S-201.00:R006",
+      "S-201.00:R007",
+      "S-201.00:R009",
+      "S-201.00:R010",
+      "S-201.00:R012",
+      "S-201.00:R015",
+      "S-201.00:R016",
+      "S-201.00:R019",
+      "S-201.00:R020",
+      "S-201.00:R021",
+      "S-201.00:R023",
+      "S-201.00:R025",
+      "S-201.00:R028",
+      "S-201.00:R033",
+      "S-201.00:R040"
+     ]
+    },
+    "validated": {
+     "chars": 3182,
+     "units": 52,
+     "retainedExact": 18,
+     "retainedOfOcrExact": 17,
+     "ocrExact": 21,
+     "readings": 49,
+     "technicalReadings": 19,
+     "precision": 0.388,
+     "recallOfOcrExact": 0.81,
+     "rows": {
+      "technicalRows": 34,
+      "exact": 18,
+      "exactContradicted": 1,
+      "uncertain": 3,
+      "uncertainCorrectFlagged": 1,
+      "incorrect": 1,
+      "partial": 2,
+      "inMerge": 0,
+      "missed": 10,
+      "completeTechnicalAnnotations": 18,
+      "technicalAnnotations": 33
+     },
+     "exactGids": [
+      "S-201.00:R003",
+      "S-201.00:R004",
+      "S-201.00:R006",
+      "S-201.00:R007",
+      "S-201.00:R009",
+      "S-201.00:R010",
+      "S-201.00:R012",
+      "S-201.00:R015",
+      "S-201.00:R016",
+      "S-201.00:R019",
+      "S-201.00:R020",
+      "S-201.00:R021",
+      "S-201.00:R023",
+      "S-201.00:R025",
+      "S-201.00:R028",
+      "S-201.00:R032",
+      "S-201.00:R034",
+      "S-201.00:R040"
+     ]
+    },
+    "spatial": {
+     "chars": 3118,
+     "units": 73,
+     "retainedExact": 16,
+     "retainedOfOcrExact": 16,
+     "ocrExact": 21,
+     "readings": 29,
+     "technicalReadings": 18,
+     "precision": 0.621,
+     "recallOfOcrExact": 0.762,
+     "rows": {
+      "technicalRows": 34,
+      "exact": 16,
+      "exactContradicted": 1,
+      "uncertain": 5,
+      "uncertainCorrectFlagged": 2,
+      "incorrect": 0,
+      "partial": 0,
+      "inMerge": 0,
+      "missed": 13,
+      "completeTechnicalAnnotations": 16,
+      "technicalAnnotations": 33
+     },
+     "exactGids": [
+      "S-201.00:R003",
+      "S-201.00:R004",
+      "S-201.00:R006",
+      "S-201.00:R007",
+      "S-201.00:R009",
+      "S-201.00:R012",
+      "S-201.00:R021",
+      "S-201.00:R023",
+      "S-201.00:R025",
+      "S-201.00:R028",
+      "S-201.00:R032",
+      "S-201.00:R034",
+      "S-201.00:R039",
+      "S-201.00:R040",
+      "S-201.00:R047",
+      "S-201.00:R055"
+     ]
+    }
+   },
+   "retrieval": [
+    {
+     "query": "ground snow load",
+     "qwenV2Block": [
+      {
+       "expect": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+       "found": true
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+       "found": true
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+       "found": true
+      }
+     ],
+     "retrievedChars": 328,
+     "retrievedUnits": 7
+    },
+    {
+     "query": "seismic loading",
+     "qwenV2Block": [
+      {
+       "expect": "Ss 0.133",
+       "found": true
+      },
+      {
+       "expect": "S1 0.43",
+       "found": false
+      },
+      {
+       "expect": "Sds 0.142",
+       "found": true
+      },
+      {
+       "expect": "Sd1 0.069",
+       "found": false
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "Ss 0.133",
+       "found": true
+      },
+      {
+       "expect": "S1 0.43",
+       "found": false
+      },
+      {
+       "expect": "Sds 0.142",
+       "found": true
+      },
+      {
+       "expect": "Sd1 0.069",
+       "found": false
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "Ss 0.133",
+       "found": true
+      },
+      {
+       "expect": "S1 0.43",
+       "found": false
+      },
+      {
+       "expect": "Sds 0.142",
+       "found": true
+      },
+      {
+       "expect": "Sd1 0.069",
+       "found": false
+      }
+     ],
+     "retrievedChars": 613,
+     "retrievedUnits": 16
+    },
+    {
+     "query": "basic wind speed",
+     "qwenV2Block": [
+      {
+       "expect": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+       "found": true
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+       "found": false
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+       "found": true
+      }
+     ],
+     "retrievedChars": 242,
+     "retrievedUnits": 5
+    },
+    {
+     "query": "stud 600S162 MIL",
+     "qwenV2Block": [
+      {
+       "expect": "600S162-43 MIL @ 16\" O/C",
+       "found": true
+      }
+     ],
+     "spatialBlock": [
+      {
+       "expect": "600S162-43 MIL @ 16\" O/C",
+       "found": true
+      }
+     ],
+     "retrieved": [
+      {
+       "expect": "600S162-43 MIL @ 16\" O/C",
+       "found": true
+      }
+     ],
+     "retrievedChars": 722,
+     "retrievedUnits": 14
+    }
+   ],
+   "validation": {
+    "tally": {
+     "tokensChecked": 6,
+     "corrected_text_layer": 0,
+     "corrected_overlap_tile": 2,
+     "flagged_ambiguous": 4,
+     "confirmed_text_layer": 0,
+     "flagged_text_layer_disagrees": 0,
+     "conflicts_resolved": 2,
+     "linesFlagged": 4,
+     "linesCorrected": 2
+    },
+    "correctedLines": [
+     {
+      "lid": "L0171",
+      "ocr": "I. AL",
+      "text": "1. AL",
+      "checks": [
+       {
+        "token": "I.",
+        "candidate": "1.",
+        "reason": "list_number",
+        "status": "corrected_overlap_tile"
+       }
+      ]
+     },
+     {
+      "lid": "L0347",
+      "ocr": "I. WELD TOGETHER ALL BACK TO BACK LINTEL",
+      "text": "1. WELD TOGETHER ALL BACK TO BACK LINTEL",
+      "checks": [
+       {
+        "token": "I.",
+        "candidate": "1.",
+        "reason": "list_number",
+        "status": "corrected_overlap_tile"
+       },
+       {
+        "token": null,
+        "candidate": null,
+        "reason": "conflict_differs_only_by_lookalike_glyphs",
+        "status": "conflict_resolved"
+       }
+      ]
+     }
+    ],
+    "flaggedLines": [
+     {
+      "lid": "L0050",
+      "text": "IOD NAILS TO T",
+      "checks": [
+       {
+        "token": "IOD",
+        "candidate": "10D",
+        "reason": "room_or_door_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0060",
+      "text": "I. INTERNATIONAL BUILDING CODE (IBC 2015)",
+      "checks": [
+       {
+        "token": "I.",
+        "candidate": "1.",
+        "reason": "list_number",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0108",
+      "text": "SI 0.43",
+      "checks": [
+       {
+        "token": "SI",
+        "candidate": "S1",
+        "reason": "coefficient_label",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     },
+     {
+      "lid": "L0121",
+      "text": "Sdl 0.069",
+      "checks": [
+       {
+        "token": "Sdl",
+        "candidate": "Sd1",
+        "reason": "coefficient_label",
+        "status": "flagged_ambiguous"
+       }
+      ]
+     }
+    ]
+   },
+   "changes": {
+    "boxPolicy": [
+     {
+      "truth": "WIND LOADING (IBC 2015)",
+      "before": "exact_contradicted",
+      "after": "exact_marked"
+     },
+     {
+      "truth": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+      "before": "exact_marked",
+      "after": "exact"
+     },
+     {
+      "truth": "Cs= 0.095",
+      "before": "none",
+      "after": "exact"
+     },
+     {
+      "truth": "R= 1.5",
+      "before": "exact",
+      "after": "none"
+     }
+    ],
+    "validation": [
+     {
+      "truth": "DESIGN BASE SHEAR 57 KIPS",
+      "before": "exact_marked",
+      "after": "exact"
+     }
+    ],
+    "evidenceOnlyInValidatedV2": [
+     "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+     "WIND LOADING (IBC 2015)",
+     "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+     "INTERNAL PRESSURE COEFFICIENT 0.25",
+     "COMPONENT AND CLADDING PRESSURE 30 PSF"
+    ],
+    "evidenceOnlyInSpatial": [
+     "(2)#10 SCREWS",
+     "CONNECTION 3",
+     "CONNECTION 4"
+    ],
+    "spatialExactNotExactInOcr": [],
+    "spatialSeamResolvedShown": [
+     {
+      "text": "600S162-43 MIL @ 16\" O/C",
+      "cut": [
+       "16\" O/C"
+      ]
+     },
+     {
+      "text": "ANGLES SHALL BE ASTM A36. TUBE STEEL SH",
+      "cut": [
+       "AN"
+      ]
+     }
+    ]
+   },
+   "blockChars": {
+    "av": 3178,
+    "qwen": 3184,
+    "validated": 3182,
+    "spatial": 3118
+   }
+  }
+ ]
+}

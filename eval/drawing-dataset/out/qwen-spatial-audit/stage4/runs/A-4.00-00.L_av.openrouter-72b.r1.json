@@ -1,0 +1,123 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "L_av",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0bcef9803bd4d9a5016afb2d57020887d28b59bb45394fd0ee",
+ "latencyMs": 23612,
+ "inputTokens": 12821,
+ "outputTokens": 2292,
+ "reasoningTokens": 1552,
+ "costUsd": 0.005314600000000001,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-4.00-00.pdf",
+  "evidenceSha": "02bec224e5edd1ad",
+  "userPromptChars": 9411,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-4.00-00\",\"detected_sheet_title\":\"ENLARGED TOILET PLANS & ADA DETAILS\",\"discipline\":\"Architecture\",\"summary\":\"The sheet provides enlarged toilet-room plans, accessory elevations and schedules, signage information, and lavatory details. Three sheet-local coordination concerns were identified: an unresolved callout to a detail marked NOT USED, an apparent signage mounting-dimension conflict, and a potentially erroneous automatic-flush-valve note for lavatories.\",\"findings\":[{\"category\":\"actual discrepancy\",\"severity\":\"warning\",\"title\":\"Callout references lavatory detail marked NOT USED\",\"observation\":\"Detail 5, TYP. TOILET ROOM ACCESSORY ELEV., includes a callout labeled \\\"8 A-4.00\\\" adjacent to the under-lavatory protection note, while Detail 8, LAVATORY SECTION, is visibly marked \\\"NOT USED.\\\"\",\"drawing_evidence\":\"Detail 5 at the lower lavatory/accessory elevation shows the callout \\\"8 A4.00\\\" and the note \\\"ADA-COMPLIANT UNDERSINK PIPING PROTECTION - SEE PLUMBING.\\\" Detail 8 at the lower right is titled \\\"LAVATORY SECTION\\\" and contains a large \\\"NOT USED\\\" marking.\",\"drawing_location\":\"Details 5 and 8, lower half of sheet\",\"suggested_code_reference\":\"\",\"recommendation\":\"Remove or revise the obsolete 8/A-4.00 callout, or restore and coordinate the referenced detail. Confirm that the plumbing drawings provide the intended accessible lavatory protection detail.\"},{\"category\":\"conflicting information\",\"severity\":\"warning\",\"title\":\"Signage mounting dimensions require clarification\",\"observation\":\"The typical signage elevation shows both a maximum character height of 5'-0\\\" and a minimum character height of 4'-0\\\" above the finished floor. The signage notes separately state that mounting height is to be 60 inches above the finished floor to the centerline of the sign. These criteria may produce different locations for the sign and should be reconciled.\",\"drawing_evidence\":\"Detail 4, TYP. SIGNAGE HEIGHT ELEVATION, shows \\\"4'-0\\\" MIN.\\\" to the lowest character and \\\"5'-0\\\" MAX.\\\" to the highest character. The SIGNAGE NOTES at the right state that the mounting height shall be \\\"60\\\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN.\\\"\",\"drawing_location\":\"Detail 4 and SIGNAGE NOTES, upper-right portion of sheet\",\"suggested_code_reference\":\"\",\"recommendation\":\"Identify the controlling mounting criterion and revise the detail or note so the sign location is unambiguous. Confirm the final dimensions against the applicable accessibility standard during permit review.\"},{\"category\":\"actual discrepancy\",\"severity\":\"warning\",\"title\":\"Automatic flush-valve note includes lavatories\",\"observation\":\"General Note 3 directs the contractor to provide automatic flush valves on all lavatories, toilets, and urinals. The inclusion of lavatories is inconsistent with the fixture types shown and may result in an incorrect plumbing specification.\",\"drawing_evidence\":\"General Notes, upper-right portion of sheet, Note 3 reads: \\\"PROVIDE AUTOMATIC FLUSH VALVES ON ALL LAVATORIES, TOILETS & URINALS.\\\" The toilet-room fixture plans show lavatories separately from toilets and urinals.\",\"drawing_location\":\"General Notes panel, Note 3; toilet room fixture plans\",\"suggested_code_reference\":\"\",\"recommendation\":\"Correct Note 3 to identify the fixtures intended to receive automatic flush valves and coordinate the revised wording with the plumbing fixture schedule and plumbing drawings.\"}]}",
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet provides enlarged toilet-room plans, accessory elevations and schedules, signage information, and lavatory details. Three sheet-local coordination concerns were identified: an unresolved callout to a detail marked NOT USED, an apparent signage mounting-dimension conflict, and a potentially erroneous automatic-flush-valve note for lavatories.",
+ "drafts": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Callout references lavatory detail marked NOT USED",
+   "observation": "Detail 5, TYP. TOILET ROOM ACCESSORY ELEV., includes a callout labeled \"8 A-4.00\" adjacent to the under-lavatory protection note, while Detail 8, LAVATORY SECTION, is visibly marked \"NOT USED.\"",
+   "drawing_evidence": "Detail 5 at the lower lavatory/accessory elevation shows the callout \"8 A4.00\" and the note \"ADA-COMPLIANT UNDERSINK PIPING PROTECTION - SEE PLUMBING.\" Detail 8 at the lower right is titled \"LAVATORY SECTION\" and contains a large \"NOT USED\" marking.",
+   "drawing_location": "Details 5 and 8, lower half of sheet",
+   "suggested_code_reference": "",
+   "recommendation": "Remove or revise the obsolete 8/A-4.00 callout, or restore and coordinate the referenced detail. Confirm that the plumbing drawings provide the intended accessible lavatory protection detail."
+  },
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Signage mounting dimensions require clarification",
+   "observation": "The typical signage elevation shows both a maximum character height of 5'-0\" and a minimum character height of 4'-0\" above the finished floor. The signage notes separately state that mounting height is to be 60 inches above the finished floor to the centerline of the sign. These criteria may produce different locations for the sign and should be reconciled.",
+   "drawing_evidence": "Detail 4, TYP. SIGNAGE HEIGHT ELEVATION, shows \"4'-0\" MIN.\" to the lowest character and \"5'-0\" MAX.\" to the highest character. The SIGNAGE NOTES at the right state that the mounting height shall be \"60\" ABOVE THE FINISHED FLOOR TO THE CENTERLINE OF THE SIGN.\"",
+   "drawing_location": "Detail 4 and SIGNAGE NOTES, upper-right portion of sheet",
+   "suggested_code_reference": "",
+   "recommendation": "Identify the controlling mounting criterion and revise the detail or note so the sign location is unambiguous. Confirm the final dimensions against the applicable accessibility standard during permit review."
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Automatic flush-valve note includes lavatories",
+   "observation": "General Note 3 directs the contractor to provide automatic flush valves on all lavatories, toilets, and urinals. The inclusion of lavatories is inconsistent with the fixture types shown and may result in an incorrect plumbing specification.",
+   "drawing_evidence": "General Notes, upper-right portion of sheet, Note 3 reads: \"PROVIDE AUTOMATIC FLUSH VALVES ON ALL LAVATORIES, TOILETS & URINALS.\" The toilet-room fixture plans show lavatories separately from toilets and urinals.",
+   "drawing_location": "General Notes panel, Note 3; toilet room fixture plans",
+   "suggested_code_reference": "",
+   "recommendation": "Correct Note 3 to identify the fixtures intended to receive automatic flush valves and coordinate the revised wording with the plumbing fixture schedule and plumbing drawings."
+  }
+ ],
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Callout references lavatory detail marked NOT USED",
+   "observation": "Detail 5, TYP. TOILET ROOM ACCESSORY ELEV., includes a callout labeled \"8 A-4.00\" adjacent to the under-lavatory protection note, while Detail 8, LAVATORY SECTION, is visibly marked \"NOT USED.\"",
+   "drawing_evidence": "Detail 5 at the lower lavatory/accessory elevation shows the callout \"8 A4.00\" and the note \"ADA-COMPLIANT UNDERSINK PIPING PROTECTION - SEE PLUMBING.\" Detail 8 at the lower right is titled \"LAVATORY SECTION\" and contains a large \"NOT USED\" marking.",
+   "drawing_location": "Details 5 and 8, lower half of sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Remove or revise the obsolete 8/A-4.00 callout, or restore and coordinate the referenced detail. Confirm that the plumbing drawings provide the intended accessible lavatory protection detail.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Callout references lavatory detail marked NOT USED",
+    "originalObservation": "Detail 5, TYP. TOILET ROOM ACCESSORY ELEV., includes a callout labeled \"8 A-4.00\" adjacent to the under-lavatory protection note, while Detail 8, LAVATORY SECTION, is visibly marked \"NOT USED.\"",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Automatic flush-valve note includes lavatories",
+   "observation": "General Note 3 directs the contractor to provide automatic flush valves on all lavatories, toilets, and urinals. The inclusion of lavatories is inconsistent with the fixture types shown and may result in an incorrect plumbing specification.",
+   "drawing_evidence": "General Notes, upper-right portion of sheet, Note 3 reads: \"PROVIDE AUTOMATIC FLUSH VALVES ON ALL LAVATORIES, TOILETS & URINALS.\" The toilet-room fixture plans show lavatories separately from toilets and urinals.",
+   "drawing_location": "General Notes panel, Note 3; toilet room fixture plans",
+   "suggested_code_reference": null,
+   "recommendation": "Correct Note 3 to identify the fixtures intended to receive automatic flush valves and coordinate the revised wording with the plumbing fixture schedule and plumbing drawings.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Automatic flush-valve note includes lavatories",
+    "originalObservation": "General Note 3 directs the contractor to provide automatic flush valves on all lavatories, toilets, and urinals. The inclusion of lavatories is inconsistent with the fixture types shown and may result in an incorrect plumbing specification.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Signage mounting dimensions require clarification",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

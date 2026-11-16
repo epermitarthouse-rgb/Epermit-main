@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842966-iWPIo9XzsTViPpSx4oVj",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [164, 0, 560, 46],\n        \"text_content\": \"LICENSED\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [164, 0, 560, 126],\n        \"text_content\": \"PROFESSIONAL ENGINEER\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [19, 764, 62, 979],\n        \"text_content\": \"AVENUE\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [79, 800, 122, 979],\n        \"text_content\": \"ON DC\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [144, 828, 187, 979],\n        \"text_content\": \"8-0003\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [226, 896, 248, 979],\n        \"text_content\": \"650\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [428, 418, 523, 980],\n        \"text_content\": \"S USA, LLC\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [554, 340, 608, 979],\n        \"text_content\": \"Confidential and proprietary property of\\nS USA, LLC. Do not be copied or reproduced without written\\nconsent of S USA, LLC. This document was prepared for use on this specific site in\\naccordance with the contract documents applicable for use on a different site or at a\\ndifferent project. It shall not be used as reference or example on another project\\nwithout the express written consent of the architects and engineers. Reproduction of\\nthis document in whole or part for use on any other project is not authorized.\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 659,
+ "costUsd": 0.001892,
+ "reportedCostUsd": 0.0018918,
+ "latencyS": 17.77,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

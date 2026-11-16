@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842998-j6AaRVHxkBLVg6CiGcFt",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 0, 546, 28], \"text_content\": \"DENSITY AS PER ASTM 1557.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 37, 753, 78], \"text_content\": \"OAD BEARING UNITS MANUFACTURED IN\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 85, 100, 115], \"text_content\": \"E N.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 128, 821, 169], \"text_content\": \"OW GRADE USE AND TYPE 'S' FOR ABOVE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 223, 856, 264], \"text_content\": \"TS OF ASTM C476. COMPRESSIVE STRENGTH\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 270, 763, 309], \"text_content\": \"UTING SHALL BE IN ACCORDANCE WITH\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 366, 760, 405], \"text_content\": \"NDATION WALLS SHALL BE FILLED WITH\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 460, 796, 499], \"text_content\": \"ANDARD WEIGHT JOINT REINFORCEMENT\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 507, 598, 546], \"text_content\": \"O COURSES. LAP SPLICE JOINT\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 554, 648, 593], \"text_content\": \"FABRICATED CORNERS AND TIES.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 601, 556, 640], \"text_content\": \"' O.C., FULL HEIGHT, LAP 24\\\".\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 651, 786, 690], \"text_content\": \"T) ADJACENT TO OPENINGS & CORNERS,\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 746, 768, 785], \"text_content\": \"ENT TO FOOTINGS WITH HOOKED DOWEL\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 842,
+ "costUsd": 0.002075,
+ "reportedCostUsd": 0.0020748,
+ "latencyS": 20.2,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842142-tj2B2JNwS931j84EQR2Z",
+ "text": "```json\n[\n    {\"bbox_2d\": [204, 36, 452, 75], \"text_content\": \"42\\\" (36\\\" MIN.)\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [177, 145, 330, 180], \"text_content\": \"24\\\" MIN.\", \"category\": \"dimension\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [448, 140, 496, 175], \"text_content\": \"12\\\"\", \"category\": \"dimension\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [438, 213, 506, 248], \"text_content\": \"MIN.\", \"category\": \"dimension\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [262, 292, 290, 317], \"text_content\": \"1B\", \"category\": \"room_or_tag\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [700, 138, 738, 187], \"text_content\": \"1C\", \"category\": \"room_or_tag\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [177, 472, 230, 507], \"text_content\": \"2\\\" MIN.\", \"category\": \"dimension\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [647, 702, 685, 754], \"text_content\": \"18\\\"\", \"category\": \"dimension\", \"group\": 7, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [730, 668, 784, 720], \"text_content\": \"29\\\"\", \"category\": \"dimension\", \"group\": 8, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [836, 608, 882, 654], \"text_content\": \"34\\\"\", \"category\": \"dimension\", \"group\": 9, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [943, 435, 948, 800], \"text_content\": \"TOP OF GRAB BAR\", \"category\": \"label\", \"group\": 10, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [456, 920, 552, 955], \"text_content\": \"16-18\", \"category\": \"dimension\", \"group\": 11, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [855, 942, 979, 977], \"text_content\": \"FINISH\", \"category\": \"label\", \"group\": 12, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 390, 30, 715], \"text_content\": \"TO TOP OF HOOK.\", \"category\": \"label\", \"group\": 13, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 854,
+ "costUsd": 0.002087,
+ "reportedCostUsd": 0.0020868,
+ "latencyS": 17.01,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

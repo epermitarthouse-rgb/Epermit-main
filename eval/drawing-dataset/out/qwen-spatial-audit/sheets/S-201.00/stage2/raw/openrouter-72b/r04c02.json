@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842255-MsDBegP5BwrgCMK9wqex",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [246, 544, 528, 578],\n        \"text_content\": \"EXISTING ROOF\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [246, 592, 357, 625],\n        \"text_content\": \"TRUSS\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [360, 729, 906, 760],\n        \"text_content\": \"EXISTING W21X19 STEEL BEAM\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 221,
+ "costUsd": 0.001454,
+ "reportedCostUsd": 0.0014538,
+ "latencyS": 4.66,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

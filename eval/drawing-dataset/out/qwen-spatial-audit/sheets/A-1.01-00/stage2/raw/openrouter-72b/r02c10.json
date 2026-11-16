@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842502-wfXsXroSINAjgOf3fNCw",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [264, 202, 443, 236],\n        \"text_content\": \"STORAGE\",\n        \"category\": \"room_or_tag\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [326, 265, 396, 292],\n        \"text_content\": \"EX.\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [232, 329, 515, 364],\n        \"text_content\": \"COORDINATE ANY\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [192, 376, 555, 411],\n        \"text_content\": \"WORK IN THIS AREA W/\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [219, 425, 532, 459],\n        \"text_content\": \"MCDONALD'S A.C.M.\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 355,
+ "costUsd": 0.001588,
+ "reportedCostUsd": 0.0015878,
+ "latencyS": 12.12,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

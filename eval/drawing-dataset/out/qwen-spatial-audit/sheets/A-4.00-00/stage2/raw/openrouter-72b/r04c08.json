@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842368-O9WMGMYIee09PwcV9nD8",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [646, 0, 979, 22],\n        \"text_content\": \"THERE IS NO W\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [646, 36, 979, 62],\n        \"text_content\": \"SHALL BE PLAC\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [646, 68, 979, 94],\n        \"text_content\": \"HEIGHT SHALL E\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [646, 100, 979, 126],\n        \"text_content\": \"LOCATION SHALL\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [646, 132, 979, 158],\n        \"text_content\": \"WITHOUT ENCOU\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [609, 312, 664, 387],\n        \"text_content\": \"4\",\n        \"category\": \"other\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [788, 278, 980, 343],\n        \"text_content\": \"TYP\",\n        \"category\": \"other\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [788, 412, 928, 444],\n        \"text_content\": \"SCALE:\",\n        \"category\": \"other\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [15, 566, 191, 592],\n        \"text_content\": \"SUPPORT\",\n        \"category\": \"other\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [15, 620, 158, 646],\n        \"text_content\": \"NOTE 3)\",\n        \"category\": \"other\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [10, 708, 246, 734],\n        \"text_content\": \"LONG CENTER\",\n        \"category\": \"other\",\n        \"group\": 5,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 742,
+ "costUsd": 0.001975,
+ "reportedCostUsd": 0.0019748,
+ "latencyS": 17.5,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,43 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "L_spatial",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_06f88d033677f50d016afb2c86e54487d2aae414ff5fd5d384",
+ "latencyMs": 10678,
+ "inputTokens": 20207,
+ "outputTokens": 528,
+ "reasoningTokens": 403,
+ "costUsd": 0.0046749999999999995,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-3.06-00.pdf",
+  "evidenceSha": "c67ba715113a0d3a",
+  "userPromptChars": 12120,
+  "images": [
+   "P-R003 source",
+   "P-R003 target",
+   "P-R004 source",
+   "P-R004 target",
+   "P-R005 source",
+   "P-R005 target"
+  ],
+  "pairs": [
+   "P-R003",
+   "P-R004",
+   "P-R005"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-3.06-00\",\"detected_sheet_title\":\"WALL SECTIONS\",\"discipline\":\"Architectural\",\"summary\":\"The sheet presents guard rail details at the high roof and wall sections at the high roof and new order window. The visible guard rail details identify a 3'-6\\\" minimum height, a 21-inch-diameter sphere opening limitation, rail extension beyond equipment, and attachment/roof-penetration coordination notes. No specific, drawing-supported discrepancy or demonstrated omission was identified on this sheet.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet presents guard rail details at the high roof and wall sections at the high roof and new order window. The visible guard rail details identify a 3'-6\" minimum height, a 21-inch-diameter sphere opening limitation, rail extension beyond equipment, and attachment/roof-penetration coordination notes. No specific, drawing-supported discrepancy or demonstrated omission was identified on this sheet.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

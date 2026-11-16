@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842464-R441heLF2bNyTtl83TUC",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 465, 323, 500], \"text_content\": \"T UNDERSINK PIPING\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 510, 216, 538], \"text_content\": \"SEE PLUMBING\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [582, 432, 614, 470], \"text_content\": \"8\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [542, 482, 656, 520], \"text_content\": \"A400\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [56, 19, 104, 230], \"text_content\": \"34\\\" MAX.\", \"category\": \"dimension\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [142, 10, 204, 230], \"text_content\": \"29\\\" MIN.\", \"category\": \"dimension\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [754, 0, 816, 230], \"text_content\": \"3'-4\\\" MAX TO\", \"category\": \"dimension\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [830, 0, 864, 314], \"text_content\": \"REFLECTIVE SUR\", \"category\": \"label\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [40, 643, 704, 724], \"text_content\": \"ACCESSORY\", \"category\": \"detail_title\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [743, 643, 979, 724], \"text_content\": \"ELEV\", \"category\": \"detail_title\", \"group\": 6, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 606,
+ "costUsd": 0.001839,
+ "reportedCostUsd": 0.0018388,
+ "latencyS": 16.89,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

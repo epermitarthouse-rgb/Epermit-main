@@ -1,0 +1,36 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_spatial2",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_006c6c50415ba26b016afb2f5c2b6887d2b503f0d1fe63f816",
+ "latencyMs": 9250,
+ "inputTokens": 16898,
+ "outputTokens": 562,
+ "reasoningTokens": 465,
+ "costUsd": 0.004054,
+ "input": {
+  "systemPromptSha": "b9235654637a5d01",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "c1ba39999dfae2f0",
+  "userPromptChars": 14841,
+  "images": [
+   "P-R038 source"
+  ],
+  "pairs": [
+   "P-R038"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains door and hardware schedules, window types, general door notes, hardware selections, and related details. The visible information does not establish a specific discrepancy, conflicting value, or demonstrated omission requiring a preliminary finding on this sheet.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains door and hardware schedules, window types, general door notes, hardware selections, and related details. The visible information does not establish a specific discrepancy, conflicting value, or demonstrated omission requiring a preliminary finding on this sheet.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

@@ -1,0 +1,104 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "D_v2_12x9",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_080d7c3cfe0e47d4016aec8f622ddc87d2aca55ee4856e29c3",
+ "latencyMs": 10428,
+ "inputTokens": 5133,
+ "outputTokens": 444,
+ "costUsd": 0.0172725,
+ "userPromptChars": 3622,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides schedules and specifications for doors, door hardware, and window types for a McDonald's location in Washington, DC.",
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Incomplete Door Schedule Information",
+   "observation": "The door schedule includes several entries that list 'H.M.' for door material and dimensions, such as '3'-0\"x7'-0\"x1 3/4\"', but lack information on hardware sets for some entries.",
+   "drawing_evidence": "Door schedule with incomplete entries under 'H.M.' column and dimensions '3'-0\"x7'-0\"x1 3/4\"'.",
+   "drawing_location": "Lower right section of the sheet, Door Schedule table.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that all door schedule entries specify complete hardware details to facilitate compliance verification.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Incomplete Door Schedule Information",
+    "originalObservation": "The door schedule includes several entries that list 'H.M.' for door material and dimensions, such as '3'-0\"x7'-0\"x1 3/4\"', but lack information on hardware sets for some entries.",
+    "originalCodeReference": "2015 IBC Table 1607.1 (amended by local codes) for door hardware requirements",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "General Hardware Notes",
+   "observation": "Hardware notes are listed, but specific codes or standards governing their installation are not referenced.",
+   "drawing_evidence": "General notes section next to the door schedule, outlining various installation and material requirements.",
+   "drawing_location": "Middle right section of the sheet, under General Notes.",
+   "suggested_code_reference": null,
+   "recommendation": "Reference applicable standards or code sections in the notes for clarity and compliance verification.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "General Hardware Notes",
+    "originalObservation": "Hardware notes are listed, but specific codes or standards governing their installation are not referenced.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Window and Glazing Specifications",
+   "observation": "Window types are illustrated, but specific glazing performance criteria (e.g., U-values) are not detailed for all types.",
+   "drawing_evidence": "Window types section, with diagrams of various window configurations but lacking detailed performance criteria.",
+   "drawing_location": "Top section of the sheet, Window Types block.",
+   "suggested_code_reference": null,
+   "recommendation": "Include detailed glazing performance metrics for each window type to ensure compliance with energy efficiency standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Window and Glazing Specifications",
+    "originalObservation": "Window types are illustrated, but specific glazing performance criteria (e.g., U-values) are not detailed for all types.",
+    "originalCodeReference": "2015 IECC [where energy conservation is concerned]",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842493-NBCGEHtnu06yltD35Y0X",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [68, 254, 526, 292],\n        \"text_content\": \"SEE KITCHEN DRAWINGS FOR\",\n        \"category\": \"note\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [70, 304, 556, 338],\n        \"text_content\": \"EQUIPMENT IN THIS AREA TYP.\",\n        \"category\": \"note\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 150,
+ "costUsd": 0.001383,
+ "reportedCostUsd": 0.0013828,
+ "latencyS": 7.24,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

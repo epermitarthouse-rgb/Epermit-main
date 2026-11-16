@@ -1,0 +1,79 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "A_pdf_only",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0ff243a5c3d5185e016aec8f649b5887d288de4a3a1e86f8c0",
+ "latencyMs": 8197,
+ "inputTokens": 3536,
+ "outputTokens": 330,
+ "costUsd": 0.012140000000000001,
+ "userPromptChars": 422,
+ "detected": {
+  "number": "S-201.00",
+  "title": "Wall Sections and Notes",
+  "discipline": "Structural"
+ },
+ "summary": "Preliminary review of structural wall sections and associated notes for a McDonald's project in Washington, DC. The drawing includes detailed wall sections and comprehensive notes on materials and construction practices.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Connection Details for Light Gage Steel",
+   "observation": "General notes indicate the use of light gage steel but detailed connection instructions or diagrams are not visible.",
+   "drawing_evidence": "GENERAL NOTES state: 'Provide a continuous steel track at the top and bottom' without further specific connection detail.",
+   "drawing_location": "General notes section, top right of the drawing.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that detailed connection diagrams for light gage steel are provided on referenced sheets, if applicable.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Connection Details for Light Gage Steel",
+    "originalObservation": "General notes indicate the use of light gage steel but detailed connection instructions or diagrams are not visible.",
+    "originalCodeReference": "2015 IBC (as adopted per 2017 DC Codes) for structural connections.",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Design Criteria for Roof Loads",
+   "observation": "Specific roof load criteria are mentioned, but the suitability for local conditions is not clear from the provided information.",
+   "drawing_evidence": "DESIGN CRITERIA section lists 'Roof Live Load = 20 PSF,' without further local geographic validation.",
+   "drawing_location": "Design criteria section, center of the notes panel.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure roof load criteria are verified against local wind, snow, and other environmental conditions.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Design Criteria for Roof Loads",
+    "originalObservation": "Specific roof load criteria are mentioned, but the suitability for local conditions is not clear from the provided information.",
+    "originalCodeReference": "2015 IBC (as adopted per 2017 DC Codes) for structural load requirements.",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

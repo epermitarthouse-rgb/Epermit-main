@@ -1,0 +1,77 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-1.01-00 source=4x3 annotations=109 technical=42 shown=72 independentlyVerified=false
+- STAIR TOWER "B"
+- SLOPE
+- SLOPE
+- SEE KITCHEN DRAWINGS FOR / EQUIPMENT IN THIS AREA TYP.
+- \A-4.01,
+- 3'-10"
+- 8'-3"
+- DS
+- STORAGE (ctx?)
+- EXIST. STAIR & RAILING
+- STORAGE
+- MECHANICAL
+- [EX.]
+- STAIR TOWER "A"
+- DINING
+- ALIGN
+- ?27'-6 1/2"
+- 3'-6" / MIN.
+- NEW 45 MIN / F.P.S.C. DOOR. (ctx?)
+- CREW ROOM
+- MCDONALD'S ACM (TYP.) (ctx?)
+- MIN.' (ctx?)
+- 6'-9" / MIN. (ctx?)
+- 28'-9"
+- EXIST. STAIR & RAILING
+- •UP
+- ALIGN
+- ?4'-3'
+- -4" METAL STUDS @ 16" O.C. MIN. / FIRE STOPPED TO BOTTOM OF / STRUCTURE AS PER UL NO. U305. (ctx?)
+- DS
+- YP. BD., I LAYER PER (ctx?)
+- SF
+- {- EXIST. STAIR & RAILING MCDONALD'S ACM (TYP.) | MCDONALD'S ACM (TYP.)|} (ctx?)
+- 8'-2"
+- 9 1/2"
+- ?8'-2 1/2"
+- 8'-3"
+- 8'-3"
+- ?6'-11 1/2"
+- SE NEW STOREFRONT SYSTEM - SEE A-3.01 FOR ASSEMBLY NOTES, SEE (ctx?)
+- {NEW FULL HEIGHT STUD WALLS | 7 NEW FULL HEIG} (ctx?)
+- ELEVATIONS FOR LOCATIONS & SPECS (ctx?)
+- 2. SEE A-3.01 FOR EXTERIOR WALL ASSEMBLY TYPES. SEE 6/A-1.00 FOR / INTERIOR PARTITION TYPES. INTERIOR PARTITIONS ARE TYPE 'A' / NOTED OTHERWISE. (ctx?)
+- 1H
+- ASSISTANCE" SIGNAGE (ctx?)
+- 3. SEE EXTERIOR ELEVATIONS FOR WINDOW TYPES (ctx?)
+- 4. SEE SHEET A-6.00 FOR DOOR AND A-6.01 FOR ROOM FINISH (ctx?)
+- # = DOOR TAG - SEE SCHEDULE SHEET A-6.00
+- SCHEDULES (ctx?)
+- 4. ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN / ACCESSIBILITY REACH RANGE REQUIREMENTS / {(ICC/ANSI All7.I-2003). | (ICC/ANSI AlI7.I-2003).} (ctx?)
+- 5. IF APPLICABLE, SEE SITE PLAN FOR SIDEWALKS, RAMPS, ETC. (ctx?)
+- 5. 5. REPLACE OR ADD ADA COMPLAINT HARDWARE ON / ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE / SHEET A-1.03 FOR SCHEDULE. (ctx?)
+- LOCATIONS AND POSITIONS INDICATED IN PACKAGE OR AS REQUIRED BY / LOCAL CODES. SIGNAGE PACKAGE SUPPLIED BY: / PERMA-SIGN 9292 1ST ST., BOX 588 NEW ROCHELLE, NY 10802 - / 1-800-214-8765 - www.forrestpermasigns.com (ctx?)
+- FORREST (ctx?)
+- 6. ENSURE THAT THE OPENING FORCE IS ADA / COMPLIANT. THE OPENING FORCE OF ALL EXT. (ctx?)
+- PUSH/PULL DOORS SHALL NOT EXCEED 8 ½ LBS. (ctx?)
+- INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 / LBS. (ctx?)
+- ALUMINUM BATTENS - SEE A-3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR / SPECS (ctx?)
+- M
+- HFA
+- M.M
+- PREPARED FOR:
+- ctio
+- DRAWING NAME:
+- DRAWN BY:
+- DESIGN BY:
+- DATE:
+- CHECKED BY:
+- SCALE:
+- SHEET:
+- PROJECT #
+- PAGE #
+omitted: 37 annotations (7 technical: datum 7; 30 other) by budget; not shown is not absent

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842829-lmgHzpz9wck3L3uKGwhu",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 0, 614, 32],\n        \"text_content\": \"MIN MOORE \\\"GRAY 2121-10\\\"\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [15, 47, 558, 85],\n        \"text_content\": \"GASKETS FOR DOOR #11\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 153,
+ "costUsd": 0.001386,
+ "reportedCostUsd": 0.0013858,
+ "latencyS": 5.86,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

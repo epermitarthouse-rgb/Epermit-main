@@ -1,0 +1,104 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0e494e3457b094d8016aec8f7eaa4c87d292c87e0a7fde0b69",
+ "latencyMs": 11064,
+ "inputTokens": 4559,
+ "outputTokens": 485,
+ "costUsd": 0.016247499999999998,
+ "userPromptChars": 3602,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet provides structural wall sections, general notes, design criteria, and specific construction details. Key details include connection types, load criteria, and concrete requirements.",
+ "published": [
+  {
+   "category": "mislabeling or mistyping",
+   "severity": "warning",
+   "title": "Potential Typographical Error in Wall Section Scales",
+   "observation": "Wall Section 1 is noted with a scale of \"3/4\"=1'-0\"\" and Wall Section 2 as \"3/4\"1'-0\"\". The absence of the dash ' in Section 2's scale could confuse the interpretation.",
+   "drawing_evidence": "1   WALL SECTION - SCALE: 3/4\"=1'-0\" / 2   WALL SECTION - SCALE: 3/4\"1'-0\"",
+   "drawing_location": "Bottom left of the sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and correct the typographical error in the scale notation for clarity.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Potential Typographical Error in Wall Section Scales",
+    "originalObservation": "Wall Section 1 is noted with a scale of \"3/4\"=1'-0\"\" and Wall Section 2 as \"3/4\"1'-0\"\". The absence of the dash ' in Section 2's scale could confuse the interpretation.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Lack of Detailed Seismic Design Category Information",
+   "observation": "The seismic design category is listed as 'D ASSUMED', without further qualification or justification.",
+   "drawing_evidence": "Sdl 0.069 / SITE CLASS D. ASSUMED / SEISMIC IMPORTANCE FACTOR 1.0 / SEISMIC DESIGN CATEGORY",
+   "drawing_location": "Design Criteria Section",
+   "suggested_code_reference": null,
+   "recommendation": "Provide a detailed justification or calculation for assuming a Seismic Design Category D for the project.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Lack of Detailed Seismic Design Category Information",
+    "originalObservation": "The seismic design category is listed as 'D ASSUMED', without further qualification or justification.",
+    "originalCodeReference": "2015 IBC",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "mislabeling or mistyping",
+   "severity": "advisory",
+   "title": "Potential Inconsistency in Concrete Notes",
+   "observation": "The note indicates special inspections per sections '109.3.13 AND 1705,' but there is a visible OCR reading uncertainty.",
+   "drawing_evidence": "A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.",
+   "drawing_location": "Special Inspections (Structural) Section",
+   "suggested_code_reference": null,
+   "recommendation": "Verify the accurate sections for special inspection requirements, considering local amendments.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Potential Inconsistency in Concrete Notes",
+    "originalObservation": "The note indicates special inspections per sections '109.3.13 AND 1705,' but there is a visible OCR reading uncertainty.",
+    "originalCodeReference": "2015 IBC 1705",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842984-7vpAvNx1hBaONjBAo1Bl",
+ "text": "```json\n[\n    {\"bbox_2d\": [24, 0, 60, 508], \"text_content\": \"75 NEW YORK AVEN\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [86, 0, 122, 490], \"text_content\": \"WASHINGTON DC\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [150, 0, 249, 106], \"text_content\": \"SITE ID # 008-0003\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [242, 54, 251, 371], \"text_content\": \"NSN # 00650\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [350, 657, 400, 980], \"text_content\": \"PREPARED FOR:\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [408, 0, 510, 846], \"text_content\": \"McDonald's U\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [546, 0, 750, 926], \"text_content\": \"These drawings and specifications are the confidential property of McDonald's USA, LLC and shall not be copied or reproduced without authorization. The contract documents were prepared for use in conjunction with its issue date and are not suitable for use at a later time. Use of these drawings for reference or design requires the services of properly licensed architects and engineers. Do not reuse the contract documents for reuse on another project.\", \"category\": \"title_block\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 513,
+ "costUsd": 0.001746,
+ "reportedCostUsd": 0.0017458,
+ "latencyS": 10.49,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

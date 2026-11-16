@@ -1,0 +1,79 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "A_pdf_only",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_05a15b0bfca0384b016aec8f4606f087d29a86d293fae01bae",
+ "latencyMs": 10417,
+ "inputTokens": 3741,
+ "outputTokens": 304,
+ "costUsd": 0.0123925,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "Review of door and window schedule with hardware specifications and general notes.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Fire-Rating Information Omission",
+   "observation": "The door schedule includes columns for 'Fire Rating,' but certain entries are left blank, such as for door numbers 2 and 3.",
+   "drawing_evidence": "Door schedule entry for door number 2 has no fire-rating information.",
+   "drawing_location": "DOOR SCHEDULE, Column 'Fire Rating' for door number 2.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and include required fire-rating information for all doors where applicable.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Fire-Rating Information Omission",
+    "originalObservation": "The door schedule includes columns for 'Fire Rating,' but certain entries are left blank, such as for door numbers 2 and 3.",
+    "originalCodeReference": "IBC 2015 / DC local amendments (exact section not visible)",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Door Hardware Inconsistencies",
+   "observation": "The hardware specification listed under 'DOOR 2A' is different from the general notes for similar door types.",
+   "drawing_evidence": "Hardware for DOOR 2A specifies a 'Panic Device,' whereas similar doors in the general notes require a closer.",
+   "drawing_location": "DOOR HARDWARE section, text for DOOR 2A.",
+   "suggested_code_reference": null,
+   "recommendation": "Review hardware specifications for consistency with general notes and requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Door Hardware Inconsistencies",
+    "originalObservation": "The hardware specification listed under 'DOOR 2A' is different from the general notes for similar door types.",
+    "originalCodeReference": "IBC 2015 / local amendments (exact section not visible)",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

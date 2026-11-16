@@ -1,0 +1,75 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "D_v2_12x9",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0b6a730c25974c50016aec8f13df0887d2ba5047ef56686879",
+ "latencyMs": 6712,
+ "inputTokens": 5105,
+ "outputTokens": 342,
+ "costUsd": 0.0161825,
+ "userPromptChars": 3571,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "This sheet provides toilet room plans, detailing ADA compliance, and associated signage and fixture information.",
+ "published": [
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Door push/pull pressure discrepancy",
+   "observation": "There are two conflicting notes regarding door push/pull pressure: one reads 'max. of 5# push/pull press/sweep period from 70 degrees to a point 3\" from latch must be at least 3 seconds' and another reads 'from 10 degrees to a point 3\" from latch must be at least 3 seconds'.",
+   "drawing_evidence": "The first note is located in the top left quadrant, and the second in the bottom left quadrant.",
+   "drawing_location": "General notes, sheet A-4.00-00.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and correct the door closing annotations to reduce ambiguity, ensuring ADA compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "unrecognized_reference"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Door push/pull pressure discrepancy",
+    "originalObservation": "There are two conflicting notes regarding door push/pull pressure: one reads 'max. of 5# push/pull press/sweep period from 70 degrees to a point 3\" from latch must be at least 3 seconds' and another reads 'from 10 degrees to a point 3\" from latch must be at least 3 seconds'.",
+    "originalCodeReference": "2010 ADA Standards for Accessible Design Section 404.2.9",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "unrecognized_reference"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Door schedule reference",
+   "observation": "The sheet references a door schedule on sheet A-6.00, which was not part of the submitted set.",
+   "drawing_evidence": "Note says 'SEE SHEET A-6.00 FOR DOOR SCHEDULE.'",
+   "drawing_location": "General notes, sheet A-4.00-00.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure the door schedule on A-6.00 is reviewed for compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door schedule reference",
+    "originalObservation": "The sheet references a door schedule on sheet A-6.00, which was not part of the submitted set.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

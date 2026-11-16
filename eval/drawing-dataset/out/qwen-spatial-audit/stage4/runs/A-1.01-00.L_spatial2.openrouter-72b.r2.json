@@ -1,0 +1,111 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "L_spatial2",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0acb1b395c756074016afb2f34894087d2a4f7334021444d1d",
+ "latencyMs": 13062,
+ "inputTokens": 24177,
+ "outputTokens": 1041,
+ "reasoningTokens": 719,
+ "costUsd": 0.0060846,
+ "input": {
+  "systemPromptSha": "b9235654637a5d01",
+  "pdf": "A-1.01-00.pdf",
+  "evidenceSha": "734ded321a75bac0",
+  "userPromptChars": 16402,
+  "images": [
+   "P-R018 source",
+   "P-R018 target",
+   "P-R016 source",
+   "P-R016 target",
+   "P-R023 source",
+   "P-R023 target",
+   "P-R024 source",
+   "P-R024 target"
+  ],
+  "pairs": [
+   "P-R018",
+   "P-R016",
+   "P-R023",
+   "P-R024",
+   "P-R025",
+   "P-R026",
+   "P-R027",
+   "P-R028",
+   "P-R029",
+   "P-R030",
+   "P-R031",
+   "P-R033",
+   "P-R035",
+   "P-R021"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-1.01-00\",\"detected_sheet_title\":\"MEZZANINE & BASEMENT FLOOR PLAN\",\"discipline\":\"Architectural\",\"summary\":\"Architectural floor-plan sheet showing a 2nd floor alteration plan, basement alteration plan, general notes, keyed notes, and symbol legends. The sheet includes references to other indexed project sheets for door schedules, wall assemblies, elevations, and details. One advisory drafting/record issue is visible in the revision block.\",\"findings\":[{\"category\":\"Title block / revision control\",\"severity\":\"advisory\",\"title\":\"Revision 00 has a non-date entry\",\"observation\":\"The revision block identifies revision 00 as “FIRST ISSUE” but lists the date as “00,” while subsequent revisions have calendar dates such as “10/29/25,” “12/16/25,” “02/16/26,” “07/17/26,” and “10/15/26.”\",\"drawing_evidence\":\"Revision table at the right side of the sheet: “00 FIRST ISSUE 00.”\",\"drawing_location\":\"Right-side title block, REVISIONS table.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm whether “00” is an intentional project revision convention; otherwise replace it with the applicable first-issue date for consistent permit-set revision tracking.\",\"finding_type\":\"missing_information\",\"source_sheets\":[\"A-1.01-00.pdf\"],\"evidence_ids\":[\"c24\"],\"evidence_status\":\"confirmed_by_drawing\",\"confidence\":\"high\"}]}",
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "Architectural floor-plan sheet showing a 2nd floor alteration plan, basement alteration plan, general notes, keyed notes, and symbol legends. The sheet includes references to other indexed project sheets for door schedules, wall assemblies, elevations, and details. One advisory drafting/record issue is visible in the revision block.",
+ "drafts": [
+  {
+   "category": "Title block / revision control",
+   "severity": "advisory",
+   "title": "Revision 00 has a non-date entry",
+   "observation": "The revision block identifies revision 00 as “FIRST ISSUE” but lists the date as “00,” while subsequent revisions have calendar dates such as “10/29/25,” “12/16/25,” “02/16/26,” “07/17/26,” and “10/15/26.”",
+   "drawing_evidence": "Revision table at the right side of the sheet: “00 FIRST ISSUE 00.”",
+   "drawing_location": "Right-side title block, REVISIONS table.",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm whether “00” is an intentional project revision convention; otherwise replace it with the applicable first-issue date for consistent permit-set revision tracking.",
+   "finding_type": "missing_information",
+   "source_sheets": [
+    "A-1.01-00.pdf"
+   ],
+   "evidence_ids": [
+    "c24"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "published": [
+  {
+   "category": "Title block / revision control",
+   "severity": "advisory",
+   "title": "Revision 00 has a non-date entry",
+   "observation": "The revision block identifies revision 00 as “FIRST ISSUE” but lists the date as “00,” while subsequent revisions have calendar dates such as “10/29/25,” “12/16/25,” “02/16/26,” “07/17/26,” and “10/15/26.”",
+   "drawing_evidence": "Revision table at the right side of the sheet: “00 FIRST ISSUE 00.”",
+   "drawing_location": "Right-side title block, REVISIONS table.",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm whether “00” is an intentional project revision convention; otherwise replace it with the applicable first-issue date for consistent permit-set revision tracking.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Revision 00 has a non-date entry",
+    "originalObservation": "The revision block identifies revision 00 as “FIRST ISSUE” but lists the date as “00,” while subsequent revisions have calendar dates such as “10/29/25,” “12/16/25,” “02/16/26,” “07/17/26,” and “10/15/26.”",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   },
+   "finding_type": "missing_information",
+   "source_sheets": [
+    "A-1.01-00.pdf"
+   ],
+   "evidence_ids": [
+    "c24"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "withheld": []
+}

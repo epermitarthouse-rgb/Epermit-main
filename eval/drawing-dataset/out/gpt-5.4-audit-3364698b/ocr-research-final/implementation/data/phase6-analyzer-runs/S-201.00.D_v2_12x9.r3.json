@@ -1,0 +1,46 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "D_v2_12x9",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0358769d6b3e81b5016aec8f8754c887d2a892862265c84fd5",
+ "latencyMs": 4932,
+ "inputTokens": 4652,
+ "outputTokens": 197,
+ "costUsd": 0.0136,
+ "userPromptChars": 3606,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "Sheet S-201.00 provides structural notes and wall sections for a McDonald's location. The drawing includes multiple wall section details, connection specifics, and structural notes concerning materials and design criteria. The drawing outlines requirements for steel, concrete, and wood components, as well as design loads such as wind and seismic factors.",
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "advisory",
+   "title": "Typographical inconsistency in section scale notation",
+   "observation": "Scale for wall sections is noted as \"3/4\"1'-0\"\" instead of \"3/4\"=1'-0\".",
+   "drawing_evidence": "Wall Section 2, title block.",
+   "drawing_location": "Wall Section titles on left side of sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Correct the typographical error to avoid confusion.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Typographical inconsistency in section scale notation",
+    "originalObservation": "Scale for wall sections is noted as \"3/4\"1'-0\"\" instead of \"3/4\"=1'-0\".",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

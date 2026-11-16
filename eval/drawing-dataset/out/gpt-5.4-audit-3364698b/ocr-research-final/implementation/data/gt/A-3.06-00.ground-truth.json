@@ -1,0 +1,3797 @@
+{
+ "sheet": "A-3.06-00",
+ "sha256": "c20cc018310747ea435c888f7c1b1d4884ef8d1054b16da9ab770a504a33b6cf",
+ "scope": "sheet",
+ "source": "Converted from 04-line-reconstruction (drawing-ground-truth.json + reconstruction-evaluation.json rowGeometry).",
+ "rowRule": "One entry per printed text row. 'rids' are the candidate rows (data/reference-rows-candidates.json) that read it; where one candidate covers two printed rows (R063, R077) the row is suffixed a/b and its box is built from the members that match its text.",
+ "annotationRule": "Rows that form one callout, note, bubble or elevation marker share an annotation id, listed top to bottom (vertical text: left to right).",
+ "regionRule": "trueRegion is title_block for x >= 2300 pt (the title-block border seen in A15/A25/A45), otherwise drawing.",
+ "technicalRule": "Stage 04: annotation category dimension/dimension_note/elevation/sheet_reference/reference_note, or the row text rule.",
+ "rows": [
+  {
+   "gid": "A-3.06-00:R001",
+   "aid": "A-3.06-00:N01",
+   "text": "2",
+   "technical": true,
+   "box": {
+    "x": 278,
+    "y": 1643.8,
+    "width": 6.4,
+    "height": 7.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R002",
+   "aid": "A-3.06-00:N01",
+   "text": "A-3.06",
+   "technical": true,
+   "box": {
+    "x": 267.3,
+    "y": 1629.8,
+    "width": 27.8,
+    "height": 9.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R004",
+   "aid": "A-3.06-00:N02",
+   "text": "EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT",
+   "technical": true,
+   "box": {
+    "x": 298.6,
+    "y": 1606.7,
+    "width": 247,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R012",
+   "aid": "A-3.06-00:N03",
+   "text": "EQ",
+   "technical": true,
+   "box": {
+    "x": 335.8,
+    "y": 1586.6,
+    "width": 12.8,
+    "height": 9.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R011",
+   "aid": "A-3.06-00:N04",
+   "text": "EQ",
+   "technical": true,
+   "box": {
+    "x": 488.6,
+    "y": 1586.5,
+    "width": 12.9,
+    "height": 9.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R027",
+   "aid": "A-3.06-00:N05",
+   "text": "3'-6\"MIN HEIGHT FROM",
+   "technical": true,
+   "box": {
+    "x": 193.6,
+    "y": 1465.2,
+    "width": 10.6,
+    "height": 86.5
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R021",
+   "aid": "A-3.06-00:N05",
+   "text": "T.O. ROOF DECK MEMBRANE",
+   "technical": true,
+   "box": {
+    "x": 205.3,
+    "y": 1453.4,
+    "width": 10.4,
+    "height": 111
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R054+R049",
+   "aid": "A-3.06-00:N06",
+   "text": "EQ",
+   "technical": true,
+   "box": {
+    "x": 242.2,
+    "y": 1461.9,
+    "width": 9.1,
+    "height": 17.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:M1",
+   "aid": "A-3.06-00:N06M",
+   "text": "EQ",
+   "technical": true,
+   "box": {
+    "x": 242,
+    "y": 1516,
+    "width": 10,
+    "height": 22
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R050",
+   "aid": "A-3.06-00:N07",
+   "text": "3",
+   "technical": true,
+   "box": {
+    "x": 350.7,
+    "y": 1474.3,
+    "width": 6.4,
+    "height": 7.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R059",
+   "aid": "A-3.06-00:N07",
+   "text": "A-3.06",
+   "technical": true,
+   "box": {
+    "x": 339,
+    "y": 1459.8,
+    "width": 28.9,
+    "height": 9.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R015",
+   "aid": "A-3.06-00:N08",
+   "text": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+   "technical": true,
+   "box": {
+    "x": 618.4,
+    "y": 1569.9,
+    "width": 145.9,
+    "height": 11
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R018",
+   "aid": "A-3.06-00:N08",
+   "text": "NEW METAL PARAPET CAP.",
+   "technical": false,
+   "box": {
+    "x": 621.3,
+    "y": 1558.1,
+    "width": 104.8,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R030",
+   "aid": "A-3.06-00:N09",
+   "text": "-GUARD RAIL SHALL BE CONSTRUCTED SO AS TO",
+   "technical": true,
+   "box": {
+    "x": 619.2,
+    "y": 1534.5,
+    "width": 188.2,
+    "height": 11.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R034",
+   "aid": "A-3.06-00:N09",
+   "text": "PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA",
+   "technical": true,
+   "box": {
+    "x": 621.3,
+    "y": 1523.4,
+    "width": 185,
+    "height": 10.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R063a",
+   "aid": "A-3.06-00:N10",
+   "text": "VARIES (V.I.F)",
+   "technical": true,
+   "box": {
+    "x": 623.4,
+    "y": 1443.7,
+    "width": 66.3,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R063b",
+   "aid": "A-3.06-00:N10",
+   "text": "T.O. ROOF MEMBRANE",
+   "technical": true,
+   "box": {
+    "x": 616.7,
+    "y": 1430.4,
+    "width": 108.4,
+    "height": 20.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R067",
+   "aid": "A-3.06-00:N11",
+   "text": "(E) JOISTS",
+   "technical": false,
+   "box": {
+    "x": 615.6,
+    "y": 1416.7,
+    "width": 48.1,
+    "height": 12.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R003",
+   "aid": "A-3.06-00:N12",
+   "text": "-1-1/4\" PIPE RAILING. PAINT",
+   "technical": true,
+   "box": {
+    "x": 1146.3,
+    "y": 1608.6,
+    "width": 108,
+    "height": 11.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R006",
+   "aid": "A-3.06-00:N12",
+   "text": "TO MATCH NEW METAL",
+   "technical": false,
+   "box": {
+    "x": 1152.7,
+    "y": 1598.7,
+    "width": 87.1,
+    "height": 10.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R009",
+   "aid": "A-3.06-00:N12",
+   "text": "PARAPET CAP.",
+   "technical": false,
+   "box": {
+    "x": 1152.7,
+    "y": 1586.2,
+    "width": 60,
+    "height": 11.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R007",
+   "aid": "A-3.06-00:N13",
+   "text": "NOTE: CONTRACTOR",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1596.6,
+    "width": 79.2,
+    "height": 11.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R010",
+   "aid": "A-3.06-00:N13",
+   "text": "TO FIELD VERIFY",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1585.2,
+    "width": 67.5,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R014",
+   "aid": "A-3.06-00:N13",
+   "text": "LOCATION OF",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1573.6,
+    "width": 54.7,
+    "height": 10.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R017",
+   "aid": "A-3.06-00:N13",
+   "text": "MECHANICAL",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1562.5,
+    "width": 50.4,
+    "height": 10.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R022",
+   "aid": "A-3.06-00:N13",
+   "text": "EQUIPMENT ON THE",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1551.6,
+    "width": 72.8,
+    "height": 11
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R026",
+   "aid": "A-3.06-00:N13",
+   "text": "ROOF. PROVIDE AND",
+   "technical": false,
+   "box": {
+    "x": 1280,
+    "y": 1540.2,
+    "width": 84.5,
+    "height": 10.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R033",
+   "aid": "A-3.06-00:N13",
+   "text": "INSTALL GUARD RAILS",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1529.3,
+    "width": 87.7,
+    "height": 11.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R036",
+   "aid": "A-3.06-00:N13",
+   "text": "AT LOCATION AS AS",
+   "technical": false,
+   "box": {
+    "x": 1280,
+    "y": 1517.5,
+    "width": 79.1,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R038",
+   "aid": "A-3.06-00:N13",
+   "text": "SHOWN ON ROOF PLAN.",
+   "technical": false,
+   "box": {
+    "x": 1279.9,
+    "y": 1506.3,
+    "width": 89.8,
+    "height": 12.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R020",
+   "aid": "A-3.06-00:N14",
+   "text": "-GUARD RAIL SLEEVE AND",
+   "technical": false,
+   "box": {
+    "x": 1149.5,
+    "y": 1553.8,
+    "width": 104.5,
+    "height": 10.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R025",
+   "aid": "A-3.06-00:N14",
+   "text": "BASE PLATE SET ON",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1543.1,
+    "width": 80.2,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R031",
+   "aid": "A-3.06-00:N14",
+   "text": "ELASTOMERIC TAPE AND",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1531.3,
+    "width": 97.3,
+    "height": 11
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R035",
+   "aid": "A-3.06-00:N14",
+   "text": "SECURED TO NEW WOOD",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1520.3,
+    "width": 93,
+    "height": 11.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R037",
+   "aid": "A-3.06-00:N14",
+   "text": "BLOCK AS REQUIRED WITH",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1508.9,
+    "width": 103.7,
+    "height": 12.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R041",
+   "aid": "A-3.06-00:N14",
+   "text": "FASTENERS.",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1496.6,
+    "width": 49.2,
+    "height": 12.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R045",
+   "aid": "A-3.06-00:N15",
+   "text": "-4x4 WOOD BLOCKING",
+   "technical": true,
+   "box": {
+    "x": 1152.7,
+    "y": 1481.1,
+    "width": 86.6,
+    "height": 11.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R047",
+   "aid": "A-3.06-00:N15",
+   "text": "BETWEEN JOISTS AT NEW",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1470.5,
+    "width": 97.3,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R056",
+   "aid": "A-3.06-00:N15",
+   "text": "GUARD RAIL PENETRATION",
+   "technical": false,
+   "box": {
+    "x": 1154.2,
+    "y": 1459.2,
+    "width": 103.4,
+    "height": 10.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R061",
+   "aid": "A-3.06-00:N15",
+   "text": "LOCATIONS.",
+   "technical": false,
+   "box": {
+    "x": 1153.2,
+    "y": 1447.1,
+    "width": 48,
+    "height": 11.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R040",
+   "aid": "A-3.06-00:N16",
+   "text": "3'-6\"",
+   "technical": true,
+   "box": {
+    "x": 1035.1,
+    "y": 1494.6,
+    "width": 9.6,
+    "height": 22.8
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R023",
+   "aid": "A-3.06-00:N16",
+   "text": "MIN. ABOVE DECK MEMBRANE",
+   "technical": true,
+   "box": {
+    "x": 1049,
+    "y": 1446.9,
+    "width": 9.6,
+    "height": 115.5
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R024",
+   "aid": "A-3.06-00:N17",
+   "text": "CAULK BEHIND FLASHING",
+   "technical": false,
+   "box": {
+    "x": 1762.2,
+    "y": 1548.5,
+    "width": 97.4,
+    "height": 10.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R028",
+   "aid": "A-3.06-00:N17",
+   "text": "AND ALONG TOP EDGE OF",
+   "technical": false,
+   "box": {
+    "x": 1763.8,
+    "y": 1538.9,
+    "width": 101.4,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R032",
+   "aid": "A-3.06-00:N17",
+   "text": "FLASHING",
+   "technical": false,
+   "box": {
+    "x": 1763.2,
+    "y": 1529.5,
+    "width": 38.6,
+    "height": 10.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R043",
+   "aid": "A-3.06-00:N18",
+   "text": "FLASHING/ SEALANT: EXTEND",
+   "technical": false,
+   "box": {
+    "x": 1762.2,
+    "y": 1487.6,
+    "width": 114.4,
+    "height": 12.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R046",
+   "aid": "A-3.06-00:N18",
+   "text": "UNDER BASE CAP PER",
+   "technical": false,
+   "box": {
+    "x": 1761.9,
+    "y": 1477.9,
+    "width": 90.2,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R051",
+   "aid": "A-3.06-00:N18",
+   "text": "MANUFACTURER'S INSTRUCTIONS.",
+   "technical": false,
+   "box": {
+    "x": 1750.5,
+    "y": 1466.5,
+    "width": 137.9,
+    "height": 14.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R053",
+   "aid": "A-3.06-00:N19",
+   "text": "8\" MIN.",
+   "technical": true,
+   "box": {
+    "x": 1749.4,
+    "y": 1451.2,
+    "width": 10.7,
+    "height": 26.7
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R058",
+   "aid": "A-3.06-00:N20",
+   "text": "CHECK WITH ROOF SYSTEM",
+   "technical": false,
+   "box": {
+    "x": 1763.2,
+    "y": 1459.2,
+    "width": 106.3,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R060",
+   "aid": "A-3.06-00:N20",
+   "text": "MANUFACTURES GUIDELINES FOR",
+   "technical": false,
+   "box": {
+    "x": 1763.3,
+    "y": 1449.1,
+    "width": 124,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R064",
+   "aid": "A-3.06-00:N20",
+   "text": "WARRANTY MAINTENANCE.",
+   "technical": false,
+   "box": {
+    "x": 1763.8,
+    "y": 1441.2,
+    "width": 101.4,
+    "height": 11.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R005",
+   "aid": "A-3.06-00:N21",
+   "text": "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4070",
+   "technical": true,
+   "box": {
+    "x": 1840.3,
+    "y": 1605,
+    "width": 199,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R013",
+   "aid": "A-3.06-00:N22",
+   "text": "1-1/4\" PIPE RAILING. PAINT PEX-I",
+   "technical": true,
+   "box": {
+    "x": 1989.9,
+    "y": 1575.8,
+    "width": 124.6,
+    "height": 11.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R016",
+   "aid": "A-3.06-00:N22",
+   "text": "TO MATCH METAL PANELS",
+   "technical": false,
+   "box": {
+    "x": 1992.4,
+    "y": 1567.4,
+    "width": 101.4,
+    "height": 10.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R019",
+   "aid": "A-3.06-00:N22",
+   "text": "AND/OR (E) CORNICE",
+   "technical": false,
+   "box": {
+    "x": 1992.4,
+    "y": 1556.1,
+    "width": 80.7,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R029",
+   "aid": "A-3.06-00:N23",
+   "text": "DURA-LAST CAULK",
+   "technical": false,
+   "box": {
+    "x": 1989.4,
+    "y": 1534.8,
+    "width": 77.8,
+    "height": 11.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R039",
+   "aid": "A-3.06-00:N24",
+   "text": "STAINLESS STEEL BAND",
+   "technical": false,
+   "box": {
+    "x": 1989.6,
+    "y": 1506.4,
+    "width": 94.8,
+    "height": 11.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R042",
+   "aid": "A-3.06-00:N24",
+   "text": "POSITIONED 1/4\" FROM THE TOP",
+   "technical": true,
+   "box": {
+    "x": 1992.4,
+    "y": 1497.9,
+    "width": 121.1,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R044",
+   "aid": "A-3.06-00:N24",
+   "text": "OF THE STACK FLASHING",
+   "technical": false,
+   "box": {
+    "x": 1992.4,
+    "y": 1488.5,
+    "width": 97.4,
+    "height": 9.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R048",
+   "aid": "A-3.06-00:N25",
+   "text": "PREFABRICATED VENT STACK",
+   "technical": false,
+   "box": {
+    "x": 1990.3,
+    "y": 1470.4,
+    "width": 119,
+    "height": 10.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R055+R057",
+   "aid": "A-3.06-00:N25",
+   "text": "FLASHING",
+   "technical": false,
+   "box": {
+    "x": 1992.4,
+    "y": 1460.6,
+    "width": 39.4,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R062",
+   "aid": "A-3.06-00:N26",
+   "text": "2\" DIAMETER PIPE & BASE",
+   "technical": true,
+   "box": {
+    "x": 1993.3,
+    "y": 1447.5,
+    "width": 102.3,
+    "height": 9.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R065",
+   "aid": "A-3.06-00:N26",
+   "text": "PLATE",
+   "technical": false,
+   "box": {
+    "x": 1993.8,
+    "y": 1438.2,
+    "width": 25.5,
+    "height": 9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R066",
+   "aid": "A-3.06-00:N27",
+   "text": "(E) INSULATION",
+   "technical": false,
+   "box": {
+    "x": 1988.6,
+    "y": 1420.9,
+    "width": 59,
+    "height": 12.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R069",
+   "aid": "A-3.06-00:N28",
+   "text": "(E) WOOD DECKING",
+   "technical": false,
+   "box": {
+    "x": 1989,
+    "y": 1408.4,
+    "width": 78.4,
+    "height": 10.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R071",
+   "aid": "A-3.06-00:N29",
+   "text": "5/16\" DIAMETER X 3\" LAG BOLTS",
+   "technical": true,
+   "box": {
+    "x": 1992,
+    "y": 1370.8,
+    "width": 116,
+    "height": 13.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R077a",
+   "aid": "A-3.06-00:N30",
+   "text": "4x4 HORIZONTAL BLOCKING",
+   "technical": true,
+   "box": {
+    "x": 1991.6,
+    "y": 1349.8,
+    "width": 109.1,
+    "height": 9.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R077b",
+   "aid": "A-3.06-00:N30",
+   "text": "BETWEEN JOIST TOP CHORDS.",
+   "technical": false,
+   "box": {
+    "x": 1993.3,
+    "y": 1338.6,
+    "width": 115.6,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R108",
+   "aid": "A-3.06-00:N31",
+   "text": "29'-0\"",
+   "technical": true,
+   "box": {
+    "x": 181.2,
+    "y": 1072.6,
+    "width": 27.3,
+    "height": 10.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R110",
+   "aid": "A-3.06-00:N31",
+   "text": "T/ BLOCKING @ PARAPET",
+   "technical": true,
+   "box": {
+    "x": 181.3,
+    "y": 1061.9,
+    "width": 101,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R113",
+   "aid": "A-3.06-00:N32",
+   "text": "G.C. TO COORDINATE",
+   "technical": false,
+   "box": {
+    "x": 268.4,
+    "y": 1044.8,
+    "width": 84.4,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R116",
+   "aid": "A-3.06-00:N32",
+   "text": "REGARDING REPLACING",
+   "technical": false,
+   "box": {
+    "x": 268.4,
+    "y": 1035.2,
+    "width": 94.1,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R118",
+   "aid": "A-3.06-00:N32",
+   "text": "EXISTING LADDER",
+   "technical": false,
+   "box": {
+    "x": 268.3,
+    "y": 1025.5,
+    "width": 71.7,
+    "height": 9.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R121",
+   "aid": "A-3.06-00:N32",
+   "text": "BEYOND W/",
+   "technical": false,
+   "box": {
+    "x": 268.3,
+    "y": 1015.5,
+    "width": 46.6,
+    "height": 9.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R125",
+   "aid": "A-3.06-00:N32",
+   "text": "MCDONALD'S ACM.",
+   "technical": false,
+   "box": {
+    "x": 268.3,
+    "y": 1005.6,
+    "width": 75.9,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R073",
+   "aid": "A-3.06-00:N33",
+   "text": "-EXISTING ROOF DECKING, INSULATION, AND",
+   "technical": false,
+   "box": {
+    "x": 618.7,
+    "y": 1357,
+    "width": 165.1,
+    "height": 12.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R078",
+   "aid": "A-3.06-00:N33",
+   "text": "MEMBRANE. ALL NEW PENETRATIONS TO",
+   "technical": false,
+   "box": {
+    "x": 620.2,
+    "y": 1346.9,
+    "width": 154,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R081",
+   "aid": "A-3.06-00:N33",
+   "text": "FOLLOW ROOFING SYSTEM MANUFACTURER'S",
+   "technical": false,
+   "box": {
+    "x": 621.3,
+    "y": 1336.2,
+    "width": 170,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R084",
+   "aid": "A-3.06-00:N33",
+   "text": "RECOMMENDATIONS TO MAINTAIN WARRANTY.",
+   "technical": false,
+   "box": {
+    "x": 621.3,
+    "y": 1324,
+    "width": 175.3,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R105",
+   "aid": "A-3.06-00:N34",
+   "text": "PARAPET BEYOND",
+   "technical": false,
+   "box": {
+    "x": 762.5,
+    "y": 1097.8,
+    "width": 73.8,
+    "height": 8.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R072",
+   "aid": "A-3.06-00:N35",
+   "text": "-EXISTING ROOF DECKING, INSULATION, AND",
+   "technical": false,
+   "box": {
+    "x": 1149.5,
+    "y": 1361.1,
+    "width": 166.8,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R075",
+   "aid": "A-3.06-00:N35",
+   "text": "MEMBRANE. ALL NEW PENETRATIONS TO FOLLOW",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1351.1,
+    "width": 187.1,
+    "height": 10.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R079",
+   "aid": "A-3.06-00:N35",
+   "text": "ROOFING SYSTEM MANUFACTURER'S",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1339.4,
+    "width": 136.8,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R083",
+   "aid": "A-3.06-00:N35",
+   "text": "RECOMMENDATIONS TO MAINTAIN WARRANTY.",
+   "technical": false,
+   "box": {
+    "x": 1153.8,
+    "y": 1327.6,
+    "width": 175.3,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R076",
+   "aid": "A-3.06-00:N36",
+   "text": "3",
+   "technical": true,
+   "box": {
+    "x": 1019.1,
+    "y": 1353.7,
+    "width": 5.9,
+    "height": 7.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R080",
+   "aid": "A-3.06-00:N36",
+   "text": "A-3.06",
+   "technical": true,
+   "box": {
+    "x": 1004.1,
+    "y": 1339.8,
+    "width": 35.3,
+    "height": 10.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R103+R106",
+   "aid": "A-3.06-00:N37",
+   "text": "PARAPET BEYOND",
+   "technical": false,
+   "box": {
+    "x": 1124.9,
+    "y": 1097.1,
+    "width": 73.8,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R109",
+   "aid": "A-3.06-00:N38",
+   "text": "29'-0\" A.F.F. (V.I.F.)",
+   "technical": true,
+   "box": {
+    "x": 1336.6,
+    "y": 1070.4,
+    "width": 77,
+    "height": 11.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R111",
+   "aid": "A-3.06-00:N38",
+   "text": "T/BLK'G @ PARAPET",
+   "technical": true,
+   "box": {
+    "x": 1334.5,
+    "y": 1062.9,
+    "width": 83.4,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R074",
+   "aid": "A-3.06-00:N39",
+   "text": "SQUARE FLOOR FLANGE",
+   "technical": false,
+   "box": {
+    "x": 1762.2,
+    "y": 1354.3,
+    "width": 95.1,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R082",
+   "aid": "A-3.06-00:N40",
+   "text": "(E) JOIST TOP CHORD",
+   "technical": false,
+   "box": {
+    "x": 1763.3,
+    "y": 1332.8,
+    "width": 84.5,
+    "height": 10.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R104",
+   "aid": "A-3.06-00:N41",
+   "text": "T/ BLK'G @ PARAPET",
+   "technical": true,
+   "box": {
+    "x": 1552.1,
+    "y": 1099.1,
+    "width": 82.8,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R107",
+   "aid": "A-3.06-00:N41",
+   "text": "ELEV. + 17'-4\"",
+   "technical": true,
+   "box": {
+    "x": 1551.6,
+    "y": 1090.4,
+    "width": 54.5,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R112",
+   "aid": "A-3.06-00:N42",
+   "text": "EXTERIOR ASSEMBLY-4",
+   "technical": true,
+   "box": {
+    "x": 1710.3,
+    "y": 1056.5,
+    "width": 107.5,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R114",
+   "aid": "A-3.06-00:N42",
+   "text": "(SEE ASSEMBLY NOTES)",
+   "technical": true,
+   "box": {
+    "x": 1709.8,
+    "y": 1044.4,
+    "width": 108,
+    "height": 10
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:M2",
+   "aid": "A-3.06-00:N43",
+   "text": "1",
+   "technical": true,
+   "box": {
+    "x": 1964,
+    "y": 1148,
+    "width": 5,
+    "height": 10
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R101",
+   "aid": "A-3.06-00:N43",
+   "text": "A-3.00",
+   "technical": true,
+   "box": {
+    "x": 1951.8,
+    "y": 1134.4,
+    "width": 28.5,
+    "height": 8.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R115",
+   "aid": "A-3.06-00:N44",
+   "text": "- 1/2\" EXTERIOR PLYWOOD",
+   "technical": true,
+   "box": {
+    "x": 2120.6,
+    "y": 1041,
+    "width": 115.1,
+    "height": 10.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R117",
+   "aid": "A-3.06-00:N44",
+   "text": "SHEATHING",
+   "technical": false,
+   "box": {
+    "x": 2125.4,
+    "y": 1030.4,
+    "width": 48.6,
+    "height": 9.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R085",
+   "aid": "A-3.06-00:N45",
+   "text": "McDonald's",
+   "technical": false,
+   "box": {
+    "x": 2342.5,
+    "y": 1282.1,
+    "width": 194.4,
+    "height": 30.4
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R086",
+   "aid": "A-3.06-00:N46",
+   "text": "HFA",
+   "technical": false,
+   "box": {
+    "x": 2354.4,
+    "y": 1184,
+    "width": 164.6,
+    "height": 63.8
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R140",
+   "aid": "A-3.06-00:N47",
+   "text": "STANDING SEAM METAL",
+   "technical": false,
+   "box": {
+    "x": 269.5,
+    "y": 929.4,
+    "width": 93,
+    "height": 10.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R144",
+   "aid": "A-3.06-00:N47",
+   "text": "ROOF TO REMAIN",
+   "technical": false,
+   "box": {
+    "x": 269.5,
+    "y": 919.7,
+    "width": 70.6,
+    "height": 10
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R148",
+   "aid": "A-3.06-00:N48",
+   "text": "25'-0\" A.F.F.",
+   "technical": true,
+   "box": {
+    "x": 181.6,
+    "y": 857.8,
+    "width": 49.6,
+    "height": 10
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R149",
+   "aid": "A-3.06-00:N48",
+   "text": "EXISTING ROOF @ L.P. (V.I.F.)",
+   "technical": true,
+   "box": {
+    "x": 180.7,
+    "y": 846.4,
+    "width": 114.5,
+    "height": 12.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R155",
+   "aid": "A-3.06-00:N49",
+   "text": "REPLACE EXIST.",
+   "technical": false,
+   "box": {
+    "x": 260.9,
+    "y": 805.1,
+    "width": 65.2,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R156",
+   "aid": "A-3.06-00:N49",
+   "text": "GUTTER & DOWNSPOUT",
+   "technical": false,
+   "box": {
+    "x": 260.9,
+    "y": 795.3,
+    "width": 89.6,
+    "height": 11.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R160",
+   "aid": "A-3.06-00:N49",
+   "text": "W/ NEW. MATCH EXIST.",
+   "technical": false,
+   "box": {
+    "x": 260.9,
+    "y": 784.8,
+    "width": 87.7,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R161",
+   "aid": "A-3.06-00:N49",
+   "text": "EXTENT OF GUTTER",
+   "technical": false,
+   "box": {
+    "x": 260.9,
+    "y": 775.1,
+    "width": 78.3,
+    "height": 10.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R174",
+   "aid": "A-3.06-00:N50",
+   "text": "EXIST. MASONRY",
+   "technical": false,
+   "box": {
+    "x": 269.4,
+    "y": 705.3,
+    "width": 66.4,
+    "height": 10
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R178",
+   "aid": "A-3.06-00:N50",
+   "text": "TO REMAIN.",
+   "technical": false,
+   "box": {
+    "x": 269.4,
+    "y": 695.8,
+    "width": 47.6,
+    "height": 10.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R130",
+   "aid": "A-3.06-00:N51",
+   "text": "NEW MEMBRANE",
+   "technical": false,
+   "box": {
+    "x": 710,
+    "y": 976.4,
+    "width": 64.1,
+    "height": 10
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R131",
+   "aid": "A-3.06-00:N51",
+   "text": "ROOFING OVER",
+   "technical": false,
+   "box": {
+    "x": 711.1,
+    "y": 967,
+    "width": 61.3,
+    "height": 9.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R132",
+   "aid": "A-3.06-00:N51",
+   "text": "BUILT-UP ROOF TYP.",
+   "technical": true,
+   "box": {
+    "x": 711.1,
+    "y": 956.4,
+    "width": 90.9,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R134+R135",
+   "aid": "A-3.06-00:N52",
+   "text": "3'-6\"",
+   "technical": true,
+   "box": {
+    "x": 571,
+    "y": 941.5,
+    "width": 11.8,
+    "height": 24.6
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R136",
+   "aid": "A-3.06-00:N52",
+   "text": "MIN.",
+   "technical": true,
+   "box": {
+    "x": 587.6,
+    "y": 943.2,
+    "width": 11.2,
+    "height": 19.1
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R147",
+   "aid": "A-3.06-00:N53",
+   "text": "1:12 MIN.",
+   "technical": true,
+   "box": {
+    "x": 671.5,
+    "y": 876.9,
+    "width": 34.2,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R173",
+   "aid": "A-3.06-00:N54",
+   "text": "EXIST. DOUBLE",
+   "technical": false,
+   "box": {
+    "x": 571,
+    "y": 705.5,
+    "width": 59.9,
+    "height": 11.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R177",
+   "aid": "A-3.06-00:N54",
+   "text": "ROOF TRUSS TO",
+   "technical": false,
+   "box": {
+    "x": 571,
+    "y": 696,
+    "width": 64.1,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R180",
+   "aid": "A-3.06-00:N54",
+   "text": "REMAIN. TYP.",
+   "technical": true,
+   "box": {
+    "x": 571.5,
+    "y": 687.3,
+    "width": 53.5,
+    "height": 9.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R128",
+   "aid": "A-3.06-00:N55",
+   "text": "LINE OF EXISTING",
+   "technical": false,
+   "box": {
+    "x": 1120.6,
+    "y": 986.4,
+    "width": 69.5,
+    "height": 9.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R129",
+   "aid": "A-3.06-00:N55",
+   "text": "STAIR TOWER.",
+   "technical": false,
+   "box": {
+    "x": 1120.6,
+    "y": 976.4,
+    "width": 57.3,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R133",
+   "aid": "A-3.06-00:N56",
+   "text": "NEW MEMBRANE",
+   "technical": false,
+   "box": {
+    "x": 1122.7,
+    "y": 956.4,
+    "width": 63.1,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R137",
+   "aid": "A-3.06-00:N56",
+   "text": "ROOFING OVER",
+   "technical": false,
+   "box": {
+    "x": 1122.8,
+    "y": 946.5,
+    "width": 60.9,
+    "height": 9.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R138",
+   "aid": "A-3.06-00:N56",
+   "text": "BUILT-UP ROOF TYP.",
+   "technical": true,
+   "box": {
+    "x": 1122.8,
+    "y": 937.2,
+    "width": 80.2,
+    "height": 9.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R141",
+   "aid": "A-3.06-00:N57",
+   "text": "1:12 MIN.",
+   "technical": true,
+   "box": {
+    "x": 1043.6,
+    "y": 929.6,
+    "width": 39.6,
+    "height": 9.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R127",
+   "aid": "A-3.06-00:N58",
+   "text": "2'-10\"",
+   "technical": true,
+   "box": {
+    "x": 1312.1,
+    "y": 982.1,
+    "width": 11.8,
+    "height": 27.3
+   },
+   "vertical": true,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R142",
+   "aid": "A-3.06-00:N59",
+   "text": "26'-2\" A.F.F. (V.I.F.)",
+   "technical": true,
+   "box": {
+    "x": 1336.6,
+    "y": 926.9,
+    "width": 75.9,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R145",
+   "aid": "A-3.06-00:N59",
+   "text": "EXIST. ROOF @ H.P.",
+   "technical": true,
+   "box": {
+    "x": 1336.6,
+    "y": 917.3,
+    "width": 76.5,
+    "height": 10.2
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R119",
+   "aid": "A-3.06-00:N60",
+   "text": "4\" METAL STUDS @ 16\" O.C.SEE",
+   "technical": true,
+   "box": {
+    "x": 1711.6,
+    "y": 1021.3,
+    "width": 137.2,
+    "height": 10.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R123",
+   "aid": "A-3.06-00:N60",
+   "text": "STRUCTURAL DRAWINGS.",
+   "technical": false,
+   "box": {
+    "x": 1710.8,
+    "y": 1008.8,
+    "width": 111.3,
+    "height": 11.4
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R150",
+   "aid": "A-3.06-00:N61",
+   "text": "7",
+   "technical": true,
+   "box": {
+    "x": 1614.7,
+    "y": 836.7,
+    "width": 6.4,
+    "height": 7.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R153",
+   "aid": "A-3.06-00:N61",
+   "text": "A-3.00",
+   "technical": true,
+   "box": {
+    "x": 1602.8,
+    "y": 822.6,
+    "width": 29,
+    "height": 9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R167",
+   "aid": "A-3.06-00:N62",
+   "text": "B/ UNDERCSORE",
+   "technical": true,
+   "box": {
+    "x": 1551.6,
+    "y": 739.2,
+    "width": 63.6,
+    "height": 10.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R169",
+   "aid": "A-3.06-00:N62",
+   "text": "ELEV. + 10'-8\"",
+   "technical": true,
+   "box": {
+    "x": 1550.5,
+    "y": 729.9,
+    "width": 56.7,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R172",
+   "aid": "A-3.06-00:N63",
+   "text": "NEW CANOPY",
+   "technical": false,
+   "box": {
+    "x": 1710.3,
+    "y": 712.1,
+    "width": 54,
+    "height": 8.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R122",
+   "aid": "A-3.06-00:N64",
+   "text": "6\" METAL STUDS @ 16\" O.C.SEE",
+   "technical": true,
+   "box": {
+    "x": 2124.8,
+    "y": 1011,
+    "width": 137.1,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R126",
+   "aid": "A-3.06-00:N64",
+   "text": "STRUCTURAL DRAWINGS.",
+   "technical": false,
+   "box": {
+    "x": 2124.8,
+    "y": 999.1,
+    "width": 109.8,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R139",
+   "aid": "A-3.06-00:N65",
+   "text": "- DIAGONAL BRACING, SEE",
+   "technical": false,
+   "box": {
+    "x": 2124.8,
+    "y": 934,
+    "width": 117.3,
+    "height": 12.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R143",
+   "aid": "A-3.06-00:N65",
+   "text": "STRUCTURAL DRAWINGS",
+   "technical": false,
+   "box": {
+    "x": 2124.8,
+    "y": 923.7,
+    "width": 132.4,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R146",
+   "aid": "A-3.06-00:N66",
+   "text": "ROOF MEMBRANE",
+   "technical": false,
+   "box": {
+    "x": 2124.8,
+    "y": 882.8,
+    "width": 79.8,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R204",
+   "aid": "A-3.06-00:N67",
+   "text": "EXIST. LOWER ROOF",
+   "technical": false,
+   "box": {
+    "x": 250.2,
+    "y": 478.4,
+    "width": 80.2,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R205",
+   "aid": "A-3.06-00:N67",
+   "text": "SLOPE TO REMAIN.",
+   "technical": false,
+   "box": {
+    "x": 250.2,
+    "y": 469.2,
+    "width": 78,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R188",
+   "aid": "A-3.06-00:N68",
+   "text": "EXIST. ROOF TRUSSES",
+   "technical": false,
+   "box": {
+    "x": 704.2,
+    "y": 627.6,
+    "width": 87.1,
+    "height": 10.1
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R193",
+   "aid": "A-3.06-00:N68",
+   "text": "TO REMAIN. TYP.",
+   "technical": true,
+   "box": {
+    "x": 704.2,
+    "y": 619,
+    "width": 67.8,
+    "height": 9.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R185",
+   "aid": "A-3.06-00:N69",
+   "text": "EXIST. ROOF TRUSSES",
+   "technical": false,
+   "box": {
+    "x": 1115.3,
+    "y": 628.7,
+    "width": 87.7,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R194",
+   "aid": "A-3.06-00:N69",
+   "text": "TO REMAIN. TYP.",
+   "technical": true,
+   "box": {
+    "x": 1115.3,
+    "y": 618.4,
+    "width": 66.9,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R179",
+   "aid": "A-3.06-00:N70",
+   "text": "EXTERIOR ASSEMBLY-5",
+   "technical": true,
+   "box": {
+    "x": 1710.9,
+    "y": 690.7,
+    "width": 106.9,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R182",
+   "aid": "A-3.06-00:N70",
+   "text": "(SEE ASSEMBLY NOTES)",
+   "technical": true,
+   "box": {
+    "x": 1709.8,
+    "y": 678.9,
+    "width": 110.1,
+    "height": 11.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R197",
+   "aid": "A-3.06-00:N71",
+   "text": "T/WINDOW",
+   "technical": true,
+   "box": {
+    "x": 1551.5,
+    "y": 595.6,
+    "width": 39.6,
+    "height": 9.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R198",
+   "aid": "A-3.06-00:N71",
+   "text": "ELEV. + 8'-0\"",
+   "technical": true,
+   "box": {
+    "x": 1551.5,
+    "y": 586.2,
+    "width": 53,
+    "height": 8.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R206",
+   "aid": "A-3.06-00:N72",
+   "text": "NEW DT WINDOW",
+   "technical": false,
+   "box": {
+    "x": 1710.9,
+    "y": 459.2,
+    "width": 65.8,
+    "height": 8.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R189",
+   "aid": "A-3.06-00:N73",
+   "text": "3",
+   "technical": true,
+   "box": {
+    "x": 1885.4,
+    "y": 630.1,
+    "width": 6.5,
+    "height": 7.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R184",
+   "aid": "A-3.06-00:N73",
+   "text": "A-3.00",
+   "technical": true,
+   "box": {
+    "x": 1874.3,
+    "y": 616.3,
+    "width": 29.1,
+    "height": 9.5
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R199",
+   "aid": "A-3.06-00:N74",
+   "text": "EXIST. ROOF",
+   "technical": false,
+   "box": {
+    "x": 2077.9,
+    "y": 569.4,
+    "width": 58.2,
+    "height": 12
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R200",
+   "aid": "A-3.06-00:N74",
+   "text": "JOISTS TO",
+   "technical": false,
+   "box": {
+    "x": 2078.7,
+    "y": 559.3,
+    "width": 48,
+    "height": 10.8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R201",
+   "aid": "A-3.06-00:N74",
+   "text": "REMAIN",
+   "technical": false,
+   "box": {
+    "x": 2077.9,
+    "y": 548,
+    "width": 36.2,
+    "height": 10.9
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R202",
+   "aid": "A-3.06-00:N75",
+   "text": "2",
+   "technical": true,
+   "box": {
+    "x": 2278.9,
+    "y": 546.8,
+    "width": 6.6,
+    "height": 8
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R203",
+   "aid": "A-3.06-00:N75",
+   "text": "A-3.00",
+   "technical": true,
+   "box": {
+    "x": 2266.6,
+    "y": 531.5,
+    "width": 30.5,
+    "height": 11.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R192",
+   "aid": "A-3.06-00:N76",
+   "text": "These drawings and specifications are the confidential and proprietary property of",
+   "technical": false,
+   "box": {
+    "x": 2486.7,
+    "y": 297.3,
+    "width": 9.7,
+    "height": 332.9
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R195",
+   "aid": "A-3.06-00:N76",
+   "text": "McDonald's USA, LLC and shall not be copied or reproduced without written",
+   "technical": false,
+   "box": {
+    "x": 2496.4,
+    "y": 308.6,
+    "width": 9.7,
+    "height": 310.3
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R187",
+   "aid": "A-3.06-00:N76",
+   "text": "authorization. The contract documents were prepared for use on this specific site in",
+   "technical": false,
+   "box": {
+    "x": 2504.8,
+    "y": 287.1,
+    "width": 9.4,
+    "height": 352.3
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R186",
+   "aid": "A-3.06-00:N76",
+   "text": "conjunction with its issue date and are not suitable for use on a different site or at",
+   "technical": false,
+   "box": {
+    "x": 2514.2,
+    "y": 290.9,
+    "width": 8.1,
+    "height": 347.4
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R191",
+   "aid": "A-3.06-00:N76",
+   "text": "a later time. Use of these drawings for reference or example on another project",
+   "technical": false,
+   "box": {
+    "x": 2521.7,
+    "y": 294.6,
+    "width": 10.3,
+    "height": 337.4
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R190",
+   "aid": "A-3.06-00:N76",
+   "text": "requires the services of properly licensed architects and engineers. Reproduction of",
+   "technical": false,
+   "box": {
+    "x": 2529.4,
+    "y": 289,
+    "width": 10.8,
+    "height": 347.1
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R196",
+   "aid": "A-3.06-00:N76",
+   "text": "the contract documents for reuse on another project is not authorized.",
+   "technical": false,
+   "box": {
+    "x": 2539,
+    "y": 315.8,
+    "width": 8.6,
+    "height": 293.7
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R212",
+   "aid": "A-3.06-00:N77",
+   "text": "EXTERIOR ASSEMBLY-5",
+   "technical": true,
+   "box": {
+    "x": 1710.9,
+    "y": 224.4,
+    "width": 106.9,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R216",
+   "aid": "A-3.06-00:N77",
+   "text": "(SEE ASSEMBLY NOTES)",
+   "technical": true,
+   "box": {
+    "x": 1709.8,
+    "y": 212.7,
+    "width": 109.1,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R220",
+   "aid": "A-3.06-00:N78",
+   "text": "EXIST. MASONRY",
+   "technical": false,
+   "box": {
+    "x": 1714,
+    "y": 178.5,
+    "width": 70.7,
+    "height": 9.6
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R224",
+   "aid": "A-3.06-00:N79",
+   "text": "T/ SLAB",
+   "technical": true,
+   "box": {
+    "x": 1551.6,
+    "y": 162.4,
+    "width": 33.1,
+    "height": 10.7
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R228",
+   "aid": "A-3.06-00:N79",
+   "text": "ELEV. + 0'-0\"",
+   "technical": true,
+   "box": {
+    "x": 1550.9,
+    "y": 153.2,
+    "width": 54.7,
+    "height": 10.3
+   },
+   "vertical": false,
+   "region": "drawing"
+  },
+  {
+   "gid": "A-3.06-00:R208",
+   "aid": "A-3.06-00:N80",
+   "text": "PREPARED FOR:",
+   "technical": false,
+   "box": {
+    "x": 2441.1,
+    "y": 280.5,
+    "width": 12.2,
+    "height": 84.4
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R209",
+   "aid": "A-3.06-00:N81",
+   "text": "SITE ADDRESS:",
+   "technical": false,
+   "box": {
+    "x": 2322.9,
+    "y": 280.5,
+    "width": 12.2,
+    "height": 78.8
+   },
+   "vertical": true,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R210",
+   "aid": "A-3.06-00:N82",
+   "text": "DRAWING NAME:",
+   "technical": false,
+   "box": {
+    "x": 2322,
+    "y": 249.4,
+    "width": 59.1,
+    "height": 12.5
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R215",
+   "aid": "A-3.06-00:N83",
+   "text": "DRAWN BY:",
+   "technical": false,
+   "box": {
+    "x": 2322.8,
+    "y": 213.6,
+    "width": 42.4,
+    "height": 11.6
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R214",
+   "aid": "A-3.06-00:N84",
+   "text": "DESIGN BY:",
+   "technical": false,
+   "box": {
+    "x": 2400.7,
+    "y": 213.4,
+    "width": 42.4,
+    "height": 11.2
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R213",
+   "aid": "A-3.06-00:N85",
+   "text": "DATE:",
+   "technical": false,
+   "box": {
+    "x": 2478.6,
+    "y": 214.8,
+    "width": 23.4,
+    "height": 9.8
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R222",
+   "aid": "A-3.06-00:N86",
+   "text": "CHECKED BY:",
+   "technical": false,
+   "box": {
+    "x": 2323,
+    "y": 178.2,
+    "width": 48.7,
+    "height": 9.5
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R223",
+   "aid": "A-3.06-00:N87",
+   "text": "SCALE:",
+   "technical": false,
+   "box": {
+    "x": 2400.8,
+    "y": 177.3,
+    "width": 27.1,
+    "height": 11.3
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R221",
+   "aid": "A-3.06-00:N88",
+   "text": "SHEET:",
+   "technical": false,
+   "box": {
+    "x": 2479.5,
+    "y": 178.3,
+    "width": 26.2,
+    "height": 10.8
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R229",
+   "aid": "A-3.06-00:N89",
+   "text": "PROJECT #",
+   "technical": false,
+   "box": {
+    "x": 2322.9,
+    "y": 141.5,
+    "width": 41.3,
+    "height": 11.5
+   },
+   "vertical": false,
+   "region": "title_block"
+  },
+  {
+   "gid": "A-3.06-00:R230",
+   "aid": "A-3.06-00:N90",
+   "text": "PAGE #",
+   "technical": false,
+   "box": {
+    "x": 2439.7,
+    "y": 140.7,
+    "width": 30.4,
+    "height": 12.2
+   },
+   "vertical": false,
+   "region": "title_block"
+  }
+ ],
+ "annotations": [
+  {
+   "aid": "A-3.06-00:N01",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:R001",
+    "A-3.06-00:R002"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N02",
+   "category": "dimension_note",
+   "rows": [
+    "A-3.06-00:R004"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N03",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R012"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N04",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R011"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N05",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R027",
+    "A-3.06-00:R021"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N06",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R054+R049"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N06M",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:M1"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N07",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:R050",
+    "A-3.06-00:R059"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N08",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R015",
+    "A-3.06-00:R018"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N09",
+   "category": "dimension_note",
+   "rows": [
+    "A-3.06-00:R030",
+    "A-3.06-00:R034"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N10",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R063a",
+    "A-3.06-00:R063b"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N11",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R067"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N12",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R003",
+    "A-3.06-00:R006",
+    "A-3.06-00:R009"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N13",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R007",
+    "A-3.06-00:R010",
+    "A-3.06-00:R014",
+    "A-3.06-00:R017",
+    "A-3.06-00:R022",
+    "A-3.06-00:R026",
+    "A-3.06-00:R033",
+    "A-3.06-00:R036",
+    "A-3.06-00:R038"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N14",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R020",
+    "A-3.06-00:R025",
+    "A-3.06-00:R031",
+    "A-3.06-00:R035",
+    "A-3.06-00:R037",
+    "A-3.06-00:R041"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N15",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R045",
+    "A-3.06-00:R047",
+    "A-3.06-00:R056",
+    "A-3.06-00:R061"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N16",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R040",
+    "A-3.06-00:R023"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N17",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R024",
+    "A-3.06-00:R028",
+    "A-3.06-00:R032"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N18",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R043",
+    "A-3.06-00:R046",
+    "A-3.06-00:R051"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N19",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R053"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N20",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R058",
+    "A-3.06-00:R060",
+    "A-3.06-00:R064"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N21",
+   "category": "reference_note",
+   "rows": [
+    "A-3.06-00:R005"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N22",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R013",
+    "A-3.06-00:R016",
+    "A-3.06-00:R019"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N23",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R029"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N24",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R039",
+    "A-3.06-00:R042",
+    "A-3.06-00:R044"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N25",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R048",
+    "A-3.06-00:R055+R057"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N26",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R062",
+    "A-3.06-00:R065"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N27",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R066"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N28",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R069"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N29",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R071"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N30",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R077a",
+    "A-3.06-00:R077b"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N31",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R108",
+    "A-3.06-00:R110"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N32",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R113",
+    "A-3.06-00:R116",
+    "A-3.06-00:R118",
+    "A-3.06-00:R121",
+    "A-3.06-00:R125"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N33",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R073",
+    "A-3.06-00:R078",
+    "A-3.06-00:R081",
+    "A-3.06-00:R084"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N34",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R105"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N35",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R072",
+    "A-3.06-00:R075",
+    "A-3.06-00:R079",
+    "A-3.06-00:R083"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N36",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:R076",
+    "A-3.06-00:R080"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N37",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R103+R106"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N38",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R109",
+    "A-3.06-00:R111"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N39",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R074"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N40",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R082"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N41",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R104",
+    "A-3.06-00:R107"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N42",
+   "category": "reference_note",
+   "rows": [
+    "A-3.06-00:R112",
+    "A-3.06-00:R114"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N43",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:M2",
+    "A-3.06-00:R101"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N44",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R115",
+    "A-3.06-00:R117"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N45",
+   "category": "logo",
+   "rows": [
+    "A-3.06-00:R085"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N46",
+   "category": "logo",
+   "rows": [
+    "A-3.06-00:R086"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N47",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R140",
+    "A-3.06-00:R144"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N48",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R148",
+    "A-3.06-00:R149"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N49",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R155",
+    "A-3.06-00:R156",
+    "A-3.06-00:R160",
+    "A-3.06-00:R161"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N50",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R174",
+    "A-3.06-00:R178"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N51",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R130",
+    "A-3.06-00:R131",
+    "A-3.06-00:R132"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N52",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R134+R135",
+    "A-3.06-00:R136"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N53",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R147"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N54",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R173",
+    "A-3.06-00:R177",
+    "A-3.06-00:R180"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N55",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R128",
+    "A-3.06-00:R129"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N56",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R133",
+    "A-3.06-00:R137",
+    "A-3.06-00:R138"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N57",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R141"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N58",
+   "category": "dimension",
+   "rows": [
+    "A-3.06-00:R127"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N59",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R142",
+    "A-3.06-00:R145"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N60",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R119",
+    "A-3.06-00:R123"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N61",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:R150",
+    "A-3.06-00:R153"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N62",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R167",
+    "A-3.06-00:R169"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N63",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R172"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N64",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R122",
+    "A-3.06-00:R126"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N65",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R139",
+    "A-3.06-00:R143"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N66",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R146"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N67",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R204",
+    "A-3.06-00:R205"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N68",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R188",
+    "A-3.06-00:R193"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N69",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R185",
+    "A-3.06-00:R194"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N70",
+   "category": "reference_note",
+   "rows": [
+    "A-3.06-00:R179",
+    "A-3.06-00:R182"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N71",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R197",
+    "A-3.06-00:R198"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N72",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R206"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N73",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:R189",
+    "A-3.06-00:R184"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N74",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R199",
+    "A-3.06-00:R200",
+    "A-3.06-00:R201"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N75",
+   "category": "sheet_reference",
+   "rows": [
+    "A-3.06-00:R202",
+    "A-3.06-00:R203"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N76",
+   "category": "legal",
+   "rows": [
+    "A-3.06-00:R192",
+    "A-3.06-00:R195",
+    "A-3.06-00:R187",
+    "A-3.06-00:R186",
+    "A-3.06-00:R191",
+    "A-3.06-00:R190",
+    "A-3.06-00:R196"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N77",
+   "category": "reference_note",
+   "rows": [
+    "A-3.06-00:R212",
+    "A-3.06-00:R216"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N78",
+   "category": "note",
+   "rows": [
+    "A-3.06-00:R220"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N79",
+   "category": "elevation",
+   "rows": [
+    "A-3.06-00:R224",
+    "A-3.06-00:R228"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-3.06-00:N80",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R208"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N81",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R209"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N82",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R210"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N83",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R215"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N84",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R214"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N85",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R213"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N86",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R222"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N87",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R223"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N88",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R221"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N89",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R229"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-3.06-00:N90",
+   "category": "title_block_label",
+   "rows": [
+    "A-3.06-00:R230"
+   ],
+   "technical": false
+  }
+ ],
+ "noise": {
+  "textLayerEcho": [
+   {
+    "x": 167.8,
+    "y": 1206.9,
+    "width": 22.5,
+    "height": 20.3
+   },
+   {
+    "x": 127.2,
+    "y": 1198.3,
+    "width": 16.6,
+    "height": 20.6
+   },
+   {
+    "x": 168.9,
+    "y": 1183.7,
+    "width": 16.1,
+    "height": 11.4
+   },
+   {
+    "x": 210.7,
+    "y": 1185.9,
+    "width": 10.7,
+    "height": 8.5
+   },
+   {
+    "x": 892.7,
+    "y": 1206,
+    "width": 22.6,
+    "height": 25.7
+   },
+   {
+    "x": 848.5,
+    "y": 1197.2,
+    "width": 16.6,
+    "height": 23.5
+   },
+   {
+    "x": 890.7,
+    "y": 1184.4,
+    "width": 10.7,
+    "height": 10.7
+   },
+   {
+    "x": 932.4,
+    "y": 1184.4,
+    "width": 11.8,
+    "height": 10.7
+   },
+   {
+    "x": 1566.5,
+    "y": 1206,
+    "width": 22.1,
+    "height": 23.9
+   },
+   {
+    "x": 1522.3,
+    "y": 1196.8,
+    "width": 16.6,
+    "height": 25.7
+   },
+   {
+    "x": 1610.4,
+    "y": 1185.5,
+    "width": 6.4,
+    "height": 9.6
+   },
+   {
+    "x": 1565.5,
+    "y": 1184.4,
+    "width": 8.6,
+    "height": 10.7
+   },
+   {
+    "x": 2366.8,
+    "y": 1167.3,
+    "width": 18,
+    "height": 15.8
+   },
+   {
+    "x": 2360.3,
+    "y": 1138.6,
+    "width": 8.1,
+    "height": 9.8
+   },
+   {
+    "x": 2374.5,
+    "y": 1128.9,
+    "width": 8.5,
+    "height": 9.9
+   },
+   {
+    "x": 2498.3,
+    "y": 1019.7,
+    "width": 15,
+    "height": 9.4
+   },
+   {
+    "x": 2387.7,
+    "y": 1010,
+    "width": 9.4,
+    "height": 9.4
+   },
+   {
+    "x": 2413.9,
+    "y": 812.7,
+    "width": 9.4,
+    "height": 9.4
+   },
+   {
+    "x": 2330.4,
+    "y": 794.6,
+    "width": 9.4,
+    "height": 10.3
+   },
+   {
+    "x": 2389.5,
+    "y": 794.6,
+    "width": 7.6,
+    "height": 8.8
+   },
+   {
+    "x": 2515.1,
+    "y": 794.9,
+    "width": 8.4,
+    "height": 8.4
+   },
+   {
+    "x": 2328.5,
+    "y": 776.7,
+    "width": 6.6,
+    "height": 8.8
+   },
+   {
+    "x": 2391.4,
+    "y": 777.1,
+    "width": 8.4,
+    "height": 8.4
+   },
+   {
+    "x": 2522.6,
+    "y": 777.1,
+    "width": 6.6,
+    "height": 8.4
+   },
+   {
+    "x": 2374.5,
+    "y": 758.9,
+    "width": 7.5,
+    "height": 9.7
+   },
+   {
+    "x": 2329.5,
+    "y": 758.9,
+    "width": 6.6,
+    "height": 8.4
+   },
+   {
+    "x": 2510.4,
+    "y": 742,
+    "width": 4.7,
+    "height": 6.6
+   },
+   {
+    "x": 2374.5,
+    "y": 723.6,
+    "width": 7.5,
+    "height": 8.4
+   },
+   {
+    "x": 2329.5,
+    "y": 724.2,
+    "width": 5.6,
+    "height": 7.5
+   },
+   {
+    "x": 2329.5,
+    "y": 706.7,
+    "width": 5.6,
+    "height": 6.6
+   },
+   {
+    "x": 2374.5,
+    "y": 704.8,
+    "width": 7.5,
+    "height": 8.4
+   },
+   {
+    "x": 2328.5,
+    "y": 687,
+    "width": 6.6,
+    "height": 8.4
+   },
+   {
+    "x": 2384.8,
+    "y": 230.8,
+    "width": 15.9,
+    "height": 13.1
+   },
+   {
+    "x": 2324.8,
+    "y": 191.4,
+    "width": 15,
+    "height": 13.2
+   },
+   {
+    "x": 2401.8,
+    "y": 192.3,
+    "width": 14.9,
+    "height": 11.3
+   },
+   {
+    "x": 2480.4,
+    "y": 191.4,
+    "width": 17.8,
+    "height": 11.3
+   },
+   {
+    "x": 2478.6,
+    "y": 155.1,
+    "width": 31.8,
+    "height": 14.5
+   },
+   {
+    "x": 2323.9,
+    "y": 154.8,
+    "width": 20.7,
+    "height": 14.1
+   },
+   {
+    "x": 2402.7,
+    "y": 154.8,
+    "width": 17.8,
+    "height": 14.1
+   },
+   {
+    "x": 2324.7,
+    "y": 120.1,
+    "width": 11.4,
+    "height": 17.3
+   },
+   {
+    "x": 2440.3,
+    "y": 118.2,
+    "width": 13.1,
+    "height": 15.9
+   },
+   {
+    "x": 1561.2,
+    "y": 59.8,
+    "width": 34.2,
+    "height": 23.5
+   },
+   {
+    "x": 164.6,
+    "y": 60.9,
+    "width": 32.1,
+    "height": 21.4
+   },
+   {
+    "x": 125.4,
+    "y": 51.3,
+    "width": 16.9,
+    "height": 22.3
+   },
+   {
+    "x": 1524.8,
+    "y": 52.4,
+    "width": 13.9,
+    "height": 20.3
+   },
+   {
+    "x": 168.9,
+    "y": 39.5,
+    "width": 12.8,
+    "height": 8.6
+   },
+   {
+    "x": 211.7,
+    "y": 40.6,
+    "width": 10.7,
+    "height": 7.5
+   },
+   {
+    "x": 1565.4,
+    "y": 39.5,
+    "width": 9.6,
+    "height": 8.6
+   },
+   {
+    "x": 1611.4,
+    "y": 39.5,
+    "width": 3.2,
+    "height": 8.6
+   }
+  ],
+  "nonText": [
+   {
+    "x": 247,
+    "y": 1566,
+    "width": 10.7,
+    "height": 39.4
+   },
+   {
+    "x": 402,
+    "y": 1470.1,
+    "width": 35.3,
+    "height": 10.7
+   },
+   {
+    "x": 1165.5,
+    "y": 1378.5,
+    "width": 9.6,
+    "height": 15
+   },
+   {
+    "x": 678,
+    "y": 826.4,
+    "width": 13.9,
+    "height": 10.7
+   },
+   {
+    "x": 789.1,
+    "y": 826.4,
+    "width": 7.5,
+    "height": 10.7
+   },
+   {
+    "x": 1049,
+    "y": 648,
+    "width": 8.6,
+    "height": 13.9
+   },
+   {
+    "x": 2368.4,
+    "y": 1323.8,
+    "width": 131.2,
+    "height": 101.9
+   },
+   {
+    "x": 2454.2,
+    "y": 311.5,
+    "width": 30,
+    "height": 63.8
+   }
+  ]
+ },
+ "ambiguities": [
+  "R013/C027: final glyph of PEX-I could be I or 1 (kept as Stage 03).",
+  "R015, R003, R013: the font draws 1 like I; 1-1/4\" is the reading consistent with the rest of the sheet (Stage 03).",
+  "R036: the drawing literally prints 'as AS'.",
+  "R167: the drawing prints 'UNDERCSORE'.",
+  "R071: the 5/16\" fraction is stacked; Stage 01 found Vision never reads it."
+ ],
+ "geometryCorrections": [
+  {
+   "gid": "R101",
+   "text": "A-3.00",
+   "stage04": {
+    "box": {
+     "x": 1964,
+     "y": 1148,
+     "width": 5,
+     "height": 10
+    },
+    "vertical": false
+   },
+   "harness": {
+    "box": {
+     "x": 1951.8,
+     "y": 1134.4,
+     "width": 28.5,
+     "height": 8.6
+    },
+    "vertical": false
+   }
+  },
+  {
+   "gid": "R134+R135",
+   "text": "3'-6\"",
+   "stage04": {
+    "box": {
+     "x": 571,
+     "y": 941.1,
+     "width": 16,
+     "height": 25.7
+    },
+    "vertical": false
+   },
+   "harness": {
+    "box": {
+     "x": 571,
+     "y": 941.5,
+     "width": 11.8,
+     "height": 24.6
+    },
+    "vertical": true
+   }
+  }
+ ]
+}

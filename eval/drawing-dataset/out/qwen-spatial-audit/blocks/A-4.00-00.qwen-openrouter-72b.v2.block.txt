@@ -1,0 +1,97 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-4.00-00 source=qwen-openrouter-72b annotations=440 technical=218 shown=92 independentlyVerified=false
+- RS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE A / ERIOD FROM 70 DEGREES TO A POINT 3" FROM LATC (ctx?)
+- {O BE ADJUSTED TO MEET MAX. OF 5# PUSH/PULL PRE | ULL PRESSURE.} / OM LATCH MUST BE AT LEAST 3 SECONDS. (ctx?)
+- TABLE HANDLES AND / ED TO MEET MAX. / URE. SWEEP PERIOD / A POINT 3" FROM / ST 3 SECONDS. (ctx?)
+- 1/2" CEMENT BOARD O (ctx?)
+- 5'-0"
+- 4" (ctx?)
+- MAX. (ctx?)
+- 6'-8"
+- MIN.
+- 2"
+- 7'-1"
+- A-4.00
+- 6" min
+- 6" min
+- 4'-0" MIN. TO LOWEST CHARACTER
+- 5'-0" MAX. TO HIGHEST CHARACTER
+- 4'-10"
+- 48" MIN.
+- 7"
+- 16'-7"
+- 4'-6"
+- 7'-1"
+- SEE DETAIL 4-A-4.00.
+- A-4.00
+- ?7'-5 1/2"
+- 5'-2"
+- 3/8" = 1'-0"
+- LE: 3/8" = 1'-0"
+- 3/8"
+- TYP
+- EIGHT ELEVATION
+- 3/8"
+- 54" MIN.
+- 42" MIN.
+- 12" (ctx?)
+- {HUGHES SUPPLY (1)2x6 4'-0" LONG C | LONG CENTER} (ctx?)
+- 42"
+- ?ALE: 1/2”=1'-0”
+- MAX. (ctx?)
+- 40" (ctx?)
+- 36"
+- 4"
+- 42" (36" MIN.)
+- 24" (ctx?)
+- 12"
+- 24" MIN.
+- MIN.
+- 4" MAX.
+- MIN.
+- 4" MAX.
+- 4" MAX.
+- 2" MIN.
+- 48" MAX.
+- 34"
+- 42" MAX
+- 2" MIN.
+- 29"
+- 15" MIN.
+- 18"
+- 18"
+- 24" MIN.
+- ALE: 3"=1'-0"
+- SOAP DISPENSER, / ENSER, COUNTER / {6A MOUNTED, 6" SPOU | 6”SPOUT} / (OPTIONAL) ; BOBRICK / B-82216 ; HUGHES SUPPLY / (866) 310-3576 / MCDCOORD@HAJOCA.COM
+- A-4.00-00
+- 2"
+- BE 4" MAX.
+- 48" MAX. AF
+- 48 MAX. AFF
+- 34" MAX.
+- 48" MAX. AFF / AF / TO OPERATING MED (ctx?)
+- 3'-4" MAX TO (ctx?)
+- 34" MAX.
+- 3'-4" MAX TO REFLECTIVE SURFACE (ctx?)
+- 48" MAX.
+- NOTES: / SEE A-4.00 FOR ACC / SELECT ONE ITEM FROM / CUT BACK-UP SUPPORT / {G.C. TO COORDINATE | 4.} / PRIOR TO PURCHASING (ctx?)
+- 34" MAX. (ctx?)
+- 29" MIN.
+- 34" MAX.
+- ELEV
+- {ALE: 1"=1'-0" | SCALE:}
+- 1/2"=1'-0"
+- 1/2"=
+- 12'-0"
+- 5. SEE SHEET A-6.0
+- T A-6.00 FOR DOOR SCHEDULE.
+- 7
+- ERMANENT IDENTIFICATION IS PROVIDED FOR R / IDED AND SHALL BE ACCOMPANIED BY BRAILL / ALL BE INSTALLED ON THE WALL ADJACENT / S NO WALL SPACE ON THE LATCH SIDE, INCL / E PLACED ON THE NEAREST ADJACENT WALL, / SHALL BE 60" ABOVE THE FINISHED FLOOR TO / SHALL BE DETERMINED SO THAT A PERSON / ENCOUNTERING PROTRUDING OBJECTS OR ST (ctx?)
+- 4"
+- ALL DOORS W/ ACCESSIBLE HANDLES AND / CLOSURE TO BE ADJUSTED TO MEET MAX. / OF 5# PUSH/PULL PRESSURE SWEEP PERIOD / FROM 10 DEGREES TO A POINT 3" FROM / LATCH MUST BE AT LEAST 3 SECONDS. (ctx?)
+- 4"
+- MAX.
+- PERSON MAY APPROACH WITHIN 3" OF SIGNS
+omitted: 348 annotations (131 technical: numeric 118, datum 6, qualifier 5, value 1, reference 1; 217 other) by budget; not shown is not absent

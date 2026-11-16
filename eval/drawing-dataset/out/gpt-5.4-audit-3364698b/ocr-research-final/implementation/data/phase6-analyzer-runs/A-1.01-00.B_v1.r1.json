@@ -1,0 +1,75 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "B_v1",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0216e30f22a778f3016aec8f22d19c87d2b2745be46c8d256f",
+ "latencyMs": 6963,
+ "inputTokens": 4084,
+ "outputTokens": 299,
+ "costUsd": 0.0132,
+ "userPromptChars": 1760,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet details the second floor and basement alteration floor plans for a McDonald's location. It includes general notes, keyed notes, and symbol legends relevant to the plan.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Absence of specific code references for ADA compliance",
+   "observation": "The general notes refer to ADA signage and hardware but do not cite specific codes or sections from the applicable standards.",
+   "drawing_evidence": "5. REPLACE OR ADD ADA COMPLAINT HARDWARE...",
+   "drawing_location": "General Notes Section",
+   "suggested_code_reference": null,
+   "recommendation": "It's recommended to include specific ADA standards or codes for clarity and compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Absence of specific code references for ADA compliance",
+    "originalObservation": "The general notes refer to ADA signage and hardware but do not cite specific codes or sections from the applicable standards.",
+    "originalCodeReference": "2015 IBC / 2010 ADA Standards for Accessible Design (if applicable)",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "advisory",
+   "title": "Missing specific sheet references",
+   "observation": "References to additional details or notes (e.g., 'SEE A-3.01 FOR ASSEMBLY NOTES') lack clarity as those sheets are not provided in the index.",
+   "drawing_evidence": "ALUMINUM BATTENS - SEE A-3.01 FOR ASSEMBLY NOTES",
+   "drawing_location": "Plan Keyed Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure referenced sheets are part of the drawing set for cross-verification.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Missing specific sheet references",
+    "originalObservation": "References to additional details or notes (e.g., 'SEE A-3.01 FOR ASSEMBLY NOTES') lack clarity as those sheets are not provided in the index.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

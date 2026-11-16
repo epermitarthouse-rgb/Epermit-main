@@ -1,0 +1,57 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "B_v1",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_09515690dffa087a016aec8f29b10487d29bcf41b2e612fdc7",
+ "latencyMs": 7725,
+ "inputTokens": 4084,
+ "outputTokens": 294,
+ "costUsd": 0.01315,
+ "userPromptChars": 1760,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The drawing sheet provides floor plans for the 2nd floor and basement alterations, with general notes, plan keyed notes, and symbol legends.",
+ "published": [
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Keynote citation needs confirmation",
+   "observation": "The finding cites a keyed-note number that is not supported by the quoted drawing evidence. The note citation and the numbered note text on the sheet need to agree.",
+   "drawing_evidence": "General notes reference ADA compliance ('REPLACE OR ADD ADA COMPLAINT HARDWARE ON...').",
+   "drawing_location": "Plan Keyed Notes section, Note #5",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm the keyed-note number against the sheet before treating the specification as missing or deficient.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "keynote_citation_mismatch"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "ADA Compliance Indications",
+    "originalObservation": "The sheet includes notes to replace or add ADA compliant hardware (e.g., 'REPLACE OR ADD ADA COMPLAINT HARDWARE').",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Signage Requirements",
+   "originalSeverity": "advisory",
+   "originalCodeReference": "",
+   "rules": [
+    "near_duplicate"
+   ]
+  }
+ ]
+}

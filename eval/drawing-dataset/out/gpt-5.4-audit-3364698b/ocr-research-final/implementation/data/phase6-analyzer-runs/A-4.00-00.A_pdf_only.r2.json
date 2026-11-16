@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "A_pdf_only",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0a2b1bccb26db8dd016aec8f01dc3c87d2baa8d7190882d6fc",
+ "latencyMs": 9081,
+ "inputTokens": 3922,
+ "outputTokens": 404,
+ "costUsd": 0.013845,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "Enlarged Toilet Plans & ADA Details",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet includes plans and elevations related to toilet room layouts, ADA details, and associated signage.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing Dimensions for Clearances",
+   "observation": "The toilet room plan (Detail 1) does not label all ADA-required clearance dimensions, such as the turn-around clearance or minimum side approach clearance for fixtures.",
+   "drawing_evidence": "Detail 1: Toilet Room Plan lacks labeled dimensions for certain ADA clearances.",
+   "drawing_location": "Top left of the sheet, Detail 1: Toilet Room Plan",
+   "suggested_code_reference": "2015 IBC Section 1109.2",
+   "recommendation": "Ensure dimensions for ADA-required clearances are clearly labeled on the plan for verification of compliance.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Missing Dimensions for Clearances",
+    "originalObservation": "The toilet room plan (Detail 1) does not label all ADA-required clearance dimensions, such as the turn-around clearance or minimum side approach clearance for fixtures.",
+    "originalCodeReference": "2015 IBC Section 1109.2",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": "2015 IBC Section 1109.2",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "advisory",
+   "title": "Signage Height Discrepancy",
+   "observation": "The typical signage height elevation (Detail 4) indicates a discrepancy between the graphical representation and general notes on signage placement.",
+   "drawing_evidence": "Detail 4 indicates a mounting height different from the typical note for accessories.",
+   "drawing_location": "Top right of the sheet, Detail 4: Typ. Signage Height Elevation",
+   "suggested_code_reference": null,
+   "recommendation": "Review signage height for compliance with ADA guidelines and ensure consistency across the documents.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Signage Height Discrepancy",
+    "originalObservation": "The typical signage height elevation (Detail 4) indicates a discrepancy between the graphical representation and general notes on signage placement.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "General Notes Verification",
+   "observation": "General notes (Detail 3) contain essential ADA compliance statements that need verification against code requirements.",
+   "drawing_evidence": "Detail 3: General Notes reference ADA compliance but lack specific referenced sections.",
+   "drawing_location": "Top center of the sheet, Detail 3: General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Conduct a detailed review to ensure all ADA-related notes align with the current accessibility codes.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "General Notes Verification",
+    "originalObservation": "General notes (Detail 3) contain essential ADA compliance statements that need verification against code requirements.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

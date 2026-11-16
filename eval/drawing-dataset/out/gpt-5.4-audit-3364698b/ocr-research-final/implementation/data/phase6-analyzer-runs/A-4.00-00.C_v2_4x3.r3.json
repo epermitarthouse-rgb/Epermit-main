@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0f2efa342bfe45b3016aec8f11b7cc87d28027f77ca8adfcbc",
+ "latencyMs": 7294,
+ "inputTokens": 5014,
+ "outputTokens": 470,
+ "costUsd": 0.017235,
+ "userPromptChars": 3584,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architecture"
+ },
+ "summary": "This sheet includes architectural plans and details for toilet room layouts, ADA requirements, and accessory installations. It provides specific dimensions and notes likely related to accessibility compliance.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Inadequate detail reference for door compliance",
+   "observation": "Note states 'ALL DOORS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE ADJUSTED TO MEET MAX 5# PUSH/PULL PRESSURE. SWEEP PERIOD FROM 70 DEGREES TO A POINT 3\" FROM LATCH MUST BE AT LEAST 3 SECONDS.' but does not specify the adjustment mechanism or method to verify compliance.",
+   "drawing_evidence": "Note in Toilet Room Plan and General Notes.",
+   "drawing_location": "Adjacent to door symbols and General Notes section in both highlighted plan and detail views.",
+   "suggested_code_reference": null,
+   "recommendation": "Provide additional clarification or specification on how to achieve the door pressure and sweep period requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Inadequate detail reference for door compliance",
+    "originalObservation": "Note states 'ALL DOORS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE ADJUSTED TO MEET MAX 5# PUSH/PULL PRESSURE. SWEEP PERIOD FROM 70 DEGREES TO A POINT 3\" FROM LATCH MUST BE AT LEAST 3 SECONDS.' but does not specify the adjustment mechanism or method to verify compliance.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Signage installation requirements",
+   "observation": "Signage notes mention mounting height and location but rely on interpretation. The sheet states, 'SIGNS SHALL BE INSTALLED ON THE WALL ADJACENT TO THE LATCH SIDE... HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR.'",
+   "drawing_evidence": "Signage notes in the Typ. Signage Height Elevation.",
+   "drawing_location": "Detail 4, Typ. Signage Height Elevation, General Notes Area.",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate the signage installation with construction documentation to ensure compliance with accessibility standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Signage installation requirements",
+    "originalObservation": "Signage notes mention mounting height and location but rely on interpretation. The sheet states, 'SIGNS SHALL BE INSTALLED ON THE WALL ADJACENT TO THE LATCH SIDE... HEIGHT SHALL BE 60\" ABOVE THE FINISHED FLOOR.'",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Conflicting grab bar dimensions",
+   "observation": "Conflicting dimensions are provided for the grab bar lengths, '42\" MAX' and '36\" MIN' for the toilet areas.",
+   "drawing_evidence": "Dimensions visible in Toilet Room Plan and Toilet Room Fixture Plan.",
+   "drawing_location": "Details 1 and 2, adjacent to the toilet fixtures.",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify and ensure consistent grab bar length dimensions across all relevant drawings to meet code requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Conflicting grab bar dimensions",
+    "originalObservation": "Conflicting dimensions are provided for the grab bar lengths, '42\" MAX' and '36\" MIN' for the toilet areas.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

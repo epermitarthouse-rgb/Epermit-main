@@ -1,0 +1,32 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "L_av",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_07264e8a7d96c305016afb2d4067bc87d2b198c8f28c6d1c2a",
+ "latencyMs": 8965,
+ "inputTokens": 12708,
+ "outputTokens": 498,
+ "reasoningTokens": 388,
+ "costUsd": 0.0031392,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-3.06-00.pdf",
+  "evidenceSha": "14d270dc429f841f",
+  "userPromptChars": 9374,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-3.06-00\",\"detected_sheet_title\":\"WALL SECTIONS\",\"discipline\":\"Architectural\",\"summary\":\"The sheet presents guardrail details at the high roof and wall sections at the high roof and new order window. Visible notes identify guardrail height, infill limitation, flashing/roofing coordination, blocking, and references to structural drawings and assembly notes. No specific, supported discrepancy is apparent from this sheet alone.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet presents guardrail details at the high roof and wall sections at the high roof and new order window. Visible notes identify guardrail height, infill limitation, flashing/roofing coordination, blocking, and references to structural drawings and assembly notes. No specific, supported discrepancy is apparent from this sheet alone.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

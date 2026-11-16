@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842285-5qr0W0opimqt0G3COzyd",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 196, 980, 230],\n        \"text_content\": \"O BE ADJUSTED TO MEET MAX. OF 5# PUSH/PULL PRE\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 240, 768, 280],\n        \"text_content\": \"OM LATCH MUST BE AT LEAST 3 SECONDS.\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 428, 453, 468],\n        \"text_content\": \"RIES, TOILETS & URINALS.\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 712, 736, 752],\n        \"text_content\": \"FOR TOILET PLUMBING FIXTURE DETAILS.\",\n        \"category\": \"note\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 804, 964, 844],\n        \"text_content\": \"CONCENTRATED LOAD OF 250 POUNDS APPLIED IN\",\n        \"category\": \"note\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 852, 749, 892],\n        \"text_content\": \"O PRODUCE THE MAXIMUM LOAD EFFECT.\",\n        \"category\": \"note\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 946, 980, 980],\n        \"text_content\": \"ILLED AND SEALED TO PROTECT STRUCTURAL ELEMEN\",\n        \"category\": \"note\",\n        \"group\": 5,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 533,
+ "costUsd": 0.001766,
+ "reportedCostUsd": 0.0017658,
+ "latencyS": 10.88,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

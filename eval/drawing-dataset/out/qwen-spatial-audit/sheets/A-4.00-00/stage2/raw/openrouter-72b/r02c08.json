@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842310-qNHnwhjUOmCoytMS7G7P",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [846, 212, 872, 266],\n        \"text_content\": \"6\\\" min\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [568, 805, 771, 840],\n        \"text_content\": \"GRAPHICS\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [799, 805, 935, 840],\n        \"text_content\": \"SHOWN\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [568, 902, 648, 935],\n        \"text_content\": \"GC\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [666, 902, 725, 935],\n        \"text_content\": \"TO\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [736, 902, 935, 935],\n        \"text_content\": \"PROVIDE\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [953, 902, 980, 935],\n        \"text_content\": \"AD\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [568, 957, 725, 980],\n        \"text_content\": \"INSTALL\",\n        \"category\": \"note\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [743, 957, 872, 980],\n        \"text_content\": \"SIGNS\",\n        \"category\": \"note\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [883, 957, 980, 980],\n        \"text_content\": \"AT\",\n        \"category\": \"note\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 674,
+ "costUsd": 0.001907,
+ "reportedCostUsd": 0.0019068,
+ "latencyS": 18.02,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,100 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "D_v2_12x9",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0bd188e2e0f197a5016aec8f36aea087d28cd6b0e7da0cb506",
+ "latencyMs": 14957,
+ "inputTokens": 4927,
+ "outputTokens": 470,
+ "costUsd": 0.0170175,
+ "userPromptChars": 3554,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet provides floor plans for the second floor and basement alterations of a McDonald's site. It includes general notes, keyed notes, and symbol legends but lacks specific construction details such as door and window schedules which are referenced to other sheets. References are made to ADA compliance for hardware and door forces.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Referenced Sheets Missing from Index",
+   "observation": "The sheet references other drawings for details, such as door schedule on sheet A-6.00 and partition types on sheet A-3.01, which are not included in the submitted sheet index.",
+   "drawing_evidence": "SEE SHEET A-6.00 FOR DOOR AND A-6.01 FOR ROOM FINISH. SEE INTERIOR PARTITION TYPES ON A-3.01.",
+   "drawing_location": "General notes section, items 2 and 4.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that referenced sheets are included in the complete project documentation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "cross_sheet_reference_unresolved"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Referenced Sheets Missing from Index",
+    "originalObservation": "The sheet references other drawings for details, such as door schedule on sheet A-6.00 and partition types on sheet A-3.01, which are not included in the submitted sheet index.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability. Referenced sheet content was not reviewed in this request. Severity was not changed solely for that unread cross-sheet reference. Absence from the project and compliance are both unverified."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "ADA Compliance Note for Hardware Not Detailed",
+   "observation": "The drawing mentions replacing or adding ADA compliant hardware but does not specify which hardware or how it will comply.",
+   "drawing_evidence": "REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.",
+   "drawing_location": "General notes section, item 5.",
+   "suggested_code_reference": "2015 IBC, Chapter 11 (Accessibility) as adopted by DC.",
+   "recommendation": "Ensure detailed specifications for ADA hardware are provided on the referenced sheet.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "cross_sheet_reference_unresolved"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "ADA Compliance Note for Hardware Not Detailed",
+    "originalObservation": "The drawing mentions replacing or adding ADA compliant hardware but does not specify which hardware or how it will comply.",
+    "originalCodeReference": "2015 IBC, Chapter 11 (Accessibility) as adopted by DC.",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": "2015 IBC, Chapter 11 (Accessibility) as adopted by DC.",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability. Referenced sheet content was not reviewed in this request. Severity was not changed solely for that unread cross-sheet reference. Absence from the project and compliance are both unverified."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Accessibility Reach Range Adjustments",
+   "observation": "The drawing notes that all self-service items should be adjusted to meet accessibility reach ranges.",
+   "drawing_evidence": "ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS.",
+   "drawing_location": "General notes section, item 4.",
+   "suggested_code_reference": null,
+   "recommendation": "Review self-service item locations to confirm compliance with ICC/ANSI A117.1.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Accessibility Reach Range Adjustments",
+    "originalObservation": "The drawing notes that all self-service items should be adjusted to meet accessibility reach ranges.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

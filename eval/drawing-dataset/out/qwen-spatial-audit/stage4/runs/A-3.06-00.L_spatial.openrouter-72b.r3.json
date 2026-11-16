@@ -1,0 +1,43 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "L_spatial",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0d9b690f263ca832016afb2c9085ec87d2bbdc15f1324ef3dc",
+ "latencyMs": 13269,
+ "inputTokens": 20207,
+ "outputTokens": 615,
+ "reasoningTokens": 508,
+ "costUsd": 0.0047794,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-3.06-00.pdf",
+  "evidenceSha": "c67ba715113a0d3a",
+  "userPromptChars": 12120,
+  "images": [
+   "P-R003 source",
+   "P-R003 target",
+   "P-R004 source",
+   "P-R004 target",
+   "P-R005 source",
+   "P-R005 target"
+  ],
+  "pairs": [
+   "P-R003",
+   "P-R004",
+   "P-R005"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-3.06-00\",\"detected_sheet_title\":\"WALL SECTIONS\",\"discipline\":\"Architectural\",\"summary\":\"The sheet presents guard rail details at the high roof and wall sections at the high roof and new order window. Visible dimensions, guard opening limitation, attachment notes, roof slopes, elevations, and referenced structural/detail coordination are shown. No high-value discrepancy or demonstrated omission was identified from this sheet alone.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet presents guard rail details at the high roof and wall sections at the high roof and new order window. Visible dimensions, guard opening limitation, attachment notes, roof slopes, elevations, and referenced structural/detail coordination are shown. No high-value discrepancy or demonstrated omission was identified from this sheet alone.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

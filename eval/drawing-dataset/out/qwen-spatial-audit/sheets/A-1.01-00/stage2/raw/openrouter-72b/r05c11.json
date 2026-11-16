@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842576-Ocrt62k8aUf0jSVvOH9J",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [467, 26, 513, 62],\n        \"text_content\": \"04\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [657, 26, 980, 62],\n        \"text_content\": \"PERMIT COMMEN\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [467, 99, 513, 136],\n        \"text_content\": \"05\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [667, 99, 980, 136],\n        \"text_content\": \"OWNER REVISIC\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [598, 778, 640, 980],\n        \"text_content\": \"AVENUE\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [650, 788, 704, 980],\n        \"text_content\": \"ON DC\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [714, 838, 768, 980],\n        \"text_content\": \"-0003\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [778, 898, 832, 980],\n        \"text_content\": \"650\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 553,
+ "costUsd": 0.001786,
+ "reportedCostUsd": 0.0017858,
+ "latencyS": 15.95,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

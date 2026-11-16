@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842529-qNrfQimRejNTABg6BOeZ",
+ "text": "```json\n[\n    {\"bbox_2d\": [406, 10, 500, 45], \"text_content\": \"ALIGN\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [224, 25, 260, 110], \"text_content\": \"4'-3\\\"\", \"category\": \"dimension\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [455, 115, 500, 150], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [602, 115, 647, 150], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [938, 45, 967, 74], \"text_content\": \"B\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [924, 137, 960, 165], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [1, 110, 38, 155], \"text_content\": \"S\", \"category\": \"label\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [1, 374, 38, 402], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 7, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 444, 15, 462], \"text_content\": \"\\\"\", \"category\": \"dimension\", \"group\": 8, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [170, 444, 270, 478], \"text_content\": \"9 1/2\\\"\", \"category\": \"dimension\", \"group\": 9, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [459, 393, 520, 428], \"text_content\": \"OPP.\", \"category\": \"label\", \"group\": 10, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [535, 374, 614, 402], \"text_content\": \"B\", \"category\": \"label\", \"group\": 11, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [634, 378, 694, 406], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 12, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [525, 448, 675, 478], \"text_content\": \"6'-11 1/2\\\"\", \"category\": \"dimension\", \"group\": 13, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [134, 542, 154, 561], \"text_content\": \"2\", \"category\": \"label\", \"group\": 14, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [100, 586, 188, 621], \"text_content\": \"A-301\", \"category\": \"label\", \"group\": 15, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [434, 542, 454, 561], \"text_content\": \"1\", \"category\": \"label\", \"group\": 16, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [418, 586, 506, 621], \"text_content\": \"A-301\", \"category\": \"label\", \"group\": 17, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 1066,
+ "costUsd": 0.002299,
+ "reportedCostUsd": 0.0022988,
+ "latencyS": 29.53,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,91 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_spatial2",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0984bde0f5478a69016afb2f65840c87d28c66f319132eb0e4",
+ "latencyMs": 15447,
+ "inputTokens": 16898,
+ "outputTokens": 1120,
+ "reasoningTokens": 822,
+ "costUsd": 0.0047236000000000005,
+ "input": {
+  "systemPromptSha": "b9235654637a5d01",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "c1ba39999dfae2f0",
+  "userPromptChars": 14841,
+  "images": [
+   "P-R038 source"
+  ],
+  "pairs": [
+   "P-R038"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains window types, a door hardware schedule, and a door schedule. Door and window dimensions, hardware notes, accessibility-related notes, and fire-rated gasket requirements are visibly documented. One title-block drafting defect was identified: the first-issue revision date is shown as “00.”\",\"findings\":[{\"category\":\"Title block / drafting coordination\",\"severity\":\"advisory\",\"title\":\"First-issue revision date is incomplete or placeholder text\",\"observation\":\"The revision block lists revision “00” as “FIRST ISSUE” with the date shown as “00,” rather than a discernible date or an explicit N/A designation.\",\"drawing_evidence\":\"Revision block at the right side of the title block: “00 FIRST ISSUE 00.”\",\"drawing_location\":\"Right-side title block, revisions table\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm whether “00” is intentional. If not, replace it with the actual first-issue date or an approved notation indicating that no date applies, and coordinate the revision history with the permit-set issue date.\",\"finding_type\":\"missing_information\",\"source_sheets\":[\"A-6.00-00\"],\"evidence_ids\":[\"c29\"],\"evidence_status\":\"confirmed_by_drawing\",\"confidence\":\"high\"}]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains window types, a door hardware schedule, and a door schedule. Door and window dimensions, hardware notes, accessibility-related notes, and fire-rated gasket requirements are visibly documented. One title-block drafting defect was identified: the first-issue revision date is shown as “00.”",
+ "drafts": [
+  {
+   "category": "Title block / drafting coordination",
+   "severity": "advisory",
+   "title": "First-issue revision date is incomplete or placeholder text",
+   "observation": "The revision block lists revision “00” as “FIRST ISSUE” with the date shown as “00,” rather than a discernible date or an explicit N/A designation.",
+   "drawing_evidence": "Revision block at the right side of the title block: “00 FIRST ISSUE 00.”",
+   "drawing_location": "Right-side title block, revisions table",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm whether “00” is intentional. If not, replace it with the actual first-issue date or an approved notation indicating that no date applies, and coordinate the revision history with the permit-set issue date.",
+   "finding_type": "missing_information",
+   "source_sheets": [
+    "A-6.00-00"
+   ],
+   "evidence_ids": [
+    "c29"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "published": [
+  {
+   "category": "Title block / drafting coordination",
+   "severity": "advisory",
+   "title": "First-issue revision date is incomplete or placeholder text",
+   "observation": "The revision block lists revision “00” as “FIRST ISSUE” with the date shown as “00,” rather than a discernible date or an explicit N/A designation.",
+   "drawing_evidence": "Revision block at the right side of the title block: “00 FIRST ISSUE 00.”",
+   "drawing_location": "Right-side title block, revisions table",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm whether “00” is intentional. If not, replace it with the actual first-issue date or an approved notation indicating that no date applies, and coordinate the revision history with the permit-set issue date.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "First-issue revision date is incomplete or placeholder text",
+    "originalObservation": "The revision block lists revision “00” as “FIRST ISSUE” with the date shown as “00,” rather than a discernible date or an explicit N/A designation.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   },
+   "finding_type": "missing_information",
+   "source_sheets": [
+    "A-6.00-00"
+   ],
+   "evidence_ids": [
+    "c29"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "withheld": []
+}

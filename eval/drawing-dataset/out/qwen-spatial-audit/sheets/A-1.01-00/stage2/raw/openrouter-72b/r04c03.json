@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842528-Y0rRKO4sZv8Lu5kvOwJW",
+ "text": "```json\n[\n    {\"bbox_2d\": [186, 104, 245, 143], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [818, 104, 867, 143], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [77, 372, 112, 400], \"text_content\": \"D\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [158, 369, 207, 400], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [88, 448, 186, 480], \"text_content\": \"8'-3\\\"\", \"category\": \"dimension\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [316, 430, 438, 474], \"text_content\": \"9 1/2\\\"\", \"category\": \"dimension\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [740, 372, 775, 400], \"text_content\": \"D\", \"category\": \"label\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [832, 369, 881, 400], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 7, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [758, 448, 856, 479], \"text_content\": \"8'-3\\\"\", \"category\": \"dimension\", \"group\": 8, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [80, 618, 100, 644], \"text_content\": \"2\", \"category\": \"label\", \"group\": 9, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [30, 670, 138, 705], \"text_content\": \"A-2.01\", \"category\": \"label\", \"group\": 10, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [930, 618, 950, 644], \"text_content\": \"2\", \"category\": \"label\", \"group\": 11, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [920, 670, 975, 705], \"text_content\": \"A-3\", \"category\": \"label\", \"group\": 12, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 775,
+ "costUsd": 0.002008,
+ "reportedCostUsd": 0.0020078,
+ "latencyS": 22.25,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

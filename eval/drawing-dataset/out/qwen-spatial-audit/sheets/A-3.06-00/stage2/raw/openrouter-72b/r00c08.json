@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842004-IzMm1dZOfbwKVz24Ze3K",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [630, 708, 980, 740],\n        \"text_content\": \"CAULK BEHIND FLASHI\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [630, 746, 980, 778],\n        \"text_content\": \"AND ALONG TOP EDGE\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [630, 784, 784, 820],\n        \"text_content\": \"FLASHING\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [630, 958, 980, 980],\n        \"text_content\": \"FLASHING/SEALANT\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 287,
+ "costUsd": 0.00152,
+ "reportedCostUsd": 0.0015198,
+ "latencyS": 10.42,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

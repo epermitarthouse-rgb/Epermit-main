@@ -1,0 +1,100 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "B_v1",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0edb4f5f7a6188d3016aec8f6cc3e887d2ab94b81e66b30ae5",
+ "latencyMs": 10410,
+ "inputTokens": 3857,
+ "outputTokens": 439,
+ "costUsd": 0.0140325,
+ "userPromptChars": 1807,
+ "detected": {
+  "number": "S-201.00",
+  "title": "Wall Sections and Notes",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet includes wall sections and various structural notes applicable to the construction. The annotations detail connections, materials, and requirements for structural elements. It includes notes on light gauge steel, reinforced concrete, masonry, and other structural components relevant to the project.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Absence of Specific Load Calculations",
+   "observation": "The sheet does not provide specific load calculations or values for the wall sections depicted.",
+   "drawing_evidence": "The sheet provides general structural notes but lacks numerical load values in the depicted wall sections.",
+   "drawing_location": "Wall sections 1 and 2 on left side of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Provide specific load calculations to ensure that the structural design is in accordance with applicable codes.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "unsupported_local_amendment"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Absence of Specific Load Calculations",
+    "originalObservation": "The sheet does not provide specific load calculations or values for the wall sections depicted.",
+    "originalCodeReference": "DCMR Title 12, Subtitle A (Building Code), as amended IBC 2015.",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "unsupported_local_amendment"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Inconsistent Scale Representation",
+   "observation": "Wall section 2 is labeled with an incorrect scale as '3/4\"1'-0', which appears to be a typo.",
+   "drawing_evidence": "Visible scale for Wall Section 2 reads 'SCALE: 3/4\"1'-0'\" which is missing the expected '- ' between scale ratio and unit.",
+   "drawing_location": "Below Wall section 2, near bottom left of the drawing.",
+   "suggested_code_reference": null,
+   "recommendation": "Correct the typographical error in the scale annotation to avoid confusion during construction interpretation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Inconsistent Scale Representation",
+    "originalObservation": "Wall section 2 is labeled with an incorrect scale as '3/4\"1'-0', which appears to be a typo.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Submittal Requirements Not Fully Detailed",
+   "observation": "The submittal requirements section is not fully detailed with specific items needed for compliance verification.",
+   "drawing_evidence": "Excerpt mentions 'CONTRACTOR SHALL SUBMIT THE FOLLOWING ITEMS' but lacks a full list of submittals.",
+   "drawing_location": "Submittals section on the right side of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure complete submittal documentation is prepared and provided.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Submittal Requirements Not Fully Detailed",
+    "originalObservation": "The submittal requirements section is not fully detailed with specific items needed for compliance verification.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

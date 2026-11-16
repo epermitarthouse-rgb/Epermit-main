@@ -1,0 +1,55 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "B_v1",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_011e0c04a8da7bd5016aec8f0235f487d2951b8ba7050e2d62",
+ "latencyMs": 5881,
+ "inputTokens": 4245,
+ "outputTokens": 300,
+ "costUsd": 0.0136125,
+ "userPromptChars": 1733,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "The drawing sheet provides detailed plans and elevations for toilet rooms, including ADA compliance details.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Door Schedule Reference",
+   "observation": "The sheet references a door schedule on 'See Sheet A-6.00'.",
+   "drawing_evidence": "SEE SHEET A-6.00 FOR DOOR SCHEDULE.",
+   "drawing_location": "General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that the door schedule on Sheet A-6.00 is reviewed for complete compliance with ADA and IBC requirements for door hardware and signage.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door Schedule Reference",
+    "originalObservation": "The sheet references a door schedule on 'See Sheet A-6.00'.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Signage Location Clarity",
+   "originalSeverity": "warning",
+   "originalCodeReference": "2015 IBC Section 703.4 (as adopted by 2017 DC Construction Codes)",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,109 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "D_v2_12x9",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_063e13317f7aa867016aec8f82f1a087d2b9a20a54490e5680",
+ "latencyMs": 8189,
+ "inputTokens": 4652,
+ "outputTokens": 623,
+ "costUsd": 0.01786,
+ "userPromptChars": 3606,
+ "detected": {
+  "number": "S-201.00",
+  "title": "Wall Sections and Notes",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet provides structural wall sections, notes on various materials, and design criteria. Connections, seismic data, and material specifications are outlined for compliance with structural and safety standards. Coordination with other disciplines and further review may be necessary to ensure complete compliance with code requirements.",
+ "published": [
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Coordination Note on Insulation and Air Barriers",
+   "observation": "Notes suggest that construction must include necessary components for air barriers and insulation, which are essential for meeting energy standards, but specific R-values or system details are not included.",
+   "drawing_evidence": "Details shall also include necessary components for construction of air barriers and insulation systems...",
+   "drawing_location": "General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that detailed specifications for air barriers and insulation are coordinated with the architectural and mechanical drawings.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Coordination Note on Insulation and Air Barriers",
+    "originalObservation": "Notes suggest that construction must include necessary components for air barriers and insulation, which are essential for meeting energy standards, but specific R-values or system details are not included.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "critical",
+   "title": "Inconsistent Connection Details",
+   "observation": "Connection details show inconsistencies. Connection 3A states: 'STIFFCLIP LB O\" OFFSET', which appears to be an error in measurement or typographical error.",
+   "drawing_evidence": "CONNECTION 3A: STIFFCLIP LB O\" OFFSET / W/ (3)#12 SCREWS TO STUD, (2) 0.157 PAF TO EX STEEL CHANNEL",
+   "drawing_location": "Wall Section Details",
+   "suggested_code_reference": null,
+   "recommendation": "Review and correct the connection detail to specify the correct offset measurement.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "critical",
+    "originalTitle": "Inconsistent Connection Details",
+    "originalObservation": "Connection details show inconsistencies. Connection 3A states: 'STIFFCLIP LB O\" OFFSET', which appears to be an error in measurement or typographical error.",
+    "originalCodeReference": "",
+    "publishedSeverity": "critical",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Special Inspections Requirements",
+   "observation": "Special inspection notes are listed for structural steel, fabrication, and masonry; however, the specific criteria or agency responsible for verification is not named.",
+   "drawing_evidence": "Special inspection... as required by Section 1705 IBC (types listed but no specific agency or criteria)",
+   "drawing_location": "Special Inspections (Structural)",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify the responsible party for special inspections and provide specific criteria or standards to be used in accordance with IBC 2015 Section 1705.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Special Inspections Requirements",
+    "originalObservation": "Special inspection notes are listed for structural steel, fabrication, and masonry; however, the specific criteria or agency responsible for verification is not named.",
+    "originalCodeReference": "2015 IBC 1705",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Seismic Design Information Incomplete",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

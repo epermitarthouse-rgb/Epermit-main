@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842645-X3fyMVwH6JJfhvLCpIu1",
+ "text": "```json\n[\n    {\"bbox_2d\": [76, 549, 237, 618], \"text_content\": \"3'-11 1/2\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [462, 560, 512, 603], \"text_content\": \"W1\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [648, 764, 694, 880], \"text_content\": \"\\\"9-8\", \"category\": \"dimension\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [20, 884, 62, 933], \"text_content\": \"LR\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [204, 864, 244, 896], \"text_content\": \"W8\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 305,
+ "costUsd": 0.001538,
+ "reportedCostUsd": 0.0015378,
+ "latencyS": 16.01,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

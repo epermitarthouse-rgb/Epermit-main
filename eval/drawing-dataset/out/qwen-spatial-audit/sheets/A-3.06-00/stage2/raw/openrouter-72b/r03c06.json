@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842051-3uVeNZe7q0vmjvSjLuAe",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [420, 462, 478, 588],\n        \"text_content\": \"2'-10\\\"\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [530, 168, 844, 208],\n        \"text_content\": \"29'-0\\\" A.F.F. (V.I.F.)\",\n        \"category\": \"elevation\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [530, 212, 864, 246],\n        \"text_content\": \"T/BLK'G @ PARAPET\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [530, 770, 844, 808],\n        \"text_content\": \"26'-2\\\" A.F.F. (V.I.F.)\",\n        \"category\": \"elevation\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [530, 812, 844, 848],\n        \"text_content\": \"EXIST. ROOF @ H.P.\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 383,
+ "costUsd": 0.001616,
+ "reportedCostUsd": 0.0016158,
+ "latencyS": 8.49,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

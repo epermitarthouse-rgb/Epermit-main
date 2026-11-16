@@ -1,0 +1,231 @@
+{
+ "generatedAt": "2026-11-16T15:31:43.113Z",
+ "backend": "openrouter-72b",
+ "subset": true,
+ "scorer": "stage3-evidence-eval.v1 (unchanged)",
+ "results": [
+  {
+   "sheet": "A-3.06-00",
+   "status": "no openrouter-72b sheet index"
+  },
+  {
+   "sheet": "A-4.00-00",
+   "status": "no openrouter-72b sheet index"
+  },
+  {
+   "sheet": "A-1.01-00",
+   "status": "no openrouter-72b sheet index"
+  },
+  {
+   "sheet": "A-6.00-00",
+   "status": "no openrouter-72b sheet index"
+  },
+  {
+   "sheet": "S-201.00",
+   "coverage": {
+    "gtRows": 55,
+    "gtRowsInReadTiles": 17,
+    "tilesRead": 5
+   },
+   "appleVision4x3": {
+    "lines": {
+     "units": 385,
+     "summary": {
+      "techRowsExact": 5,
+      "techRowsClean": 5,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 3,
+      "techRowsWrong": 1,
+      "techRowsNone": 4,
+      "techRows": 13,
+      "techAnnComplete": 5,
+      "techAnnClean": 5,
+      "techAnnContext": 4,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 385,
+      "segmentsOutOfScope": 334
+     }
+    },
+    "v2Rows": {
+     "units": 383,
+     "summary": {
+      "techRowsExact": 5,
+      "techRowsClean": 5,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 3,
+      "techRowsWrong": 1,
+      "techRowsNone": 4,
+      "techRows": 13,
+      "techAnnComplete": 5,
+      "techAnnClean": 5,
+      "techAnnContext": 4,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 383,
+      "segmentsOutOfScope": 332
+     }
+    },
+    "v2Block": {
+     "units": 30,
+     "chars": 3178,
+     "summary": {
+      "techRowsExact": 1,
+      "techRowsClean": 1,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 1,
+      "techRowsNone": 11,
+      "techRows": 13,
+      "techAnnComplete": 1,
+      "techAnnClean": 1,
+      "techAnnContext": 0,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 30,
+      "segmentsOutOfScope": 38
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 5,
+     "boxOnRow": 5,
+     "medianOverlap": 0.944
+    }
+   },
+   "qwen": {
+    "backend": "openrouter-72b",
+    "model": "qwen/qwen2.5-vl-72b-instruct",
+    "lines": {
+     "units": 49,
+     "summary": {
+      "techRowsExact": 9,
+      "techRowsClean": 9,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 1,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 0,
+      "techRows": 13,
+      "techAnnComplete": 9,
+      "techAnnClean": 8,
+      "techAnnContext": 7,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 49,
+      "segmentsOutOfScope": 33
+     }
+    },
+    "linesModelBoxes": {
+     "units": 49,
+     "summary": {
+      "techRowsExact": 9,
+      "techRowsClean": 9,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 1,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 0,
+      "techRows": 13,
+      "techAnnComplete": 9,
+      "techAnnClean": 8,
+      "techAnnContext": 7,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 49,
+      "segmentsOutOfScope": 33
+     }
+    },
+    "v2Rows": {
+     "units": 56,
+     "summary": {
+      "techRowsExact": 10,
+      "techRowsClean": 10,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 0,
+      "techRows": 13,
+      "techAnnComplete": 9,
+      "techAnnClean": 9,
+      "techAnnContext": 7,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 56,
+      "segmentsOutOfScope": 33
+     }
+    },
+    "v2Block": {
+     "units": 34,
+     "chars": 2282,
+     "summary": {
+      "techRowsExact": 10,
+      "techRowsClean": 10,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 0,
+      "techRows": 13,
+      "techAnnComplete": 9,
+      "techAnnClean": 9,
+      "techAnnContext": 5,
+      "techAnn": 12,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 34,
+      "segmentsOutOfScope": 31
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 9,
+     "boxOnRow": 9,
+     "medianOverlap": 0.954
+    },
+    "spatialModelBoxes": {
+     "technicalRowsTextFound": 9,
+     "boxOnRow": 9,
+     "medianOverlap": 1
+    },
+    "snapped": 31
+   }
+  }
+ ]
+}

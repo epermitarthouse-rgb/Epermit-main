@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842943-Ab8Km6L0dF7KdItWf3xY",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [499, 146, 950, 215],\n        \"text_content\": \"ALBRECHT\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [502, 232, 948, 269],\n        \"text_content\": \"ENGINEERING INC\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [679, 438, 950, 644],\n        \"text_content\": \"DISTRICT OF\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [786, 514, 950, 612],\n        \"text_content\": \"RACHEL G\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [842, 700, 979, 738],\n        \"text_content\": \"PE90548\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [682, 724, 797, 860],\n        \"text_content\": \"PRO\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [729, 840, 979, 970],\n        \"text_content\": \"ESSIONAL\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [829, 820, 979, 868],\n        \"text_content\": \"LICENSE\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [729, 734, 979, 834],\n        \"text_content\": \"Rachel Aja\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 815, 227, 855],\n        \"text_content\": \"PPICATION\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 873, 186, 913],\n        \"text_content\": \"S 109.3.13\",\n        \"category\": \"title_block\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 770,
+ "costUsd": 0.002003,
+ "reportedCostUsd": 0.0020028,
+ "latencyS": 16.73,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

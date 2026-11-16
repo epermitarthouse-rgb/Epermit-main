@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842899-4sNo3jC1lOAMS41AQ14c",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 0, 874, 46], \"text_content\": \"NS OF STUD TO STUD, STUD TO TRACK\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 38, 874, 84], \"text_content\": \"ING 2-NO. 10 SELF TAPPING METAL\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 79, 874, 125], \"text_content\": \"ECTION, UNLESS NOTED OTHERWISE ON\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 121, 864, 167], \"text_content\": \"B EACH END OF LINTEL, UNLESS NOTED\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 276, 882, 322], \"text_content\": \"GS TO TRACK. STUDS SHALL HAVE FULL\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 318, 874, 364], \"text_content\": \"DE WEB OF TRACK. NO VOIDS WILL BE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 360, 920, 406], \"text_content\": \"BOTTOM OF STUD AT TRACK (TYPICAL).\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 402, 896, 448], \"text_content\": \"57 WITH 1\\\" EMBEDMENT INTO CONCRETE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 444, 874, 490], \"text_content\": \"AND 3/8\\\" EMBEDMENT INTO STEEL.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 486, 814, 532], \"text_content\": \"MING SHALL CONFORM TO THE AISI\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 528, 862, 574], \"text_content\": \"TEEL INSTITUTE) SPECIFICATIONS FOR\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 568, 778, 614], \"text_content\": \"AGE COLD-FORMED STRUCTURAL\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 610, 918, 656], \"text_content\": \"DI CODE OF RECOMMENDED STANDARD\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 854, 316, 930], \"text_content\": \"ONCRETE\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 902,
+ "costUsd": 0.002135,
+ "reportedCostUsd": 0.0021348,
+ "latencyS": 22.54,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

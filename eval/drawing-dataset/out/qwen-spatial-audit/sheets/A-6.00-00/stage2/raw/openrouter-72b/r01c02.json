@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842194-kxh5A6boGLkXEBCCc43y",
+ "text": "```json\n[\n    {\"bbox_2d\": [106, 0, 146, 100], \"text_content\": \"V.I.\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [155, 100, 194, 280], \"text_content\": \"V.I.F.\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [502, 354, 562, 392], \"text_content\": \"W3\", \"category\": \"room_or_tag\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [678, 326, 963, 354], \"text_content\": \"G.C. TO APPLY\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [668, 372, 976, 396], \"text_content\": \"FILM ON INERIO\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [678, 412, 833, 440], \"text_content\": \"GLAZING\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [898, 178, 979, 316], \"text_content\": \"2'-6\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 431,
+ "costUsd": 0.001664,
+ "reportedCostUsd": 0.0016638,
+ "latencyS": 9.42,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842979-5ihepJYW1qaV8me2cD0d",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [569, 464, 979, 504],\n        \"text_content\": \"EXISTING W4X30 STEE\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 81,
+ "costUsd": 0.001314,
+ "reportedCostUsd": 0.0013138,
+ "latencyS": 2.33,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

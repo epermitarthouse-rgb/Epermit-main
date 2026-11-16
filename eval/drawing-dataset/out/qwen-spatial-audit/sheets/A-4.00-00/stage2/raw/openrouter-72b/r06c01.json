@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842150-HlYJ6HNjvs7VJoX4mkPg",
+ "text": "```json\n[\n    {\"bbox_2d\": [86, 400, 120, 434], \"text_content\": \"4A\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [19, 478, 177, 504], \"text_content\": \"ELECTRIC\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [19, 518, 143, 544], \"text_content\": \"HAND\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [19, 558, 158, 584], \"text_content\": \"DRYER\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [580, 406, 980, 434], \"text_content\": \"ALL LAVATORIES MUST H\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [580, 456, 980, 484], \"text_content\": \"COMBINATION FAUCET\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [580, 494, 980, 522], \"text_content\": \"CAPABLE OF SUPPLYING\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [580, 534, 980, 562], \"text_content\": \"WATER FOR A MIN. OF IO\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [505, 478, 549, 512], \"text_content\": \"11\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [680, 742, 822, 768], \"text_content\": \"WALL-MTD\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [680, 760, 822, 786], \"text_content\": \"SOAP DISP\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [894, 742, 948, 768], \"text_content\": \"6B\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 733,
+ "costUsd": 0.001966,
+ "reportedCostUsd": 0.0019658,
+ "latencyS": 13.35,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

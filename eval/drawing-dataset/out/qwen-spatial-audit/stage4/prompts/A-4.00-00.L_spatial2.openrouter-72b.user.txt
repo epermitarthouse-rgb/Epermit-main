@@ -1,0 +1,233 @@
+Review this permit drawing sheet and return the structured preliminary observations.
+
+Current file: A-4.00-00.pdf
+
+Submitted sheet index (filenames and detected numbers only; other sheets were not read in this request):
+- number not detected | A-4.00-00.pdf | current sheet
+- number not detected | A-1.00-00.pdf | in project, not in this analysis
+- number not detected | A-1.01-00.pdf | in project, not in this analysis
+- number not detected | A-1.02-00.pdf | in project, not in this analysis
+- number not detected | A-1.03-00.pdf | in project, not in this analysis
+- number not detected | A-1.04.00.pdf | in project, not in this analysis
+- number not detected | A-1.05.00.pdf | in project, not in this analysis
+- number not detected | A-1.06-00.pdf | in project, not in this analysis
+- number not detected | A-2.00-00.pdf | in project, not in this analysis
+- number not detected | A-2.01-00.pdf | in project, not in this analysis
+- number not detected | A-2.02.00.pdf | in project, not in this analysis
+- number not detected | A-3.00-00.pdf | in project, not in this analysis
+- number not detected | A-3.01-00.pdf | in project, not in this analysis
+- number not detected | A-3.02-00.pdf | in project, not in this analysis
+- number not detected | A-3.03-00.pdf | in project, not in this analysis
+- number not detected | A-3.04-00.pdf | in project, not in this analysis
+- number not detected | A-3.05-00.pdf | in project, not in this analysis
+- number not detected | A-3.06-00.pdf | in project, not in this analysis
+- number not detected | A-4.01-00.pdf | in project, not in this analysis
+- number not detected | A-4.02-00.pdf | in project, not in this analysis
+- number not detected | A-6.00-00.pdf | in project, not in this analysis
+- number not detected | A-6.01.00.pdf | in project, not in this analysis
+- number not detected | CV-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.01-00.pdf | in project, not in this analysis
+- number not detected | DM-1.02-00.pdf | in project, not in this analysis
+- number not detected | DM-2.00-00.pdf | in project, not in this analysis
+- number not detected | DM-2.01-00.pdf | in project, not in this analysis
+- number not detected | E-1.0-00.pdf | in project, not in this analysis
+- number not detected | E-1.1-00.pdf | in project, not in this analysis
+- number not detected | E-1.2-00.pdf | in project, not in this analysis
+- number not detected | E-1.3-00.pdf | in project, not in this analysis
+- number not detected | E-2.1-00.pdf | in project, not in this analysis
+- number not detected | E-2.2-00.pdf | in project, not in this analysis
+- number not detected | E-3.0-00.pdf | in project, not in this analysis
+- number not detected | E-3.1-00.pdf | in project, not in this analysis
+- number not detected | E-3.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.0-00.pdf | in project, not in this analysis
+- number not detected | E-4.1-00.pdf | in project, not in this analysis
+- number not detected | E-4.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.3-00.pdf | in project, not in this analysis
+- number not detected | EN-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-2.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-3.00-0.pdf | in project, not in this analysis
+- number not detected | FP100.pdf | in project, not in this analysis
+- number not detected | FP200 .pdf | in project, not in this analysis
+- number not detected | FP201.pdf | in project, not in this analysis
+- number not detected | FP300.pdf | in project, not in this analysis
+- number not detected | G-0.00-0.pdf | in project, not in this analysis
+- number not detected | M-1.1.pdf | in project, not in this analysis
+- number not detected | M-1.2.pdf | in project, not in this analysis
+- number not detected | M-1.3.pdf | in project, not in this analysis
+- number not detected | M-1.4.pdf | in project, not in this analysis
+- number not detected | M-2.0.pdf | in project, not in this analysis
+- number not detected | M-3.0.pdf | in project, not in this analysis
+- number not detected | M-4.0.pdf | in project, not in this analysis
+- number not detected | M-4.1.pdf | in project, not in this analysis
+- number not detected | MD-1.1.pdf | in project, not in this analysis
+- number not detected | MD-1.2.pdf | in project, not in this analysis
+- number not detected | MD-1.3.pdf | in project, not in this analysis
+- number not detected | P-1.0-00.pdf | in project, not in this analysis
+- number not detected | P-1.1-00.pdf | in project, not in this analysis
+- number not detected | P-1.2-00.pdf | in project, not in this analysis
+- number not detected | P-1.3-00.pdf | in project, not in this analysis
+- number not detected | P-1.4-00.pdf | in project, not in this analysis
+- number not detected | P-1.5-00.pdf | in project, not in this analysis
+- number not detected | P-1.6-00.pdf | in project, not in this analysis
+- number not detected | P-1.7-00.pdf | in project, not in this analysis
+- number not detected | P-1.8-00.pdf | in project, not in this analysis
+- number not detected | P-2.0-00.pdf | in project, not in this analysis
+- number not detected | P-2.1-00.pdf | in project, not in this analysis
+- number not detected | P-3.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.1-00.pdf | in project, not in this analysis
+- number not detected | S-001.00.pdf | in project, not in this analysis
+- number not detected | S-002.00.pdf | in project, not in this analysis
+- number not detected | S-201.00.pdf | in project, not in this analysis
+- number not detected | S-202.00.pdf | in project, not in this analysis
+- number not detected | S-203.00.pdf | in project, not in this analysis
+- number not detected | S-204.00.pdf | in project, not in this analysis
+- number not detected | S-300.00.pdf | in project, not in this analysis
+If a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.
+
+Stage3 spatial evidence (experimental; machine-extracted; independentlyVerified=false). sheet=A-4.00-00 discipline=Architectural source=qwen-openrouter-72b-validated model=qwen/qwen2.5-vl-72b-instruct
+Rules: each "- " line is one printed annotation; " / " separates its rows; ×n = same text printed n times in that detail. ?text = look-alike glyph or model doubt, unverified; {A | B} = overlapping tiles disagree, neither confirmed. eN cites boxes and tiles in the evidence pack. Not shown is not absent.
+## 3 GENERAL NOTES (N.T.S.)
+- e1 2. INTERIOR DIMENS
+- e2 3. PROVIDE AUTOMA
+- e3 4. ALL LAVATORY
+- e4 5. SEE SHEET A-6.0
+- e5 T A-6.00 FOR DOOR SCHEDULE.
+- e6 6. SEE PLUMBING FI
+## sheet
+- e7 TABLE HANDLES AND / ED TO MEET MAX. / URE. SWEEP PERIOD / A POINT 3" FROM / ST 3 SECONDS.
+- e8 12'-0"
+## 2 TOILET ROOM FIXTURE PLAN (3/8" = 1'-0")
+- e9 6B
+- e10 4A ×2
+- e11 7
+- e12 5 ×2
+- e13 54x60 ×2
+- e14 9 ×2
+- e15 1B ×2
+- e16 1C
+- e17 2 ×2
+- e18 1A / 59x60
+- e19 48x48 ×2
+- e20 4 / A-4.00 ×2
+- e21 G.C. TO PROVIDE & / INSTALL ADA / COMPLIANT SIGNAGE. / SEE DETAIL 4-A-4.00.
+- e22 59x60 / 1A / {1C | 2 1C}
+- e23 1A
+## 1 TOILET ROOM PLAN (3/8" = 1'-0")
+- e24 5'-0"
+- e25 4" / MAX.
+- e26 6'-8"
+- e27 7'-1" ×2
+- e28 4'-10"
+- e29 7"
+- e30 16'-7"
+- e31 4'-6"
+- e32 7'-5 1/2"
+- e33 6'-0"
+- e34 5'-2"
+- e35 4" MAX.
+## 4 TYP. SIGNAGE HEIGHT ELEVATION (1/2"=1'-0")
+- e36 ?q" / MIN.
+- e37 2"
+- e38 6" min
+- e39 48" MIN. AFF. B. OF BRAILLE 60" MAX. AFF. T. OF TACTILE
+- e40 1-800-214-8765
+- e41 SHALL BE 60" ABOVE THE FINISHED FLOOR TO
+## 5 TYP. TOILET ROOM ACCESSORY ELEV. (1/2"=1'-0")
+- e42 54" MIN.
+- e43 42" MIN.
+- e44 12" ×2
+- e45 MAX.
+- e46 40"
+- e47 4"
+- e48 FACE OF / FINISHED WALL / 1C / ALTERNATIVE / 2'-0" / DISPENSER / LOCATION / 1A / TOP OF GRAB BAR / HOLD / 40" / 34" / 2" MIN. / 2 / 15" MIN. / 18" / 24" MIN. / 40" / FINISHED FLOOR
+- e49 42" (36" MIN.)
+- e50 1C
+- e51 24" MIN. ×2
+- e52 MIN. ×2
+- e53 1B ×2
+- e54 48" MAX. TO TOP OF HOOK.
+- e55 2" MIN.
+- e56 42" MAX
+- e57 34"
+- e58 29"
+- e59 18"
+- e60 16-18
+- e61 A-4.00-00 / STAN OVERBY / New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26
+- e62 4A
+- e63 5
+- e64 2"
+- e65 NOTE: / HAND DRYER / PROJECTION FROM / FINISHED WALL TO / BE 4" MAX.
+- e66 3'-4" MAX TO REFLECTIVE SURFACE
+- e67 48" MAX. AFF ×2
+- e68 34" MAX. ×3
+- e69 29" MIN.
+- e70 48" MAX.
+- e71 8 / A400
+## 7 TOILET STALL DOOR JAMB (3"=1'-0")
+- e72 ALE: 1/2”=1'-0”
+- e73 4" MAX. ×2
+## 6 TOILET ROOM ACCESSORY SCHEDULE (N.T.S.)
+- e74 HUGHES SUPPLY (1)2x6 4'-0" LONG C / (866) 310-3576 MOUNTED / MCDCOORD@HAJOCA.COM
+- e75 1B GRAB BAR
+- e76 HUGHES SUPPLY / (866) 310-3576 / MCDCOORD@HAJOCA.COM ×3
+- e77 5 MIRROR, CHANNEL
+- e78 SOAP DISPENSER, / ENSER, COUNTER / HUGHES SUPPLY / BOBRICK / MOUNTED, 6" SPOU / (866) 310-3576 / {6A (OPTIONAL) | 6”SPOUT} / B-82216 / MCDCOORD@HAJOCA.COM
+- e79 SOAP DISPENSER, / 6B WALL-MOUNTED / NTED / B-2112 MCDCO
+- e80 OUNTED, ADA COMPLIANT, KB310-SSWM
+- e81 8 DIAPER CONTAINER
+- e82 (866) 310- 3576
+- e83 917
+- e84 917 MCDCO
+shown 84/161 units; omitted 77 (43 technical) by budget; title block, detail titles (in headers) and duplicates excluded
+
+Question-targeted evidence from the full sheet index. Units already in the summary above are listed by id; units the summary omitted (oN) and title-block or detail-caption readings (cN) are quoted. Same markers: ?text unverified, {A | B} tiles disagree.
+### Q-TITLE Title block, sheet numbering, detail titles and scale notations.
+- in summary: e34, e8, e7, e63
+- c56 [title block] DRAWN BY: / DESIGN BY: / DATE: / HFA / {HFA 09/20/25 | HFA} / CHECKED BY: / {SCALE: | BY: SCALE:} / SHEET: / WGN / AS NOTED 25 OF 28 / PROJECT # / PAGE # / {16-25-95017 | 25-95017 A-4.00-00}
+- c19 [detail title 2 TOILET ROOM FIXTURE PLAN] 6B / TOILET ROOM FIXTU / {SCALE: 3/8" | LE: 3/8" = 1'-0"} / MANUF. / ITEM / MODEL # / {(SEE NOTE | EE NOTE 2)} / BOBRICK / 1A GRAB BAR 42" / B-6806X42 / B-6806X36 / 1B GRAB BAR 36" / 1C / 24" / B-6806X24 / {BAR | 1C GRAB BAR 24"}
+- c27 [detail title 1 TOILET ROOM PLAN] SCALE: 3/8"
+### Q-ELEV Elevations, heights and dimensions that must agree across details.
+- in summary: e66, e64, e71
+- c5 [title block] 4'-0" MIN. TO LOWEST CHARACTER 5'-0" MAX. TO HIGHEST CHARACTER
+### Q-DOOR Door schedule: sizes, types, frames, hardware and fire ratings.
+- in summary: e73, e72, e5, e4, e6
+- c51 [detail title 7 TOILET STALL DOOR JAMB] ALE: 3"=1'-0"
+- c50 [detail title 7 TOILET STALL DOOR JAMB] SCALE: 3
+- c47 [detail title 7 TOILET STALL DOOR JAMB] 7 TOIL
+- c44 [detail title 7 TOILET STALL DOOR JAMB] METAL STUD
+- c48 [detail title 7 TOILET STALL DOOR JAMB] TOILET STALL DOOR
+- c49 [detail title 7 TOILET STALL DOOR JAMB] OR JAMB
+- o32 [4 TYP. SIGNAGE HEIGHT ELEVATION] ACENT TO THE LATCH SIDE OF THE DOOR. WI
+- o31 [4 TYP. SIGNAGE HEIGHT ELEVATION] BRAILLE IN CONFORMANCE WITH CHAPTER 7
+- o33 [4 TYP. SIGNAGE HEIGHT ELEVATION] DOOR TO THE CENTERLINE OF THE SIGN. MOUNT
+### Q-FORCE Door opening force and accessible operation.
+- in summary: e34, e8, e7
+- o36 [1 TOILET ROOM PLAN] ALL DOORS W/ ACCESSIBLE HANDLES AND / MAX. / {CLOSURE TO BE ADJUSTED TO MEET MAX. | ERIOD} / {OF 5# PUSH/PULL PRESSURE SWEEP PERIOD | ROM} / S. / FROM 10 DEGREES TO A POINT 3" FROM / LATCH MUST BE AT LEAST 3 SECONDS.
+- o6 [sheet] ALL DOORS W/ ACCESSIBLE HA / CLOSURE TO BE ADJUSTED TO N / OF 5# PUSH/PULL PRESSURE. SWE / FROM 10 DEGREES TO A POINT / LATCH MUST BE AT LEAST 3 SE
+- o4 [3 GENERAL NOTES] O BE ADJUSTED TO MEET MAX. OF 5# PUSH/PULL PRE / OM LATCH MUST BE AT LEAST 3 SECONDS.
+- o15 [3 GENERAL NOTES] CONCENTRATED LOAD OF 250 POUNDS APPLIED IN / O PRODUCE THE MAXIMUM LOAD EFFECT.
+### Q-FIRE Fire-resistance ratings, rated assemblies and listings.
+- in summary: e67, e70, e68, e69
+- o15 [3 GENERAL NOTES] CONCENTRATED LOAD OF 250 POUNDS APPLIED IN / O PRODUCE THE MAXIMUM LOAD EFFECT.
+- o70 [5 TYP. TOILET ROOM ACCESSORY ELEV.] TO OPERATING MECHANISM
+- o73 [5 TYP. TOILET ROOM ACCESSORY ELEV.] TO OPERATING MED
+### Q-ACCESS Accessibility: clearances, mounting heights, grab bars, lavatories, signage.
+- in summary: e48, e67, e70, e68, e54, e55, e53, e66, e64, e71, e39, e21, e65, e69, e73, e38, e37, e51, e49, e52, e35, e56, e42, e43, e46, e44, e47, e50, e83, e78, e79, e34, e74, e20, e19, e61, e8, e7, e41, e80, e5, e76, e22, e23, e25, e27, e29, e31, e30, e57, e58, e59, e60, e24, e26, e33, e28, e32, e18, e17, e16, e72, e63, e77, e75, e81, e36, e6, e84, e82, e3, e2, e4, e12, e9, e10, e14, e15, e13, e11, e62, e40, e45
+- o55 [5 TYP. TOILET ROOM ACCESSORY ELEV.] WALL-MTD 6B / SOAP DISP
+- o19 [4 TYP. SIGNAGE HEIGHT ELEVATION] VIDE ADA SIGNAGE PACKAGE AND
+### Q-MATERIAL Structural materials and connections: studs, gauges, steel grades, fasteners.
+- in summary: e81, e80
+- o51 [6 TOILET ROOM ACCESSORY SCHEDULE] GING TABLE, / HUGHES SUPPLY FRAME WALL OPENING / , RECESSED, ADA KOALA KARE / (866) 310-3576 MANUFACTURER'S / KB310-SSRE / STAINLESS STEEL / MCDCOORD@HAJOCA.COM RECOMMENDATIONS
+- o64 [6 TOILET ROOM ACCESSORY SCHEDULE] {MCD COORD @HAJ OCA.COM | MCDCOORD@HAJOCA.COM RECOMMENDATIONS}
+- o61 [6 TOILET ROOM ACCESSORY SCHEDULE] {(866) 310-3576 MANUFACTURER'S | RECOMMENDATIONS}
+- o62 [6 TOILET ROOM ACCESSORY SCHEDULE] {STAINLESS STEEL | SURFACE MOUNTED,}
+- o60 [6 TOILET ROOM ACCESSORY SCHEDULE] {7 SURFACE MOUNTED, | 7 BABY CHANGING TABLE}
+### Q-XREF Referenced sheets and details that must be checked together.
+- in summary: e83, e78, e20, e19, e21, e4, e6, e3, e71, e66, e74, e70, e68
+- c19 [detail title 2 TOILET ROOM FIXTURE PLAN] 6B / TOILET ROOM FIXTU / {SCALE: 3/8" | LE: 3/8" = 1'-0"} / MANUF. / ITEM / MODEL # / {(SEE NOTE | EE NOTE 2)} / BOBRICK / 1A GRAB BAR 42" / B-6806X42 / B-6806X36 / 1B GRAB BAR 36" / 1C / 24" / B-6806X24 / {BAR | 1C GRAB BAR 24"}
+
+Cross-sheet pairs (resolved through the project sheet index; targets were not reviewed in this request unless their lines are quoted):
+- P-R007 plan_to_schedule: "T A-6.00 FOR DOOR SCHEDULE." @1814,1571 -> A-6.00-00.pdf detail 1 "DOOR SCHEDULE" (scale N.T.S.) [topic_resolved] image#1=source image#2=target target lines: [L0202] 4. NOT USED. / [L0205] 5 S.C. WOOD W/ LAM. / [L0206] 3'-0"x6'-8"x1 3/4" / [L0207] 3/4" C H.M. 2"JAMB & HEAD / [L0211] WALL SECTIONS / [L0212] 5. SEE ELEVATIONS AND WALL S / [L0213] 5 / [L0218] 3/4" D H.M. 2"JAMB & HEAD

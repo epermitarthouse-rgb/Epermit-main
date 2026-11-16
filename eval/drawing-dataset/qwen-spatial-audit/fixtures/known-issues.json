@@ -1,0 +1,84 @@
+{
+  "version": "qsa.known-issues.v1",
+  "source": "eval/drawing-dataset/out/gpt-5.4-audit-3364698b/ocr-research-final: 07-finding-root-cause (FINDING-INVENTORY.md, data/finding-inventory.csv), 09-v2-downstream (verify/scoring.csv), implementation/data/gt/*.ground-truth.json",
+  "note": "Patterns pre-screen findings; every match is still read before it is counted. Genuine items are the only issues the saved research confirmed; they are a floor on what the sheets contain, not a complete list. No item is professionally verified.",
+  "genuine": [
+    {
+      "id": "G-S201-SDC", "sheet": "S-201.00", "expectedSeverity": ["advisory", "warning"],
+      "issue": "SEISMIC DESIGN CATEGORY (and SEISMIC USE GROUP) are printed as captions with no value.",
+      "evidence": "S-201 GT ambiguity: 'SEISMIC DESIGN CATEGORY and SEISMIC USE GROUP have no printed value.' Inventory F127, F133 (OK, TRUE-GAP).",
+      "all": ["SEISMIC (DESIGN CATEGORY|USE GROUP)|\\bSDC\\b"],
+      "any": ["not (specified|stated|provided|listed|indicated|given|shown)", "no value", "missing", "blank", "without (a )?value", "does not (explicitly )?(state|specify|list|indicate|provide)", "omit", "absent", "lacks?"],
+      "none": ["is listed as", "listed as ORD"]
+    },
+    {
+      "id": "G-S201-SCALE", "sheet": "S-201.00", "expectedSeverity": ["advisory"],
+      "issue": "Wall section 2 scale is printed 3/4\"1'-0\" (no '=').",
+      "evidence": "Text layer of S-201.00.pdf: '3/4\"1'-0\"' under SCALE: 2 WALL SECTION. Inventory F116, F119, F134 (OKs), F143 (OK).",
+      "all": ["scale"],
+      "any": ["3/4\"\\s*1'", "typo", "missing (an )?(equal|=)", "inconsisten", "incorrect", "format", "notation"],
+      "none": []
+    },
+    {
+      "id": "G-S201-OF00", "sheet": "S-201.00", "expectedSeverity": ["advisory"],
+      "issue": "Title block sheet count printed 'OF 00'.",
+      "evidence": "Text layer of S-201.00.pdf: 'OF 00'. Inventory F114 (OKs).",
+      "all": ["OF 00|sheet (count|numbering|total)"],
+      "any": [""],
+      "none": []
+    }
+  ],
+  "plausible": [
+    {
+      "id": "P-A600-D11", "sheet": "A-6.00-00", "expectedSeverity": ["advisory", "warning"],
+      "issue": "Door schedule has no fire-rating column while general door note 11 calls for fire-rated gaskets at door #11.",
+      "evidence": "Inventory F103 (Q, PLAUSIBLE); blind-pass register row 1.",
+      "all": ["fire[- ]?rat|gasket"],
+      "any": ["#\\s*11|door 11|note 11|rating column|label|not (indicated|shown|listed)"],
+      "none": []
+    }
+  ],
+  "traps": [
+    {
+      "id": "T-A306-GUARD", "sheet": "A-3.06-00", "class": "E",
+      "issue": "Guard-rail height reported missing; the sheet prints 3'-6\" MIN HEIGHT FROM / T.O. ROOF DECK MEMBRANE.",
+      "evidence": "A-3.06 full-sheet GT; 05-evidence-selection; Phase 6 A arm 2 of 3.",
+      "all": ["guard ?rail|guardrail", "height"], "any": ["height (is )?(not|missing|unspecified)", "(missing|omit|no|without|lack)\\w* (guard ?rail )?height", "height omission", "not (specified|shown|indicated|provided)"], "none": ["3'-6\"", "42\""]
+    },
+    {
+      "id": "T-A400-70", "sheet": "A-4.00-00", "class": "E",
+      "issue": "10 vs 70 DEGREES conflict; all three printed copies say 70.",
+      "evidence": "07 ROOT-CAUSE-REPORT; crops/A-4.00-note-*.png; F070, F072.",
+      "all": ["\\b10\\b.{0,40}\\b70\\b|\\b70\\b.{0,40}\\b10\\b|10 ?(°|DEG)"], "any": ["DEG|°|angle|swing|open"], "none": []
+    },
+    {
+      "id": "T-S201-OFFSET", "sheet": "S-201.00", "class": "E",
+      "issue": "Critical built on the printed 0\" OFFSET connection note.",
+      "evidence": "F141 (C, MISINTERP); crops/S-201-connection-3-3A.png.",
+      "all": ["0\" ?OFFSET|zero offset"], "any": [""], "none": []
+    },
+    {
+      "id": "T-S201-SNOW", "sheet": "S-201.00", "class": "E",
+      "issue": "Ground snow load reported absent; the sheet prints GROUND SNOW LOAD: 25 PSF + DRIFT.",
+      "evidence": "S-201 GT W1; 09 README section 1 (4x3 OCR limit).",
+      "all": ["ground snow"], "any": ["missing", "absent", "not (specified|provided|stated|listed)", "incomplete", "without (a )?value", "no value"], "none": ["25 PSF"]
+    },
+    {
+      "id": "T-A600-FORCE", "sheet": "*", "class": "E",
+      "issue": "8 1/2 lb (exterior) and 5 lb (interior) opening forces reported as a contradiction; they are different conditions.",
+      "evidence": "09 README section 1 (A-6.00 C r2 MISINTERP).",
+      "all": ["8 ?1/2|8\\.5", "\\b5\\s*(LB|LBS|lbf|pound)"], "any": ["contradict", "inconsisten", "conflict", "discrepan"], "none": []
+    },
+    {
+      "id": "T-A600-EXTERIC", "sheet": "A-6.00-00", "class": "E",
+      "issue": "Tile-edge misread EXTERIC treated as a door identification inconsistency.",
+      "evidence": "09 README section 1; F097.",
+      "all": ["EXTERIC"], "any": [""], "none": []
+    }
+  ],
+  "harness": {
+    "id": "H-XREF-MISSING", "class": "H",
+    "issue": "A referenced sheet is reported missing or unavailable although it is in the 82-sheet set.",
+    "any": ["missing", "not (included|provided|submitted|available|present|found)", "unavailable", "absent", "not in the (submitted )?(sheet )?index", "cannot be (verified|located|found)", "unresolved"]
+  }
+}

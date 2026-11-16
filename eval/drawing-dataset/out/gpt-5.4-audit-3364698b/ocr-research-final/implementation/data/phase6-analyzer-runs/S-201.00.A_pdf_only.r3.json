@@ -1,0 +1,71 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "A_pdf_only",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_02961a5df52119cc016aec8f6c9e0c87d284408e48b15940ca",
+ "latencyMs": 9694,
+ "inputTokens": 3536,
+ "outputTokens": 280,
+ "costUsd": 0.011640000000000001,
+ "userPromptChars": 422,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet includes two wall sections and various structural notes. It provides details regarding connections, steel, masonry, and foundation specifications.",
+ "published": [
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Incorrect Scale Notation",
+   "observation": "The scale for Wall Section 2 is labeled as \"3/4\"1'-0\"\" which appears to be a typographical error, likely intended to read \"3/4\"=1'-0\".\"",
+   "drawing_evidence": "The scale notation for Wall Section 2 is shown incorrectly as \"3/4\"1'-0\".\"",
+   "drawing_location": "Wall Section 2",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and correct the scale notation to ensure clarity and avoid misinterpretation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Incorrect Scale Notation",
+    "originalObservation": "The scale for Wall Section 2 is labeled as \"3/4\"1'-0\"\" which appears to be a typographical error, likely intended to read \"3/4\"=1'-0\".\"",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Missing Detail References",
+   "observation": "The drawing notes mention connections without specifying detail references for further clarification.",
+   "drawing_evidence": "Connections A1, A2, B1, B2, C1, C2, etc., are labeled without referencing specific detail drawings.",
+   "drawing_location": "Wall Sections",
+   "suggested_code_reference": null,
+   "recommendation": "Include detail references for each connection to provide precise construction guidance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Missing Detail References",
+    "originalObservation": "The drawing notes mention connections without specifying detail references for further clarification.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

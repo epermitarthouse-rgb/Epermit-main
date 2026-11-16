@@ -1,0 +1,165 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0ca629c7fb99aa1c016aecd0fe775887d2a21047cdf5cfa5dc",
+ "latencyMs": 66202,
+ "inputTokens": 6779,
+ "outputTokens": 302,
+ "costUsd": 0.0199675,
+ "input": {
+  "systemPromptSha": "ceaf7fadc9d19913",
+  "pdf": "A-6.00-00.pdf",
+  "blockSha": "4b43601e9945cd06",
+  "sheetIndexRun": 1,
+  "sheetIndexProject": 81,
+  "userPromptChars": 9439,
+  "userPrompt": "Review this permit drawing sheet and return the structured preliminary observations.\n\nCurrent file: A-6.00-00.pdf\n\nSubmitted sheet index (filenames and detected numbers only; other sheets were not read in this request):\n- number not detected | A-6.00-00.pdf | current sheet\n- number not detected | A-1.00-00.pdf | in project, not in this analysis\n- number not detected | A-1.01-00.pdf | in project, not in this analysis\n- number not detected | A-1.02-00.pdf | in project, not in this analysis\n- number not detected | A-1.03-00.pdf | in project, not in this analysis\n- number not detected | A-1.04.00.pdf | in project, not in this analysis\n- number not detected | A-1.05.00.pdf | in project, not in this analysis\n- number not detected | A-1.06-00.pdf | in project, not in this analysis\n- number not detected | A-2.00-00.pdf | in project, not in this analysis\n- number not detected | A-2.01-00.pdf | in project, not in this analysis\n- number not detected | A-2.02.00.pdf | in project, not in this analysis\n- number not detected | A-3.00-00.pdf | in project, not in this analysis\n- number not detected | A-3.01-00.pdf | in project, not in this analysis\n- number not detected | A-3.02-00.pdf | in project, not in this analysis\n- number not detected | A-3.03-00.pdf | in project, not in this analysis\n- number not detected | A-3.04-00.pdf | in project, not in this analysis\n- number not detected | A-3.05-00.pdf | in project, not in this analysis\n- number not detected | A-3.06-00.pdf | in project, not in this analysis\n- number not detected | A-4.00-00.pdf | in project, not in this analysis\n- number not detected | A-4.01-00.pdf | in project, not in this analysis\n- number not detected | A-4.02-00.pdf | in project, not in this analysis\n- number not detected | A-6.01.00.pdf | in project, not in this analysis\n- number not detected | CV-1.00-00.pdf | in project, not in this analysis\n- number not detected | DM-1.00-00.pdf | in project, not in this analysis\n- number not detected | DM-1.01-00.pdf | in project, not in this analysis\n- number not detected | DM-1.02-00.pdf | in project, not in this analysis\n- number not detected | DM-2.00-00.pdf | in project, not in this analysis\n- number not detected | DM-2.01-00.pdf | in project, not in this analysis\n- number not detected | E-1.0-00.pdf | in project, not in this analysis\n- number not detected | E-1.1-00.pdf | in project, not in this analysis\n- number not detected | E-1.2-00.pdf | in project, not in this analysis\n- number not detected | E-1.3-00.pdf | in project, not in this analysis\n- number not detected | E-2.1-00.pdf | in project, not in this analysis\n- number not detected | E-2.2-00.pdf | in project, not in this analysis\n- number not detected | E-3.0-00.pdf | in project, not in this analysis\n- number not detected | E-3.1-00.pdf | in project, not in this analysis\n- number not detected | E-3.2-00.pdf | in project, not in this analysis\n- number not detected | E-4.0-00.pdf | in project, not in this analysis\n- number not detected | E-4.1-00.pdf | in project, not in this analysis\n- number not detected | E-4.2-00.pdf | in project, not in this analysis\n- number not detected | E-4.3-00.pdf | in project, not in this analysis\n- number not detected | EN-1.00-0.pdf | in project, not in this analysis\n- number not detected | EQ-1.00-0.pdf | in project, not in this analysis\n- number not detected | EQ-2.00-0.pdf | in project, not in this analysis\n- number not detected | EQ-3.00-0.pdf | in project, not in this analysis\n- number not detected | FP100.pdf | in project, not in this analysis\n- number not detected | FP200 .pdf | in project, not in this analysis\n- number not detected | FP201.pdf | in project, not in this analysis\n- number not detected | FP300.pdf | in project, not in this analysis\n- number not detected | G-0.00-0.pdf | in project, not in this analysis\n- number not detected | M-1.1.pdf | in project, not in this analysis\n- number not detected | M-1.2.pdf | in project, not in this analysis\n- number not detected | M-1.3.pdf | in project, not in this analysis\n- number not detected | M-1.4.pdf | in project, not in this analysis\n- number not detected | M-2.0.pdf | in project, not in this analysis\n- number not detected | M-3.0.pdf | in project, not in this analysis\n- number not detected | M-4.0.pdf | in project, not in this analysis\n- number not detected | M-4.1.pdf | in project, not in this analysis\n- number not detected | MD-1.1.pdf | in project, not in this analysis\n- number not detected | MD-1.2.pdf | in project, not in this analysis\n- number not detected | MD-1.3.pdf | in project, not in this analysis\n- number not detected | P-1.0-00.pdf | in project, not in this analysis\n- number not detected | P-1.1-00.pdf | in project, not in this analysis\n- number not detected | P-1.2-00.pdf | in project, not in this analysis\n- number not detected | P-1.3-00.pdf | in project, not in this analysis\n- number not detected | P-1.4-00.pdf | in project, not in this analysis\n- number not detected | P-1.5-00.pdf | in project, not in this analysis\n- number not detected | P-1.6-00.pdf | in project, not in this analysis\n- number not detected | P-1.7-00.pdf | in project, not in this analysis\n- number not detected | P-1.8-00.pdf | in project, not in this analysis\n- number not detected | P-2.0-00.pdf | in project, not in this analysis\n- number not detected | P-2.1-00.pdf | in project, not in this analysis\n- number not detected | P-3.0-00.pdf | in project, not in this analysis\n- number not detected | P-4.0-00.pdf | in project, not in this analysis\n- number not detected | P-4.1-00.pdf | in project, not in this analysis\n- number not detected | S-001.00.pdf | in project, not in this analysis\n- number not detected | S-002.00.pdf | in project, not in this analysis\n- number not detected | S-201.00.pdf | in project, not in this analysis\n- number not detected | S-202.00.pdf | in project, not in this analysis\n- number not detected | S-203.00.pdf | in project, not in this analysis\n- number not detected | S-204.00.pdf | in project, not in this analysis\n- number not detected | S-300.00.pdf | in project, not in this analysis\nIf a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.\n\nStage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.\nReading rules: each \"- \" line is one printed annotation; \" / \" separates its rows; \" ; \" separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.\nstage3_status=recovered version=phase3.stage3-visual-evidence.v2\nStage3 OCR evidence v2 sheet=A-6.00-00 source=4x3 annotations=236 technical=172 shown=41 independentlyVerified=false\n- EQ.\n- V.I.F.\n- V.I.F.\n- ?4'-0'\n- 1/2\" (ctx?)\n- V.I.F.\n- 8'-6\"\n- 8'-0\"\n- 2. 1/4\" CLEAR TEMPERED GLAZING (ctx?)\n- 1/2\" CORIAN SILL EACH SIDE (ctx?)\n- 1 EA HINGE 780-112HD 83\" ALUM HAGER (ctx?)\n- .. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB: / HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB (ctx?)\n- H.M. ; 2\"JAMB 4\"HD\n- 1 EA PANIC 9975E0-LD 36\" (ctx?)\n- 4 ; H.M. ; H.M. ; 2\"JAMB 4\"HD\n- H.M. ; 3'-8\"x7'-0\"x1 3/4 ; H.M. ; 2\"JAMB 4\"HD\n- EA WTH/STP160V 36 X 84 N.GUARD / EA THRESHOLD 325HD 36\" N.GUARD (ctx?)\n- 5 ; S.C. WOOD W/ LAM. ; H.M. ; 2\"JAMB & HEAD\n- 5. SEE ELEVATIONS AND WALL SECTIONS (ctx?)\n- 1 EA THRESHOLD 325HD 36\" N.GUARD (ctx?)\n- 1 EA HINGE 780-112HD 83\" ALUM HAGER (ctx?)\n- 1/4\" TEMP.\n- 1 EA PANIC 9975EO-LD 48\" SP28 V.DUPRIN / EA TRIM 990DT US26D V.DUPRIN (ctx?)\n- 5'-10\"\n- 1 EA THRESHOLD 325HD 48\" N.GUARD (ctx?)\n- 5'-0\"\n- 10\" STILE\n- 1/4\" / JEMPERED GLASS\n- S.C. WOOD W/ LAM. ; D ; H.M. ; 2\"JAMB & HEAD\n- 2. 3 EA HINGES OFFSET PIVOT ANSI -A-156.4 GRADE 1; PROVIDE EXPOSED PARTS OF (ctx?)\n- 6A ; S.C. WOOD W/ LAM. ; H.M. ; 2\"JAMB & HEAD\n- 7 ; S.C. WOOD W/ LAM. ; H.M. ; {2\"JAMB & HEAD | 2 JAMB & HEAD}\n- 10 ; H.M. ; 3'-0\"x7'-0\"x1 3/4\" ; H.M. ; {2\"JAMB & HEAD | 2 JAMB & HEAD}\n- 8. DOOR 3, 4. & 4A TO HAVE MAXIMUM U VALUE = 0.61 / {DOOR 5 RESTROOM EXTERIOR, 7 - LAMINATED FINISH, PER DECOR | DOOR 5 RESTROOM EXTERIC | 9. DOOR 5 9.} / GEOMETRY - \"LAMITECH 2315 MT DARKSTEEL\" (ctx?)\n- ?12 S.C. WOOD W/ LAM. 3'-0\"x6'-8'x1 3/4\n- 2\"JAMB & HEAD\n- (FINISH TO MATCH STOREFRONT DOOR) / {WIDE x 1/2\" RISE (ADA ACCESSIBLE). | WIDE x 1/2 RISE (ADA ACCESSIBLE).} (ctx?)\n- {1 EA PUSH PLATE 30S 4 X 32 US32D 40*AFF MOUNTED TO CENTER OF PLATE | 1 EA PUSH PLATE 30S 4 X 32 US32D 40 AFF MOUNTED TO CENTER OF PLATE | 3. 1 EA PUSH PLATE 3OS 4 X 32 US32D 40\"AFF MOL | 1 EA PUSH PLATE 30S 4 X 32 US32D 40\"AFF MOL} (ctx?)\n- {1 EA PULL PLATE LADDER PULL HANDLE WITH DECORATIVE FIXING, 32\"L 1\"DIA | 4. 1 EA PULL PLATE LADDER PULL HANDLE WITH DECO} / #S-32-1000 - UMCO 32D. 40\" AFF MOUNTED CENTER OF PULL / ALT. OPTION: 1 EA PULLPLATE SANITGRASP (ctx?)\n- ONTARIO OAK 1540 PW\" / {FRAME FINISH BENJAMIN MOORE \"GRAY 2121-10\" | FRAME FINISH BENJAMIN MC} (ctx?)\n- 2. 6 EA HINGES OFFSET PIVOT ANSI -A-156.4 GRADE 1; BY DOOR MANUFACTURER. (ctx?)\nomitted: 195 annotations (132 technical: qualifier 3, numeric 100, reference 2, dimension 14, datum 13; 63 other) by budget; not shown is not absent"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet provides a detailed door schedule, door hardware specifications, and window types for a commercial project.\",\"findings\":[{\"category\":\"actual discrepancy\",\"severity\":\"warning\",\"title\":\"Door Hardware Opening Force\",\"observation\":\"The opening force specified is 8 1/2 LB for exterior doors and 5 LB for interior doors, but does not affirm compliance with 2017 DC amended requirements.\",\"drawing_evidence\":\".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB; HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB.\",\"drawing_location\":\"General Notes section of Door Hardware\",\"suggested_code_reference\":\"2015 IBC\",\"recommendation\":\"Review to confirm that the specified door opening forces comply with local code requirements, including possible amendments.\"},{\"category\":\"further professional review\",\"severity\":\"advisory\",\"title\":\"Window Types Usage\",\"observation\":\"Window type W6 is marked as 'NOT USED.'\",\"drawing_evidence\":\"W6 - NOT USED\",\"drawing_location\":\"Window Types detail at top of sheet\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm that the window type 'W6' designation matches the overall project requirements and that its exclusion does not affect the design intent.\"}]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides a detailed door schedule, door hardware specifications, and window types for a commercial project.",
+ "drafts": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Door Hardware Opening Force",
+   "observation": "The opening force specified is 8 1/2 LB for exterior doors and 5 LB for interior doors, but does not affirm compliance with 2017 DC amended requirements.",
+   "drawing_evidence": ".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB; HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB.",
+   "drawing_location": "General Notes section of Door Hardware",
+   "suggested_code_reference": "2015 IBC",
+   "recommendation": "Review to confirm that the specified door opening forces comply with local code requirements, including possible amendments."
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Window Types Usage",
+   "observation": "Window type W6 is marked as 'NOT USED.'",
+   "drawing_evidence": "W6 - NOT USED",
+   "drawing_location": "Window Types detail at top of sheet",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm that the window type 'W6' designation matches the overall project requirements and that its exclusion does not affect the design intent."
+  }
+ ],
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Door Hardware Opening Force",
+   "observation": "The opening force specified is 8 1/2 LB for exterior doors and 5 LB for interior doors, but does not affirm compliance with 2017 DC amended requirements.",
+   "drawing_evidence": ".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB; HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB.",
+   "drawing_location": "General Notes section of Door Hardware",
+   "suggested_code_reference": null,
+   "recommendation": "Review to confirm that the specified door opening forces comply with local code requirements, including possible amendments.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Door Hardware Opening Force",
+    "originalObservation": "The opening force specified is 8 1/2 LB for exterior doors and 5 LB for interior doors, but does not affirm compliance with 2017 DC amended requirements.",
+    "originalCodeReference": "2015 IBC",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Window Types Usage",
+   "observation": "Window type W6 is marked as 'NOT USED.'",
+   "drawing_evidence": "W6 - NOT USED",
+   "drawing_location": "Window Types detail at top of sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm that the window type 'W6' designation matches the overall project requirements and that its exclusion does not affect the design intent.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Window Types Usage",
+    "originalObservation": "Window type W6 is marked as 'NOT USED.'",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [],
+ "oneSheetIndexReplay": {
+  "published": [
+   {
+    "category": "actual discrepancy",
+    "severity": "warning",
+    "title": "Door Hardware Opening Force",
+    "observation": "The opening force specified is 8 1/2 LB for exterior doors and 5 LB for interior doors, but does not affirm compliance with 2017 DC amended requirements.",
+    "drawing_evidence": ".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB; HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB.",
+    "drawing_location": "General Notes section of Door Hardware",
+    "suggested_code_reference": null,
+    "recommendation": "Review to confirm that the specified door opening forces comply with local code requirements, including possible amendments.",
+    "verification_status": "unresolved_reference",
+    "validation": {
+     "outcome": "adjusted",
+     "rules": [
+      "section_not_supported"
+     ],
+     "originalSeverity": "warning",
+     "originalTitle": "Door Hardware Opening Force",
+     "originalObservation": "The opening force specified is 8 1/2 LB for exterior doors and 5 LB for interior doors, but does not affirm compliance with 2017 DC amended requirements.",
+     "originalCodeReference": "2015 IBC",
+     "publishedSeverity": "warning",
+     "publishedCodeReference": null,
+     "citationIssues": [
+      "section_not_supported"
+     ],
+     "editionMappingApplied": false,
+     "independentlyVerified": false,
+     "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+    }
+   },
+   {
+    "category": "further professional review",
+    "severity": "advisory",
+    "title": "Window Types Usage",
+    "observation": "Window type W6 is marked as 'NOT USED.'",
+    "drawing_evidence": "W6 - NOT USED",
+    "drawing_location": "Window Types detail at top of sheet",
+    "suggested_code_reference": null,
+    "recommendation": "Confirm that the window type 'W6' designation matches the overall project requirements and that its exclusion does not affect the design intent.",
+    "verification_status": "unresolved_reference",
+    "validation": {
+     "outcome": "accepted",
+     "rules": [],
+     "originalSeverity": "advisory",
+     "originalTitle": "Window Types Usage",
+     "originalObservation": "Window type W6 is marked as 'NOT USED.'",
+     "originalCodeReference": "",
+     "publishedSeverity": "advisory",
+     "publishedCodeReference": null,
+     "citationIssues": [],
+     "editionMappingApplied": false,
+     "independentlyVerified": false,
+     "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+    }
+   }
+  ],
+  "withheld": []
+ }
+}

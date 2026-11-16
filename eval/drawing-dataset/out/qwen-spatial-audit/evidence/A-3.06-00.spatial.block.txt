@@ -1,0 +1,54 @@
+Stage3 spatial evidence (experimental; machine-extracted; independentlyVerified=false). sheet=A-3.06-00 discipline=Architectural source=qwen-openrouter-72b-validated model=qwen/qwen2.5-vl-72b-instruct
+Rules: each "- " line is one printed annotation; " / " separates its rows; ×n = same text printed n times in that detail. ?text = look-alike glyph or model doubt, unverified; {A | B} = overlapping tiles disagree, neither confirmed. eN cites boxes and tiles in the evidence pack. Not shown is not absent.
+## 1 GUARD RAIL ELEVATION DETAIL @ HIGH ROOF (1/2" = 1'-0")
+- e1 2 / A-3.06
+- e2 EXTEND GUARD RAIL MIN. 30" BEYO
+- e3 EQ ×4
+- e4 {I-1/4" PIPE RAILING. PAINT TO MATCH | I-I/4} / NEW METAL PARAPET CAP.
+- e5 HEIGHT FROM DECK MEMBRANE
+- e6 GUARD RAIL SHALL BE CONSTRUCTED SO AS TO / PREVENT THE PASSAGE OF A SPHERE 21" IN DIA
+- e7 3'-6"MIN HEIGHT T.O. ROOF DECK M
+- e8 3 / A-3.06
+- e9 VARIES (V.I.F) / T.O. ROOF MEMBRANE / (E) JOISTS
+## 3 GUARD RAIL DETAIL @ HIGH ROOF (1-1/2" = 1'-0")
+- e10 {THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010 | 4070}
+- e11 ?I-1/4" PIPE RAIL / TO MATCH MET / AND/OR (E) CO
+- e12 STAINLESS STE / POSITIONED 1/4 / OF THE STACK / OF THE STACK
+- e13 MIN. / 8"
+- e14 2" DIAMETER F / PLATE
+## 2 GUARD RAIL DETAIL @ HIGH ROOF (3/4" = 1'-0")
+- e15 {I-1/4" PIPE RAILING. PAI | LING. PAINT} / {TO MATCH NEW METAL | N METAL} / PARAPET CAP. / {GUARD RAIL SLEEVE A | LEEVE AND} / BASE PLATE SET ON / {TAPE AND | ELASTOMERIC TAPE AN} / SECURED TO NEW WOOD / {BLOCK AS REQUIRED W | QUIRED WITH} / FASTENERS.
+- e16 {3'-6" DECK MEMBRANE | 31-6"}
+- e17 3'-6" MIN. ABOVE DECK MI
+- e18 3 / {3 | A-3.06} / A-3.06
+## 5 WALL SECTION @ NEW ORDER WINDOW (3/4" = 1'-0")
+- e19 GUARD / 3 / SCALE: 1-1/2"= / T/ BLK'G @ PARAPET / ELEV. + 17'-4"
+- e20 I / A-3.00
+- e21 EXTERIOR ASSEMBLY-4 / (SEE ASSEMBLY NOTES)
+- e22 1/2" EXTERIOR PLYWOOD / SHEATHING / {6" METAL STUDS @ 16" O.C.S | 6" O.C.SEE} / STRUCTURAL DRAWINGS. / DIAGONAL BRACING, SEE / STRUCTURAL DRAWINGS
+- e23 4" METAL STUDS @ 16" O.C.SEE / STRUCTURAL DRAWINGS.
+- e24 7 / A-3.00 / NEW CANOPY / EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES)
+- e25 B/ UNDERCSORE / ELEV. + 10'-8"
+- e26 3 / A-3.00
+- e27 T/WINDOW / ELEV. + 8'-0"
+- e28 EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES) / (
+- e29 T/ SLAB / ?ELEV. + O'-O"
+- e30 1
+## 4 WALL SECTION @ HIGH ROOF (3/4" = 1'-0")
+- e31 29'-0" A.F.F. (V.I.F.) / T/BLK'G @ PARAPET
+- e32 29'-0" / {T/ BLOCKING | LOCKING @ PARAPET}
+- e33 2'-10"
+- e34 NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP. ×2
+- e35 3'-6" MIN.
+- e36 1:12 MIN. ×2
+- e37 STANDING SEAM METAL / ROOF TO REMAIN
+- e38 26'-2" A.F.F. (V.I.F.) / {EXIST. ROOF @ H.P. | EXIST. ROOF 6'}
+- e39 25'-0" A.F.F. / {EXISTING ROO | TING ROOF @ L.P. (V.I.F.)}
+- e40 1 ×3
+- e41 EXIST. DOUBLE / ROOF TRUSS TO / REMAIN. TYP.
+- e42 EXIST. MASONRY / TO REMAIN.
+- e43 EXIST. ROOF TRUSSES / TO REMAIN. TYP. ×2
+- e44 A-3.06-00 / STAN OVERBY / {10/15/26 | S New York Ave & 1st St, Wash DC SECTIONS.DWG}
+- e45 10/15
+- e46 008-0003 75 New York Ave & 1st St, Wash DC SECT
+shown 46/52 units; omitted 6 (2 technical) by budget; title block, detail titles (in headers) and duplicates excluded

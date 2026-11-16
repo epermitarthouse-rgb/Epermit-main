@@ -1,0 +1,80 @@
+{
+ "findings": 143,
+ "screened": 19,
+ "agreeing": 15,
+ "confusion": {
+  "none -> U": 80,
+  "none -> E": 29,
+  "none -> Q": 12,
+  "harness -> H": 6,
+  "harness -> U": 3,
+  "none -> H": 2,
+  "trap -> E": 2,
+  "plausible -> Q": 1,
+  "genuine -> OKs": 4,
+  "genuine -> OK": 2,
+  "none -> OK": 1,
+  "genuine -> Q": 1
+ },
+ "disagreements": [
+  {
+   "id": "F015",
+   "screen": "H-XREF-MISSING",
+   "manual": "U",
+   "cause": "XREF-POINTER",
+   "title": "Missing Door Schedule on Current Sheet"
+  },
+  {
+   "id": "F020",
+   "screen": "H-XREF-MISSING",
+   "manual": "U",
+   "cause": "XREF-POINTER",
+   "title": "Missing Interior Partition Type Details"
+  },
+  {
+   "id": "F075",
+   "screen": "H-XREF-MISSING",
+   "manual": "U",
+   "cause": "XREF-POINTER",
+   "title": "Door Schedule Reference Missing"
+  },
+  {
+   "id": "F138",
+   "screen": "G-S201-SDC",
+   "manual": "Q",
+   "cause": "TRUE-GAP?",
+   "title": "Unclear Seismic Design Category"
+  }
+ ],
+ "groundingByManualClass": {
+  "U": {
+   "not_found": 50,
+   "grounded": 32,
+   "partly_grounded": 1
+  },
+  "E": {
+   "not_found": 24,
+   "grounded": 5,
+   "partly_grounded": 2
+  },
+  "Q": {
+   "not_found": 9,
+   "grounded": 4,
+   "partly_grounded": 1
+  },
+  "H": {
+   "grounded": 5,
+   "not_found": 3
+  },
+  "OKs": {
+   "not_found": 2,
+   "grounded": 2
+  },
+  "OK": {
+   "grounded": 1,
+   "partly_grounded": 1,
+   "not_found": 1
+  }
+ },
+ "manualE_notScreened": 29
+}

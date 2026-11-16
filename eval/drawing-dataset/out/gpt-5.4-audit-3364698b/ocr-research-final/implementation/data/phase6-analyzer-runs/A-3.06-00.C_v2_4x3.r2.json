@@ -1,0 +1,55 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "C_v2_4x3",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0a43020d5fc0b6b4016aec8eefc9d887d2a8f6418d8c93af5a",
+ "latencyMs": 8667,
+ "inputTokens": 4904,
+ "outputTokens": 316,
+ "costUsd": 0.01542,
+ "userPromptChars": 3546,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet includes details of guard rails and wall sections in a commercial setting. It specifies guard rail construction details and dimensions, with references to structural drawings for further details.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Structural Details Reference",
+   "observation": "The sheet refers to structural drawings for metal stud details.",
+   "drawing_evidence": "4\" METAL STUDS @ 16\" O.C. SEE STRUCTURAL DRAWINGS.",
+   "drawing_location": "Wall Section @ High Roof",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that referenced structural drawings include complete and compliant details for metal studs.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Structural Details Reference",
+    "originalObservation": "The sheet refers to structural drawings for metal stud details.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Guard Rail Sphere Passage Requirements",
+   "originalSeverity": "warning",
+   "originalCodeReference": "2015 IBC, typical guard rail provisions",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,57 @@
+{
+ "generatedAt": "2026-11-16T16:26:36.406Z",
+ "backend": "openrouter-72b",
+ "reasoning": "medium",
+ "jobs": 15,
+ "pending": 15,
+ "spentUsd": 0.1367,
+ "expectedUsd": 0.1509,
+ "worstCaseUsd": 0.3309,
+ "rows": [
+  {
+   "arm": "L_spatial2",
+   "sheet": "A-3.06-00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 17917,
+   "expectedUsdPerCall": 0.0108,
+   "worstUsdPerCall": 0.0228
+  },
+  {
+   "arm": "L_spatial2",
+   "sheet": "A-4.00-00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 12140,
+   "expectedUsdPerCall": 0.0096,
+   "worstUsdPerCall": 0.0216
+  },
+  {
+   "arm": "L_spatial2",
+   "sheet": "A-1.01-00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 22093,
+   "expectedUsdPerCall": 0.0116,
+   "worstUsdPerCall": 0.0236
+  },
+  {
+   "arm": "L_spatial2",
+   "sheet": "A-6.00-00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 10421,
+   "expectedUsdPerCall": 0.0093,
+   "worstUsdPerCall": 0.0213
+  },
+  {
+   "arm": "L_spatial2",
+   "sheet": "S-201.00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 8858,
+   "expectedUsdPerCall": 0.009,
+   "worstUsdPerCall": 0.021
+  }
+ ]
+}

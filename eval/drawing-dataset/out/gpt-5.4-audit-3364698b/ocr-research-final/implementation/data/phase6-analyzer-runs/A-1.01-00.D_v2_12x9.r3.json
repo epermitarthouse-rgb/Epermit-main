@@ -1,0 +1,63 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "D_v2_12x9",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0c3978c563d0ae14016aec8f3abea887d29f245c8a1bd71a61",
+ "latencyMs": 9332,
+ "inputTokens": 4927,
+ "outputTokens": 487,
+ "costUsd": 0.0171875,
+ "userPromptChars": 3554,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides alteration floor plans for the 2nd floor and basement of a McDonald’s building, including general notes and keyed notes. It includes professional certification. The revisions section shows multiple updates, with the latest one dated 10/15/26.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Absence of partition detail on current sheet",
+   "observation": "The drawing refers to partition specifications in a different part of the plan (A-3.01, A-1.00), but these details are not directly included on this sheet.",
+   "drawing_evidence": "6/A-1.00 FOR INTERIOR PARTITION TYPES.",
+   "drawing_location": "General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that relevant partition details are present and accessible on the referenced sheets within the project documentation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Absence of partition detail on current sheet",
+    "originalObservation": "The drawing refers to partition specifications in a different part of the plan (A-3.01, A-1.00), but these details are not directly included on this sheet.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Reference to exterior wall assembly and interior partition types without included details",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  },
+  {
+   "title": "Omission of door hardware schedule on the current sheet",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

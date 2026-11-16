@@ -1,0 +1,98 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "D_v2_12x9",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0002741758292d41016aec8f15bc8087d2913430eeb1e015f4",
+ "latencyMs": 9549,
+ "inputTokens": 5105,
+ "outputTokens": 449,
+ "costUsd": 0.0172525,
+ "userPromptChars": 3571,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides detailed plans for toilet rooms, including layout, fixture locations, signage, and accessibility details. It focuses on compliance with ADA standards and includes accessory schedules and elevations.",
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Door push/pull force discrepancy observed",
+   "observation": "The note states, 'ALL DOORS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE ADJUSTED TO MEET MAX. OF 5# PUSH/PULL PRESSURE. SWEEP PERIOD FROM 10 DEGREES TO A POINT 3\" FROM LATCH MUST BE AT LEAST 3 SECONDS.'",
+   "drawing_evidence": "Located in the general notes section of the sheet.",
+   "drawing_location": "General Notes, Section 3",
+   "suggested_code_reference": "2015 IBC Section 1010.1.3",
+   "recommendation": "Verify door hardware and closure adjustments to ensure compliance with the stated maximum force and timing requirements.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Door push/pull force discrepancy observed",
+    "originalObservation": "The note states, 'ALL DOORS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE ADJUSTED TO MEET MAX. OF 5# PUSH/PULL PRESSURE. SWEEP PERIOD FROM 10 DEGREES TO A POINT 3\" FROM LATCH MUST BE AT LEAST 3 SECONDS.'",
+    "originalCodeReference": "2015 IBC Section 1010.1.3",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": "2015 IBC Section 1010.1.3",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Missing door schedule on-sheet reference",
+   "observation": "The sheet notes, 'SEE SHEET A-6.00 FOR DOOR SCHEDULE,' but this sheet is not provided in the current request.",
+   "drawing_evidence": "Note present on the top left detail of the sheet.",
+   "drawing_location": "Detail 1, Toilet Room Plan",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure the door schedule on sheet A-6.00 is reviewed for compatibility with accessibility requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "cross_sheet_reference_unresolved"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Missing door schedule on-sheet reference",
+    "originalObservation": "The sheet notes, 'SEE SHEET A-6.00 FOR DOOR SCHEDULE,' but this sheet is not provided in the current request.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability. Referenced sheet content was not reviewed in this request. Severity was not changed solely for that unread cross-sheet reference. Absence from the project and compliance are both unverified."
+   }
+  },
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Signage height compliance",
+   "observation": "Signage notes specify a height of 60 inches above the finished floor to centerline, ensuring ADA compliance.",
+   "drawing_evidence": "Detail 4 demonstrates typical signage height elevation.",
+   "drawing_location": "Detail 4, Typ. Signage Height Elevation",
+   "suggested_code_reference": "2015 IBC Section 703.3.10",
+   "recommendation": "Double-check on-site installation to maintain compliance with the depicted signage heights.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Signage height compliance",
+    "originalObservation": "Signage notes specify a height of 60 inches above the finished floor to centerline, ensuring ADA compliance.",
+    "originalCodeReference": "2015 IBC Section 703.3.10",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": "2015 IBC Section 703.3.10",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,162 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "L_av",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0addce0e83aefadc016afb2e02df7c87d2991f056957902209",
+ "latencyMs": 25560,
+ "inputTokens": 12531,
+ "outputTokens": 2306,
+ "reasoningTokens": 1533,
+ "costUsd": 0.005273399999999999,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "S-201.00.pdf",
+  "evidenceSha": "610b94a5c42d6873",
+  "userPromptChars": 9431,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"S-201.00\",\"detected_sheet_title\":\"WALL SECTIONS AND NOTES\",\"discipline\":\"Structural\",\"summary\":\"Structural wall sections, design criteria, material notes, special-inspection notes, and light-gage framing notes are shown. Preliminary concerns are primarily document-control and citation-coordination items; no specific structural capacity discrepancy can be established from this sheet alone.\",\"findings\":[{\"category\":\"document control\",\"severity\":\"warning\",\"title\":\"Revision status is not reconciled with the revision table\",\"observation\":\"The sheet footer states “REVISED PERMIT SET 10/15/2026,” while the visible REVISIONS table in the upper-right title-block area contains no revision number, description, or date entries.\",\"drawing_evidence\":\"Blank REVISIONS table at the upper-right title block; footer at the bottom right reads “REVISED PERMIT SET 10/15/2026.”\",\"drawing_location\":\"Upper-right title block and bottom sheet border\",\"suggested_code_reference\":\"\",\"recommendation\":\"Enter the applicable revision number, description, and date in the revision table, or otherwise coordinate the title-block revision record with the stated revised permit-set date.\"},{\"category\":\"document control\",\"severity\":\"advisory\",\"title\":\"Sheet-count field appears incomplete\",\"observation\":\"The title block shows the sheet field as “OF 00,” which does not identify the total sheet count.\",\"drawing_evidence\":\"Title block fields at lower right show “SHEET: OF 00”; the printed sheet number is S-201.00.\",\"drawing_location\":\"Lower-right title block\",\"suggested_code_reference\":\"\",\"recommendation\":\"Verify and correct the sheet-count field before permit issuance so the sheet can be reliably tracked within the permit set.\"},{\"category\":\"technical coordination\",\"severity\":\"advisory\",\"title\":\"Special-inspection section mapping should be verified\",\"observation\":\"The sheet states that a special-inspection statement is required where applicable under “sections 109.3.13 and 1705,” while the adjacent cloud lists specific inspection categories and section numbers, including “CONCRETE CONSTRUCTION 1705.3,” “MASONRY CONSTRUCTION 1705.4,” and “COLD-FORMED STEEL 1705.3.4.” The applicable section assignments should be confirmed against the adopted DC code text.\",\"drawing_evidence\":\"“SPECIAL INSPECTIONS (STRUCTURAL)” note and adjacent cloud listing inspection categories and cited sections 1705.3, 1705.4, and 1705.3.4.\",\"drawing_location\":\"Right-center notes area under “SPECIAL INSPECTIONS (STRUCTURAL)”\",\"suggested_code_reference\":\"2015 IBC base code, Sections 109.3.13 and 1705, as cited on the drawing\",\"recommendation\":\"Have the structural design professional and code consultant verify the section references and inspection-category mapping against the adopted 2017 District of Columbia Construction Codes, then revise the note if necessary.\"},{\"category\":\"technical coordination\",\"severity\":\"advisory\",\"title\":\"Wood-design cross-reference is ambiguous\",\"observation\":\"Wood Notes item 7 directs the reader to “section 23 of IBC 2015,” but does not identify whether this is intended to mean a chapter, section, or another referenced standard.\",\"drawing_evidence\":\"Wood Notes item 7 reads: “REFER TO SECTION 23 OF IBC 2015 FOR ADDITIONAL INFORMATION.”\",\"drawing_location\":\"Structural notes panel, WOOD NOTES, item 7\",\"suggested_code_reference\":\"2015 IBC base code, Chapter 23, as apparently intended by the drawing note\",\"recommendation\":\"Confirm the intended IBC reference and revise the note to identify the correct chapter or section explicitly.\"}]}",
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "Structural wall sections, design criteria, material notes, special-inspection notes, and light-gage framing notes are shown. Preliminary concerns are primarily document-control and citation-coordination items; no specific structural capacity discrepancy can be established from this sheet alone.",
+ "drafts": [
+  {
+   "category": "document control",
+   "severity": "warning",
+   "title": "Revision status is not reconciled with the revision table",
+   "observation": "The sheet footer states “REVISED PERMIT SET 10/15/2026,” while the visible REVISIONS table in the upper-right title-block area contains no revision number, description, or date entries.",
+   "drawing_evidence": "Blank REVISIONS table at the upper-right title block; footer at the bottom right reads “REVISED PERMIT SET 10/15/2026.”",
+   "drawing_location": "Upper-right title block and bottom sheet border",
+   "suggested_code_reference": "",
+   "recommendation": "Enter the applicable revision number, description, and date in the revision table, or otherwise coordinate the title-block revision record with the stated revised permit-set date."
+  },
+  {
+   "category": "document control",
+   "severity": "advisory",
+   "title": "Sheet-count field appears incomplete",
+   "observation": "The title block shows the sheet field as “OF 00,” which does not identify the total sheet count.",
+   "drawing_evidence": "Title block fields at lower right show “SHEET: OF 00”; the printed sheet number is S-201.00.",
+   "drawing_location": "Lower-right title block",
+   "suggested_code_reference": "",
+   "recommendation": "Verify and correct the sheet-count field before permit issuance so the sheet can be reliably tracked within the permit set."
+  },
+  {
+   "category": "technical coordination",
+   "severity": "advisory",
+   "title": "Special-inspection section mapping should be verified",
+   "observation": "The sheet states that a special-inspection statement is required where applicable under “sections 109.3.13 and 1705,” while the adjacent cloud lists specific inspection categories and section numbers, including “CONCRETE CONSTRUCTION 1705.3,” “MASONRY CONSTRUCTION 1705.4,” and “COLD-FORMED STEEL 1705.3.4.” The applicable section assignments should be confirmed against the adopted DC code text.",
+   "drawing_evidence": "“SPECIAL INSPECTIONS (STRUCTURAL)” note and adjacent cloud listing inspection categories and cited sections 1705.3, 1705.4, and 1705.3.4.",
+   "drawing_location": "Right-center notes area under “SPECIAL INSPECTIONS (STRUCTURAL)”",
+   "suggested_code_reference": "2015 IBC base code, Sections 109.3.13 and 1705, as cited on the drawing",
+   "recommendation": "Have the structural design professional and code consultant verify the section references and inspection-category mapping against the adopted 2017 District of Columbia Construction Codes, then revise the note if necessary."
+  },
+  {
+   "category": "technical coordination",
+   "severity": "advisory",
+   "title": "Wood-design cross-reference is ambiguous",
+   "observation": "Wood Notes item 7 directs the reader to “section 23 of IBC 2015,” but does not identify whether this is intended to mean a chapter, section, or another referenced standard.",
+   "drawing_evidence": "Wood Notes item 7 reads: “REFER TO SECTION 23 OF IBC 2015 FOR ADDITIONAL INFORMATION.”",
+   "drawing_location": "Structural notes panel, WOOD NOTES, item 7",
+   "suggested_code_reference": "2015 IBC base code, Chapter 23, as apparently intended by the drawing note",
+   "recommendation": "Confirm the intended IBC reference and revise the note to identify the correct chapter or section explicitly."
+  }
+ ],
+ "published": [
+  {
+   "category": "document control",
+   "severity": "advisory",
+   "title": "Sheet-count field appears incomplete",
+   "observation": "The title block shows the sheet field as “OF 00,” which does not identify the total sheet count.",
+   "drawing_evidence": "Title block fields at lower right show “SHEET: OF 00”; the printed sheet number is S-201.00.",
+   "drawing_location": "Lower-right title block",
+   "suggested_code_reference": null,
+   "recommendation": "Verify and correct the sheet-count field before permit issuance so the sheet can be reliably tracked within the permit set.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Sheet-count field appears incomplete",
+    "originalObservation": "The title block shows the sheet field as “OF 00,” which does not identify the total sheet count.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "technical coordination",
+   "severity": "advisory",
+   "title": "Special-inspection section mapping should be verified",
+   "observation": "The sheet states that a special-inspection statement is required where applicable under “sections 109.3.13 and 1705,” while the adjacent cloud lists specific inspection categories and section numbers, including “CONCRETE CONSTRUCTION 1705.3,” “MASONRY CONSTRUCTION 1705.4,” and “COLD-FORMED STEEL 1705.3.4.” The applicable section assignments should be confirmed against the adopted DC code text.",
+   "drawing_evidence": "“SPECIAL INSPECTIONS (STRUCTURAL)” note and adjacent cloud listing inspection categories and cited sections 1705.3, 1705.4, and 1705.3.4.",
+   "drawing_location": "Right-center notes area under “SPECIAL INSPECTIONS (STRUCTURAL)”",
+   "suggested_code_reference": null,
+   "recommendation": "Have the structural design professional and code consultant verify the section references and inspection-category mapping against the adopted 2017 District of Columbia Construction Codes, then revise the note if necessary.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Special-inspection section mapping should be verified",
+    "originalObservation": "The sheet states that a special-inspection statement is required where applicable under “sections 109.3.13 and 1705,” while the adjacent cloud lists specific inspection categories and section numbers, including “CONCRETE CONSTRUCTION 1705.3,” “MASONRY CONSTRUCTION 1705.4,” and “COLD-FORMED STEEL 1705.3.4.” The applicable section assignments should be confirmed against the adopted DC code text.",
+    "originalCodeReference": "2015 IBC base code, Sections 109.3.13 and 1705, as cited on the drawing",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "technical coordination",
+   "severity": "advisory",
+   "title": "Wood-design cross-reference is ambiguous",
+   "observation": "Wood Notes item 7 directs the reader to “section 23 of IBC 2015,” but does not identify whether this is intended to mean a chapter, section, or another referenced standard.",
+   "drawing_evidence": "Wood Notes item 7 reads: “REFER TO SECTION 23 OF IBC 2015 FOR ADDITIONAL INFORMATION.”",
+   "drawing_location": "Structural notes panel, WOOD NOTES, item 7",
+   "suggested_code_reference": "2015 IBC base code, Chapter 23, as apparently intended by the drawing note",
+   "recommendation": "Confirm the intended IBC reference and revise the note to identify the correct chapter or section explicitly.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Wood-design cross-reference is ambiguous",
+    "originalObservation": "Wood Notes item 7 directs the reader to “section 23 of IBC 2015,” but does not identify whether this is intended to mean a chapter, section, or another referenced standard.",
+    "originalCodeReference": "2015 IBC base code, Chapter 23, as apparently intended by the drawing note",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": "2015 IBC base code, Chapter 23, as apparently intended by the drawing note",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Revision status is not reconciled with the revision table",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

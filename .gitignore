@@ -75,6 +75,15 @@ scraper-service/data/territory/electric/unresolved_providers.json
 !scraper-service/tests/fixtures/territory/**
 
 # Phase 2A drawing-evaluation extracts (client sheet text). Do not commit.
-eval/drawing-dataset/out/
+# Ignore the contents of out/, then re-include the Qwen experiment archive.
+# The multi-GB extracts (mcd-649fdaa6, the full gpt-5.4 audit) stay local.
+eval/drawing-dataset/out/*
+!eval/drawing-dataset/out/qwen-spatial-audit/
+
+# OpenRouter account-status probe. Not an experiment result.
+eval/drawing-dataset/out/qwen-spatial-audit/openrouter-check.json
+
 eval/drawing-dataset/.venv/
 eval/drawing-dataset/.cache/
+eval/drawing-dataset/qwen-spatial-audit/**/__pycache__/
+eval/drawing-dataset/qwen-spatial-audit/**/*.pyc

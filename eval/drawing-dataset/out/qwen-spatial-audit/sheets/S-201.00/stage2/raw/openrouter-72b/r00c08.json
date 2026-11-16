@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842225-hGNecFygxIK5hzOB3CEP",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 386, 849, 430],\n        \"text_content\": \"R DETAILS APPLY TO SIMILAR CONDITIONS\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 483, 866, 525],\n        \"text_content\": \"CESSARY COMPONENTS FOR CONSTRUCTION\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 576, 884, 615],\n        \"text_content\": \"AL ELEMENTS REQUIRED FOR STABILITY ARE\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 624, 824, 665],\n        \"text_content\": \"FOLLOWS: ROOF DECK, ROOF SHEATHING,\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 896, 104, 935],\n        \"text_content\": \"2015)\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 365,
+ "costUsd": 0.001598,
+ "reportedCostUsd": 0.0015978,
+ "latencyS": 7.32,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

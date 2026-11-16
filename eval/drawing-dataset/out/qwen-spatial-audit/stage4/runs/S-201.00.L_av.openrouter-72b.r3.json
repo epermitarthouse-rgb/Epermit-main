@@ -1,0 +1,141 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "L_av",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0a1c1faa738d2442016afb2e1c68a087d28ed3de037a23b873",
+ "latencyMs": 25199,
+ "inputTokens": 12531,
+ "outputTokens": 2398,
+ "reasoningTokens": 1385,
+ "costUsd": 0.0053838,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "S-201.00.pdf",
+  "evidenceSha": "610b94a5c42d6873",
+  "userPromptChars": 9431,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"S-201.00\",\"detected_sheet_title\":\"WALL SECTIONS AND NOTES\",\"discipline\":\"Structural\",\"summary\":\"Structural wall sections, design criteria, and structural notes are shown for the McDonald’s project at 75 New York Avenue, Washington, DC. The sheet identifies IBC 2015 as a design basis, but several structural references and design inputs require reconciliation or clarification before reliance on the sheet for permit construction.\",\"findings\":[{\"category\":\"conflicting information\",\"severity\":\"warning\",\"title\":\"Conflicting soil bearing pressures\",\"observation\":\"The masonry and foundation notes identify an \\\"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL\\\" of 1,500 PSF in Note 1, while Note 8 directs the contractor to form footings on a \\\"MINIMUM DESIGN SOIL PRESSURE 2,500 PSF.\\\" The two stated soil-pressure values are not reconciled on this sheet.\",\"drawing_evidence\":\"Right-side MASONRY AND FOUNDATION NOTES, Notes 1 and 8: \\\"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1500 PSF\\\" and \\\"MINIMUM DESIGN SOIL PRESSURE 2500 PSF.\\\"\",\"drawing_location\":\"Right-center notes panel, under MASONRY AND FOUNDATION NOTES.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm the governing geotechnical/design soil pressure and revise the notes and footing design basis so the assumed allowable bearing capacity, design soil pressure, and any geotechnical report reference are consistent.\"},{\"category\":\"actual discrepancy\",\"severity\":\"warning\",\"title\":\"Concrete standard edition appears inconsistent with the stated design basis\",\"observation\":\"The DESIGN DATA section identifies \\\"INTERNATIONAL BUILDING CODE (IBC 2015),\\\" while the REINFORCED CONCRETE notes require all concrete work to conform to \\\"ACI 318-06.\\\" This is an apparent edition mismatch requiring design-professional confirmation; the sheet does not explain whether ACI 318-06 is intentionally retained or superseded by the governing adopted structural standard.\",\"drawing_evidence\":\"DESIGN DATA Note 1 states \\\"INTERNATIONAL BUILDING CODE (IBC 2015).\\\" REINFORCED CONCRETE Note 1 states \\\"ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS FOR CONCRETE STRUCTURES.\\\"\",\"drawing_location\":\"Right-side notes panel, DESIGN DATA and REINFORCED CONCRETE sections.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Identify the governing concrete design standard for this permit set and revise the concrete note, calculations, and specifications if the ACI 318-06 reference is not the intended standard.\"},{\"category\":\"conflicting information\",\"severity\":\"warning\",\"title\":\"Special-inspection citation should be verified for the stated IBC edition\",\"observation\":\"The sheet states that a statement of special inspections is required where inspections and tests are required by \\\"SECTIONS 109.3.13 AND 1705,\\\" while the same sheet identifies IBC 2015 as the design basis. The cited section combination should be verified against the adopted 2015 IBC and the applicable District of Columbia amendments before permit reliance.\",\"drawing_evidence\":\"SPECIAL INSPECTIONS (STRUCTURAL) note: \\\"A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.\\\" The DESIGN DATA section states \\\"INTERNATIONAL BUILDING CODE (IBC 2015).\\\"\",\"drawing_location\":\"Lower-right notes panel, SPECIAL INSPECTIONS (STRUCTURAL) section.\",\"suggested_code_reference\":\"2015 IBC base code, Section 1705 (proposed; authoritative code text not supplied)\",\"recommendation\":\"Verify the cited inspection sections against the adopted 2015 IBC and known District of Columbia amendments, then correct the note and confirm that the project-specific statement of special inspections identifies all applicable structural work.\"},{\"category\":\"general coordination note\",\"severity\":\"advisory\",\"title\":\"Wall Section 2 scale notation is incomplete\",\"observation\":\"Wall Section 1 is labeled \\\"SCALE: 3/4\\\\\\\"=1'-0\\\\\\\",\\\" whereas Wall Section 2 is labeled \\\"SCALE: 3/4\\\\\\\"1'-0\\\\\\\"\\\" without the equal sign. This may create avoidable ambiguity in interpreting the detail scale.\",\"drawing_evidence\":\"Bottom captions for details 1 and 2 show different scale notation: Detail 1 \\\"3/4\\\\\\\"=1'-0\\\\\\\"\\\" and Detail 2 \\\"3/4\\\\\\\"1'-0\\\\\\\".\\\"\",\"drawing_location\":\"Bottom of the two wall-section details.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Correct the Wall Section 2 scale label to match the intended scale notation, or identify the detail as not to scale if that is the design intent.\"}]}",
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "Structural wall sections, design criteria, and structural notes are shown for the McDonald’s project at 75 New York Avenue, Washington, DC. The sheet identifies IBC 2015 as a design basis, but several structural references and design inputs require reconciliation or clarification before reliance on the sheet for permit construction.",
+ "drafts": [
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Conflicting soil bearing pressures",
+   "observation": "The masonry and foundation notes identify an \"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL\" of 1,500 PSF in Note 1, while Note 8 directs the contractor to form footings on a \"MINIMUM DESIGN SOIL PRESSURE 2,500 PSF.\" The two stated soil-pressure values are not reconciled on this sheet.",
+   "drawing_evidence": "Right-side MASONRY AND FOUNDATION NOTES, Notes 1 and 8: \"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1500 PSF\" and \"MINIMUM DESIGN SOIL PRESSURE 2500 PSF.\"",
+   "drawing_location": "Right-center notes panel, under MASONRY AND FOUNDATION NOTES.",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm the governing geotechnical/design soil pressure and revise the notes and footing design basis so the assumed allowable bearing capacity, design soil pressure, and any geotechnical report reference are consistent."
+  },
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Concrete standard edition appears inconsistent with the stated design basis",
+   "observation": "The DESIGN DATA section identifies \"INTERNATIONAL BUILDING CODE (IBC 2015),\" while the REINFORCED CONCRETE notes require all concrete work to conform to \"ACI 318-06.\" This is an apparent edition mismatch requiring design-professional confirmation; the sheet does not explain whether ACI 318-06 is intentionally retained or superseded by the governing adopted structural standard.",
+   "drawing_evidence": "DESIGN DATA Note 1 states \"INTERNATIONAL BUILDING CODE (IBC 2015).\" REINFORCED CONCRETE Note 1 states \"ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS FOR CONCRETE STRUCTURES.\"",
+   "drawing_location": "Right-side notes panel, DESIGN DATA and REINFORCED CONCRETE sections.",
+   "suggested_code_reference": "",
+   "recommendation": "Identify the governing concrete design standard for this permit set and revise the concrete note, calculations, and specifications if the ACI 318-06 reference is not the intended standard."
+  },
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Special-inspection citation should be verified for the stated IBC edition",
+   "observation": "The sheet states that a statement of special inspections is required where inspections and tests are required by \"SECTIONS 109.3.13 AND 1705,\" while the same sheet identifies IBC 2015 as the design basis. The cited section combination should be verified against the adopted 2015 IBC and the applicable District of Columbia amendments before permit reliance.",
+   "drawing_evidence": "SPECIAL INSPECTIONS (STRUCTURAL) note: \"A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.\" The DESIGN DATA section states \"INTERNATIONAL BUILDING CODE (IBC 2015).\"",
+   "drawing_location": "Lower-right notes panel, SPECIAL INSPECTIONS (STRUCTURAL) section.",
+   "suggested_code_reference": "2015 IBC base code, Section 1705 (proposed; authoritative code text not supplied)",
+   "recommendation": "Verify the cited inspection sections against the adopted 2015 IBC and known District of Columbia amendments, then correct the note and confirm that the project-specific statement of special inspections identifies all applicable structural work."
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Wall Section 2 scale notation is incomplete",
+   "observation": "Wall Section 1 is labeled \"SCALE: 3/4\\\"=1'-0\\\",\" whereas Wall Section 2 is labeled \"SCALE: 3/4\\\"1'-0\\\"\" without the equal sign. This may create avoidable ambiguity in interpreting the detail scale.",
+   "drawing_evidence": "Bottom captions for details 1 and 2 show different scale notation: Detail 1 \"3/4\\\"=1'-0\\\"\" and Detail 2 \"3/4\\\"1'-0\\\".\"",
+   "drawing_location": "Bottom of the two wall-section details.",
+   "suggested_code_reference": "",
+   "recommendation": "Correct the Wall Section 2 scale label to match the intended scale notation, or identify the detail as not to scale if that is the design intent."
+  }
+ ],
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Concrete standard edition appears inconsistent with the stated design basis",
+   "observation": "The DESIGN DATA section identifies \"INTERNATIONAL BUILDING CODE (IBC 2015),\" while the REINFORCED CONCRETE notes require all concrete work to conform to \"ACI 318-06.\" This is an apparent edition mismatch requiring design-professional confirmation; the sheet does not explain whether ACI 318-06 is intentionally retained or superseded by the governing adopted structural standard.",
+   "drawing_evidence": "DESIGN DATA Note 1 states \"INTERNATIONAL BUILDING CODE (IBC 2015).\" REINFORCED CONCRETE Note 1 states \"ALL CONCRETE WORK SHALL CONFORM TO ACI 318-06 CODE REQUIREMENTS FOR CONCRETE STRUCTURES.\"",
+   "drawing_location": "Right-side notes panel, DESIGN DATA and REINFORCED CONCRETE sections.",
+   "suggested_code_reference": null,
+   "recommendation": "Identify the governing concrete design standard for this permit set and revise the concrete note, calculations, and specifications if the ACI 318-06 reference is not the intended standard.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Concrete standard edition appears inconsistent with the stated design basis",
+    "originalObservation": "The DESIGN DATA section identifies \"INTERNATIONAL BUILDING CODE (IBC 2015),\" while the REINFORCED CONCRETE notes require all concrete work to conform to \"ACI 318-06.\" This is an apparent edition mismatch requiring design-professional confirmation; the sheet does not explain whether ACI 318-06 is intentionally retained or superseded by the governing adopted structural standard.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Wall Section 2 scale notation is incomplete",
+   "observation": "Wall Section 1 is labeled \"SCALE: 3/4\\\"=1'-0\\\",\" whereas Wall Section 2 is labeled \"SCALE: 3/4\\\"1'-0\\\"\" without the equal sign. This may create avoidable ambiguity in interpreting the detail scale.",
+   "drawing_evidence": "Bottom captions for details 1 and 2 show different scale notation: Detail 1 \"3/4\\\"=1'-0\\\"\" and Detail 2 \"3/4\\\"1'-0\\\".\"",
+   "drawing_location": "Bottom of the two wall-section details.",
+   "suggested_code_reference": null,
+   "recommendation": "Correct the Wall Section 2 scale label to match the intended scale notation, or identify the detail as not to scale if that is the design intent.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Wall Section 2 scale notation is incomplete",
+    "originalObservation": "Wall Section 1 is labeled \"SCALE: 3/4\\\"=1'-0\\\",\" whereas Wall Section 2 is labeled \"SCALE: 3/4\\\"1'-0\\\"\" without the equal sign. This may create avoidable ambiguity in interpreting the detail scale.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Conflicting soil bearing pressures",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  },
+  {
+   "title": "Special-inspection citation should be verified for the stated IBC edition",
+   "originalSeverity": "warning",
+   "originalCodeReference": "2015 IBC base code, Section 1705 (proposed; authoritative code text not supplied)",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

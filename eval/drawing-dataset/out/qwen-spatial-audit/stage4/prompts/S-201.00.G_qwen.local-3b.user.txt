@@ -1,0 +1,107 @@
+Review this permit drawing sheet and return the structured preliminary observations.
+
+Current file: S-201.00.pdf
+
+Submitted sheet index (filenames and detected numbers only; other sheets were not read in this request):
+- number not detected | S-201.00.pdf | current sheet
+- number not detected | A-1.00-00.pdf | in project, not in this analysis
+- number not detected | A-1.01-00.pdf | in project, not in this analysis
+- number not detected | A-1.02-00.pdf | in project, not in this analysis
+- number not detected | A-1.03-00.pdf | in project, not in this analysis
+- number not detected | A-1.04.00.pdf | in project, not in this analysis
+- number not detected | A-1.05.00.pdf | in project, not in this analysis
+- number not detected | A-1.06-00.pdf | in project, not in this analysis
+- number not detected | A-2.00-00.pdf | in project, not in this analysis
+- number not detected | A-2.01-00.pdf | in project, not in this analysis
+- number not detected | A-2.02.00.pdf | in project, not in this analysis
+- number not detected | A-3.00-00.pdf | in project, not in this analysis
+- number not detected | A-3.01-00.pdf | in project, not in this analysis
+- number not detected | A-3.02-00.pdf | in project, not in this analysis
+- number not detected | A-3.03-00.pdf | in project, not in this analysis
+- number not detected | A-3.04-00.pdf | in project, not in this analysis
+- number not detected | A-3.05-00.pdf | in project, not in this analysis
+- number not detected | A-3.06-00.pdf | in project, not in this analysis
+- number not detected | A-4.00-00.pdf | in project, not in this analysis
+- number not detected | A-4.01-00.pdf | in project, not in this analysis
+- number not detected | A-4.02-00.pdf | in project, not in this analysis
+- number not detected | A-6.00-00.pdf | in project, not in this analysis
+- number not detected | A-6.01.00.pdf | in project, not in this analysis
+- number not detected | CV-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.01-00.pdf | in project, not in this analysis
+- number not detected | DM-1.02-00.pdf | in project, not in this analysis
+- number not detected | DM-2.00-00.pdf | in project, not in this analysis
+- number not detected | DM-2.01-00.pdf | in project, not in this analysis
+- number not detected | E-1.0-00.pdf | in project, not in this analysis
+- number not detected | E-1.1-00.pdf | in project, not in this analysis
+- number not detected | E-1.2-00.pdf | in project, not in this analysis
+- number not detected | E-1.3-00.pdf | in project, not in this analysis
+- number not detected | E-2.1-00.pdf | in project, not in this analysis
+- number not detected | E-2.2-00.pdf | in project, not in this analysis
+- number not detected | E-3.0-00.pdf | in project, not in this analysis
+- number not detected | E-3.1-00.pdf | in project, not in this analysis
+- number not detected | E-3.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.0-00.pdf | in project, not in this analysis
+- number not detected | E-4.1-00.pdf | in project, not in this analysis
+- number not detected | E-4.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.3-00.pdf | in project, not in this analysis
+- number not detected | EN-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-2.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-3.00-0.pdf | in project, not in this analysis
+- number not detected | FP100.pdf | in project, not in this analysis
+- number not detected | FP200 .pdf | in project, not in this analysis
+- number not detected | FP201.pdf | in project, not in this analysis
+- number not detected | FP300.pdf | in project, not in this analysis
+- number not detected | G-0.00-0.pdf | in project, not in this analysis
+- number not detected | M-1.1.pdf | in project, not in this analysis
+- number not detected | M-1.2.pdf | in project, not in this analysis
+- number not detected | M-1.3.pdf | in project, not in this analysis
+- number not detected | M-1.4.pdf | in project, not in this analysis
+- number not detected | M-2.0.pdf | in project, not in this analysis
+- number not detected | M-3.0.pdf | in project, not in this analysis
+- number not detected | M-4.0.pdf | in project, not in this analysis
+- number not detected | M-4.1.pdf | in project, not in this analysis
+- number not detected | MD-1.1.pdf | in project, not in this analysis
+- number not detected | MD-1.2.pdf | in project, not in this analysis
+- number not detected | MD-1.3.pdf | in project, not in this analysis
+- number not detected | P-1.0-00.pdf | in project, not in this analysis
+- number not detected | P-1.1-00.pdf | in project, not in this analysis
+- number not detected | P-1.2-00.pdf | in project, not in this analysis
+- number not detected | P-1.3-00.pdf | in project, not in this analysis
+- number not detected | P-1.4-00.pdf | in project, not in this analysis
+- number not detected | P-1.5-00.pdf | in project, not in this analysis
+- number not detected | P-1.6-00.pdf | in project, not in this analysis
+- number not detected | P-1.7-00.pdf | in project, not in this analysis
+- number not detected | P-1.8-00.pdf | in project, not in this analysis
+- number not detected | P-2.0-00.pdf | in project, not in this analysis
+- number not detected | P-2.1-00.pdf | in project, not in this analysis
+- number not detected | P-3.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.1-00.pdf | in project, not in this analysis
+- number not detected | S-001.00.pdf | in project, not in this analysis
+- number not detected | S-002.00.pdf | in project, not in this analysis
+- number not detected | S-202.00.pdf | in project, not in this analysis
+- number not detected | S-203.00.pdf | in project, not in this analysis
+- number not detected | S-204.00.pdf | in project, not in this analysis
+- number not detected | S-300.00.pdf | in project, not in this analysis
+If a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.
+
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=S-201.00 source=qwen-local-3b annotations=13 technical=12 shown=13 independentlyVerified=false
+- 1. INTERNATIONAL BUILDING CODE (IBC 2015)
+- 2. AMERICAN CONCRETE INSTITUTE (ACI) (ctx?)
+- 3. AMERICAN WOOD COUNCIL (AWC) (ctx?)
+- DESIGN CRITERIA (ctx?)
+- FLOOR LIVE LOAD: 100 PSF (ctx?)
+- ROOF LIVE LOAD: 30 PSF (ctx?)
+- (NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED) / GROUND SNOW LOAD: 25 PSF + DRIFT / OR 30 PSF EQUIVALENT UNIFORM LOAD / FLAT ROOF SNOW LOAD: 17.5 PSF (ctx?)
+- SNOW EXPOSURE FACTOR: 0.7 (ctx?)
+- SNOW LOAD IMPORTANCE FACTOR: 1 (ctx?)
+- THERMAL FACTOR: 1
+- WIND LOADING (IBC 2015) (ctx?)
+- BASIC WIND SPEED (3 SECOND GUST) 115 MPH / RISK CATEGORY ii (ctx?)
+- WIND EXPOSURE CATEGORY 5
+omitted: none

@@ -1,0 +1,96 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "B_v1",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_097ee085e1cf967d016aec8f764a0487d2945005b43a6184e7",
+ "latencyMs": 8356,
+ "inputTokens": 3857,
+ "outputTokens": 377,
+ "costUsd": 0.0134125,
+ "userPromptChars": 1807,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet titled 'Wall Sections and Notes' includes two wall section drawings and structural notes. Key design, steel, wood, and masonry notes are provided along with specific connection details.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Incomplete address information",
+   "observation": "The project address is referenced as '75 New York Avenue, Washington DC', but lacks specific postal information in the available notes.",
+   "drawing_evidence": "SITE ID # 008-0003, 75 NEW YORK AVENUE, WASHINGTON DC",
+   "drawing_location": "Title block",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure the complete project address is included on all relevant documentation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Incomplete address information",
+    "originalObservation": "The project address is referenced as '75 New York Avenue, Washington DC', but lacks specific postal information in the available notes.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Connection details require verification",
+   "observation": "Connection details include specific clips and screws, e.g., 'STIFFCLIP AL600 (2)#12 SCREWS'.",
+   "drawing_evidence": "CONNECTION 1: STIFFCLIP AL600 (2)#12 SCREWS",
+   "drawing_location": "Wall section details",
+   "suggested_code_reference": null,
+   "recommendation": "Review the structural connection details to confirm compliance with project specifications and relevant codes.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Connection details require verification",
+    "originalObservation": "Connection details include specific clips and screws, e.g., 'STIFFCLIP AL600 (2)#12 SCREWS'.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "General notes on design",
+   "observation": "General design notes specify compliance with applicable codes such as 'IBC 2015' and 'IBC 2009'.",
+   "drawing_evidence": "GENERAL NOTES: DETAILS SHOWN ARE TYPICAL, SIMILAR DETAILS APPLY TO SIMILAR CONDITIONS",
+   "drawing_location": "General notes section",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure design criteria are updated where necessary to reflect the current project requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "General notes on design",
+    "originalObservation": "General design notes specify compliance with applicable codes such as 'IBC 2015' and 'IBC 2009'.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

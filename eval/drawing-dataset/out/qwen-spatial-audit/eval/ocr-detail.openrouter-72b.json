@@ -1,0 +1,1533 @@
+{
+ "generatedAt": "2026-11-16T15:33:12.670Z",
+ "backend": "openrouter-72b",
+ "compare": null,
+ "subset": false,
+ "sheets": [
+  {
+   "sheet": "A-3.06-00",
+   "gtScope": "sheet",
+   "gtRowsScored": 182,
+   "tilesRead": 112,
+   "tilesNonBlank": 112,
+   "appleVision4x3": {
+    "technicalRows": 72,
+    "exact": 33,
+    "exactContradicted": 1,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [
+     {
+      "truth": "POSITIONED 1/4\" FROM THE TOP",
+      "read": [
+       "POSITIONED I/ [ocr_error]",
+       "POSITIONED 1/4\" FROM THE TOP [correct]"
+      ]
+     }
+    ],
+    "wrong": 6,
+    "wrongChangesValue": 3,
+    "partial": 3,
+    "missed": 30,
+    "wrongRows": [
+     {
+      "truth": "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4070",
+      "read": [
+       "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010 [ocr_error]",
+       "_THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "1-1/4\" PIPE RAILING. PAINT PEX-I",
+      "read": [
+       "- I-I/4\" PIPE RA [ocr_error]",
+       "I-1/4\" PIPE RAILING. PAINT PEX-I [ocr_error]"
+      ],
+      "changesValue": true
+     },
+     {
+      "truth": "T/ BLOCKING @ PARAPET",
+      "read": [
+       "7/ BLOCKING & PARAPET [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "29'-0\" A.F.F. (V.I.F.)",
+      "read": [
+       "29'-0\" A.F.F. V. [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "2'-10\"",
+      "read": [
+       "2'-10' [ocr_error]"
+      ],
+      "changesValue": true
+     },
+     {
+      "truth": "ELEV. + 10'-8\"",
+      "read": [
+       "EV. + 10'-1 [ocr_error]"
+      ],
+      "changesValue": true
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "-1-1/4\" PIPE RAILING. PAINT",
+      "read": [
+       "RAILING. PAINT [fragment]",
+       "-I-1/4\" PIPE RAILING. PAINT [ocr_error]"
+      ]
+     },
+     {
+      "truth": "26'-2\" A.F.F. (V.I.F.)",
+      "read": [
+       "26'-2\" A.F.F. (V.I.F. [fragment]",
+       "26'-2\" A.F.F. (V. [fragment]"
+      ]
+     },
+     {
+      "truth": "B/ UNDERCSORE",
+      "read": [
+       "UNDERCSOR [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "2",
+     "EQ",
+     "EQ",
+     "EQ",
+     "3",
+     "A-3.06",
+     "3'-6\"",
+     "8\" MIN.",
+     "2\" DIAMETER PIPE & BASE",
+     "5/16\" DIAMETER X 3\" LAG BOLTS",
+     "29'-0\"",
+     "3",
+     "A-3.06",
+     "T/BLK'G @ PARAPET",
+     "T/ BLK'G @ PARAPET",
+     "ELEV. + 17'-4\"",
+     "1",
+     "3'-6\"",
+     "1:12 MIN.",
+     "1:12 MIN.",
+     "EXIST. ROOF @ H.P.",
+     "7",
+     "A-3.00",
+     "T/WINDOW",
+     "ELEV. + 8'-0\"",
+     "3",
+     "2",
+     "A-3.00",
+     "T/ SLAB",
+     "ELEV. + 0'-0\""
+    ],
+    "inScopeReadings": 200,
+    "noMatchReadings": 11,
+    "noMatchPrintedElsewhere": 1,
+    "noMatchUnsupported": 10,
+    "unsupportedExamples": [
+     "M",
+     "2 G",
+     "3 G",
+     "1",
+     "H",
+     "3",
+     "B",
+     "#",
+     "1",
+     "4"
+    ],
+    "states": {
+     "A-3.06-00:R001": "none",
+     "A-3.06-00:R002": "exact",
+     "A-3.06-00:R004": "exact",
+     "A-3.06-00:R012": "none",
+     "A-3.06-00:R011": "exact",
+     "A-3.06-00:R027": "exact",
+     "A-3.06-00:R021": "exact",
+     "A-3.06-00:R054+R049": "none",
+     "A-3.06-00:M1": "none",
+     "A-3.06-00:R050": "none",
+     "A-3.06-00:R059": "none",
+     "A-3.06-00:R015": "exact",
+     "A-3.06-00:R030": "exact",
+     "A-3.06-00:R034": "exact",
+     "A-3.06-00:R063a": "exact",
+     "A-3.06-00:R063b": "exact",
+     "A-3.06-00:R003": "partial",
+     "A-3.06-00:R045": "exact",
+     "A-3.06-00:R040": "none",
+     "A-3.06-00:R023": "exact",
+     "A-3.06-00:R053": "none",
+     "A-3.06-00:R005": "wrong",
+     "A-3.06-00:R013": "wrong",
+     "A-3.06-00:R042": "exact_contradicted",
+     "A-3.06-00:R062": "none",
+     "A-3.06-00:R071": "none",
+     "A-3.06-00:R077a": "exact",
+     "A-3.06-00:R108": "none",
+     "A-3.06-00:R110": "wrong",
+     "A-3.06-00:R076": "none",
+     "A-3.06-00:R080": "none",
+     "A-3.06-00:R109": "wrong",
+     "A-3.06-00:R111": "none",
+     "A-3.06-00:R104": "none",
+     "A-3.06-00:R107": "none",
+     "A-3.06-00:R112": "exact",
+     "A-3.06-00:R114": "exact",
+     "A-3.06-00:M2": "none",
+     "A-3.06-00:R101": "exact",
+     "A-3.06-00:R115": "exact",
+     "A-3.06-00:R148": "exact",
+     "A-3.06-00:R149": "exact",
+     "A-3.06-00:R132": "exact",
+     "A-3.06-00:R134+R135": "none",
+     "A-3.06-00:R136": "exact",
+     "A-3.06-00:R147": "none",
+     "A-3.06-00:R180": "exact",
+     "A-3.06-00:R138": "exact",
+     "A-3.06-00:R141": "none",
+     "A-3.06-00:R127": "wrong",
+     "A-3.06-00:R142": "partial",
+     "A-3.06-00:R145": "none",
+     "A-3.06-00:R119": "exact",
+     "A-3.06-00:R150": "none",
+     "A-3.06-00:R153": "none",
+     "A-3.06-00:R167": "partial",
+     "A-3.06-00:R169": "wrong",
+     "A-3.06-00:R122": "exact",
+     "A-3.06-00:R193": "exact",
+     "A-3.06-00:R194": "exact",
+     "A-3.06-00:R179": "exact",
+     "A-3.06-00:R182": "exact",
+     "A-3.06-00:R197": "none",
+     "A-3.06-00:R198": "none",
+     "A-3.06-00:R189": "none",
+     "A-3.06-00:R184": "exact",
+     "A-3.06-00:R202": "none",
+     "A-3.06-00:R203": "none",
+     "A-3.06-00:R212": "exact",
+     "A-3.06-00:R216": "exact",
+     "A-3.06-00:R224": "none",
+     "A-3.06-00:R228": "none"
+    }
+   },
+   "openrouter-72b": {
+    "technicalRows": 72,
+    "exact": 43,
+    "exactContradicted": 1,
+    "exactMarkedConflict": 5,
+    "exactInMerge": 0,
+    "contradictedRows": [
+     {
+      "truth": "3'-6\"",
+      "read": [
+       "31-6\" [ocr_error]",
+       "3'-6\" [correct]"
+      ]
+     }
+    ],
+    "wrong": 3,
+    "wrongChangesValue": 2,
+    "partial": 14,
+    "missed": 7,
+    "wrongRows": [
+     {
+      "truth": "A-3.06",
+      "read": [
+       "2 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "-1-1/4\" PIPE RAILING. PAINT TO MATCH",
+      "read": [
+       "I-1/4\" PIPE RAILING. PAINT TO MATCH [ocr_error]",
+       "I-I/4 [ocr_error]"
+      ],
+      "changesValue": true
+     },
+     {
+      "truth": "ELEV. + 0'-0\"",
+      "read": [
+       "ELEV. + O'-O\" [ocr_error]"
+      ],
+      "changesValue": true
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "EXTEND GUARD RAIL MIN. 30\" BEYOND EACH END OF EQUIPMENT",
+      "read": [
+       "EXTEND GUARD RAIL MIN. 30\" BEYO [fragment]",
+       "O\" BEYOND EACH END OF EQUIPMENT [ocr_error]"
+      ]
+     },
+     {
+      "truth": "T.O. ROOF DECK MEMBRANE",
+      "read": [
+       "T.O. ROOF DECK M [fragment]"
+      ]
+     },
+     {
+      "truth": "-1-1/4\" PIPE RAILING. PAINT",
+      "read": [
+       "I-1/4\" PIPE RAILING. PAI [ocr_error]",
+       "LING. PAINT [fragment]"
+      ]
+     },
+     {
+      "truth": "MIN. ABOVE DECK MEMBRANE",
+      "read": [
+       "DECK MEMBRANE [fragment]"
+      ]
+     },
+     {
+      "truth": "8\" MIN.",
+      "read": [
+       "MIN. [fragment]",
+       "8\" [fragment]"
+      ]
+     },
+     {
+      "truth": "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4070",
+      "read": [
+       "4070 [fragment]",
+       "THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010 [ocr_error]"
+      ]
+     },
+     {
+      "truth": "1-1/4\" PIPE RAILING. PAINT PEX-I",
+      "read": [
+       "I-1/4\" PIPE RAIL [ocr_error]",
+       "PIPE RAILING. PAINT PEX-I [fragment]"
+      ]
+     },
+     {
+      "truth": "POSITIONED 1/4\" FROM THE TOP",
+      "read": [
+       "POSITIONED 1/ [fragment]",
+       "IONED 1/4\" FROM THE TOP [fragment]"
+      ]
+     },
+     {
+      "truth": "2\" DIAMETER PIPE & BASE",
+      "read": [
+       "2\" DIAMETER F [ocr_error]",
+       "AMETER PIPE & BASE [fragment]"
+      ]
+     },
+     {
+      "truth": "5/16\" DIAMETER X 3\" LAG BOLTS",
+      "read": [
+       "DIAMETER X [fragment]",
+       "AMETER X 3\" LAG BOLTS [fragment]"
+      ]
+     },
+     {
+      "truth": "4x4 HORIZONTAL BLOCKING",
+      "read": [
+       "4x4 HORIZONTA [fragment]",
+       "ORIZONTAL BLOCKING [fragment]"
+      ]
+     },
+     {
+      "truth": "T/ BLOCKING @ PARAPET",
+      "read": [
+       "T/ BLOCKING [fragment]",
+       "LOCKING @ PARAPET [fragment]"
+      ]
+     },
+     {
+      "truth": "EXISTING ROOF @ L.P. (V.I.F.)",
+      "read": [
+       "EXISTING ROO [fragment]",
+       "TING ROOF @ L.P. (V.I.F.) [fragment]"
+      ]
+     },
+     {
+      "truth": "6\" METAL STUDS @ 16\" O.C.SEE",
+      "read": [
+       "6\" METAL STUDS @ 16\" O.C.S [fragment]",
+       "6\" O.C.SEE [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "2",
+     "3'-6\"MIN HEIGHT FROM",
+     "EQ",
+     "1",
+     "A-3.00",
+     "1:12 MIN.",
+     "3"
+    ],
+    "inScopeReadings": 364,
+    "noMatchReadings": 145,
+    "noMatchPrintedElsewhere": 88,
+    "noMatchUnsupported": 57,
+    "unsupportedExamples": [
+     "HEIGHT FROM DECK MEMBRANE",
+     "3'-6\"MIN HEIGHT T.O. ROOF DECK M",
+     "MIN. ABOVE DECK MI",
+     "|",
+     "3",
+     "@",
+     "2",
+     "3 SCALE:",
+     "1",
+     "I",
+     "t. 410.837.",
+     "i",
+     "OR THE LAWS OF THE STATE OF DC",
+     "LICENSE NO. ARC40001205",
+     "DISTRICT OF COLUMBIA",
+     "DISTRICT OF C",
+     "WARREN NAGEY",
+     "WARREN N",
+     "No. ARC40001205",
+     "X",
+     "1",
+     "1",
+     "#",
+     "PERMIT COMMENTS 10/29/25",
+     "01 PERMIT COMMEN"
+    ],
+    "states": {
+     "A-3.06-00:R001": "none",
+     "A-3.06-00:R002": "wrong",
+     "A-3.06-00:R004": "partial",
+     "A-3.06-00:R012": "exact",
+     "A-3.06-00:R011": "exact",
+     "A-3.06-00:R027": "none",
+     "A-3.06-00:R021": "partial",
+     "A-3.06-00:R054+R049": "exact",
+     "A-3.06-00:M1": "none",
+     "A-3.06-00:R050": "exact",
+     "A-3.06-00:R059": "exact",
+     "A-3.06-00:R015": "wrong",
+     "A-3.06-00:R030": "exact_marked",
+     "A-3.06-00:R034": "exact_marked",
+     "A-3.06-00:R063a": "exact",
+     "A-3.06-00:R063b": "exact_marked",
+     "A-3.06-00:R003": "partial",
+     "A-3.06-00:R045": "exact",
+     "A-3.06-00:R040": "exact_contradicted",
+     "A-3.06-00:R023": "partial",
+     "A-3.06-00:R053": "partial",
+     "A-3.06-00:R005": "partial",
+     "A-3.06-00:R013": "partial",
+     "A-3.06-00:R042": "partial",
+     "A-3.06-00:R062": "partial",
+     "A-3.06-00:R071": "partial",
+     "A-3.06-00:R077a": "partial",
+     "A-3.06-00:R108": "exact",
+     "A-3.06-00:R110": "partial",
+     "A-3.06-00:R076": "exact_marked",
+     "A-3.06-00:R080": "exact",
+     "A-3.06-00:R109": "exact",
+     "A-3.06-00:R111": "exact",
+     "A-3.06-00:R104": "exact",
+     "A-3.06-00:R107": "exact",
+     "A-3.06-00:R112": "exact",
+     "A-3.06-00:R114": "exact",
+     "A-3.06-00:M2": "none",
+     "A-3.06-00:R101": "none",
+     "A-3.06-00:R115": "exact",
+     "A-3.06-00:R148": "exact",
+     "A-3.06-00:R149": "partial",
+     "A-3.06-00:R132": "exact",
+     "A-3.06-00:R134+R135": "exact",
+     "A-3.06-00:R136": "exact",
+     "A-3.06-00:R147": "exact",
+     "A-3.06-00:R180": "exact",
+     "A-3.06-00:R138": "exact",
+     "A-3.06-00:R141": "none",
+     "A-3.06-00:R127": "exact",
+     "A-3.06-00:R142": "exact",
+     "A-3.06-00:R145": "exact_marked",
+     "A-3.06-00:R119": "exact",
+     "A-3.06-00:R150": "exact",
+     "A-3.06-00:R153": "exact",
+     "A-3.06-00:R167": "exact",
+     "A-3.06-00:R169": "exact",
+     "A-3.06-00:R122": "partial",
+     "A-3.06-00:R193": "exact",
+     "A-3.06-00:R194": "exact",
+     "A-3.06-00:R179": "exact",
+     "A-3.06-00:R182": "exact",
+     "A-3.06-00:R197": "exact",
+     "A-3.06-00:R198": "exact",
+     "A-3.06-00:R189": "none",
+     "A-3.06-00:R184": "exact",
+     "A-3.06-00:R202": "exact",
+     "A-3.06-00:R203": "exact",
+     "A-3.06-00:R212": "exact",
+     "A-3.06-00:R216": "exact",
+     "A-3.06-00:R224": "exact",
+     "A-3.06-00:R228": "wrong"
+    }
+   }
+  },
+  {
+   "sheet": "A-4.00-00",
+   "gtScope": "windows",
+   "gtRowsScored": 50,
+   "tilesRead": 116,
+   "tilesNonBlank": 116,
+   "appleVision4x3": {
+    "technicalRows": 33,
+    "exact": 13,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 0,
+    "wrongChangesValue": 0,
+    "partial": 1,
+    "missed": 19,
+    "wrongRows": [],
+    "partialRows": [
+     {
+      "truth": "42\" MAX.",
+      "read": [
+       "42\" MAX [fragment]",
+       "42\" [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "4\"",
+     "1C",
+     "12\"",
+     "2'-0\"",
+     "1'-0\"",
+     "MIN",
+     "1B",
+     "1A",
+     "7\"-9\"",
+     "40\"",
+     "40\"",
+     "34\"",
+     "34\"",
+     "29\"",
+     "2",
+     "18\"",
+     "2\"",
+     "MIN.",
+     "18\""
+    ],
+    "inScopeReadings": 37,
+    "noMatchReadings": 0,
+    "noMatchPrintedElsewhere": 0,
+    "noMatchUnsupported": 0,
+    "unsupportedExamples": [],
+    "states": {
+     "A-4.00-00:R001": "exact",
+     "A-4.00-00:R006": "exact",
+     "A-4.00-00:R007": "exact",
+     "A-4.00-00:R012": "exact",
+     "A-4.00-00:R013": "none",
+     "A-4.00-00:R016": "exact",
+     "A-4.00-00:R017": "none",
+     "A-4.00-00:R018": "exact",
+     "A-4.00-00:R019": "none",
+     "A-4.00-00:R020": "exact",
+     "A-4.00-00:R021": "none",
+     "A-4.00-00:R025": "none",
+     "A-4.00-00:R026": "none",
+     "A-4.00-00:R027": "none",
+     "A-4.00-00:R028": "none",
+     "A-4.00-00:R029": "exact",
+     "A-4.00-00:R032": "none",
+     "A-4.00-00:R034": "exact",
+     "A-4.00-00:R035": "exact",
+     "A-4.00-00:R036": "none",
+     "A-4.00-00:R037": "none",
+     "A-4.00-00:R038": "partial",
+     "A-4.00-00:R039": "none",
+     "A-4.00-00:R040": "none",
+     "A-4.00-00:R041": "none",
+     "A-4.00-00:R042": "exact",
+     "A-4.00-00:R043": "none",
+     "A-4.00-00:R044": "none",
+     "A-4.00-00:R045": "exact",
+     "A-4.00-00:R046": "exact",
+     "A-4.00-00:R048": "none",
+     "A-4.00-00:R049": "none",
+     "A-4.00-00:R050": "none"
+    }
+   },
+   "openrouter-72b": {
+    "technicalRows": 33,
+    "exact": 15,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 2,
+    "wrongChangesValue": 1,
+    "partial": 0,
+    "missed": 16,
+    "wrongRows": [
+     {
+      "truth": "12\"",
+      "read": [
+       "MIN. [ocr_error]"
+      ],
+      "changesValue": true
+     },
+     {
+      "truth": "2\" HOLD",
+      "read": [
+       "2\" MIN. [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [],
+    "missedRows": [
+     "4\"",
+     "MIN.",
+     "2'-0\"",
+     "1'-0\"",
+     "MIN",
+     "7\"-9\"",
+     "24\" MIN.",
+     "40\"",
+     "40\"",
+     "42\" MAX.",
+     "34\"",
+     "34\"",
+     "15\" MIN.",
+     "2\"",
+     "MIN.",
+     "18\""
+    ],
+    "inScopeReadings": 61,
+    "noMatchReadings": 21,
+    "noMatchPrintedElsewhere": 19,
+    "noMatchUnsupported": 2,
+    "unsupportedExamples": [
+     "LE: 3/8\" = 1'-0\"",
+     "FINISHEI"
+    ],
+    "states": {
+     "A-4.00-00:R001": "exact",
+     "A-4.00-00:R006": "exact",
+     "A-4.00-00:R007": "exact",
+     "A-4.00-00:R012": "exact",
+     "A-4.00-00:R013": "none",
+     "A-4.00-00:R016": "exact",
+     "A-4.00-00:R017": "exact",
+     "A-4.00-00:R018": "exact",
+     "A-4.00-00:R019": "wrong",
+     "A-4.00-00:R020": "none",
+     "A-4.00-00:R021": "none",
+     "A-4.00-00:R025": "none",
+     "A-4.00-00:R026": "none",
+     "A-4.00-00:R027": "exact",
+     "A-4.00-00:R028": "exact",
+     "A-4.00-00:R029": "exact",
+     "A-4.00-00:R032": "none",
+     "A-4.00-00:R034": "none",
+     "A-4.00-00:R035": "wrong",
+     "A-4.00-00:R036": "none",
+     "A-4.00-00:R037": "none",
+     "A-4.00-00:R038": "none",
+     "A-4.00-00:R039": "none",
+     "A-4.00-00:R040": "none",
+     "A-4.00-00:R041": "exact",
+     "A-4.00-00:R042": "none",
+     "A-4.00-00:R043": "exact",
+     "A-4.00-00:R044": "exact",
+     "A-4.00-00:R045": "exact",
+     "A-4.00-00:R046": "exact",
+     "A-4.00-00:R048": "none",
+     "A-4.00-00:R049": "none",
+     "A-4.00-00:R050": "none"
+    }
+   }
+  },
+  {
+   "sheet": "A-1.01-00",
+   "gtScope": "windows",
+   "gtRowsScored": 76,
+   "tilesRead": 112,
+   "tilesNonBlank": 112,
+   "appleVision4x3": {
+    "technicalRows": 33,
+    "exact": 3,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 1,
+    "wrongChangesValue": 0,
+    "partial": 0,
+    "missed": 29,
+    "wrongRows": [
+     {
+      "truth": "NEW 1 HR. FIRE",
+      "read": [
+       "NEW I HR. FIRE [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [],
+    "missedRows": [
+     "113",
+     "2",
+     "A-2.00",
+     "2",
+     "A-301",
+     "1",
+     "A-3.01",
+     "10",
+     "9",
+     "A-4.01",
+     "1",
+     "A-3.02",
+     "3'-5 1/2\"",
+     "3'-4\"",
+     "4'-7 1/2\"",
+     "9 1/2\"",
+     "9 1/2\"",
+     "11",
+     "A-4.01",
+     "2'-4\"",
+     "8",
+     "A-3.00",
+     "13'-2\"",
+     "112",
+     "1",
+     "A-2.01",
+     "101B",
+     "1",
+     "A-2.00"
+    ],
+    "inScopeReadings": 40,
+    "noMatchReadings": 0,
+    "noMatchPrintedElsewhere": 0,
+    "noMatchUnsupported": 0,
+    "unsupportedExamples": [],
+    "states": {
+     "A-1.01-00:R004": "none",
+     "A-1.01-00:R005": "none",
+     "A-1.01-00:R006": "none",
+     "A-1.01-00:R021": "none",
+     "A-1.01-00:R022": "none",
+     "A-1.01-00:R024": "none",
+     "A-1.01-00:R025": "none",
+     "A-1.01-00:R027": "none",
+     "A-1.01-00:R028": "exact",
+     "A-1.01-00:R029": "none",
+     "A-1.01-00:R030": "none",
+     "A-1.01-00:R032": "none",
+     "A-1.01-00:R033": "none",
+     "A-1.01-00:R034": "none",
+     "A-1.01-00:R035": "none",
+     "A-1.01-00:R036": "none",
+     "A-1.01-00:R037": "none",
+     "A-1.01-00:R038": "exact",
+     "A-1.01-00:R039": "exact",
+     "A-1.01-00:R040": "none",
+     "A-1.01-00:R046": "none",
+     "A-1.01-00:R047": "none",
+     "A-1.01-00:R048": "none",
+     "A-1.01-00:R060": "none",
+     "A-1.01-00:R061": "none",
+     "A-1.01-00:R062": "none",
+     "A-1.01-00:R065": "none",
+     "A-1.01-00:R066": "none",
+     "A-1.01-00:R067": "none",
+     "A-1.01-00:R069": "none",
+     "A-1.01-00:R070": "wrong",
+     "A-1.01-00:R075": "none",
+     "A-1.01-00:R076": "none"
+    }
+   },
+   "openrouter-72b": {
+    "technicalRows": 33,
+    "exact": 8,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 9,
+    "wrongChangesValue": 0,
+    "partial": 1,
+    "missed": 15,
+    "wrongRows": [
+     {
+      "truth": "A-3.01",
+      "read": [
+       "A-3.0I [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "A-4.01",
+      "read": [
+       "IO [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "9",
+      "read": [
+       "q [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "A-4.01",
+      "read": [
+       "A-4.0I [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "A-3.02",
+      "read": [
+       "I [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "11",
+      "read": [
+       "A-4.01 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "101B",
+      "read": [
+       "IOIB [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "NEW 1 HR. FIRE",
+      "read": [
+       "NEW I HR. [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "1",
+      "read": [
+       "A-2.00 [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "13'-2\"",
+      "read": [
+       "3'-2\" [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "2",
+     "2",
+     "A-301",
+     "1",
+     "10",
+     "1",
+     "3'-5 1/2\"",
+     "3'-4\"",
+     "9 1/2\"",
+     "3'-10\"",
+     "9 1/2\"",
+     "A-4.01",
+     "2'-4\"",
+     "1",
+     "A-2.00"
+    ],
+    "inScopeReadings": 102,
+    "noMatchReadings": 31,
+    "noMatchPrintedElsewhere": 10,
+    "noMatchUnsupported": 21,
+    "unsupportedExamples": [
+     "I",
+     "2",
+     "2",
+     "A-30I OP",
+     "A-301 OPP.",
+     "A-4.0I",
+     "3'-4\"",
+     "q 1/2\"",
+     "3'-5 1/2\"",
+     "|",
+     "|",
+     "9 1/2\" 3'-10\"",
+     "A",
+     "2'-4\"",
+     "2'-4\"",
+     "A",
+     "A",
+     "C",
+     "C",
+     "A",
+     "A"
+    ],
+    "states": {
+     "A-1.01-00:R004": "exact",
+     "A-1.01-00:R005": "none",
+     "A-1.01-00:R006": "exact",
+     "A-1.01-00:R021": "none",
+     "A-1.01-00:R022": "none",
+     "A-1.01-00:R024": "none",
+     "A-1.01-00:R025": "wrong",
+     "A-1.01-00:R027": "none",
+     "A-1.01-00:R028": "wrong",
+     "A-1.01-00:R029": "wrong",
+     "A-1.01-00:R030": "wrong",
+     "A-1.01-00:R032": "none",
+     "A-1.01-00:R033": "wrong",
+     "A-1.01-00:R034": "none",
+     "A-1.01-00:R035": "none",
+     "A-1.01-00:R036": "exact",
+     "A-1.01-00:R037": "none",
+     "A-1.01-00:R038": "none",
+     "A-1.01-00:R039": "exact",
+     "A-1.01-00:R040": "none",
+     "A-1.01-00:R046": "wrong",
+     "A-1.01-00:R047": "none",
+     "A-1.01-00:R048": "none",
+     "A-1.01-00:R060": "exact",
+     "A-1.01-00:R061": "exact",
+     "A-1.01-00:R062": "partial",
+     "A-1.01-00:R065": "exact",
+     "A-1.01-00:R066": "none",
+     "A-1.01-00:R067": "exact",
+     "A-1.01-00:R069": "wrong",
+     "A-1.01-00:R070": "wrong",
+     "A-1.01-00:R075": "wrong",
+     "A-1.01-00:R076": "none"
+    }
+   }
+  },
+  {
+   "sheet": "A-6.00-00",
+   "gtScope": "windows",
+   "gtRowsScored": 111,
+   "tilesRead": 108,
+   "tilesNonBlank": 108,
+   "appleVision4x3": {
+    "technicalRows": 60,
+    "exact": 8,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 17,
+    "contradictedRows": [],
+    "wrong": 1,
+    "wrongChangesValue": 1,
+    "partial": 2,
+    "missed": 32,
+    "wrongRows": [
+     {
+      "truth": "3'-0\"x6'-8\"x1 3/4\"",
+      "read": [
+       "12 S.C. WOOD W/ LAM. 3'-0\"x6'-8'x1 3/4 [merge_across_rows_same_annotation]"
+      ],
+      "changesValue": true
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "3'-8\"x7'-0\"x1 3/4\"",
+      "read": [
+       "3'-8\"x7'-0\"x1 3/4 [fragment]"
+      ]
+     },
+     {
+      "truth": "4 1/2\"",
+      "read": [
+       "1/2\" [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "1",
+     "3'-0\"x7'-0\"x1 3/4\"",
+     "6'-0\"x7'-0\"x1 3/4\"",
+     "(NOTE 5)",
+     "3",
+     "4'-0\"x7'-0\"x1 3/4\"",
+     "3'-0\"x7'-0\"x1 3/4\"",
+     "4A",
+     "3'-0\"x6'-8\"x1 3/4\"",
+     "6",
+     "3'-0\"x4'-8\"x1 3/4\"",
+     "2'-6\"x4'-8\"x1 3/4\"",
+     "3'-0\"x6'-8\"x1 3/4\"",
+     "11",
+     "3'-0\"x7'-0\"x1 3/4\"",
+     "(NOTE 11)",
+     "W1",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "W2",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "2'-6\"",
+     "2\"",
+     "W5",
+     "2\"",
+     "V.I.F.",
+     "V.I.F.",
+     "2'-6\""
+    ],
+    "inScopeReadings": 52,
+    "noMatchReadings": 0,
+    "noMatchPrintedElsewhere": 0,
+    "noMatchUnsupported": 0,
+    "unsupportedExamples": [],
+    "states": {
+     "A-6.00-00:R010": "none",
+     "A-6.00-00:R012": "none",
+     "A-6.00-00:R015": "exact_in_merge",
+     "A-6.00-00:R016": "exact_in_merge",
+     "A-6.00-00:R018": "none",
+     "A-6.00-00:R019": "exact_in_merge",
+     "A-6.00-00:R021": "none",
+     "A-6.00-00:R022": "none",
+     "A-6.00-00:R024": "none",
+     "A-6.00-00:R026": "exact",
+     "A-6.00-00:R027": "exact_in_merge",
+     "A-6.00-00:R029": "none",
+     "A-6.00-00:R031": "exact_in_merge",
+     "A-6.00-00:R032": "none",
+     "A-6.00-00:R034": "partial",
+     "A-6.00-00:R036": "exact_in_merge",
+     "A-6.00-00:R037": "exact_in_merge",
+     "A-6.00-00:R039": "none",
+     "A-6.00-00:R042": "exact_in_merge",
+     "A-6.00-00:R043": "none",
+     "A-6.00-00:R045": "none",
+     "A-6.00-00:R048": "exact_in_merge",
+     "A-6.00-00:R049": "exact_in_merge",
+     "A-6.00-00:R051": "none",
+     "A-6.00-00:R054": "exact_in_merge",
+     "A-6.00-00:R055": "exact_in_merge",
+     "A-6.00-00:R057": "none",
+     "A-6.00-00:R060": "exact_in_merge",
+     "A-6.00-00:R061": "exact_in_merge",
+     "A-6.00-00:R063": "exact",
+     "A-6.00-00:R066": "exact_in_merge",
+     "A-6.00-00:R067": "none",
+     "A-6.00-00:R068": "none",
+     "A-6.00-00:R069": "none",
+     "A-6.00-00:R070": "exact_in_merge",
+     "A-6.00-00:R072": "wrong",
+     "A-6.00-00:R075": "exact",
+     "A-6.00-00:R076": "none",
+     "A-6.00-00:R077": "exact",
+     "A-6.00-00:R078": "none",
+     "A-6.00-00:R079": "none",
+     "A-6.00-00:R080": "none",
+     "A-6.00-00:R081": "none",
+     "A-6.00-00:R082": "exact",
+     "A-6.00-00:R083": "partial",
+     "A-6.00-00:R084": "none",
+     "A-6.00-00:R085": "none",
+     "A-6.00-00:R086": "exact",
+     "A-6.00-00:R087": "exact_in_merge",
+     "A-6.00-00:R088": "exact",
+     "A-6.00-00:R089": "none",
+     "A-6.00-00:R090": "none",
+     "A-6.00-00:R091": "none",
+     "A-6.00-00:R095": "exact",
+     "A-6.00-00:R098": "none",
+     "A-6.00-00:R100": "none",
+     "A-6.00-00:R103": "none",
+     "A-6.00-00:R105": "none",
+     "A-6.00-00:R106": "none",
+     "A-6.00-00:R108": "none"
+    }
+   },
+   "openrouter-72b": {
+    "technicalRows": 60,
+    "exact": 37,
+    "exactContradicted": 3,
+    "exactMarkedConflict": 7,
+    "exactInMerge": 0,
+    "contradictedRows": [
+     {
+      "truth": "10",
+      "read": [
+       "10 [correct]",
+       "7 [ocr_error]"
+      ]
+     },
+     {
+      "truth": "11",
+      "read": [
+       "10 [ocr_error]",
+       "11 [correct]"
+      ]
+     },
+     {
+      "truth": "12",
+      "read": [
+       "12 [correct]",
+       "11 [ocr_error]"
+      ]
+     }
+    ],
+    "wrong": 2,
+    "wrongChangesValue": 2,
+    "partial": 0,
+    "missed": 14,
+    "wrongRows": [
+     {
+      "truth": "(NOTE 11)",
+      "read": [
+       "2\"JAMB & HEAD [ocr_error]"
+      ],
+      "changesValue": true
+     },
+     {
+      "truth": "2\"JAMB & HEAD",
+      "read": [
+       "(NOTE 11) [ocr_error]"
+      ],
+      "changesValue": true
+     }
+    ],
+    "partialRows": [],
+    "missedRows": [
+     "(NOTE 5)",
+     "(NOTE 5)",
+     "2\"JAMB 4\"HD",
+     "2\"JAMB 4\"HD",
+     "2\"JAMB 4\"HD",
+     "2\"JAMB & HEAD",
+     "2\"JAMB & HEAD",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "V.I.F.",
+     "2'-6\"",
+     "V.I.F.",
+     "2'-6\""
+    ],
+    "inScopeReadings": 132,
+    "noMatchReadings": 29,
+    "noMatchPrintedElsewhere": 18,
+    "noMatchUnsupported": 11,
+    "unsupportedExamples": [
+     "B",
+     "D",
+     "E",
+     "2",
+     "3",
+     "4",
+     "5",
+     "6",
+     "7",
+     "G H.M.",
+     "3/4\" H"
+    ],
+    "states": {
+     "A-6.00-00:R010": "exact",
+     "A-6.00-00:R012": "exact",
+     "A-6.00-00:R015": "none",
+     "A-6.00-00:R016": "exact",
+     "A-6.00-00:R018": "exact",
+     "A-6.00-00:R019": "exact",
+     "A-6.00-00:R021": "none",
+     "A-6.00-00:R022": "exact",
+     "A-6.00-00:R024": "exact",
+     "A-6.00-00:R026": "none",
+     "A-6.00-00:R027": "exact",
+     "A-6.00-00:R029": "exact",
+     "A-6.00-00:R031": "none",
+     "A-6.00-00:R032": "exact",
+     "A-6.00-00:R034": "exact",
+     "A-6.00-00:R036": "none",
+     "A-6.00-00:R037": "exact",
+     "A-6.00-00:R039": "exact",
+     "A-6.00-00:R042": "none",
+     "A-6.00-00:R043": "exact",
+     "A-6.00-00:R045": "exact",
+     "A-6.00-00:R048": "none",
+     "A-6.00-00:R049": "exact",
+     "A-6.00-00:R051": "exact_marked",
+     "A-6.00-00:R054": "exact",
+     "A-6.00-00:R055": "exact_marked",
+     "A-6.00-00:R057": "exact_marked",
+     "A-6.00-00:R060": "exact",
+     "A-6.00-00:R061": "exact_contradicted",
+     "A-6.00-00:R063": "exact_marked",
+     "A-6.00-00:R066": "exact",
+     "A-6.00-00:R067": "exact_contradicted",
+     "A-6.00-00:R068": "exact_marked",
+     "A-6.00-00:R069": "wrong",
+     "A-6.00-00:R070": "exact_contradicted",
+     "A-6.00-00:R072": "exact_marked",
+     "A-6.00-00:R075": "wrong",
+     "A-6.00-00:R076": "exact",
+     "A-6.00-00:R077": "exact",
+     "A-6.00-00:R078": "none",
+     "A-6.00-00:R079": "exact",
+     "A-6.00-00:R080": "none",
+     "A-6.00-00:R081": "exact",
+     "A-6.00-00:R082": "exact",
+     "A-6.00-00:R083": "exact",
+     "A-6.00-00:R084": "none",
+     "A-6.00-00:R085": "exact_marked",
+     "A-6.00-00:R086": "none",
+     "A-6.00-00:R087": "exact",
+     "A-6.00-00:R088": "exact",
+     "A-6.00-00:R089": "exact",
+     "A-6.00-00:R090": "exact",
+     "A-6.00-00:R091": "none",
+     "A-6.00-00:R095": "exact",
+     "A-6.00-00:R098": "exact",
+     "A-6.00-00:R100": "exact",
+     "A-6.00-00:R103": "exact",
+     "A-6.00-00:R105": "none",
+     "A-6.00-00:R106": "exact",
+     "A-6.00-00:R108": "none"
+    }
+   }
+  },
+  {
+   "sheet": "S-201.00",
+   "gtScope": "windows",
+   "gtRowsScored": 55,
+   "tilesRead": 111,
+   "tilesNonBlank": 111,
+   "appleVision4x3": {
+    "technicalRows": 34,
+    "exact": 12,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 9,
+    "wrongChangesValue": 0,
+    "partial": 6,
+    "missed": 7,
+    "wrongRows": [
+     {
+      "truth": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+      "read": [
+       "(GROUND SNOW LOAD: [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "Sd1 0.069",
+      "read": [
+       "Sdl 0.069 [merged_with_noise]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "DESIGN BASE SHEAR 57 KIPS",
+      "read": [
+       "DESIGN BASE SHEAR 15T KIPS3 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "600S162-43 MIL @ 16\" O/C",
+      "read": [
+       "6005162-43 MIL @ 16\" O/C [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "CONNECTION 1",
+      "read": [
+       "- CONNECTION I [ocr_error]",
+       "CONNECTION I [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "CONNECTION 2 AT",
+      "read": [
+       "CONNECTION 2 A1 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "600S162-43 MIL @ 16\" O/C",
+      "read": [
+       "6005162-43 MIL @ 16\" OIC- [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "600T150-43, 33 KSI",
+      "read": [
+       "600T150-43, 33 KSl [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "EXISTING W21X19 STEEL BEAM",
+      "read": [
+       "EXISTING W2IXI9 STEEL BEAM [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+      "read": [
+       "AMERICAN CONCRETE INSTITUTE (ACI) [fragment]"
+      ]
+     },
+     {
+      "truth": "SNOW EXPOSURE FACTOR: 0.7",
+      "read": [
+       "SNOW EXPOSURE FACTOR: [fragment]"
+      ]
+     },
+     {
+      "truth": "THERMAL FACTOR: 1",
+      "read": [
+       "THERMAL FACTOR: [fragment]"
+      ]
+     },
+     {
+      "truth": "INTERNAL PRESSURE COEFFICIENT 0.25",
+      "read": [
+       "INTERNAL PRESSURE COEFFICIENT [fragment]"
+      ]
+     },
+     {
+      "truth": "Ss 0.133",
+      "read": [
+       "0.133 [fragment]"
+      ]
+     },
+     {
+      "truth": "S1 0.43",
+      "read": [
+       "0.43 [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+     "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+     "FLAT ROOF SNOW LOAD: 17.5 PSF",
+     "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+     "COMPONENT AND CLADDING PRESSURE 30 PSF",
+     "R= 1.5",
+     "(2)#10 SCREWS"
+    ],
+    "inScopeReadings": 51,
+    "noMatchReadings": 1,
+    "noMatchPrintedElsewhere": 1,
+    "noMatchUnsupported": 0,
+    "unsupportedExamples": [],
+    "states": {
+     "S-201.00:R002": "none",
+     "S-201.00:R003": "partial",
+     "S-201.00:R004": "exact",
+     "S-201.00:R006": "exact",
+     "S-201.00:R007": "exact",
+     "S-201.00:R009": "wrong",
+     "S-201.00:R010": "none",
+     "S-201.00:R011": "none",
+     "S-201.00:R012": "partial",
+     "S-201.00:R013": "exact",
+     "S-201.00:R014": "partial",
+     "S-201.00:R015": "exact",
+     "S-201.00:R016": "none",
+     "S-201.00:R019": "partial",
+     "S-201.00:R020": "none",
+     "S-201.00:R021": "exact",
+     "S-201.00:R023": "partial",
+     "S-201.00:R024": "partial",
+     "S-201.00:R025": "exact",
+     "S-201.00:R026": "wrong",
+     "S-201.00:R028": "exact",
+     "S-201.00:R032": "exact",
+     "S-201.00:R033": "none",
+     "S-201.00:R034": "wrong",
+     "S-201.00:R039": "none",
+     "S-201.00:R040": "wrong",
+     "S-201.00:R041": "wrong",
+     "S-201.00:R042": "wrong",
+     "S-201.00:R044": "wrong",
+     "S-201.00:R045": "exact",
+     "S-201.00:R047": "exact",
+     "S-201.00:R051": "wrong",
+     "S-201.00:R054": "wrong",
+     "S-201.00:R055": "exact"
+    }
+   },
+   "openrouter-72b": {
+    "technicalRows": 34,
+    "exact": 20,
+    "exactContradicted": 3,
+    "exactMarkedConflict": 5,
+    "exactInMerge": 0,
+    "contradictedRows": [
+     {
+      "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+      "read": [
+       "AMERICAN CONCRETE INSTITUTE (ACI) [fragment]",
+       "2. AM [fragment]",
+       "2. AMERICAN CONCRETE INSTITUTE (ACI) [correct]",
+       "3. [ocr_error]",
+       "2. [fragment]",
+       "2. [fragment]"
+      ]
+     },
+     {
+      "truth": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+      "read": [
+       "OR 30 PSF EQUIVALENT UNIFORM LOAD [correct]",
+       "(NO [ocr_error]",
+       "SNO [ocr_error]"
+      ]
+     },
+     {
+      "truth": "WIND LOADING (IBC 2015)",
+      "read": [
+       "WIND LOADING (IBC 2015) [correct]",
+       "THE [ocr_error]",
+       "BAS [ocr_error]"
+      ]
+     }
+    ],
+    "wrong": 4,
+    "wrongChangesValue": 1,
+    "partial": 4,
+    "missed": 1,
+    "wrongRows": [
+     {
+      "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+      "read": [
+       "I. INTERNATIONAL BUILDING CODE (IBC 2015) [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "S1 0.43",
+      "read": [
+       "SI 0.43 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "Sd1 0.069",
+      "read": [
+       "Sdl 0.069 [ocr_error]"
+      ],
+      "changesValue": false
+     },
+     {
+      "truth": "600S162-43 MIL @ 16\" O/C",
+      "read": [
+       "OSI62-43 MIL @ 16\" O/C [ocr_error]",
+       "6005102-43 [ocr_error]",
+       "5162-45 MILE @ 16 [ocr_error]"
+      ],
+      "changesValue": true
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "SNOW LOAD IMPORTANCE FACTOR: 1",
+      "read": [
+       "SNOW LOAD IMPORTANCE FACTOR: [fragment]",
+       "FLA [ocr_error]"
+      ]
+     },
+     {
+      "truth": "THERMAL FACTOR: 1",
+      "read": [
+       "THERMAL FACTOR: [fragment]",
+       "SNO [ocr_error]"
+      ]
+     },
+     {
+      "truth": "CONNECTION 1",
+      "read": [
+       "CONNECTI [fragment]",
+       "ONNECTION I [ocr_error]"
+      ]
+     },
+     {
+      "truth": "600T150-43, 33 KSI",
+      "read": [
+       "600T150- [fragment]",
+       "OOTI50-43, 33 KSI [ocr_error]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "Cs= 0.095"
+    ],
+    "inScopeReadings": 87,
+    "noMatchReadings": 2,
+    "noMatchPrintedElsewhere": 2,
+    "noMatchUnsupported": 0,
+    "unsupportedExamples": [],
+    "states": {
+     "S-201.00:R002": "wrong",
+     "S-201.00:R003": "exact_contradicted",
+     "S-201.00:R004": "exact",
+     "S-201.00:R006": "exact",
+     "S-201.00:R007": "exact",
+     "S-201.00:R009": "exact",
+     "S-201.00:R010": "exact_contradicted",
+     "S-201.00:R011": "exact_marked",
+     "S-201.00:R012": "exact",
+     "S-201.00:R013": "partial",
+     "S-201.00:R014": "partial",
+     "S-201.00:R015": "exact_contradicted",
+     "S-201.00:R016": "exact_marked",
+     "S-201.00:R019": "exact",
+     "S-201.00:R020": "exact",
+     "S-201.00:R021": "exact",
+     "S-201.00:R023": "exact",
+     "S-201.00:R024": "wrong",
+     "S-201.00:R025": "exact",
+     "S-201.00:R026": "wrong",
+     "S-201.00:R028": "exact",
+     "S-201.00:R032": "none",
+     "S-201.00:R033": "exact",
+     "S-201.00:R034": "exact_marked",
+     "S-201.00:R039": "exact",
+     "S-201.00:R040": "exact",
+     "S-201.00:R041": "partial",
+     "S-201.00:R042": "exact",
+     "S-201.00:R044": "wrong",
+     "S-201.00:R045": "exact_marked",
+     "S-201.00:R047": "exact",
+     "S-201.00:R051": "partial",
+     "S-201.00:R054": "exact_marked",
+     "S-201.00:R055": "exact"
+    }
+   }
+  }
+ ]
+}

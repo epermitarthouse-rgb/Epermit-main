@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842785-KvKrMhBPhHc2QW8FbMZz",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 0, 246, 54], \"text_content\": \"TED FINISH.\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 54, 46, 87], \"text_content\": \"16.\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 209, 149, 247], \"text_content\": \"DECOR\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 358, 162, 400], \"text_content\": \"21-10\\\"\", \"category\": \"dimension\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 458, 46, 505], \"text_content\": \"0\\\"\", \"category\": \"dimension\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 564, 327, 612], \"text_content\": \"GRAY 2134-40\\\"\", \"category\": \"note\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 670, 112, 714], \"text_content\": \"631\\\"\", \"category\": \"dimension\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 724, 265, 768], \"text_content\": \"- \\\"LAMITECH\", \"category\": \"note\", \"group\": 7, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [467, 26, 486, 60], \"text_content\": \"04\", \"category\": \"schedule_cell\", \"group\": 8, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [658, 26, 980, 59], \"text_content\": \"PERMIT COMMEN\", \"category\": \"schedule_cell\", \"group\": 8, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [467, 99, 486, 133], \"text_content\": \"05\", \"category\": \"schedule_cell\", \"group\": 9, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [666, 99, 980, 133], \"text_content\": \"OWNER REVISIC\", \"category\": \"schedule_cell\", \"group\": 9, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [598, 777, 640, 980], \"text_content\": \"AVENUE\", \"category\": \"label\", \"group\": 10, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [658, 827, 704, 980], \"text_content\": \"ON DC\", \"category\": \"label\", \"group\": 11, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [720, 867, 776, 980], \"text_content\": \"3-0003\", \"category\": \"label\", \"group\": 12, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [790, 917, 836, 980], \"text_content\": \"650\", \"category\": \"label\", \"group\": 13, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 954,
+ "costUsd": 0.002187,
+ "reportedCostUsd": 0.0021868,
+ "latencyS": 28.21,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,76 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-3.06-00 source=4x3 annotations=82 technical=36 shown=71 independentlyVerified=false
+- A-3.06
+- ?-I-1/4" PIPE RAILING. PAINT / TO MATCH NEW METAL / PARAPET CAP.
+- EXTEND GUARD RAIL MIN. 30" BEYOND EACH END OF EQUIPMENT (ctx?)
+- THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010
+- EQ (ctx?)
+- {I-1/4" PIPE RAILING. PAINT PEX-I | - I-I/4" PIPE RA} / TO MATCH METAL PANELS / AND/OR (E) CORNICE
+- -1-1/4" PIPE RAILING. PAINT TO MATCH / NEW METAL PARAPET CAP. (ctx?)
+- 3'-6"MIN HEIGHT FROM / T.O. ROOF DECK MEMBRANE
+- MIN. ABOVE DECK MEMBRANE
+- CAULK BEHIND FLASHING (ctx?)
+- AND ALONG TOP EDGE OF / FLASHING (ctx?)
+- -DURA-LAST CAULK (ctx?)
+- -GUARD RAIL SHALL BE CONSTRUCTED SO AS TO / PREVENT THE PASSAGE OF A SPHERE 21" IN DIA (ctx?)
+- - STAINLESS STEEL BAND / {POSITIONED 1/4" FROM THE TOP | POSITIONED I/} / OF THE STACK FLASHING (ctx?)
+- -4x4 WOOD BLOCKING / {BETWEEN JOISTS AT NEW | JDISTS AT NEW} / GUARD RAIL PENETRATION / LOCATIONS. (ctx?)
+- STRUCTIONS. (ctx?)
+- {• GUIDELINES FOR | PELINES FOR}
+- VARIES (V.I.F)
+- T.O. ROOF MEMBRANE
+- — (E) INSULATION
+- -(E) JOISTS
+- - (E) WOOD DECKING
+- SQUARE FLOOR FLANGE
+- 4x4 HORIZONTAL BLOCKING
+- (E) JOIST TOP CHORD
+- A-3.00/
+- PARAPET BEYOND D
+- PARAPET BEYOND
+- 29'-0" A.F.F. V.
+- ?7/ BLOCKING & PARAPET
+- EXTERIOR ASSEMBLY-4 / (SEE ASSEMBLY NOTES) (ctx?)
+- - 1/2" EXTERIOR PLYWOOD / SHEATHING
+- 4" METAL STUDS @ 16" O.C.SEE / STRUCTURAL DRAWINGS. (ctx?)
+- 6" METAL STUDS @ 16" O.C.SEE / STRUCTURAL DRAWINGS.
+- ?2'-10'
+- LINE OF EXISTING / STAIR TOWER.
+- NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.
+- NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.
+- MIN.
+- DIAGONAL BRACING, SEE / STRUCTURAL DRAWINGS
+- STANDING SEAM METAL / ROOF TO REMAIN
+- ?26'-2" A.F.F. (V.I.F.
+- ROOF MEMBRANE
+- 25'-0" A.F.F.
+- EXISTING ROOF @ L.P. (V.I.F.)
+- UNDERCSOR / ?EV. + 10'-1
+- NEW CANOPY (ctx?)
+- {EXIST. DOUBLE | EXISI. DOUBLE} / ROOF TRUSS TO / REMAIN. TYP.
+- EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES) (ctx?)
+- EXIST. ROOF TRUSSES ES / TO REMAIN. TYP.
+- EXIST. ROOF TRUSSES / TO REMAIN. TYP.
+- A-3.00
+- {EXIST. ROOF | EXIST. R0OF} / JOISTS TO / REMAIN
+- EXIST. LOWER ROOF / SLOPE TO REMAIN.
+- EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES)
+- EXIST. MASONRY -
+- M
+- Medonald's
+- HFA
+- PREPARED FOR:
+- SITE ADDRESS:
+- DRAWING NAME: (ctx?)
+- DESIGN BY:
+- DRAWN BY: (ctx?)
+- DATE:
+- CHECKED BY:
+- SCALE:
+- SHEET:
+- 20
+- PROJECT #
+- PAGE #
+omitted: 11 annotations (0 technical; 11 other) by budget; not shown is not absent

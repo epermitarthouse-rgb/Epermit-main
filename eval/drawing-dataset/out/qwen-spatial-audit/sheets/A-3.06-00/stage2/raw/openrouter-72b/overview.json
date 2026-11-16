@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842266-fIjDSckoqHha8FDzmwut",
+ "text": "```json\n{\n  \"title_block\": [1075, 396, 1190, 790],\n  \"sheet_number\": \"24 OF 28\",\n  \"sheet_title\": \"WALL SECTIONS\",\n  \"details\": [\n    {\n      \"bbox_2d\": [55, 17, 385, 222],\n      \"detail_number\": \"1\",\n      \"title\": \"GUARD RAIL ELEVATION DETAIL @ HIGH ROOF\"\n    },\n    {\n      \"bbox_2d\": [400, 17, 695, 222],\n      \"detail_number\": \"2\",\n      \"title\": \"GUARD RAIL DETAIL @ HIGH ROOF\"\n    },\n    {\n      \"bbox_2d\": [710, 17, 1065, 222],\n      \"detail_number\": \"3\",\n      \"title\": \"GUARD RAIL DETAIL @ HIGH ROOF\"\n    },\n    {\n      \"bbox_2d\": [55, 257, 455, 700],\n      \"detail_number\": \"4\",\n      \"title\": \"WALL SECTION @ HIGH ROOF\"\n    },\n    {\n      \"bbox_2d\": [460, 257, 695, 530],\n      \"detail_number\": \"\",\n      \"title\": \"\"\n    },\n    {\n      \"bbox_2d\": [710, 257, 1065, 770],\n      \"detail_number\": \"5\",\n      \"title\": \"WALL SECTION @ NEW ORDER WINDOW\"\n    }\n  ],\n  \"schedules\": [],\n  \"gridlines\": []\n}\n```",
+ "finishReason": "stop",
+ "promptTokens": 1414,
+ "completionTokens": 388,
+ "costUsd": 0.001519,
+ "reportedCostUsd": 0.0015192,
+ "latencyS": 10.49,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

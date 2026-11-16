@@ -1,0 +1,67 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "A_pdf_only",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_01b2d8631921376a016aec8f216ae887d2bcdc4a9be1760e97",
+ "latencyMs": 7810,
+ "inputTokens": 3762,
+ "outputTokens": 376,
+ "costUsd": 0.013165,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architecture"
+ },
+ "summary": "This sheet provides floor plans for alterations on the 2nd floor and basement levels, including general notes and keyed notes for reference.",
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Fire-rated Partition Notes",
+   "observation": "The note indicates a 1-hour fire-rated partition at certain walls.",
+   "drawing_evidence": "Note in upper middle of 2nd Floor Alteration Floor Plan: '1 HR. FIRE RATED PARTITION.'",
+   "drawing_location": "Upper middle of the 2nd Floor Alteration Floor Plan",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm that the construction details for fire-rated partitions meet applicable codes and standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Fire-rated Partition Notes",
+    "originalObservation": "The note indicates a 1-hour fire-rated partition at certain walls.",
+    "originalCodeReference": "IBC 2015",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Incomplete Section References",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  },
+  {
+   "title": "Future Professional Certification Date",
+   "originalSeverity": "advisory",
+   "originalCodeReference": "",
+   "rules": [
+    "false_date_chronology_claim"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,104 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "L_av",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_02657423a87d6189016afb2d33f49c87d2918cd28739e67a48",
+ "latencyMs": 12395,
+ "inputTokens": 12708,
+ "outputTokens": 1094,
+ "reasoningTokens": 516,
+ "costUsd": 0.0038544,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-3.06-00.pdf",
+  "evidenceSha": "14d270dc429f841f",
+  "userPromptChars": 9374,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-3.06-00\",\"detected_sheet_title\":\"WALL SECTIONS\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains high-roof guardrail details and wall sections for the high roof and new order window. Guardrail height, extension, penetration, and attachment information is shown. One guardrail opening criterion warrants verification because the detail specifies prevention of passage of a 21-inch-diameter sphere.\",\"findings\":[{\"category\":\"further professional review\",\"severity\":\"warning\",\"title\":\"Guardrail opening criterion appears unusually permissive and requires verification\",\"observation\":\"Guard Rail Elevation Detail @ High Roof, detail 1, states: “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\\\" IN DIA.” The drawing does not identify the governing provision or explain why a 21-inch sphere criterion is applicable.\",\"drawing_evidence\":\"Detail 1, upper-left portion of sheet: note adjacent to the guardrail elevation reads “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\\\" IN DIA.”\",\"drawing_location\":\"Detail 1, Guard Rail Elevation Detail @ High Roof\",\"suggested_code_reference\":\"\",\"recommendation\":\"Verify the intended guard opening limitation against the applicable 2015 IBC base-code provisions and recorded DC amendments, considering the roof access and occupancy conditions. Revise the note and guardrail infill/opening design if the 21-inch criterion is not the applicable requirement.\"},{\"category\":\"general coordination note\",\"severity\":\"advisory\",\"title\":\"Guardrail structural attachment is dependent on referenced structural information\",\"observation\":\"The guardrail detail identifies “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and states that the guard rail sleeve and base plate are to be secured to new wood blocking with fasteners. The wall-section detail also labels diagonal bracing “SEE STRUCTURAL DRAWINGS.” The actual structural design and fastening schedule are not shown on this architectural sheet.\",\"drawing_evidence\":\"Detail 2, upper center: “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and “SECURED TO NEW WOOD BLOCK AS REQUIRED WITH FASTENERS.” Detail 5, right side: “DIAGONAL BRACING, SEE STRUCTURAL DRAWINGS.”\",\"drawing_location\":\"Detail 2, Guard Rail Detail @ High Roof; Detail 5, Wall Section @ New Order Window\",\"suggested_code_reference\":\"\",\"recommendation\":\"Coordinate the guardrail blocking, flange, fasteners, joist conditions, and diagonal bracing with the structural drawings and confirm that the referenced structural design supports the shown attachment locations.\"}]}",
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains high-roof guardrail details and wall sections for the high roof and new order window. Guardrail height, extension, penetration, and attachment information is shown. One guardrail opening criterion warrants verification because the detail specifies prevention of passage of a 21-inch-diameter sphere.",
+ "drafts": [
+  {
+   "category": "further professional review",
+   "severity": "warning",
+   "title": "Guardrail opening criterion appears unusually permissive and requires verification",
+   "observation": "Guard Rail Elevation Detail @ High Roof, detail 1, states: “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA.” The drawing does not identify the governing provision or explain why a 21-inch sphere criterion is applicable.",
+   "drawing_evidence": "Detail 1, upper-left portion of sheet: note adjacent to the guardrail elevation reads “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA.”",
+   "drawing_location": "Detail 1, Guard Rail Elevation Detail @ High Roof",
+   "suggested_code_reference": "",
+   "recommendation": "Verify the intended guard opening limitation against the applicable 2015 IBC base-code provisions and recorded DC amendments, considering the roof access and occupancy conditions. Revise the note and guardrail infill/opening design if the 21-inch criterion is not the applicable requirement."
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Guardrail structural attachment is dependent on referenced structural information",
+   "observation": "The guardrail detail identifies “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and states that the guard rail sleeve and base plate are to be secured to new wood blocking with fasteners. The wall-section detail also labels diagonal bracing “SEE STRUCTURAL DRAWINGS.” The actual structural design and fastening schedule are not shown on this architectural sheet.",
+   "drawing_evidence": "Detail 2, upper center: “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and “SECURED TO NEW WOOD BLOCK AS REQUIRED WITH FASTENERS.” Detail 5, right side: “DIAGONAL BRACING, SEE STRUCTURAL DRAWINGS.”",
+   "drawing_location": "Detail 2, Guard Rail Detail @ High Roof; Detail 5, Wall Section @ New Order Window",
+   "suggested_code_reference": "",
+   "recommendation": "Coordinate the guardrail blocking, flange, fasteners, joist conditions, and diagonal bracing with the structural drawings and confirm that the referenced structural design supports the shown attachment locations."
+  }
+ ],
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "warning",
+   "title": "Guardrail opening criterion appears unusually permissive and requires verification",
+   "observation": "Guard Rail Elevation Detail @ High Roof, detail 1, states: “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA.” The drawing does not identify the governing provision or explain why a 21-inch sphere criterion is applicable.",
+   "drawing_evidence": "Detail 1, upper-left portion of sheet: note adjacent to the guardrail elevation reads “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA.”",
+   "drawing_location": "Detail 1, Guard Rail Elevation Detail @ High Roof",
+   "suggested_code_reference": null,
+   "recommendation": "Verify the intended guard opening limitation against the applicable 2015 IBC base-code provisions and recorded DC amendments, considering the roof access and occupancy conditions. Revise the note and guardrail infill/opening design if the 21-inch criterion is not the applicable requirement.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Guardrail opening criterion appears unusually permissive and requires verification",
+    "originalObservation": "Guard Rail Elevation Detail @ High Roof, detail 1, states: “GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA.” The drawing does not identify the governing provision or explain why a 21-inch sphere criterion is applicable.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Guardrail structural attachment is dependent on referenced structural information",
+   "observation": "The guardrail detail identifies “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and states that the guard rail sleeve and base plate are to be secured to new wood blocking with fasteners. The wall-section detail also labels diagonal bracing “SEE STRUCTURAL DRAWINGS.” The actual structural design and fastening schedule are not shown on this architectural sheet.",
+   "drawing_evidence": "Detail 2, upper center: “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and “SECURED TO NEW WOOD BLOCK AS REQUIRED WITH FASTENERS.” Detail 5, right side: “DIAGONAL BRACING, SEE STRUCTURAL DRAWINGS.”",
+   "drawing_location": "Detail 2, Guard Rail Detail @ High Roof; Detail 5, Wall Section @ New Order Window",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate the guardrail blocking, flange, fasteners, joist conditions, and diagonal bracing with the structural drawings and confirm that the referenced structural design supports the shown attachment locations.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guardrail structural attachment is dependent on referenced structural information",
+    "originalObservation": "The guardrail detail identifies “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS” and states that the guard rail sleeve and base plate are to be secured to new wood blocking with fasteners. The wall-section detail also labels diagonal bracing “SEE STRUCTURAL DRAWINGS.” The actual structural design and fastening schedule are not shown on this architectural sheet.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,1614 @@
+{
+ "sheet": "A-1.01-00",
+ "sha256": "953efd7b2d51941603f49d83ecaeb929c74b5071f959432a7023a3fbb1eb7906",
+ "scope": "windows",
+ "windows": [
+  {
+   "id": "W1",
+   "x": 100,
+   "y": 1161,
+   "width": 1267,
+   "height": 534,
+   "note": "floor plan, upper half"
+  }
+ ],
+ "source": "Visual transcription from images/gt/A-1.01-00-01..06.png (2.5 px/pt candidate overlays) and z-a1-1..3.png (5-6 px/pt). Window W1 only (floor plan, upper half).",
+ "rowRule": "One entry per printed text row inside the windows; rows of one callout, note, bubble or dimension share an annotation id, top to bottom (vertical text: left to right).",
+ "technicalRule": "Row text contains a digit, A.F.F, ELEV., MIN, V.I.F, TYP or @ (stage 04 rule).",
+ "rows": [
+  {
+   "gid": "A-1.01-00:R001",
+   "aid": "A-1.01-00:P01",
+   "text": "NEW EXTERIOR ROOF. SEE ROOF",
+   "technical": false,
+   "box": {
+    "x": 288.65454498414545,
+    "y": 1644.86791832167,
+    "width": 126.1527272727273,
+    "height": 12.789551020408226
+   },
+   "vertical": false,
+   "candidates": [
+    "C004"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R002",
+   "aid": "A-1.01-00:P01",
+   "text": "PLAN FOR DETAILS.",
+   "technical": false,
+   "box": {
+    "x": 289.421383091034,
+    "y": 1634.2099591570286,
+    "width": 77.42482196044926,
+    "height": 11.082348553175734
+   },
+   "vertical": false,
+   "candidates": [
+    "C006"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R003",
+   "aid": "A-1.01-00:P02",
+   "text": "STAIR TOWER \"B\"",
+   "technical": false,
+   "box": {
+    "x": 507.43777454029384,
+    "y": 1651.9533982410517,
+    "width": 80.79413835296634,
+    "height": 10.45674936910791
+   },
+   "vertical": false,
+   "candidates": [
+    "C002"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R004",
+   "aid": "A-1.01-00:P02",
+   "text": "113",
+   "technical": true,
+   "box": {
+    "x": 533.5854542781817,
+    "y": 1636.3415507806042,
+    "width": 26.727272727272748,
+    "height": 11.723755288554912
+   },
+   "vertical": false,
+   "candidates": [
+    "C005"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R005",
+   "aid": "A-1.01-00:P03",
+   "text": "2",
+   "technical": true,
+   "box": {
+    "x": 711.610909041909,
+    "y": 1664.0522449690125,
+    "width": 6.949090909090955,
+    "height": 8.526367346938741
+   },
+   "vertical": false,
+   "candidates": [
+    "C001"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R006",
+   "aid": "A-1.01-00:P03",
+   "text": "A-2.00",
+   "technical": true,
+   "box": {
+    "x": 701.4545454772635,
+    "y": 1651.2626938842122,
+    "width": 27.796363636363708,
+    "height": 9.592163265306226
+   },
+   "vertical": false,
+   "candidates": [
+    "C003"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R007",
+   "aid": "A-1.01-00:P04",
+   "text": "NOTE:",
+   "technical": false,
+   "box": {
+    "x": 613.8109089076363,
+    "y": 1608.6308570819547,
+    "width": 24.545454472145593,
+    "height": 9.592163272918924
+   },
+   "vertical": false,
+   "candidates": [
+    "C007"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R008",
+   "aid": "A-1.01-00:P04",
+   "text": "COORDINATE EXTENT OF NEW FINISH IN",
+   "technical": false,
+   "box": {
+    "x": 614.3741398367608,
+    "y": 1597.2063715509253,
+    "width": 151.874007757291,
+    "height": 10.842825671682021
+   },
+   "vertical": false,
+   "candidates": [
+    "C008"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R009",
+   "aid": "A-1.01-00:P04",
+   "text": "STAIR TOWER W/ MCDONALD'S ACM.",
+   "technical": false,
+   "box": {
+    "x": 614.879998992,
+    "y": 1585.1833470301294,
+    "width": 142.1890911458181,
+    "height": 12.510957355414575
+   },
+   "vertical": false,
+   "candidates": [
+    "C010"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R010",
+   "aid": "A-1.01-00:P05",
+   "text": "NOTE:",
+   "technical": false,
+   "box": {
+    "x": 1018.0145457325091,
+    "y": 1589.4465306255674,
+    "width": 27.75272727272727,
+    "height": 9.592163265306226
+   },
+   "vertical": false,
+   "candidates": [
+    "C009"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R011",
+   "aid": "A-1.01-00:P05",
+   "text": "NEW TILE THROUGHOUT DINING AREA. G.C. TO REFER TO",
+   "technical": false,
+   "box": {
+    "x": 1018.0145429742545,
+    "y": 1577.332815491231,
+    "width": 248.02909090909088,
+    "height": 10.687378640776615
+   },
+   "vertical": false,
+   "candidates": [
+    "C011"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R012",
+   "aid": "A-1.01-00:P05",
+   "text": "DECOR DRAWINGS FOR SPECIFICATIONS & COORDINATE",
+   "technical": false,
+   "box": {
+    "x": 1019.0836384661817,
+    "y": 1567.0648163798205,
+    "width": 252.3054545454546,
+    "height": 9.592163265306226
+   },
+   "vertical": false,
+   "candidates": [
+    "C012"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R013",
+   "aid": "A-1.01-00:P05",
+   "text": "DETAILS WITH McDONALD'S A.C.M.",
+   "technical": false,
+   "box": {
+    "x": 1019.0836376198181,
+    "y": 1555.3410613710369,
+    "width": 151.81090909090904,
+    "height": 10.657959170350978
+   },
+   "vertical": false,
+   "candidates": [
+    "C013"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R014",
+   "aid": "A-1.01-00:P06",
+   "text": "SLOPE",
+   "technical": false,
+   "box": {
+    "x": 307.9636352447991,
+    "y": 1529.2396118871347,
+    "width": 16.036365675492675,
+    "height": 33.13087378640785
+   },
+   "vertical": true,
+   "candidates": [
+    "C014"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R015",
+   "aid": "A-1.01-00:P07",
+   "text": "NOTE:",
+   "technical": false,
+   "box": {
+    "x": 1018.0145456861818,
+    "y": 1512.139805857305,
+    "width": 27.796363636363708,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C015"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R016",
+   "aid": "A-1.01-00:P07",
+   "text": "NEW LIGHT FIXTURES THROUGHOUT DINING AREA. G.C. TO",
+   "technical": false,
+   "box": {
+    "x": 1018.0862040937843,
+    "y": 1501.9296645853708,
+    "width": 252.55241098022475,
+    "height": 11.030335279363271
+   },
+   "vertical": false,
+   "candidates": [
+    "C016"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R017",
+   "aid": "A-1.01-00:P07",
+   "text": "REFER TO DECOR DRAWINGS FOR SPECIFICATIONS &",
+   "technical": false,
+   "box": {
+    "x": 1018.6560105530128,
+    "y": 1490.8863574411282,
+    "width": 239.07846455472747,
+    "height": 11.164908022756435
+   },
+   "vertical": false,
+   "candidates": [
+    "C019"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R018",
+   "aid": "A-1.01-00:P07",
+   "text": "COORDINATE DETAILS WITH McDONALD'S A.C.M.",
+   "technical": false,
+   "box": {
+    "x": 1019.0836378985454,
+    "y": 1478.6037551553306,
+    "width": 214.88727272727272,
+    "height": 10.023817526611083
+   },
+   "vertical": false,
+   "candidates": [
+    "C021"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R019",
+   "aid": "A-1.01-00:P08",
+   "text": "SLOPE",
+   "technical": false,
+   "box": {
+    "x": 252.3709088058182,
+    "y": 1489.2617142590695,
+    "width": 34.210909583136356,
+    "height": 15.986938775510225
+   },
+   "vertical": false,
+   "candidates": [
+    "C017"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R020",
+   "aid": "A-1.01-00:P09",
+   "text": "SLOPE",
+   "technical": false,
+   "box": {
+    "x": 333.62181835109095,
+    "y": 1485.3842688513644,
+    "width": 36.91128605268614,
+    "height": 16.548038582505797
+   },
+   "vertical": false,
+   "candidates": [
+    "C018"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R021",
+   "aid": "A-1.01-00:P10",
+   "text": "2",
+   "technical": true,
+   "box": {
+    "x": 813.2181817647272,
+    "y": 1486.2772118157486,
+    "width": 6.949090909090955,
+    "height": 8.003766207092667
+   },
+   "vertical": false,
+   "candidates": [
+    "C020"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R022",
+   "aid": "A-1.01-00:P10",
+   "text": "A-301",
+   "technical": true,
+   "box": {
+    "x": 803,
+    "y": 1475.5,
+    "width": 13,
+    "height": 7.2
+   },
+   "vertical": false,
+   "candidates": [
+    "C022"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R023",
+   "aid": "A-1.01-00:P10",
+   "text": "OPP.",
+   "technical": false,
+   "box": {
+    "x": 844,
+    "y": 1470,
+    "width": 11.5,
+    "height": 6.2
+   },
+   "vertical": false,
+   "candidates": [
+    "C022"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R024",
+   "aid": "A-1.01-00:P11",
+   "text": "1",
+   "technical": true,
+   "box": {
+    "x": 751.5,
+    "y": 1473.5,
+    "width": 6,
+    "height": 8.5
+   },
+   "vertical": false,
+   "candidates": []
+  },
+  {
+   "gid": "A-1.01-00:R025",
+   "aid": "A-1.01-00:P11",
+   "text": "A-3.01",
+   "technical": true,
+   "box": {
+    "x": 739.9636366950544,
+    "y": 1472.2089796771006,
+    "width": 33.14181818181817,
+    "height": 12.789551020408226
+   },
+   "vertical": false,
+   "candidates": [
+    "C023"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R026",
+   "aid": "A-1.01-00:P11",
+   "text": "OPP.",
+   "technical": false,
+   "box": {
+    "x": 765.0872727784999,
+    "y": 1467.064936883386,
+    "width": 20.847272727272752,
+    "height": 9.072503807713247
+   },
+   "vertical": false,
+   "candidates": [
+    "C024"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R027",
+   "aid": "A-1.01-00:P12",
+   "text": "10",
+   "technical": true,
+   "box": {
+    "x": 649.069090918,
+    "y": 1461.9091262670293,
+    "width": 8.552727272727225,
+    "height": 7.481165048543744
+   },
+   "vertical": false,
+   "candidates": [
+    "C025"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R028",
+   "aid": "A-1.01-00:P12",
+   "text": "A-4.01",
+   "technical": true,
+   "box": {
+    "x": 639.0062071960165,
+    "y": 1448.6317947566815,
+    "width": 28.573447607803246,
+    "height": 9.189743636175535
+   },
+   "vertical": false,
+   "candidates": [
+    "C026"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R029",
+   "aid": "A-1.01-00:P13",
+   "text": "9",
+   "technical": true,
+   "box": {
+    "x": 691,
+    "y": 1463,
+    "width": 6.5,
+    "height": 9
+   },
+   "vertical": false,
+   "candidates": []
+  },
+  {
+   "gid": "A-1.01-00:R030",
+   "aid": "A-1.01-00:P13",
+   "text": "A-4.01",
+   "technical": true,
+   "box": {
+    "x": 682.1890906284546,
+    "y": 1450.153009655301,
+    "width": 22.49454568172723,
+    "height": 6.412427253170563
+   },
+   "vertical": false,
+   "candidates": [
+    "C027"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R031",
+   "aid": "A-1.01-00:P14",
+   "text": "AL",
+   "technical": false,
+   "box": {
+    "x": 1019.040000106909,
+    "y": 1441.6031068495536,
+    "width": 12.829090909090837,
+    "height": 8.549902912621292
+   },
+   "vertical": false,
+   "candidates": [
+    "C028"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R032",
+   "aid": "A-1.01-00:P15",
+   "text": "1",
+   "technical": true,
+   "box": {
+    "x": 602.5,
+    "y": 1454.5,
+    "width": 7,
+    "height": 8.5
+   },
+   "vertical": false,
+   "candidates": []
+  },
+  {
+   "gid": "A-1.01-00:R033",
+   "aid": "A-1.01-00:P15",
+   "text": "A-3.02",
+   "technical": true,
+   "box": {
+    "x": 594.0109090103756,
+    "y": 1440.534368863485,
+    "width": 26.19272727272721,
+    "height": 8.015533980582632
+   },
+   "vertical": false,
+   "candidates": [
+    "C029"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R034",
+   "aid": "A-1.01-00:P16",
+   "text": "3'-5 1/2\"",
+   "technical": true,
+   "box": {
+    "x": 581.694545704,
+    "y": 1421.2970874320777,
+    "width": 29.9345454545454,
+    "height": 14.96233009708726
+   },
+   "vertical": false,
+   "candidates": [
+    "C030"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R035",
+   "aid": "A-1.01-00:P17",
+   "text": "3'-4\"",
+   "technical": true,
+   "box": {
+    "x": 977.9018183097271,
+    "y": 1421.8314563099163,
+    "width": 19.778181818181793,
+    "height": 10.687378640776615
+   },
+   "vertical": false,
+   "candidates": [
+    "C031"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R036",
+   "aid": "A-1.01-00:P18",
+   "text": "4'-7 1/2\"",
+   "technical": true,
+   "box": {
+    "x": 653.3672729792727,
+    "y": 1421.297087424444,
+    "width": 35.27999999999997,
+    "height": 12.824854368931938
+   },
+   "vertical": false,
+   "candidates": [
+    "C032"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R037",
+   "aid": "A-1.01-00:P19",
+   "text": "9 1/2\"",
+   "technical": true,
+   "box": {
+    "x": 713.2363637343635,
+    "y": 1420.2283494076894,
+    "width": 13.898181818181797,
+    "height": 12.824854368931938
+   },
+   "vertical": false,
+   "candidates": [
+    "C033"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R038",
+   "aid": "A-1.01-00:P20",
+   "text": "3'-10\"",
+   "technical": true,
+   "box": {
+    "x": 911.061817957309,
+    "y": 1421.2970873145166,
+    "width": 22.450909090909136,
+    "height": 8.549902912621292
+   },
+   "vertical": false,
+   "candidates": [
+    "C034"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R039",
+   "aid": "A-1.01-00:P21",
+   "text": "8'-3\"",
+   "technical": true,
+   "box": {
+    "x": 790.254545508,
+    "y": 1420.2283496481555,
+    "width": 19.20000005345446,
+    "height": 10.687378596245935
+   },
+   "vertical": false,
+   "candidates": [
+    "C035"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R040",
+   "aid": "A-1.01-00:P22",
+   "text": "9 1/2\"",
+   "technical": true,
+   "box": {
+    "x": 869.8800001603636,
+    "y": 1420.762718446602,
+    "width": 21.381818181818176,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C036"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R041",
+   "aid": "A-1.01-00:P23",
+   "text": "DN",
+   "technical": false,
+   "box": {
+    "x": 510.0436363636363,
+    "y": 1406.334757188039,
+    "width": 20.312727272727216,
+    "height": 10.687378640776842
+   },
+   "vertical": false,
+   "candidates": [
+    "C037"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R042",
+   "aid": "A-1.01-00:P24",
+   "text": "SF",
+   "technical": false,
+   "box": {
+    "x": 311.6727272905455,
+    "y": 1404.7316504008286,
+    "width": 12.829090909090894,
+    "height": 10.153009708737954
+   },
+   "vertical": false,
+   "candidates": [
+    "C038"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R043",
+   "aid": "A-1.01-00:P25",
+   "text": "SF",
+   "technical": false,
+   "box": {
+    "x": 794.5090910587636,
+    "y": 1396.3681552022058,
+    "width": 19.778181818181793,
+    "height": 12.290485436893277
+   },
+   "vertical": false,
+   "candidates": [
+    "C039"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R044",
+   "aid": "A-1.01-00:P26",
+   "text": "SF",
+   "technical": false,
+   "box": {
+    "x": 918.5236364856908,
+    "y": 1398.157669975943,
+    "width": 12.850908926091051,
+    "height": 9.96660189276372
+   },
+   "vertical": false,
+   "candidates": [
+    "C040"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R045",
+   "aid": "A-1.01-00:P27",
+   "text": "SF",
+   "technical": false,
+   "box": {
+    "x": 664.0145455614545,
+    "y": 1398.8535922864467,
+    "width": 12.82909090909095,
+    "height": 8.922718296978701
+   },
+   "vertical": false,
+   "candidates": [
+    "C041"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R046",
+   "aid": "A-1.01-00:P28",
+   "text": "11",
+   "technical": true,
+   "box": {
+    "x": 1083.185454492,
+    "y": 1393.509903006136,
+    "width": 6.458181818181856,
+    "height": 7.481165048543744
+   },
+   "vertical": false,
+   "candidates": [
+    "C044"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R047",
+   "aid": "A-1.01-00:P28",
+   "text": "A-4.01",
+   "technical": true,
+   "box": {
+    "x": 1074.6763635160908,
+    "y": 1378.9203884697476,
+    "width": 26.727272727272748,
+    "height": 9.618640776699067
+   },
+   "vertical": false,
+   "candidates": [
+    "C046"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R048",
+   "aid": "A-1.01-00:P29",
+   "text": "2'-4\"",
+   "technical": true,
+   "box": {
+    "x": 1027.6145445989991,
+    "y": 1361.8205827233244,
+    "width": 8.55272893085612,
+    "height": 17.98213592767388
+   },
+   "vertical": true,
+   "candidates": [
+    "C047"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R049",
+   "aid": "A-1.01-00:P30",
+   "text": "DS",
+   "technical": false,
+   "box": {
+    "x": 782.1927272243636,
+    "y": 1338.1219417539344,
+    "width": 20.84727272727264,
+    "height": 17.6341747572817
+   },
+   "vertical": false,
+   "candidates": [
+    "C048"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R050",
+   "aid": "A-1.01-00:P31",
+   "text": "DS",
+   "technical": false,
+   "box": {
+    "x": 651.2400000493254,
+    "y": 1338.3548723259385,
+    "width": 14.747585960769698,
+    "height": 16.54153773023586
+   },
+   "vertical": false,
+   "candidates": [
+    "C049"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R051",
+   "aid": "A-1.01-00:P32",
+   "text": "G.C. TO APPLY OPAQUE FILM",
+   "technical": false,
+   "box": {
+    "x": 242.74908950590913,
+    "y": 1341.1417476440647,
+    "width": 112.25454545454551,
+    "height": 11.060193996634325
+   },
+   "vertical": false,
+   "candidates": [
+    "C050"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R052",
+   "aid": "A-1.01-00:P32",
+   "text": "ON INERIOR FACE OF GLAZING",
+   "technical": false,
+   "box": {
+    "x": 242.7163636524,
+    "y": 1330.8271845728934,
+    "width": 119.00511037418079,
+    "height": 10.687378640776615
+   },
+   "vertical": false,
+   "candidates": [
+    "C052"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R053",
+   "aid": "A-1.01-00:P33",
+   "text": "DS",
+   "technical": false,
+   "box": {
+    "x": 922.7781819651818,
+    "y": 1339.7250485102913,
+    "width": 13.898181818181683,
+    "height": 9.08427184466018
+   },
+   "vertical": false,
+   "candidates": [
+    "C051"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R054",
+   "aid": "A-1.01-00:P34",
+   "text": "DS",
+   "technical": false,
+   "box": {
+    "x": 945.2509089528181,
+    "y": 1303.3879611971106,
+    "width": 14.432727352909183,
+    "height": 10.153009623239086
+   },
+   "vertical": false,
+   "candidates": [
+    "C053"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R055",
+   "aid": "A-1.01-00:P35",
+   "text": "SF",
+   "technical": false,
+   "box": {
+    "x": 1023.3381818181817,
+    "y": 1295.37242716382,
+    "width": 11.760000017818356,
+    "height": 9.432232950199477
+   },
+   "vertical": false,
+   "candidates": [
+    "C054"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R056",
+   "aid": "A-1.01-00:P36",
+   "text": "EXIST. STAIR & RAILING",
+   "technical": false,
+   "box": {
+    "x": 514.3220696488894,
+    "y": 1279.1549515097477,
+    "width": 94.01585756835937,
+    "height": 9.991456299992251
+   },
+   "vertical": false,
+   "candidates": [
+    "C055"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R057",
+   "aid": "A-1.01-00:P37",
+   "text": "NOTE:",
+   "technical": false,
+   "box": {
+    "x": 1160.1119762469896,
+    "y": 1268.7272789733302,
+    "width": 25.728023791940586,
+    "height": 10.81323396229618
+   },
+   "vertical": false,
+   "candidates": [
+    "C056"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R058",
+   "aid": "A-1.01-00:P37",
+   "text": "COORDINATE EXTENT OF NEW FINISH IN",
+   "technical": false,
+   "box": {
+    "x": 1161.573947655057,
+    "y": 1258.0986920833566,
+    "width": 152.94310682373043,
+    "height": 10.684415868321139
+   },
+   "vertical": false,
+   "candidates": [
+    "C058"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R059",
+   "aid": "A-1.01-00:P37",
+   "text": "STAIR TOWER W/ MCDONALD'S ACM.",
+   "technical": false,
+   "box": {
+    "x": 1161.573951195835,
+    "y": 1246.8117700547793,
+    "width": 142.9890276505903,
+    "height": 10.48586272488933
+   },
+   "vertical": false,
+   "candidates": [
+    "C060"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R060",
+   "aid": "A-1.01-00:P38",
+   "text": "8",
+   "technical": true,
+   "box": {
+    "x": 1044.7418181283635,
+    "y": 1263.4966991146252,
+    "width": 7.4836363636363785,
+    "height": 8.549902912621292
+   },
+   "vertical": false,
+   "candidates": [
+    "C057"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R061",
+   "aid": "A-1.01-00:P38",
+   "text": "A-3.00",
+   "technical": true,
+   "box": {
+    "x": 1035.012256027792,
+    "y": 1249.3449734055944,
+    "width": 28.50276077270496,
+    "height": 10.134907712473478
+   },
+   "vertical": false,
+   "candidates": [
+    "C059"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R062",
+   "aid": "A-1.01-00:P39",
+   "text": "13'-2\"",
+   "technical": true,
+   "box": {
+    "x": 904.6036352585445,
+    "y": 1232.5033012166837,
+    "width": 10.690911130038216,
+    "height": 24.580970873786328
+   },
+   "vertical": true,
+   "candidates": [
+    "C061"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R063",
+   "aid": "A-1.01-00:P40",
+   "text": "DS",
+   "technical": false,
+   "box": {
+    "x": 945.2290908938181,
+    "y": 1186.5475728995063,
+    "width": 14.967272727272757,
+    "height": 11.75611650485439
+   },
+   "vertical": false,
+   "candidates": [
+    "C062"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R064",
+   "aid": "A-1.01-00:P41",
+   "text": "STAIR TOWER \"A\"",
+   "technical": false,
+   "box": {
+    "x": 1200.5875844638267,
+    "y": 1189.0578640309127,
+    "width": 80.423323611446,
+    "height": 10.314563100116402
+   },
+   "vertical": false,
+   "candidates": [
+    "C063"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R065",
+   "aid": "A-1.01-00:P41",
+   "text": "112",
+   "technical": true,
+   "box": {
+    "x": 1227.5999997327272,
+    "y": 1173.7227183931652,
+    "width": 26.727272727272748,
+    "height": 11.75611650485439
+   },
+   "vertical": false,
+   "candidates": [
+    "C067"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R066",
+   "aid": "A-1.01-00:P42",
+   "text": "1",
+   "technical": true,
+   "box": {
+    "x": 146.5,
+    "y": 1203.5,
+    "width": 6,
+    "height": 9
+   },
+   "vertical": false,
+   "candidates": []
+  },
+  {
+   "gid": "A-1.01-00:R067",
+   "aid": "A-1.01-00:P42",
+   "text": "A-2.01",
+   "technical": true,
+   "box": {
+    "x": 135.84000023163637,
+    "y": 1190.8225243252816,
+    "width": 27.796363636363623,
+    "height": 8.549902912621292
+   },
+   "vertical": false,
+   "candidates": [
+    "C064"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R068",
+   "aid": "A-1.01-00:P43",
+   "text": "DINING",
+   "technical": false,
+   "box": {
+    "x": 646.9090906418182,
+    "y": 1184.4100970250356,
+    "width": 32.07272727272721,
+    "height": 11.904318871384476
+   },
+   "vertical": false,
+   "candidates": [
+    "C065"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R069",
+   "aid": "A-1.01-00:P43",
+   "text": "101B",
+   "technical": true,
+   "box": {
+    "x": 646.952727450909,
+    "y": 1167.31029113745,
+    "width": 29.934545454545514,
+    "height": 15.335145662239483
+   },
+   "vertical": false,
+   "candidates": [
+    "C069"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R070",
+   "aid": "A-1.01-00:P44",
+   "text": "NEW 1 HR. FIRE",
+   "technical": true,
+   "box": {
+    "x": 844.6313264128751,
+    "y": 1179.5953273438092,
+    "width": 59.16108590480212,
+    "height": 13.561595597848054
+   },
+   "vertical": false,
+   "candidates": [
+    "C066"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R071",
+   "aid": "A-1.01-00:P44",
+   "text": "RESISTIVE",
+   "technical": false,
+   "box": {
+    "x": 844.8020694903554,
+    "y": 1168.7136434593915,
+    "width": 42.71207908305405,
+    "height": 11.56083014938281
+   },
+   "vertical": false,
+   "candidates": [
+    "C070"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R072",
+   "aid": "A-1.01-00:P44",
+   "text": "WALL. SEE",
+   "technical": false,
+   "box": {
+    "x": 844.737835262307,
+    "y": 1157.6916506029982,
+    "width": 42.463542463216754,
+    "height": 10.047183277481508
+   },
+   "vertical": false,
+   "candidates": [
+    "C073"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R073",
+   "aid": "A-1.01-00:P45",
+   "text": "SF",
+   "technical": false,
+   "box": {
+    "x": 1023.3163635160909,
+    "y": 1174.7914564309128,
+    "width": 11.759999999999991,
+    "height": 9.618640718809047
+   },
+   "vertical": false,
+   "candidates": [
+    "C068"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R074",
+   "aid": "A-1.01-00:P46",
+   "text": "ALIGN",
+   "technical": false,
+   "box": {
+    "x": 927.0545456861818,
+    "y": 1165.545631121398,
+    "width": 25.70181783258181,
+    "height": 11.75611650485439
+   },
+   "vertical": false,
+   "candidates": [
+    "C071"
+   ]
+  },
+  {
+   "gid": "A-1.01-00:R075",
+   "aid": "A-1.01-00:P47",
+   "text": "1",
+   "technical": true,
+   "box": {
+    "x": 1327.5,
+    "y": 1172.5,
+    "width": 5,
+    "height": 7
+   },
+   "vertical": false,
+   "candidates": []
+  },
+  {
+   "gid": "A-1.01-00:R076",
+   "aid": "A-1.01-00:P47",
+   "text": "A-2.00",
+   "technical": true,
+   "box": {
+    "x": 1314.1745451750544,
+    "y": 1157.3436893722985,
+    "width": 32.07272727960003,
+    "height": 10.68737854077358
+   },
+   "vertical": false,
+   "candidates": [
+    "C072"
+   ]
+  }
+ ],
+ "annotations": [
+  {
+   "aid": "A-1.01-00:P01",
+   "rows": [
+    "A-1.01-00:R001",
+    "A-1.01-00:R002"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P02",
+   "rows": [
+    "A-1.01-00:R003",
+    "A-1.01-00:R004"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P03",
+   "rows": [
+    "A-1.01-00:R005",
+    "A-1.01-00:R006"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P04",
+   "rows": [
+    "A-1.01-00:R007",
+    "A-1.01-00:R008",
+    "A-1.01-00:R009"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P05",
+   "rows": [
+    "A-1.01-00:R010",
+    "A-1.01-00:R011",
+    "A-1.01-00:R012",
+    "A-1.01-00:R013"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P06",
+   "rows": [
+    "A-1.01-00:R014"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P07",
+   "rows": [
+    "A-1.01-00:R015",
+    "A-1.01-00:R016",
+    "A-1.01-00:R017",
+    "A-1.01-00:R018"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P08",
+   "rows": [
+    "A-1.01-00:R019"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P09",
+   "rows": [
+    "A-1.01-00:R020"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P10",
+   "rows": [
+    "A-1.01-00:R021",
+    "A-1.01-00:R022",
+    "A-1.01-00:R023"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P11",
+   "rows": [
+    "A-1.01-00:R024",
+    "A-1.01-00:R025",
+    "A-1.01-00:R026"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P12",
+   "rows": [
+    "A-1.01-00:R027",
+    "A-1.01-00:R028"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P13",
+   "rows": [
+    "A-1.01-00:R029",
+    "A-1.01-00:R030"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P14",
+   "rows": [
+    "A-1.01-00:R031"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P15",
+   "rows": [
+    "A-1.01-00:R032",
+    "A-1.01-00:R033"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P16",
+   "rows": [
+    "A-1.01-00:R034"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P17",
+   "rows": [
+    "A-1.01-00:R035"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P18",
+   "rows": [
+    "A-1.01-00:R036"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P19",
+   "rows": [
+    "A-1.01-00:R037"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P20",
+   "rows": [
+    "A-1.01-00:R038"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P21",
+   "rows": [
+    "A-1.01-00:R039"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P22",
+   "rows": [
+    "A-1.01-00:R040"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P23",
+   "rows": [
+    "A-1.01-00:R041"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P24",
+   "rows": [
+    "A-1.01-00:R042"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P25",
+   "rows": [
+    "A-1.01-00:R043"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P26",
+   "rows": [
+    "A-1.01-00:R044"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P27",
+   "rows": [
+    "A-1.01-00:R045"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P28",
+   "rows": [
+    "A-1.01-00:R046",
+    "A-1.01-00:R047"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P29",
+   "rows": [
+    "A-1.01-00:R048"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P30",
+   "rows": [
+    "A-1.01-00:R049"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P31",
+   "rows": [
+    "A-1.01-00:R050"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P32",
+   "rows": [
+    "A-1.01-00:R051",
+    "A-1.01-00:R052"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P33",
+   "rows": [
+    "A-1.01-00:R053"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P34",
+   "rows": [
+    "A-1.01-00:R054"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P35",
+   "rows": [
+    "A-1.01-00:R055"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P36",
+   "rows": [
+    "A-1.01-00:R056"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P37",
+   "rows": [
+    "A-1.01-00:R057",
+    "A-1.01-00:R058",
+    "A-1.01-00:R059"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P38",
+   "rows": [
+    "A-1.01-00:R060",
+    "A-1.01-00:R061"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P39",
+   "rows": [
+    "A-1.01-00:R062"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P40",
+   "rows": [
+    "A-1.01-00:R063"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P41",
+   "rows": [
+    "A-1.01-00:R064",
+    "A-1.01-00:R065"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P42",
+   "rows": [
+    "A-1.01-00:R066",
+    "A-1.01-00:R067"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P43",
+   "rows": [
+    "A-1.01-00:R068",
+    "A-1.01-00:R069"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P44",
+   "rows": [
+    "A-1.01-00:R070",
+    "A-1.01-00:R071",
+    "A-1.01-00:R072"
+   ],
+   "technical": true
+  },
+  {
+   "aid": "A-1.01-00:P45",
+   "rows": [
+    "A-1.01-00:R073"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P46",
+   "rows": [
+    "A-1.01-00:R074"
+   ],
+   "technical": false
+  },
+  {
+   "aid": "A-1.01-00:P47",
+   "rows": [
+    "A-1.01-00:R075",
+    "A-1.01-00:R076"
+   ],
+   "technical": true
+  }
+ ],
+ "noise": {
+  "textLayerEcho": [],
+  "nonText": [
+   {
+    "x": 957.032726577818,
+    "y": 1392.077061328202,
+    "width": 57.90305422907352,
+    "height": 14.62179995638644
+   },
+   {
+    "x": 563.4586399936934,
+    "y": 1391.7452426756972,
+    "width": 65.3372643210671,
+    "height": 14.883284280396765
+   },
+   {
+    "x": 1018.0145438895622,
+    "y": 1350.760389026382,
+    "width": 6.4145485132389695,
+    "height": 40.61203883495136
+   }
+  ]
+ },
+ "ambiguities": [
+  "P10 prints A-301 without the dot as drawn.",
+  "P32 prints INERIOR as drawn.",
+  "P44 continues below the window (rows outside the window are not ground truth)."
+ ]
+}

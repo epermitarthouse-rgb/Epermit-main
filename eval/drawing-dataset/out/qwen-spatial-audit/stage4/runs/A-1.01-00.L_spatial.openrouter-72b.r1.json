@@ -1,0 +1,85 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "L_spatial",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_03c75551c5351ff2016afb2cbbf44087d282b043005a5bdc18",
+ "latencyMs": 18679,
+ "inputTokens": 23914,
+ "outputTokens": 1439,
+ "reasoningTokens": 1034,
+ "costUsd": 0.0065096,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-1.01-00.pdf",
+  "evidenceSha": "2bc1bf13ebfb66c8",
+  "userPromptChars": 15772,
+  "images": [
+   "P-R018 source",
+   "P-R018 target",
+   "P-R016 source",
+   "P-R016 target",
+   "P-R023 source",
+   "P-R023 target",
+   "P-R024 source",
+   "P-R024 target"
+  ],
+  "pairs": [
+   "P-R018",
+   "P-R016",
+   "P-R023",
+   "P-R024",
+   "P-R025",
+   "P-R026",
+   "P-R027",
+   "P-R028",
+   "P-R029",
+   "P-R030",
+   "P-R031",
+   "P-R033",
+   "P-R035",
+   "P-R021"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-1.01-00\",\"detected_sheet_title\":\"MEZZANINE & BASEMENT FLOOR PLAN\",\"discipline\":\"Architectural\",\"summary\":\"Architectural sheet showing second-floor and basement alteration floor plans, general notes, keyed notes, and symbol legends. One preliminary concern was identified regarding the accessibility standard edition cited in the general notes.\",\"findings\":[{\"category\":\"Accessibility/code reference\",\"severity\":\"warning\",\"title\":\"Accessibility standard edition cited in general notes may not align with the adopted code basis\",\"observation\":\"The accessibility note states: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” The selected review context identifies the 2015 IBC base code and ICC/ANSI A117.1-2009 as the applicable referenced accessibility standard, subject to verification of DC amendments.\",\"drawing_evidence\":\"General Notes, Additional ADA Notes, item 4, lower-left notes panel: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).”\",\"drawing_location\":\"Detail 3, General Notes, Additional ADA Notes, item 4\",\"suggested_code_reference\":\"ICC/ANSI A117.1-2009; applicable provision and any DC amendment require verification.\",\"recommendation\":\"Verify the accessibility standard edition used for the permit basis. If the 2015 IBC/DC requirements govern, revise the note to identify the applicable ICC/ANSI A117.1-2009 basis, or document the approved local basis supporting the 2003 edition. Coordinate the corrected reference with the accessibility details and schedules on the referenced sheets.\",\"finding_type\":\"code_requirement\",\"source_sheets\":[\"A-1.01-00\"],\"evidence_ids\":[\"e54\"],\"evidence_status\":\"requires_professional_verification\",\"confidence\":\"medium\"}]}",
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "Architectural sheet showing second-floor and basement alteration floor plans, general notes, keyed notes, and symbol legends. One preliminary concern was identified regarding the accessibility standard edition cited in the general notes.",
+ "drafts": [
+  {
+   "category": "Accessibility/code reference",
+   "severity": "warning",
+   "title": "Accessibility standard edition cited in general notes may not align with the adopted code basis",
+   "observation": "The accessibility note states: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” The selected review context identifies the 2015 IBC base code and ICC/ANSI A117.1-2009 as the applicable referenced accessibility standard, subject to verification of DC amendments.",
+   "drawing_evidence": "General Notes, Additional ADA Notes, item 4, lower-left notes panel: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).”",
+   "drawing_location": "Detail 3, General Notes, Additional ADA Notes, item 4",
+   "suggested_code_reference": "ICC/ANSI A117.1-2009; applicable provision and any DC amendment require verification.",
+   "recommendation": "Verify the accessibility standard edition used for the permit basis. If the 2015 IBC/DC requirements govern, revise the note to identify the applicable ICC/ANSI A117.1-2009 basis, or document the approved local basis supporting the 2003 edition. Coordinate the corrected reference with the accessibility details and schedules on the referenced sheets.",
+   "finding_type": "code_requirement",
+   "source_sheets": [
+    "A-1.01-00"
+   ],
+   "evidence_ids": [
+    "e54"
+   ],
+   "evidence_status": "requires_professional_verification",
+   "confidence": "medium"
+  }
+ ],
+ "published": [],
+ "withheld": [
+  {
+   "title": "Accessibility standard edition cited in general notes may not align with the adopted code basis",
+   "originalSeverity": "warning",
+   "originalCodeReference": "ICC/ANSI A117.1-2009; applicable provision and any DC amendment require verification.",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

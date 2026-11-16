@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842044-onQUhX1p1LDLNqysqOOe",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 64, 742, 168],\n        \"text_content\": \"McDonald's\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [10, 317, 674, 574],\n        \"text_content\": \"HFA\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [48, 595, 638, 652],\n        \"text_content\": \"HFA-AE , LTD.\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [20, 735, 664, 772],\n        \"text_content\": \"3700 O'Donnell Street, Suite 200\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [77, 780, 604, 814],\n        \"text_content\": \"Baltimore, Maryland 21224\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [188, 822, 495, 854],\n        \"text_content\": \"t: 410.837.3622\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [196, 864, 502, 896],\n        \"text_content\": \"f: 410.837.3621\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 528,
+ "costUsd": 0.001761,
+ "reportedCostUsd": 0.0017608,
+ "latencyS": 10.68,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

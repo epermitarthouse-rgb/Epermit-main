@@ -1,0 +1,36 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_spatial",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0999ba89e2f2009f016afb2ce1f2e887d2b99921c13f997fcb",
+ "latencyMs": 9689,
+ "inputTokens": 16533,
+ "outputTokens": 578,
+ "reasoningTokens": 460,
+ "costUsd": 0.004000200000000001,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "413f8455e34a7a87",
+  "userPromptChars": 13890,
+  "images": [
+   "P-R038 source"
+  ],
+  "pairs": [
+   "P-R038"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains window types, a door hardware schedule, a door schedule, hardware notes, general door notes, and related storefront/entrance glazing information. The visible content does not establish a supported code discrepancy, conflicting value, or demonstrated omission. Referenced sheets and details are noted on the drawing but were not reviewed in this request.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains window types, a door hardware schedule, a door schedule, hardware notes, general door notes, and related storefront/entrance glazing information. The visible content does not establish a supported code discrepancy, conflicting value, or demonstrated omission. Referenced sheets and details are noted on the drawing but were not reviewed in this request.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

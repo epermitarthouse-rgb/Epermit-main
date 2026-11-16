@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842315-yKugjWgA59cQNvU1JLpE",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 0, 76, 24],\n        \"text_content\": \"ESTROOM\",\n        \"category\": \"room_or_tag\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [126, 72, 165, 628],\n        \"text_content\": \"4'-0\\\" MIN. TO LOWEST CHARACTER\",\n        \"category\": \"dimension\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [190, 62, 233, 728],\n        \"text_content\": \"5'-0\\\" MAX. TO HIGHEST CHARACTER\",\n        \"category\": \"dimension\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [523, 65, 979, 164],\n        \"text_content\": \"McDon\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [588, 320, 979, 574],\n        \"text_content\": \"HF\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [628, 594, 955, 654],\n        \"text_content\": \"HFA-AE\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [600, 734, 979, 774],\n        \"text_content\": \"3700 O'Donnell Stre\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [657, 780, 979, 818],\n        \"text_content\": \"Baltimore, Maryla\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [764, 822, 979, 852],\n        \"text_content\": \"t: 410.837.\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [776, 868, 979, 898],\n        \"text_content\": \"f: 410.837\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 721,
+ "costUsd": 0.001954,
+ "reportedCostUsd": 0.0019538,
+ "latencyS": 18.84,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

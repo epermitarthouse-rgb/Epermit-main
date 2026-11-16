@@ -1,0 +1,80 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "D_v2_12x9",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_026fc1a4cb622fd0016aec8ef8511487d29d7d7f14c7357857",
+ "latencyMs": 8926,
+ "inputTokens": 4961,
+ "outputTokens": 447,
+ "costUsd": 0.0168725,
+ "userPromptChars": 3536,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains guard rail and wall section details relevant to the high roof and new order window areas. It includes dimensions, materials, and annotations regarding construction methods.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Guard rail construction requirement specifics",
+   "observation": "The sheet notes 'GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA' but does not specify compliance verification details or a referenced code for this requirement.",
+   "drawing_evidence": "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA' at Guard Rail Elevation Detail.",
+   "drawing_location": "Detail 1, Guard Rail Elevation Detail @ High Roof",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm whether additional documentation specifies compliance verification details.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guard rail construction requirement specifics",
+    "originalObservation": "The sheet notes 'GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA' but does not specify compliance verification details or a referenced code for this requirement.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Reference to structural drawings",
+   "observation": "The note indicates '4\" METAL STUDS @ 16\" O.C. SEE STRUCTURAL DRAWINGS.'",
+   "drawing_evidence": "4\" METAL STUDS @ 16\" O.C. SEE STRUCTURAL DRAWINGS at Wall Section.",
+   "drawing_location": "Walls section details",
+   "suggested_code_reference": null,
+   "recommendation": "Review structural drawings to confirm compatibility and compliance with overall design.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Reference to structural drawings",
+    "originalObservation": "The note indicates '4\" METAL STUDS @ 16\" O.C. SEE STRUCTURAL DRAWINGS.'",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Guard rail height clarification",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,69 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "L_av",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_07da9ac95cc8a4f5016afb2d495c0087d2868cfba28e4d260f",
+ "latencyMs": 13043,
+ "inputTokens": 12708,
+ "outputTokens": 1272,
+ "reasoningTokens": 846,
+ "costUsd": 0.0040680000000000004,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-3.06-00.pdf",
+  "evidenceSha": "14d270dc429f841f",
+  "userPromptChars": 9374,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-3.06-00\",\"detected_sheet_title\":\"WALL SECTIONS\",\"discipline\":\"Architecture\",\"summary\":\"Architectural wall-section sheet showing high-roof guard-rail details and a new-order-window wall section. The sheet includes guard-rail dimensions, roof-penetration flashing requirements, blocking and anchorage notes, and references to roof-plan and structural-document coordination. No clear on-sheet code discrepancy was identified from the visible information.\",\"findings\":[{\"category\":\"further professional review\",\"severity\":\"advisory\",\"title\":\"Guard-rail anchorage and substrate coordination should be confirmed\",\"observation\":\"The high-roof guard-rail details identify a square floor flange, 4x4 horizontal blocking between joist top chords, and 5/16-inch-diameter by 3-inch lag bolts. The adjacent wall-section/detail information also identifies existing joists and wood decking. The sheet does not establish the structural capacity of the existing roof framing, blocking, flange, or fasteners for the proposed guard rail.\",\"drawing_evidence\":\"Detail 3, upper right: “SQUARE FLOOR FLANGE,” “5/16\\\" DIAMETER X 3\\\" LAG BOLTS,” and “4x4 HORIZONTAL BLOCKING BETWEEN JOIST TOP CHORDS.” Detail 2, upper center: “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS.” Detail 4, lower left: existing roof trusses and roof framing are shown as remaining.\",\"drawing_location\":\"Guard Rail Detail @ High Roof 2 and Guard Rail Detail @ High Roof 3 in the upper half of the sheet; Wall Section @ High Roof 4 in the lower-left portion.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm the guard-rail anchorage, existing framing capacity, blocking installation, fastener capacity, and required bracing in the structural documents before construction. Coordinate the final guard-rail locations with the roof plan as directed by the sheet note.\"}]}",
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architecture"
+ },
+ "summary": "Architectural wall-section sheet showing high-roof guard-rail details and a new-order-window wall section. The sheet includes guard-rail dimensions, roof-penetration flashing requirements, blocking and anchorage notes, and references to roof-plan and structural-document coordination. No clear on-sheet code discrepancy was identified from the visible information.",
+ "drafts": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Guard-rail anchorage and substrate coordination should be confirmed",
+   "observation": "The high-roof guard-rail details identify a square floor flange, 4x4 horizontal blocking between joist top chords, and 5/16-inch-diameter by 3-inch lag bolts. The adjacent wall-section/detail information also identifies existing joists and wood decking. The sheet does not establish the structural capacity of the existing roof framing, blocking, flange, or fasteners for the proposed guard rail.",
+   "drawing_evidence": "Detail 3, upper right: “SQUARE FLOOR FLANGE,” “5/16\" DIAMETER X 3\" LAG BOLTS,” and “4x4 HORIZONTAL BLOCKING BETWEEN JOIST TOP CHORDS.” Detail 2, upper center: “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS.” Detail 4, lower left: existing roof trusses and roof framing are shown as remaining.",
+   "drawing_location": "Guard Rail Detail @ High Roof 2 and Guard Rail Detail @ High Roof 3 in the upper half of the sheet; Wall Section @ High Roof 4 in the lower-left portion.",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm the guard-rail anchorage, existing framing capacity, blocking installation, fastener capacity, and required bracing in the structural documents before construction. Coordinate the final guard-rail locations with the roof plan as directed by the sheet note."
+  }
+ ],
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Guard-rail anchorage and substrate coordination should be confirmed",
+   "observation": "The high-roof guard-rail details identify a square floor flange, 4x4 horizontal blocking between joist top chords, and 5/16-inch-diameter by 3-inch lag bolts. The adjacent wall-section/detail information also identifies existing joists and wood decking. The sheet does not establish the structural capacity of the existing roof framing, blocking, flange, or fasteners for the proposed guard rail.",
+   "drawing_evidence": "Detail 3, upper right: “SQUARE FLOOR FLANGE,” “5/16\" DIAMETER X 3\" LAG BOLTS,” and “4x4 HORIZONTAL BLOCKING BETWEEN JOIST TOP CHORDS.” Detail 2, upper center: “4x4 WOOD BLOCKING BETWEEN JOISTS AT NEW GUARD RAIL PENETRATION LOCATIONS.” Detail 4, lower left: existing roof trusses and roof framing are shown as remaining.",
+   "drawing_location": "Guard Rail Detail @ High Roof 2 and Guard Rail Detail @ High Roof 3 in the upper half of the sheet; Wall Section @ High Roof 4 in the lower-left portion.",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm the guard-rail anchorage, existing framing capacity, blocking installation, fastener capacity, and required bracing in the structural documents before construction. Coordinate the final guard-rail locations with the roof plan as directed by the sheet note.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guard-rail anchorage and substrate coordination should be confirmed",
+    "originalObservation": "The high-roof guard-rail details identify a square floor flange, 4x4 horizontal blocking between joist top chords, and 5/16-inch-diameter by 3-inch lag bolts. The adjacent wall-section/detail information also identifies existing joists and wood decking. The sheet does not establish the structural capacity of the existing roof framing, blocking, flange, or fasteners for the proposed guard rail.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

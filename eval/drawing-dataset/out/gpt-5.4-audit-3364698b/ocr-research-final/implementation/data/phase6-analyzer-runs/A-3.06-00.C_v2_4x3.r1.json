@@ -1,0 +1,59 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "C_v2_4x3",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_06d35347409027d2016aec8eed15e087d2a4ec79411c444c50",
+ "latencyMs": 6420,
+ "inputTokens": 4904,
+ "outputTokens": 345,
+ "costUsd": 0.015710000000000002,
+ "userPromptChars": 3546,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The drawing sheet shows details of guard rails and wall sections at high roof areas. Various construction elements, measurements, and annotations are indicated, relevant for ensuring proper installation and compliance with safety standards.",
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Guard Rail Sphere Passage Specification",
+   "observation": "The guard rail is described to \"prevent the passage of a sphere 21\" in dia,\" which may conflict with expected code requirements for opening limitations.",
+   "drawing_evidence": "GUARD RAIL SHALL BE CONSTRUCTED SO AS TO PREVENT THE PASSAGE OF A SPHERE 21\" IN DIA.",
+   "drawing_location": "Detail 1 on the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Review to confirm the sphere passage requirement complies with applicable codes, typically referencing a smaller diameter.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guard Rail Sphere Passage Specification",
+    "originalObservation": "The guard rail is described to \"prevent the passage of a sphere 21\" in dia,\" which may conflict with expected code requirements for opening limitations.",
+    "originalCodeReference": "2015 IBC or local amendment sections on guardrail opening limitations.",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Guard Rail Height Specification",
+   "originalSeverity": "warning",
+   "originalCodeReference": "2015 IBC or DC amendment provisions for guardrail minimum height if applicable.",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842472-CTauS57lUmO5hlFUurKM",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 0, 394, 46],\n        \"text_content\": \", WALL MOUNTED, ADA\",\n        \"category\": \"schedule_cell\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [552, 7, 698, 40],\n        \"text_content\": \"BRADLEY\",\n        \"category\": \"schedule_cell\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [613, 40, 675, 77],\n        \"text_content\": \"917\",\n        \"category\": \"schedule_cell\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [874, 90, 980, 118],\n        \"text_content\": \"MCDCO\",\n        \"category\": \"schedule_cell\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 217, 651, 255],\n        \"text_content\": \"OR ACCESSORY MOUNTING HEIGHTS.\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 264, 980, 297],\n        \"text_content\": \"EM FROM ITEM GROUPS 4 & 6, VERIFY WITH AREA CO\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 314, 964, 347],\n        \"text_content\": \"SUPPORTS BETWEEN STUDS SO FACE OF SUPPORT IS\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 361, 980, 394],\n        \"text_content\": \"DINATE FINAL ACCESSORIES SELECTION WITH McDONA\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 418, 158, 445],\n        \"text_content\": \"CHASING.\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 642, 980, 725],\n        \"text_content\": \"LET ROOM ACCESS\",\n        \"category\": \"detail_title\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 785, 72, 812],\n        \"text_content\": \"T.S.\",\n        \"category\": \"detail_reference\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 770,
+ "costUsd": 0.002003,
+ "reportedCostUsd": 0.0020028,
+ "latencyS": 20.63,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842438-zULT187giQwqclcLX20V",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [446, 0, 654, 280],\n        \"text_content\": \"NOT\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 71,
+ "costUsd": 0.001304,
+ "reportedCostUsd": 0.0013038,
+ "latencyS": 2.01,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

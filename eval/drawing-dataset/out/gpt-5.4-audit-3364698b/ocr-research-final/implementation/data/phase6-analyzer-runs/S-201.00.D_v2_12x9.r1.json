@@ -1,0 +1,96 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "D_v2_12x9",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_038a16a133e585e1016aec8f8021cc87d2a1521cfe044af12a",
+ "latencyMs": 7230,
+ "inputTokens": 4652,
+ "outputTokens": 455,
+ "costUsd": 0.01618,
+ "userPromptChars": 3606,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet displays structural wall sections and notes for a commercial permit. It includes detailed design criteria, material specifications, and connection details relevant to the construction project. Code references, and structural notes provide guidance on the implementation of structural elements in accordance with engineering standards.",
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Design Load Information",
+   "observation": "The sheet contains design criteria including floor live load (150 psf), roof live load, wind speed (115 mph), and seismic design values. These should be reviewed for site-specific accuracy and compliance with relevant codes.",
+   "drawing_evidence": "Design criteria section states 'Floor Live Load: 150 psf' and 'Basic Wind Speed: 115 mph'.",
+   "drawing_location": "Design criteria section, right side of the sheet.",
+   "suggested_code_reference": "IBC 2015 - Chapter 16, Structural Design",
+   "recommendation": "Verify design load criteria align with site-specific conditions and requirements of the 2017 DC Construction Codes.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Design Load Information",
+    "originalObservation": "The sheet contains design criteria including floor live load (150 psf), roof live load, wind speed (115 mph), and seismic design values. These should be reviewed for site-specific accuracy and compliance with relevant codes.",
+    "originalCodeReference": "IBC 2015 - Chapter 16, Structural Design",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": "IBC 2015 - Chapter 16, Structural Design",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Unclear Seismic Design Category",
+   "observation": "The seismic design category is listed but lacks supporting information to justify the category classification.",
+   "drawing_evidence": "The sheet notes 'Seismic Design Category' but does not provide area-specific support.",
+   "drawing_location": "Design criteria section, right side of the sheet.",
+   "suggested_code_reference": "IBC 2015 - Section 1613, Earthquake Loads",
+   "recommendation": "Provide supporting calculations or site-specific analysis to justify the seismic design category.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Unclear Seismic Design Category",
+    "originalObservation": "The seismic design category is listed but lacks supporting information to justify the category classification.",
+    "originalCodeReference": "IBC 2015 - Section 1613, Earthquake Loads",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": "IBC 2015 - Section 1613, Earthquake Loads",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Connection Details Coordination",
+   "observation": "Multiple connection types are specified for wall sections, including KWIK CON II+ and Stiffclip. Ensure these are coordinated with structural and architectural plans.",
+   "drawing_evidence": "Connections 1A, 2, and 3 are specified with detailed fastener types and materials.",
+   "drawing_location": "Wall sections, left side of the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure coordination across all construction documents to prevent discrepancies in connection implementations.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Connection Details Coordination",
+    "originalObservation": "Multiple connection types are specified for wall sections, including KWIK CON II+ and Stiffclip. Ensure these are coordinated with structural and architectural plans.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

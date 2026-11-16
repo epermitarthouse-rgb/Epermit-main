@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "A_pdf_only",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_01cb8e1aca7dc1e6016aec8f1f286087d2bea96dfe8b005f87",
+ "latencyMs": 16440,
+ "inputTokens": 3762,
+ "outputTokens": 422,
+ "costUsd": 0.013625,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "This sheet provides architectural floor plans for the mezzanine and basement areas of the project, with general notes and keyed notes providing specific requirements and specifications.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Incomplete Column Reference",
+   "observation": "General Note 3 references 'SEE SHEET 3/A-600 FOR DOOR AND FINISH DOOR FRAME TYPES' but A-600 is not listed in the submitted sheet index.",
+   "drawing_evidence": "General Note 3: 'SEE SHEET 3/A-600 FOR...'",
+   "drawing_location": "General Notes section, lower left corner.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that the A-600 sheet exists and contains the required information about door and finish door frame types.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Incomplete Column Reference",
+    "originalObservation": "General Note 3 references 'SEE SHEET 3/A-600 FOR DOOR AND FINISH DOOR FRAME TYPES' but A-600 is not listed in the submitted sheet index.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Fire Partition Detail Coordination",
+   "observation": "Note indicates '5/8'' INS. RATED PARTITION 1-HOUR PARTITION AS TYPE X' for certain partitions without detail location for compliance verification.",
+   "drawing_evidence": "Keyed Note: '5/8'' INS. RATED PARTITION.'",
+   "drawing_location": "2nd Floor Alteration Floor Plan, near partitions.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure the fire-rated partition details are coordinated with applicable fire safety reviews and are referenced appropriately in the project documents.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Fire Partition Detail Coordination",
+    "originalObservation": "Note indicates '5/8'' INS. RATED PARTITION 1-HOUR PARTITION AS TYPE X' for certain partitions without detail location for compliance verification.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Stair Railing Requirement Stated",
+   "observation": "Note specifies 'EXIT STAIR RAILING' without further detail about handrail and guard compliance.",
+   "drawing_evidence": "Detail near the exit stair: 'EXIT STAIR RAILING.'",
+   "drawing_location": "2nd Floor Alteration Floor Plan, near stairway.",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm that additional detailed drawings or specifications cover handrail and guard requirements to meet applicable safety standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Stair Railing Requirement Stated",
+    "originalObservation": "Note specifies 'EXIT STAIR RAILING' without further detail about handrail and guard compliance.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

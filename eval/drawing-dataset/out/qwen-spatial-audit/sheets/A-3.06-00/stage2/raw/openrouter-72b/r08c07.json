@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842116-5dCKyDimR3KbLWwcP6XX",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [604, 260, 715, 290],\n        \"text_content\": \"T/ SLAB\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [590, 302, 805, 336],\n        \"text_content\": \"ELEV. + O'-O\\\"\",\n        \"category\": \"elevation\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [470, 674, 526, 782],\n        \"text_content\": \"5\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [648, 640, 953, 750],\n        \"text_content\": \"WALL S\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [648, 778, 797, 810],\n        \"text_content\": \"SCALE:\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [832, 778, 974, 810],\n        \"text_content\": \"3/4\\\" = 1'\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 425,
+ "costUsd": 0.001658,
+ "reportedCostUsd": 0.0016578,
+ "latencyS": 13.84,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

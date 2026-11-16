@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842764-7tjS6odrosGeSsxT6DIh",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 94, 490, 126], \"text_content\": \"W/FLAP ON INSIDE N.GUARD\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 145, 51, 177], \"text_content\": \"626\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 194, 166, 226], \"text_content\": \"BOVE 626\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [30, 376, 137, 408], \"text_content\": \"HAGER\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 470, 685, 502], \"text_content\": \"40\\\"AFF MOUNTED TO CENTER OF PLATE\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [15, 519, 654, 549], \"text_content\": \"WITH DECORATIVE FIXING, 32\\\"L 1\\\"DIA\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 572, 436, 604], \"text_content\": \"OUNTED CENTER OF PULL\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 619, 56, 649], \"text_content\": \"ASP\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [24, 662, 388, 694], \"text_content\": \"CYLINDRICAL LOCK -\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 713, 127, 745], \"text_content\": \"CHROME\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 762, 85, 784], \"text_content\": \"AGER\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [13, 852, 124, 884], \"text_content\": \"F.SAFE\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [8, 903, 121, 935], \"text_content\": \"F.SAFE\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 795,
+ "costUsd": 0.002028,
+ "reportedCostUsd": 0.0020278,
+ "latencyS": 20.92,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

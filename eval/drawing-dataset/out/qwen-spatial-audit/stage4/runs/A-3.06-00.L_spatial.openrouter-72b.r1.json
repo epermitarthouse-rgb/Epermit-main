@@ -1,0 +1,43 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "L_spatial",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_06f4a9221e00fe0e016afb2c72940487d287206733fa63ae59",
+ "latencyMs": 10001,
+ "inputTokens": 20207,
+ "outputTokens": 596,
+ "reasoningTokens": 464,
+ "costUsd": 0.0047566,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-3.06-00.pdf",
+  "evidenceSha": "c67ba715113a0d3a",
+  "userPromptChars": 12120,
+  "images": [
+   "P-R003 source",
+   "P-R003 target",
+   "P-R004 source",
+   "P-R004 target",
+   "P-R005 source",
+   "P-R005 target"
+  ],
+  "pairs": [
+   "P-R003",
+   "P-R004",
+   "P-R005"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-3.06-00\",\"detected_sheet_title\":\"WALL SECTIONS\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains high-roof guardrail details and wall sections at the high roof and new order window. The reviewed details visibly identify a 3'-6\\\" minimum guard height, a 21\\\" sphere passage limitation, guardrail extension beyond equipment, roof-penetration coordination, and structural blocking/fastener information. No supported contradiction, demonstrated omission, or sheet-local technical discrepancy was identified from the visible drawing evidence.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains high-roof guardrail details and wall sections at the high roof and new order window. The reviewed details visibly identify a 3'-6\" minimum guard height, a 21\" sphere passage limitation, guardrail extension beyond equipment, roof-penetration coordination, and structural blocking/fastener information. No supported contradiction, demonstrated omission, or sheet-local technical discrepancy was identified from the visible drawing evidence.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

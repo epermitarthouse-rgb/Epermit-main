@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842331-9miRq6dV0kVENGqovQ9Q",
+ "text": "```json\n[\n    {\"bbox_2d\": [493, 296, 601, 334], \"text_content\": \"54x60\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [264, 277, 318, 305], \"text_content\": \"1B\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [528, 65, 560, 103], \"text_content\": \"2\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [730, 60, 762, 98], \"text_content\": \"1C\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [730, 0, 762, 38], \"text_content\": \"1A\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [435, 532, 477, 570], \"text_content\": \"5\", \"category\": \"label\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [72, 855, 126, 893], \"text_content\": \"6B\", \"category\": \"label\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [355, 855, 409, 893], \"text_content\": \"4A\", \"category\": \"label\", \"group\": 7, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [652, 862, 706, 909], \"text_content\": \"9\", \"category\": \"label\", \"group\": 8, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 531,
+ "costUsd": 0.001764,
+ "reportedCostUsd": 0.0017638,
+ "latencyS": 17.71,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

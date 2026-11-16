@@ -1,0 +1,75 @@
+Stage3 spatial evidence (experimental; machine-extracted; independentlyVerified=false). sheet=S-201.00 discipline=Structural source=qwen-openrouter-72b-validated model=qwen/qwen2.5-vl-72b-instruct
+Rules: each "- " line is one printed annotation; " / " separates its rows; ×n = same text printed n times in that detail. ?text = look-alike glyph or model doubt, unverified; {A | B} = overlapping tiles disagree, neither confirmed. eN cites boxes and tiles in the evidence pack. Not shown is not absent.
+## sheet
+- e1 CONNECTION 2: / (4)#12 SCREWS / ?IOD NAILS TO T
+- e2 CONNECTION 3: / TION 3: STIFFCLIP LB 4" OFFSET / W/ (3)#12 SCRE / 2 SCREWS TO STUD, (2) 0.157 PAF TO / EX STEEL BEAM
+- e3 1. INT
+- e4 2. AMERICAN CONCRETE INSTITUTE (ACI)
+- e5 3.
+- e6 2.
+- e7 3. AMERICAN WOOD COUNCIL (AWC)
+- e8 CONNECTION 4: / W/ (2)#8 SCRE / TO STUD AND (2 / PLACE SCREWS / (NO NOT ATTAC / 1" GAP TOP OF
+- e9 SEISMIC LOADING (IBC 2015)
+- e10 FLOOR LIVE LOAD: 100 PSF
+- e11 6. PAF'S SHALL BE X-U 0.157 WIT / 3" MIN EDGE DISTANCE AND 3
+- e12 ROOF LIVE LOAD: 30 PSF
+- e13 AND 3/8" EMBEDMENT INTO STEEL.
+- e14 Ss 0.133
+- e15 ?SI 0.43
+- e16 GROUND SNOW LOAD: 25 PSF + DRIFT
+- e17 Sds 0.142
+- e18 ?Sdl 0.069
+- e19 {FLAT ROOF SNOW LOAD: 17.5 PSF | GRO}
+- e20 SNOW EXPOSURE FACTOR: 0.7
+- e21 SEISMIC IMPORTANCE FACTOR 1.0
+- e22 {WIND LOADING (IBC 2015) | THE}
+- e23 Cs= 0.095 R= 1.5
+- e24 DESIGN BASE SHEAR 57 KIPS
+- e25 LL CONFORM TO ACI 318-06 CODE REQUIREMENT
+- e26 3. SLUMP 3" MAX. FOR FOUNDATIONS
+- e27 ATIONS & 4" FOR WALLS, PRIOR TO MRWR.
+- e28 {CONFORM TO ASTM A-615 GRADE 60. WELDED | IELDED}
+- e29 LL CONFORM TO ASTM A992. PLATES AND
+- e30 (2)#10 SCREWS ×2
+- e31 ORM TO ASTM A-185.
+- e32 TEEL SHALL CONFORM TO ASTM A500
+- e33 ANGLES SHALL BE ASTM A36. TUBE STEEL SH
+- e34 GRADE B.
+- e35 600S162-43 MIL @ 16" O/C ×2
+- e36 5. AL ×2
+- e37 46H-413.
+- e38 6. CO
+- e39 6005162-43 MIL @ 16" O/C
+- e40 {OSI62-43 MIL @ 16" O/C | 6005102-43 | 5162-45 MILE @ 16}
+- e41 CONNECTION 3 / EACH STUD ×2
+- e42 7. RE
+## 1 WALL SECTION (3/4"=1'-0")
+- e43 CONNECTION 4
+## STRUCTURAL NOTES (NO SCALE)
+- e44 1. WELD TOGETHER ALL BACK TO BACK LINTEL / 1.
+- e45 3. / {3. GALVANIZE ALL LINTELS. | 2. BE}
+- e46 IBC SECTION / 1705 / 1705.3 / 1705.4 / 1705.3.4
+- e47 ACITY OF SOIL IS 1,500 PSF.
+- e48 N SHALL BE 4,500 PSI IN 28 DAYS, WITH A
+- e49 BILLET STEEL ASTM A615, GRADE 60 AND
+- e50 A-307.
+- e51 6.
+- e52 AND DETAILS AND PROJECT 4".
+- e53 7.
+- e54 DESIGN SOIL PRESSURE 2,500 PSF, TO BOTTO
+- e55 ORDANCE WITH IBC 2015, AND SHALL
+- e56 DENSITY AS PER ASTM 1557.
+- e57 {ACCORDANCE WITH ASTM C90, GRADE N. | MASONRY UNITS SHALL BE HOLLOW LOAD BE} ×2
+- e58 12.
+- e59 GRADE USE MEETING ASTM C270.
+- e60 TS OF ASTM C476. COMPRESSIVE STRENGTH
+- e61 OF 2,500 PSI AND 8"-10" SLUMP. GROUTING S
+- e62 14. AL
+- e63 ' O.C., FULL HEIGHT, LAP 24".
+- e64 16.
+- e65 BARS, LAP 24".
+## 2 WALL SECTION (3/4"1'-0")
+- e66 1
+- e67 {STIFFCLIP LS 18" LO | S 18" LONG} / {(2)#10 SCREWS | IS} / TYP
+- e68 {600S162-43 MIL @ 16" O/C | 600S|62-43 MIL @ 16" O/C}
+shown 68/234 units; omitted 166 (99 technical) by budget; title block, detail titles (in headers) and duplicates excluded

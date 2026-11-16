@@ -1,0 +1,73 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "B_v1",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_095a84969984efee016aec8f0ae0e887d286cee74f0bd34a05",
+ "latencyMs": 7124,
+ "inputTokens": 4245,
+ "outputTokens": 334,
+ "costUsd": 0.0139525,
+ "userPromptChars": 1733,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet provides architectural details for toilet room plans, fixtures, and ADA compliance details. It includes diagrams for toilet room layouts, signage, and accessory installations. General notes and signage requirements are outlined.",
+ "published": [
+  {
+   "category": "Missing Required Information",
+   "severity": "warning",
+   "title": "Incomplete Reference to Door Schedule",
+   "observation": "The note specifies 'SEE SHEET A-6.00 FOR DOOR SCHEDULE' but the content of sheet A-6.00 is not included in this review.",
+   "drawing_evidence": "Note in General Notes section: 'SEE SHEET A-6.00 FOR DOOR SCHEDULE.'",
+   "drawing_location": "General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Verify the door schedule on sheet A-6.00 to ensure it meets accessibility and specification requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "cross_sheet_reference_unresolved"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Incomplete Reference to Door Schedule",
+    "originalObservation": "The note specifies 'SEE SHEET A-6.00 FOR DOOR SCHEDULE' but the content of sheet A-6.00 is not included in this review.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability. Referenced sheet content was not reviewed in this request. Severity was not changed solely for that unread cross-sheet reference. Absence from the project and compliance are both unverified."
+   }
+  },
+  {
+   "category": "General Coordination Note",
+   "severity": "advisory",
+   "title": "ADA Signage Installation",
+   "observation": "Signage is to be installed on the wall adjacent to the latch side of the door, accompanied by Braille, in conformance with Chapter 7.",
+   "drawing_evidence": "General Notes: 'SIGNS SHALL BE INSTALLED ON THE WALL ADJACENT TO THE LATCH SIDE OF THE DOOR. WHERE PROVIDED AND SHALL BE ACCOMPANIED BY BRAILLE IN CONFORMANCE WITH CHAPTER 7.'",
+   "drawing_location": "General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure all signage details are coordinated with ADA requirements as stated.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "ADA Signage Installation",
+    "originalObservation": "Signage is to be installed on the wall adjacent to the latch side of the door, accompanied by Braille, in conformance with Chapter 7.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

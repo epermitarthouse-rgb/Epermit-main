@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842890-rStmwAjq1doPCdoguHRe",
+ "text": "```json\n[\n    {\"bbox_2d\": [694, 36, 979, 68], \"text_content\": \"CONNECTION 3:\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 86, 979, 115], \"text_content\": \"W/ (3)#12 SCRE\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 138, 979, 167], \"text_content\": \"EX STEEL BEAM\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 212, 979, 243], \"text_content\": \"CONNECTION 3A\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 260, 979, 290], \"text_content\": \"W/ (3)#12 SCRE\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 310, 979, 339], \"text_content\": \"EX STEEL CHAN\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 386, 979, 415], \"text_content\": \"CONNECTION 4:\", \"category\": \"note\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 435, 979, 464], \"text_content\": \"W/ (2)#8 SCRE\", \"category\": \"note\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 484, 979, 513], \"text_content\": \"TO STUD AND (2\", \"category\": \"note\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 533, 979, 562], \"text_content\": \"PLACE SCREWS\", \"category\": \"note\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 582, 979, 611], \"text_content\": \"(NO NOT ATTAC\", \"category\": \"note\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [694, 631, 979, 660], \"text_content\": \"1\\\" GAP TOP OF\", \"category\": \"note\", \"group\": 3, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 755,
+ "costUsd": 0.001988,
+ "reportedCostUsd": 0.0019878,
+ "latencyS": 15.86,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

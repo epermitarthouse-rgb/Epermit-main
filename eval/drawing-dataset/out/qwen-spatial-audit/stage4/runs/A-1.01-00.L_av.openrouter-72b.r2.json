@@ -1,0 +1,104 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "L_av",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0311a924210aea42016afb2d90c95c87d2815c5a6368317517",
+ "latencyMs": 16624,
+ "inputTokens": 12667,
+ "outputTokens": 1693,
+ "reasoningTokens": 1034,
+ "costUsd": 0.004565,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-1.01-00.pdf",
+  "evidenceSha": "b686320b2f1bf2c3",
+  "userPromptChars": 9372,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-1.01-00\",\"detected_sheet_title\":\"MEZZANINE & BASEMENT FLOOR PLAN\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains a 2nd floor alteration floor plan, basement alteration floor plan, general notes, keyed notes, and symbol legends. The plan identifies a new 45-minute F.P.S.C. door and new one-hour fire-resistive wall construction at stair-related work, with several references to other indexed sheets. No confirmed code violation is established from this sheet alone.\",\"findings\":[{\"category\":\"further professional review\",\"severity\":\"advisory\",\"title\":\"Accessibility standard basis should be coordinated with the adopted permit criteria\",\"observation\":\"General Note 4 identifies accessibility reach requirements using “ICC/ANSI A117.1-2003.” The sheet also includes notes concerning ADA-compliant hardware and door opening forces.\",\"drawing_evidence\":\"General Notes panel, Note 4: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” General Notes panel, Note 5: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.”\",\"drawing_location\":\"Bottom-left General Notes panel, Notes 4 and 5\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm that the accessibility standard identified in the general notes is consistent with the accessibility criteria used for this Washington, DC permit submission, and coordinate the final reach-range and door-hardware requirements with the referenced A-1.03 sheet.\"},{\"category\":\"further professional review\",\"severity\":\"advisory\",\"title\":\"Rated stair enclosure components require cross-sheet coordination\",\"observation\":\"The 2nd floor plan depicts stair-related work with a “NEW 45 MIN F.P.S.C. DOOR” and “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET).” The plan also identifies metal-stud firestopping and references the door schedule on another sheet. This sheet alone does not establish continuity of the rated wall, door assembly, and adjoining construction.\",\"drawing_evidence\":\"At Stair Tower A on the 2nd floor plan: “NEW 45 MIN F.P.S.C. DOOR,” “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET),” and a nearby wall note stating “4” METAL STUDS @ 16” O.C. MIN. FIRE STOPPED TO BOTTOM OF STRUCTURE AS PER UL NO. U305.” General Note 4 directs review of sheet A-6.00 for doors.\",\"drawing_location\":\"2nd Floor Alteration Floor Plan, Stair Tower A area; lower General Notes panel\",\"suggested_code_reference\":\"\",\"recommendation\":\"Coordinate the rated door assembly and Partition D construction with the referenced A-6.00 door schedule and the applicable wall, head-of-wall, penetration, and stair-enclosure details on the indexed project sheets. Verify that the rating and firestopping provisions remain continuous at the shown interfaces.\"}]}",
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains a 2nd floor alteration floor plan, basement alteration floor plan, general notes, keyed notes, and symbol legends. The plan identifies a new 45-minute F.P.S.C. door and new one-hour fire-resistive wall construction at stair-related work, with several references to other indexed sheets. No confirmed code violation is established from this sheet alone.",
+ "drafts": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Accessibility standard basis should be coordinated with the adopted permit criteria",
+   "observation": "General Note 4 identifies accessibility reach requirements using “ICC/ANSI A117.1-2003.” The sheet also includes notes concerning ADA-compliant hardware and door opening forces.",
+   "drawing_evidence": "General Notes panel, Note 4: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” General Notes panel, Note 5: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.”",
+   "drawing_location": "Bottom-left General Notes panel, Notes 4 and 5",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm that the accessibility standard identified in the general notes is consistent with the accessibility criteria used for this Washington, DC permit submission, and coordinate the final reach-range and door-hardware requirements with the referenced A-1.03 sheet."
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Rated stair enclosure components require cross-sheet coordination",
+   "observation": "The 2nd floor plan depicts stair-related work with a “NEW 45 MIN F.P.S.C. DOOR” and “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET).” The plan also identifies metal-stud firestopping and references the door schedule on another sheet. This sheet alone does not establish continuity of the rated wall, door assembly, and adjoining construction.",
+   "drawing_evidence": "At Stair Tower A on the 2nd floor plan: “NEW 45 MIN F.P.S.C. DOOR,” “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET),” and a nearby wall note stating “4” METAL STUDS @ 16” O.C. MIN. FIRE STOPPED TO BOTTOM OF STRUCTURE AS PER UL NO. U305.” General Note 4 directs review of sheet A-6.00 for doors.",
+   "drawing_location": "2nd Floor Alteration Floor Plan, Stair Tower A area; lower General Notes panel",
+   "suggested_code_reference": "",
+   "recommendation": "Coordinate the rated door assembly and Partition D construction with the referenced A-6.00 door schedule and the applicable wall, head-of-wall, penetration, and stair-enclosure details on the indexed project sheets. Verify that the rating and firestopping provisions remain continuous at the shown interfaces."
+  }
+ ],
+ "published": [
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Accessibility standard basis should be coordinated with the adopted permit criteria",
+   "observation": "General Note 4 identifies accessibility reach requirements using “ICC/ANSI A117.1-2003.” The sheet also includes notes concerning ADA-compliant hardware and door opening forces.",
+   "drawing_evidence": "General Notes panel, Note 4: “ADJUST ALL SELF SERVICE ITEMS TO BE WITHIN ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).” General Notes panel, Note 5: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.”",
+   "drawing_location": "Bottom-left General Notes panel, Notes 4 and 5",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm that the accessibility standard identified in the general notes is consistent with the accessibility criteria used for this Washington, DC permit submission, and coordinate the final reach-range and door-hardware requirements with the referenced A-1.03 sheet.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Accessibility standard basis should be coordinated with the adopted permit criteria",
+    "originalObservation": "General Note 4 identifies accessibility reach requirements using “ICC/ANSI A117.1-2003.” The sheet also includes notes concerning ADA-compliant hardware and door opening forces.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Rated stair enclosure components require cross-sheet coordination",
+   "observation": "The 2nd floor plan depicts stair-related work with a “NEW 45 MIN F.P.S.C. DOOR” and “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET).” The plan also identifies metal-stud firestopping and references the door schedule on another sheet. This sheet alone does not establish continuity of the rated wall, door assembly, and adjoining construction.",
+   "drawing_evidence": "At Stair Tower A on the 2nd floor plan: “NEW 45 MIN F.P.S.C. DOOR,” “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET),” and a nearby wall note stating “4” METAL STUDS @ 16” O.C. MIN. FIRE STOPPED TO BOTTOM OF STRUCTURE AS PER UL NO. U305.” General Note 4 directs review of sheet A-6.00 for doors.",
+   "drawing_location": "2nd Floor Alteration Floor Plan, Stair Tower A area; lower General Notes panel",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate the rated door assembly and Partition D construction with the referenced A-6.00 door schedule and the applicable wall, head-of-wall, penetration, and stair-enclosure details on the indexed project sheets. Verify that the rating and firestopping provisions remain continuous at the shown interfaces.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Rated stair enclosure components require cross-sheet coordination",
+    "originalObservation": "The 2nd floor plan depicts stair-related work with a “NEW 45 MIN F.P.S.C. DOOR” and “NEW 1 HR. FIRE RESISTIVE WALL. SEE PARTITION D (THIS SHEET).” The plan also identifies metal-stud firestopping and references the door schedule on another sheet. This sheet alone does not establish continuity of the rated wall, door assembly, and adjoining construction.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

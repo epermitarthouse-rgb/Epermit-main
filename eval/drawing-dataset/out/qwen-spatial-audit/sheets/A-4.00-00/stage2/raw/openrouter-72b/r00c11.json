@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842286-D3ouWTihxF4SOrGxObh6",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 194, 268, 232],\n        \"text_content\": \"ULL PRESSURE.\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 804, 214, 840],\n        \"text_content\": \"LIED IN ANY\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 947, 305, 979],\n        \"text_content\": \"ELEMENTS FROM\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 206,
+ "costUsd": 0.001439,
+ "reportedCostUsd": 0.0014388,
+ "latencyS": 4.43,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

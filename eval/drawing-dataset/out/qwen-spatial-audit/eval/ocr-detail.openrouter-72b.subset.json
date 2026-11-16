@@ -1,0 +1,200 @@
+{
+ "generatedAt": "2026-11-16T15:33:12.495Z",
+ "backend": "openrouter-72b",
+ "compare": "local-3b",
+ "subset": true,
+ "sheets": [
+  {
+   "sheet": "S-201.00",
+   "gtScope": "windows",
+   "gtRowsScored": 17,
+   "tilesRead": 5,
+   "tilesNonBlank": 111,
+   "appleVision4x3": {
+    "technicalRows": 13,
+    "exact": 5,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 0,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 1,
+    "wrongChangesValue": 0,
+    "partial": 3,
+    "missed": 4,
+    "wrongRows": [
+     {
+      "truth": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+      "read": [
+       "(GROUND SNOW LOAD: [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+      "read": [
+       "AMERICAN CONCRETE INSTITUTE (ACI) [fragment]"
+      ]
+     },
+     {
+      "truth": "SNOW EXPOSURE FACTOR: 0.7",
+      "read": [
+       "SNOW EXPOSURE FACTOR: [fragment]"
+      ]
+     },
+     {
+      "truth": "THERMAL FACTOR: 1",
+      "read": [
+       "THERMAL FACTOR: [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [
+     "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+     "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+     "FLAT ROOF SNOW LOAD: 17.5 PSF",
+     "BASIC WIND SPEED (3 SECOND GUST) 115 MPH"
+    ],
+    "inScopeReadings": 51,
+    "noMatchReadings": 38,
+    "noMatchPrintedElsewhere": 34,
+    "noMatchUnsupported": 4,
+    "unsupportedExamples": [
+     "SITE CLASS D. ASSUMED",
+     "DESIGN BASE SHEAR 15T KIPS3",
+     "CONNECTION 2 A1",
+     "EACH WOOD TRUS!"
+    ],
+    "states": {
+     "S-201.00:R002": "none",
+     "S-201.00:R003": "partial",
+     "S-201.00:R004": "exact",
+     "S-201.00:R006": "exact",
+     "S-201.00:R007": "exact",
+     "S-201.00:R009": "wrong",
+     "S-201.00:R010": "none",
+     "S-201.00:R011": "none",
+     "S-201.00:R012": "partial",
+     "S-201.00:R013": "exact",
+     "S-201.00:R014": "partial",
+     "S-201.00:R015": "exact",
+     "S-201.00:R016": "none"
+    }
+   },
+   "openrouter-72b": {
+    "technicalRows": 13,
+    "exact": 9,
+    "exactContradicted": 0,
+    "exactMarkedConflict": 1,
+    "exactInMerge": 0,
+    "contradictedRows": [],
+    "wrong": 1,
+    "wrongChangesValue": 0,
+    "partial": 2,
+    "missed": 0,
+    "wrongRows": [
+     {
+      "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+      "read": [
+       "I. INTERNATIONAL BUILDING CODE (IBC 2015) [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [
+     {
+      "truth": "SNOW LOAD IMPORTANCE FACTOR: 1",
+      "read": [
+       "SNOW LOAD IMPORTANCE FACTOR: [fragment]"
+      ]
+     },
+     {
+      "truth": "THERMAL FACTOR: 1",
+      "read": [
+       "THERMAL FACTOR: [fragment]"
+      ]
+     }
+    ],
+    "missedRows": [],
+    "inScopeReadings": 23,
+    "noMatchReadings": 2,
+    "noMatchPrintedElsewhere": 2,
+    "noMatchUnsupported": 0,
+    "unsupportedExamples": [],
+    "states": {
+     "S-201.00:R002": "wrong",
+     "S-201.00:R003": "exact_marked",
+     "S-201.00:R004": "exact",
+     "S-201.00:R006": "exact",
+     "S-201.00:R007": "exact",
+     "S-201.00:R009": "exact",
+     "S-201.00:R010": "exact",
+     "S-201.00:R011": "exact",
+     "S-201.00:R012": "exact",
+     "S-201.00:R013": "partial",
+     "S-201.00:R014": "partial",
+     "S-201.00:R015": "exact",
+     "S-201.00:R016": "exact"
+    }
+   },
+   "local-3b": {
+    "technicalRows": 13,
+    "exact": 10,
+    "exactContradicted": 1,
+    "exactMarkedConflict": 1,
+    "exactInMerge": 0,
+    "contradictedRows": [
+     {
+      "truth": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+      "read": [
+       "1. INTERNATIONAL BUILDING CODE (IBC 2015) [correct]",
+       "4. RE 6. RE [ocr_error]",
+       "2. AMERICAN CONCRETE INSTITUTE (ACI) [ocr_error]"
+      ]
+     }
+    ],
+    "wrong": 1,
+    "wrongChangesValue": 0,
+    "partial": 0,
+    "missed": 1,
+    "wrongRows": [
+     {
+      "truth": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+      "read": [
+       "3. AMERICAN WOOD COUNCIL (AWC) [ocr_error]"
+      ],
+      "changesValue": false
+     }
+    ],
+    "partialRows": [],
+    "missedRows": [
+     "3. AMERICAN WOOD COUNCIL (AWC)"
+    ],
+    "inScopeReadings": 23,
+    "noMatchReadings": 2,
+    "noMatchPrintedElsewhere": 0,
+    "noMatchUnsupported": 2,
+    "unsupportedExamples": [
+     "5. RE",
+     "WIND EXPOSURE CATEGORY 5"
+    ],
+    "states": {
+     "S-201.00:R002": "exact_contradicted",
+     "S-201.00:R003": "wrong",
+     "S-201.00:R004": "none",
+     "S-201.00:R006": "exact",
+     "S-201.00:R007": "exact",
+     "S-201.00:R009": "exact",
+     "S-201.00:R010": "exact_marked",
+     "S-201.00:R011": "exact",
+     "S-201.00:R012": "exact",
+     "S-201.00:R013": "exact",
+     "S-201.00:R014": "exact",
+     "S-201.00:R015": "exact",
+     "S-201.00:R016": "exact"
+    }
+   }
+  }
+ ]
+}

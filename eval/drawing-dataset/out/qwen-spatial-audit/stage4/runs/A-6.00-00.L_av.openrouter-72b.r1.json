@@ -1,0 +1,69 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_av",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_091375e8f433411a016afb2db3e5e087d2bf230ba26a11f96b",
+ "latencyMs": 18871,
+ "inputTokens": 12856,
+ "outputTokens": 1343,
+ "reasoningTokens": 955,
+ "costUsd": 0.0041828,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "80a958b14fd7b74b",
+  "userPromptChars": 9450,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains window types, a door schedule, door hardware sets, door details, general door notes, and revision information for the McDonald's project at 75 New York Avenue, Washington, DC. The sheet is identified as page 27 of 28 and is labeled “REVISED PERMIT SET 10/15/2026.” One sheet-local coordination concern was identified regarding a referenced window assembly detail that is not resolved by the submitted sheet index.\",\"findings\":[{\"category\":\"general coordination note\",\"severity\":\"advisory\",\"title\":\"Referenced window assembly detail is not resolved by the submitted index\",\"observation\":\"The window assembly notes direct the reviewer to “SEE EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and separately identify an interior window assembly. The submitted sheet index lists A-4.00-00, A-4.01-00, and A-4.02-00, but does not resolve a sheet labeled A5.0.\",\"drawing_evidence\":\"At the lower-right of the window types area, the notes state: “EXTERIOR WINDOW ASSEMBLY (STOREFRONT & ENTRANCE SYSTEM) FOR EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and “INTERIOR WINDOW ASSEMBLY (STOREFRONT & ENTRANCE SYSTEM).”\",\"drawing_location\":\"Lower-right notes beneath the window type elevations, above the door schedule.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Confirm the intended sheet and detail designation for the exterior and interior window assembly requirements, and revise the callout or sheet index if “4/A5.0” is not the correct project reference.\"}]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains window types, a door schedule, door hardware sets, door details, general door notes, and revision information for the McDonald's project at 75 New York Avenue, Washington, DC. The sheet is identified as page 27 of 28 and is labeled “REVISED PERMIT SET 10/15/2026.” One sheet-local coordination concern was identified regarding a referenced window assembly detail that is not resolved by the submitted sheet index.",
+ "drafts": [
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Referenced window assembly detail is not resolved by the submitted index",
+   "observation": "The window assembly notes direct the reviewer to “SEE EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and separately identify an interior window assembly. The submitted sheet index lists A-4.00-00, A-4.01-00, and A-4.02-00, but does not resolve a sheet labeled A5.0.",
+   "drawing_evidence": "At the lower-right of the window types area, the notes state: “EXTERIOR WINDOW ASSEMBLY (STOREFRONT & ENTRANCE SYSTEM) FOR EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and “INTERIOR WINDOW ASSEMBLY (STOREFRONT & ENTRANCE SYSTEM).”",
+   "drawing_location": "Lower-right notes beneath the window type elevations, above the door schedule.",
+   "suggested_code_reference": "",
+   "recommendation": "Confirm the intended sheet and detail designation for the exterior and interior window assembly requirements, and revise the callout or sheet index if “4/A5.0” is not the correct project reference."
+  }
+ ],
+ "published": [
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Referenced window assembly detail is not resolved by the submitted index",
+   "observation": "The window assembly notes direct the reviewer to “SEE EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and separately identify an interior window assembly. The submitted sheet index lists A-4.00-00, A-4.01-00, and A-4.02-00, but does not resolve a sheet labeled A5.0.",
+   "drawing_evidence": "At the lower-right of the window types area, the notes state: “EXTERIOR WINDOW ASSEMBLY (STOREFRONT & ENTRANCE SYSTEM) FOR EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and “INTERIOR WINDOW ASSEMBLY (STOREFRONT & ENTRANCE SYSTEM).”",
+   "drawing_location": "Lower-right notes beneath the window type elevations, above the door schedule.",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm the intended sheet and detail designation for the exterior and interior window assembly requirements, and revise the callout or sheet index if “4/A5.0” is not the correct project reference.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Referenced window assembly detail is not resolved by the submitted index",
+    "originalObservation": "The window assembly notes direct the reviewer to “SEE EXTERIOR WINDOW ASSEMBLY, 4/A5.0” and separately identify an interior window assembly. The submitted sheet index lists A-4.00-00, A-4.01-00, and A-4.02-00, but does not resolve a sheet labeled A5.0.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

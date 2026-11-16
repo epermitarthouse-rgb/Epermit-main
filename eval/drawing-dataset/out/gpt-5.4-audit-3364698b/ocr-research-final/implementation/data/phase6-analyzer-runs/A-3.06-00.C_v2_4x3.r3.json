@@ -1,0 +1,80 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0ad06524c935732d016aec8eefcf4487d29d6451ff08f15402",
+ "latencyMs": 7208,
+ "inputTokens": 4904,
+ "outputTokens": 471,
+ "costUsd": 0.01697,
+ "userPromptChars": 3546,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides details of guard rails and wall sections at the high roof and new order window. It includes various scales of elevation and section details for construction guidance.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Structural Information Reference",
+   "observation": "Details refer to structural drawings for metal stud spacing: '4\" METAL STUDS @ 16\" O.C.SEE STRUCTURAL DRAWINGS.'",
+   "drawing_evidence": "4\" METAL STUDS @ 16\" O.C.SEE STRUCTURAL DRAWINGS.",
+   "drawing_location": "Wall Section @ High Roof, Detail 4",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that the referenced structural drawings are included in the complete submission, and accessible for review.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Structural Information Reference",
+    "originalObservation": "Details refer to structural drawings for metal stud spacing: '4\" METAL STUDS @ 16\" O.C.SEE STRUCTURAL DRAWINGS.'",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "advisory",
+   "title": "Guard Rail Height Validation",
+   "observation": "A height is specified as '3'-6\"MIN HEIGHT FROM T.O. ROOF DECK MEMBRANE'.",
+   "drawing_evidence": "3'-6\"MIN HEIGHT FROM T.O. ROOF DECK MEMBRANE",
+   "drawing_location": "Guard Rail Elevation Detail @ High Roof, Detail 1",
+   "suggested_code_reference": "2015 IBC Section 1013.3",
+   "recommendation": "Verify the specified height against current code requirements for guardrails and amend if necessary.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guard Rail Height Validation",
+    "originalObservation": "A height is specified as '3'-6\"MIN HEIGHT FROM T.O. ROOF DECK MEMBRANE'.",
+    "originalCodeReference": "2015 IBC Section 1013.3",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": "2015 IBC Section 1013.3",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Guard Rail Sphere Passage Clarification",
+   "originalSeverity": "warning",
+   "originalCodeReference": "2015 IBC Section 1015.3",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

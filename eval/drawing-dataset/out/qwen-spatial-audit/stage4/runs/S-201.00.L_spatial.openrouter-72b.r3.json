@@ -1,0 +1,89 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "L_spatial",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0ffe569d86c5f3dc016afb2d1ea7bc87d2a30932b6be06aeff",
+ "latencyMs": 21522,
+ "inputTokens": 15690,
+ "outputTokens": 1929,
+ "reasoningTokens": 1552,
+ "costUsd": 0.0054528,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "S-201.00.pdf",
+  "evidenceSha": "23adde475ba79b53",
+  "userPromptChars": 15725,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"S-201.00\",\"detected_sheet_title\":\"WALL SECTIONS AND NOTES\",\"discipline\":\"Structural\",\"summary\":\"Structural wall sections, design criteria, material notes, connections, and special-inspection notes are shown. One apparent sheet-local discrepancy was identified between the stated soil bearing pressures; confirmation against the geotechnical and structural design basis is recommended.\",\"findings\":[{\"category\":\"Structural design criteria\",\"severity\":\"warning\",\"title\":\"Conflicting soil bearing pressure values\",\"observation\":\"The Masonry and Foundation Notes state an “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL” of 1,500 PSF in note 1, while note 8 refers to a “MINIMUM DESIGN SOIL PRESSURE 2,500 PSF” at the footing depth. The sheet does not explain whether these values represent different conditions or identify which value governs the footing design.\",\"drawing_evidence\":\"Note 1: “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.” Note 8: “...MINIMUM DESIGN SOIL PRESSURE 2,500 PSF...”\",\"drawing_location\":\"Right-side Structural Notes area, Masonry and Foundation Notes, notes 1 and 8.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Reconcile the 1,500 PSF and 2,500 PSF criteria with the geotechnical report and structural calculations. Clarify the applicable soil condition, allowable/design terminology, and governing value on the permit drawings; professional structural/geotechnical verification is needed.\",\"finding_type\":\"contradiction\",\"source_sheets\":[\"S-201.00\"],\"evidence_ids\":[\"e47\",\"e54\"],\"evidence_status\":\"confirmed_by_drawing\",\"confidence\":\"high\"}]}",
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "Structural wall sections, design criteria, material notes, connections, and special-inspection notes are shown. One apparent sheet-local discrepancy was identified between the stated soil bearing pressures; confirmation against the geotechnical and structural design basis is recommended.",
+ "drafts": [
+  {
+   "category": "Structural design criteria",
+   "severity": "warning",
+   "title": "Conflicting soil bearing pressure values",
+   "observation": "The Masonry and Foundation Notes state an “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL” of 1,500 PSF in note 1, while note 8 refers to a “MINIMUM DESIGN SOIL PRESSURE 2,500 PSF” at the footing depth. The sheet does not explain whether these values represent different conditions or identify which value governs the footing design.",
+   "drawing_evidence": "Note 1: “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.” Note 8: “...MINIMUM DESIGN SOIL PRESSURE 2,500 PSF...”",
+   "drawing_location": "Right-side Structural Notes area, Masonry and Foundation Notes, notes 1 and 8.",
+   "suggested_code_reference": "",
+   "recommendation": "Reconcile the 1,500 PSF and 2,500 PSF criteria with the geotechnical report and structural calculations. Clarify the applicable soil condition, allowable/design terminology, and governing value on the permit drawings; professional structural/geotechnical verification is needed.",
+   "finding_type": "contradiction",
+   "source_sheets": [
+    "S-201.00"
+   ],
+   "evidence_ids": [
+    "e47",
+    "e54"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "published": [
+  {
+   "category": "Structural design criteria",
+   "severity": "warning",
+   "title": "Conflicting soil bearing pressure values",
+   "observation": "The Masonry and Foundation Notes state an “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL” of 1,500 PSF in note 1, while note 8 refers to a “MINIMUM DESIGN SOIL PRESSURE 2,500 PSF” at the footing depth. The sheet does not explain whether these values represent different conditions or identify which value governs the footing design.",
+   "drawing_evidence": "Note 1: “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.” Note 8: “...MINIMUM DESIGN SOIL PRESSURE 2,500 PSF...”",
+   "drawing_location": "Right-side Structural Notes area, Masonry and Foundation Notes, notes 1 and 8.",
+   "suggested_code_reference": null,
+   "recommendation": "Reconcile the 1,500 PSF and 2,500 PSF criteria with the geotechnical report and structural calculations. Clarify the applicable soil condition, allowable/design terminology, and governing value on the permit drawings; professional structural/geotechnical verification is needed.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Conflicting soil bearing pressure values",
+    "originalObservation": "The Masonry and Foundation Notes state an “ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL” of 1,500 PSF in note 1, while note 8 refers to a “MINIMUM DESIGN SOIL PRESSURE 2,500 PSF” at the footing depth. The sheet does not explain whether these values represent different conditions or identify which value governs the footing design.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   },
+   "finding_type": "contradiction",
+   "source_sheets": [
+    "S-201.00"
+   ],
+   "evidence_ids": [
+    "e47",
+    "e54"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "withheld": []
+}

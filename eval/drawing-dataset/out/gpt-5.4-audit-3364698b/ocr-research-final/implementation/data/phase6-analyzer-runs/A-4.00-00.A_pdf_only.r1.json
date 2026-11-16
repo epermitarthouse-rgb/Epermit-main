@@ -1,0 +1,80 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "A_pdf_only",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_022b0d88b98f9766016aec8efb2ac887d2b00ac3574578e8bc",
+ "latencyMs": 7012,
+ "inputTokens": 3922,
+ "outputTokens": 398,
+ "costUsd": 0.013784999999999999,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides toilet room plans, fixture plans, and ADA compliance details. It includes various drawings and notes related to fixtures, dimensions, signage, and toilet room accessories.",
+ "published": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Toilet partition dimension verification",
+   "observation": "General notes specify to verify toilet room dimensions from shell field conditions and report discrepancies.",
+   "drawing_evidence": "General notes section states: 'FIELD VERIFY TOILET ROOM DIMENSIONS FROM SHELL/PREMISE CONDITIONS PRIOR TO CONSTRUCTION...'.",
+   "drawing_location": "General Notes (3)",
+   "suggested_code_reference": null,
+   "recommendation": "Adhere to the instruction by checking site conditions before construction to avoid layout conflicts.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Toilet partition dimension verification",
+    "originalObservation": "General notes specify to verify toilet room dimensions from shell field conditions and report discrepancies.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Lavatory clearances and installations",
+   "observation": "The lavatory section details are provided, including dimensions and mounting heights, but do not explicitly confirm compliance with accessibility standards.",
+   "drawing_evidence": "Lavatory Section (8) provides dimensions for lavatory installation.",
+   "drawing_location": "Lavatory Section (8)",
+   "suggested_code_reference": null,
+   "recommendation": "Review dimensions for compliance with ADA accessibility standards to ensure proper installation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Lavatory clearances and installations",
+    "originalObservation": "The lavatory section details are provided, including dimensions and mounting heights, but do not explicitly confirm compliance with accessibility standards.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Unspecified ADA compliance for door hardware",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

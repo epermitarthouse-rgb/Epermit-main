@@ -1,0 +1,100 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "B_v1",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0e8d42ccae294a35016aec8f72696087d2b25bdb88c3f6304c",
+ "latencyMs": 6378,
+ "inputTokens": 3857,
+ "outputTokens": 381,
+ "costUsd": 0.0134525,
+ "userPromptChars": 1807,
+ "detected": {
+  "number": "S-201.00",
+  "title": "Wall Sections and Notes",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet provides wall sections and structural notes for a McDonald's site in Washington, DC. It contains detailed drawing of wall sections, connections, and various structural notes related to steel, wood, and concrete.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Unspecified Design Load Criteria",
+   "observation": "The design criteria notes specify various loads like floor live load, roof live load, special roof loads, etc., but do not explicitly mention the wind load or seismic load criteria.",
+   "drawing_evidence": "Design Criteria note section listing various loads without mention of wind or seismic loads.",
+   "drawing_location": "Top right section under Design Criteria notes",
+   "suggested_code_reference": null,
+   "recommendation": "Confirm the wind and seismic design criteria according to the 2015 IBC and local amendments.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Unspecified Design Load Criteria",
+    "originalObservation": "The design criteria notes specify various loads like floor live load, roof live load, special roof loads, etc., but do not explicitly mention the wind load or seismic load criteria.",
+    "originalCodeReference": "2015 IBC",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Inconsistent Connection Labeling",
+   "observation": "Connection 1 and Connection 2 labels are reused in both wall sections without clear distinction of which detail they apply to.",
+   "drawing_evidence": "Connection labels applied to different structural components without differentiation.",
+   "drawing_location": "Wall sections, left and middle of the sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify connection labels to ensure accurate interpretation of structural details.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Inconsistent Connection Labeling",
+    "originalObservation": "Connection 1 and Connection 2 labels are reused in both wall sections without clear distinction of which detail they apply to.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Requirement for Concrete Caps",
+   "observation": "Notes indicate the requirement to provide concrete caps at all steel column pockets.",
+   "drawing_evidence": "\"Provide concrete caps at all steel column pockets\" note under Structural Notes.",
+   "drawing_location": "Bottom right, under Reinforced Concrete notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that this requirement is communicated to contractors and integrated into the construction process.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Requirement for Concrete Caps",
+    "originalObservation": "Notes indicate the requirement to provide concrete caps at all steel column pockets.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

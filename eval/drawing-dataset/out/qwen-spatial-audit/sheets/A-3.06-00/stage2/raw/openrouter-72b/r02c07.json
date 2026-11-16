@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842040-mNN3YVaN0NJqnCr9viVQ",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [469, 442, 525, 522],\n        \"text_content\": \"3\",\n        \"category\": \"detail_reference\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [650, 404, 979, 462],\n        \"text_content\": \"GUARD\",\n        \"category\": \"detail_title\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [647, 542, 794, 574],\n        \"text_content\": \"SCALE:\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [833, 542, 979, 574],\n        \"text_content\": \"1-1/2\\\"=\",\n        \"category\": \"dimension\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [587, 899, 930, 930],\n        \"text_content\": \"T/ BLK'G @ PARAPET\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [587, 945, 806, 975],\n        \"text_content\": \"ELEV. + 17'-4\\\"\",\n        \"category\": \"elevation\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 430,
+ "costUsd": 0.001663,
+ "reportedCostUsd": 0.0016628,
+ "latencyS": 9.57,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

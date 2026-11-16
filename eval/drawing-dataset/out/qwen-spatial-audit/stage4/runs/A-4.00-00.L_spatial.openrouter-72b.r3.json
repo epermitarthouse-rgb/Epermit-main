@@ -1,0 +1,37 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "L_spatial",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_01db1bed7ac914fb016afb2cb3f01c87d282320bb1b9a31a98",
+ "latencyMs": 7682,
+ "inputTokens": 17529,
+ "outputTokens": 357,
+ "reasoningTokens": 223,
+ "costUsd": 0.0039342000000000005,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-4.00-00.pdf",
+  "evidenceSha": "936aaeb9ac7a3644",
+  "userPromptChars": 13860,
+  "images": [
+   "P-R007 source",
+   "P-R007 target"
+  ],
+  "pairs": [
+   "P-R007"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-4.00-00\",\"detected_sheet_title\":\"ENLARGED TOILET PLANS & ADA DETAILS\",\"discipline\":\"Architectural\",\"summary\":\"Sheet 25 of 28 depicts enlarged toilet room plans, fixture layouts, accessory elevations and schedule, signage height information, a toilet stall door jamb detail, and a lavatory section. The sheet includes accessibility dimensions, door-operation notes, accessory mounting information, and references to the door schedule, plumbing fixture schedule, and signage package. No specific, drawing-supported discrepancy was identified on this sheet.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "Sheet 25 of 28 depicts enlarged toilet room plans, fixture layouts, accessory elevations and schedule, signage height information, a toilet stall door jamb detail, and a lavatory section. The sheet includes accessibility dimensions, door-operation notes, accessory mounting information, and references to the door schedule, plumbing fixture schedule, and signage package. No specific, drawing-supported discrepancy was identified on this sheet.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

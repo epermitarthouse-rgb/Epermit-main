@@ -1,0 +1,61 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=S-201.00 source=qwen-openrouter-72b annotations=399 technical=219 shown=56 independentlyVerified=false
+- CTION 2: WC350-54, 13" LONG / CREWS TO STUD AND (4) (ctx?)
+- DESIGN DATA (ctx?)
+- I. INTERNATIONAL BUILDING CODE (IBC 2015) (ctx?)
+- 1. INT (ctx?)
+- 2. AMERICAN CONCRETE INSTITUTE (ACI)
+- 3. AMERICAN WOOD COUNCIL (AWC) (ctx?)
+- DESIGN CRITERIA (ctx?)
+- FLOOR LIVE LOAD: 100 PSF (ctx?)
+- ROOF LIVE LOAD: 30 PSF (ctx?)
+- {(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED) | FLOO} / GROUND SNOW LOAD: 25 PSF + DRIFT / OR 30 PSF EQUIVALENT UNIFORM LOAD / {FLAT ROOF SNOW LOAD: 17.5 PSF | GRO} (ctx?)
+- {SNO | (NO} (ctx?)
+- SNOW EXPOSURE FACTOR: 0.7 (ctx?)
+- {SNOW LOAD IMPORTANCE FACTOR: | FLA} / THERMAL FACTOR: / WIND LOADING (IBC 2015) (ctx?)
+- SNO (ctx?)
+- THE (ctx?)
+- BAS
+- BASIC WIND SPEED (3 SECOND GUST) 115 MPH (ctx?)
+- RISK
+- BAS (ctx?)
+- WIND (ctx?)
+- RISK CATEGORY ii / {WIND EXPOSURE CATEGORY B | INTE} (ctx?)
+- RIS (ctx?)
+- INTERNAL PRESSURE COEFFICIENT 0.25 (ctx?)
+- COMPONENT AND CLADDING PRESSURE 30 PSF
+- 2 SCREWS TO STUD, (2) 0.157 PAF TO (ctx?)
+- 2 SCREWS TO STUD, (2) 0.157 PAF TO (ctx?)
+- SEISMIC LOADING (IBC 2015) (ctx?)
+- SEISMIC USE GROUP
+- Ss 0.133 (ctx?)
+- ?SI 0.43
+- Sds 0.142 (ctx?)
+- ?Sdl 0.069
+- SITE CLASS D, ASSUMED (ctx?)
+- SEISMIC IMPORTANCE FACTOR 1.0
+- SEISMIC DESIGN CATEGORY (ctx?)
+- BASIC SEISMIC FORCE RESISTING SYSTEM: / ORD. PLAIN REINF MASONRY (ctx?)
+- Cs= 0.095 R= 1.5 (ctx?)
+- {DESIGN BASE SHEAR {57 KIPS} | DESIGN BASE SHEAR 57 KIPS} / ANALYSIS PROCEDURE:
+- EQUIVALENT LATERAL FORCE PROCEDURE
+- RISK CATEGORY II
+- 3" MIN EDGE DISTANCE AND 3 (ctx?)
+- WEIGHT, W/C = .40, #57 AGGREGATE / ATIONS & 4" FOR WALLS, PRIOR TO MRWR. (ctx?)
+- 3. SLUMP 3" MAX. FOR FOUNDATIONS (ctx?)
+- ?6OOTI5O-43, 33 KSI / TYPICAL TOP / AND BOTTOM OF STUDS
+- 600S162-43 MIL @ 16" O/C
+- 600S162-43 MIL @ 16" O/C
+- ?6005162-43 MIL @ 16" O/C
+- {OSI62-43 MIL @ 16" O/C | 5162-45 MILE @ 16 | 6005102-43}
+- •
+- WINDOW MUST BE / ABLE TO ACCOMODATE / DOWNWARD DEFLECTION OF 3/4" (ctx?)
+- 1705.3
+- 1. ASSUMED ALLOWABLE BEARING CAPACITY O / {ALL CONCRETE TO DEVELOP AN ULTIMATE C | 2. AL} / IN 28 DAYS IN FOOTINGS AND WALLS, 3,500 / CONCRETE EXPOSED TO FREEZE THAW SHALL / W/C RATIO OF 0.45, AND SHALL BE AIR ENTR (ctx?)
+- 1705.4
+- {S162-43 MIL @ 16" O/C | 600S162-43}
+- {STIFFCLIP LS 18" LO | S 18" LONG} / {(2)#10 SCREWS | IS} / TYP
+- 600S162-43 MIL @ 16" O/C
+omitted: 343 annotations (181 technical: datum 27, numeric 115, dimension 23, value 15, qualifier 1; 162 other) by budget; not shown is not absent

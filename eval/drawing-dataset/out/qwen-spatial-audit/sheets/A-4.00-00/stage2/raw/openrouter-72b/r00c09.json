@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842284-A0up0HSVwziAdxIXt9Dl",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 196, 979, 234],\n        \"text_content\": \"RS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE A\",\n        \"category\": \"other\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 240, 979, 277],\n        \"text_content\": \"ERIOD FROM 70 DEGREES TO A POINT 3\\\" FROM LATC\",\n        \"category\": \"other\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 333, 694, 375],\n        \"text_content\": \"DIMENSIONS ARE TO FACE OF FINISH.\",\n        \"category\": \"other\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 426, 979, 470],\n        \"text_content\": \"AUTOMATIC FLUSH VALVES ON ALL LAVATORIES, TO\",\n        \"category\": \"other\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 519, 521, 561],\n        \"text_content\": \"ATORY TOPS TO BE CORIAN.\",\n        \"category\": \"other\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 614, 594, 658],\n        \"text_content\": \"T A-6.00 FOR DOOR SCHEDULE.\",\n        \"category\": \"other\",\n        \"group\": 5,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 709, 979, 753],\n        \"text_content\": \"BING FIXTURE SCHEDULE ON MEP DRAWINGS FOR TOII\",\n        \"category\": \"other\",\n        \"group\": 6,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 802, 979, 844],\n        \"text_content\": \"RS SHALL BE DESIGNED TO RESIST A SINGLE CONCE\",\n        \"category\": \"other\",\n        \"group\": 7,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 850, 979, 892],\n        \"text_content\": \"N AT ANY POINT ON THE GRAB BAR SO AS TO PROD\",\n        \"category\": \"other\",\n        \"group\": 7,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 943, 979, 980],\n        \"text_content\": \"RS, AND SOAP DISPENSERS SHALL BE INSTALLED AN\",\n        \"category\": \"other\",\n        \"group\": 8,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 761,
+ "costUsd": 0.001994,
+ "reportedCostUsd": 0.0019938,
+ "latencyS": 15.14,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842172-QFbFoLnUOPKtxycGtmRa",
+ "text": "```json\n[\n    {\"bbox_2d\": [46, 130, 70, 175], \"text_content\": \"2\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 184, 97, 214], \"text_content\": \"A-301\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [99, 220, 140, 246], \"text_content\": \"OPP.\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [294, 399, 352, 426], \"text_content\": \"9 1/2\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [442, 402, 523, 430], \"text_content\": \"3'-10\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [714, 402, 795, 429], \"text_content\": \"3'-4\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [488, 733, 539, 774], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [588, 865, 639, 906], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [472, 498, 494, 520], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [914, 923, 946, 955], \"text_content\": \"SF\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [914, 314, 946, 346], \"text_content\": \"AL\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [908, 615, 952, 666], \"text_content\": \"2'-4\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [876, 17, 980, 40], \"text_content\": \"NOTE\", \"category\": \"note\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [876, 48, 980, 71], \"text_content\": \"NEW\", \"category\": \"note\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [876, 76, 980, 99], \"text_content\": \"REFE\", \"category\": \"note\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [876, 104, 980, 127], \"text_content\": \"COOP\", \"category\": \"note\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 941,
+ "costUsd": 0.002174,
+ "reportedCostUsd": 0.0021738,
+ "latencyS": 17.23,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,55 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0accabf4af13edef016aec8f31807087d2bf2f0e10142731ae",
+ "latencyMs": 7821,
+ "inputTokens": 4863,
+ "outputTokens": 340,
+ "costUsd": 0.0155575,
+ "userPromptChars": 3544,
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides floor plans for mezzanine and basement levels in a McDonald's restaurant alteration project. Key components involve general and keyed notes, symbol legends, and clear identification of designated areas with specific instructions and requirements.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Missing Interior Partition Type Details",
+   "observation": "Notes state to see 6/A-1.00 for interior partition types but do not provide details directly on this sheet, and the referenced sheet was not reviewed.",
+   "drawing_evidence": "Note 2: 'SEE... 6/A-1.00 for INTERIOR PARTITION TYPES.'",
+   "drawing_location": "General notes section, bottom left corner.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify details on sheet 6/A-1.00 and confirm partition types are reflected accurately.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Missing Interior Partition Type Details",
+    "originalObservation": "Notes state to see 6/A-1.00 for interior partition types but do not provide details directly on this sheet, and the referenced sheet was not reviewed.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [
+  {
+   "title": "Conflicting Door Hardware Requirements",
+   "originalSeverity": "warning",
+   "originalCodeReference": "",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,71 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0e414565433cb9b1016aec8f0eff2487d29e79c5656ea2ca0d",
+ "latencyMs": 6745,
+ "inputTokens": 5014,
+ "outputTokens": 295,
+ "costUsd": 0.015484999999999999,
+ "userPromptChars": 3584,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "This sheet includes toilet room plans, fixture plans, accessory elevations, and signage elevations. It includes ADA compliance details and various notes regarding accessibility requirements.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "ADA Maneuvering Clearance",
+   "observation": "The sheet details ADA-related measurements but does not clearly indicate the maneuvering clearance required for the lavatory area.",
+   "drawing_evidence": "Lavatory section details at location 8 lack specified clearance dimensions.",
+   "drawing_location": "8, Lavatory Section",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that required ADA clearance dimensions for the lavatory area are provided and clearly indicated.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "ADA Maneuvering Clearance",
+    "originalObservation": "The sheet details ADA-related measurements but does not clearly indicate the maneuvering clearance required for the lavatory area.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Door Pressure Adjustment",
+   "observation": "General notes require all doors with accessible handles to be adjusted to a push/pull pressure of max 5 lbs, but specific adjustment details are not provided.",
+   "drawing_evidence": "Annotation near door reads, 'ALL DOORS W/ ACCESSIBLE HANDLES AND CLOSURE TO BE ADJUSTED TO MEET MAX. OF 5# PUSH/PULL PRESSURE.'",
+   "drawing_location": "General Notes",
+   "suggested_code_reference": null,
+   "recommendation": "Provide specific adjustment details or reference applicable codes to ensure clarity in implementation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door Pressure Adjustment",
+    "originalObservation": "General notes require all doors with accessible handles to be adjusted to a push/pull pressure of max 5 lbs, but specific adjustment details are not provided.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

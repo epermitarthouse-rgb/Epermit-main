@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842298-G9aOmhQRK62bCjSSePsl",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 14, 979, 56],\n        \"text_content\": \"N AT ANY POINT ON THE GRAB BAR SO AS TO PROD\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 79, 979, 119],\n        \"text_content\": \"RS, AND SOAP DISPENSERS SHALL BE INSTALLED AN\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 366, 835, 448],\n        \"text_content\": \"GENERAL NOTES\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 507, 244, 537],\n        \"text_content\": \"ALE: N.T.S.\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [17, 620, 154, 649],\n        \"text_content\": \"VARIES\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 717, 302, 770],\n        \"text_content\": \"OM NAME\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 774, 168, 794],\n        \"text_content\": \"room name\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [765, 762, 850, 790],\n        \"text_content\": \"PULL\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [765, 804, 905, 832],\n        \"text_content\": \"HANDLE\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [765, 846, 878, 874],\n        \"text_content\": \"INSIDE\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 685,
+ "costUsd": 0.001918,
+ "reportedCostUsd": 0.0019178,
+ "latencyS": 17.11,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

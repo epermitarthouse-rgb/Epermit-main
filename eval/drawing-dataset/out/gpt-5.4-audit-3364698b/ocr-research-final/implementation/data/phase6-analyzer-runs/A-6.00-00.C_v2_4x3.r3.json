@@ -1,0 +1,121 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_050e5c317b151a86016aec8f5b39f887d296a5015539dc054c",
+ "latencyMs": 8257,
+ "inputTokens": 5040,
+ "outputTokens": 528,
+ "costUsd": 0.01788,
+ "userPromptChars": 3612,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet includes details on door and hardware schedules, window types, and various general notes related to door and window specifications.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing Specific Door Hardware Specifications",
+   "observation": "The door schedule references specific hardware but lacks detailed descriptions for certain items such as 'PUSH PLATE' specifications which are not fully clear in the provided text.",
+   "drawing_evidence": "1 EA PUSH PLATE 30S 4 X 32 US32D 40*AFF MOUNTED TO CENTER OF PLATE",
+   "drawing_location": "Door Hardware section",
+   "suggested_code_reference": null,
+   "recommendation": "Verify the hardware specifications in detail, referencing applicable standards such as the NEC or local amendments.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Missing Specific Door Hardware Specifications",
+    "originalObservation": "The door schedule references specific hardware but lacks detailed descriptions for certain items such as 'PUSH PLATE' specifications which are not fully clear in the provided text.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Exterior Door Forces Note",
+   "observation": "The drawing notes an opening force requirement: 'THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB'.",
+   "drawing_evidence": "THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB",
+   "drawing_location": "General Notes section",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure this design requirement is verified during door installation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Exterior Door Forces Note",
+    "originalObservation": "The drawing notes an opening force requirement: 'THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB'.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Panic Hardware Specification",
+   "observation": "The drawing requires 'PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.'",
+   "drawing_evidence": "PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+   "drawing_location": "General Notes section",
+   "suggested_code_reference": null,
+   "recommendation": "Cross-check against the door schedule to confirm all exterior doors include panic hardware as specified.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Panic Hardware Specification",
+    "originalObservation": "The drawing requires 'PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.'",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "General Notes on Glass and Frame Specifications",
+   "observation": "Notes mention '1/4\" CLEAR TEMPERED GLAZING' and 'H.M. FRAME', but do not fully explain compliance with thermal or safety performance standards.",
+   "drawing_evidence": "1/4\" CLEAR TEMPERED GLAZING, H.M. FRAME",
+   "drawing_location": "Window Types section",
+   "suggested_code_reference": null,
+   "recommendation": "Review the complete specifications for glazing and frame to ensure they meet applicable energy and safety codes.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "General Notes on Glass and Frame Specifications",
+    "originalObservation": "Notes mention '1/4\" CLEAR TEMPERED GLAZING' and 'H.M. FRAME', but do not fully explain compliance with thermal or safety performance standards.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

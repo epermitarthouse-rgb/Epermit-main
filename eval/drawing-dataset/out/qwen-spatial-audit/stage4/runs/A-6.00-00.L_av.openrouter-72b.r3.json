@@ -1,0 +1,104 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_av",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_02df3efcd3616d1a016afb2dd47c4087d2874110b7850b37d7",
+ "latencyMs": 20712,
+ "inputTokens": 12856,
+ "outputTokens": 1791,
+ "reasoningTokens": 1240,
+ "costUsd": 0.0047204000000000005,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "80a958b14fd7b74b",
+  "userPromptChars": 9450,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains door and hardware schedules, window types, door hardware notes, and related glazing/frame details for the McDonald’s project at 75 New York Avenue, Washington, DC. No confirmed code violation is established from this sheet alone. Two advisory coordination items warrant review against the referenced plans, elevations, wall sections, and door locations.\",\"findings\":[{\"category\":\"general coordination note\",\"severity\":\"advisory\",\"title\":\"Door 12 hardware and door function require plan coordination\",\"observation\":\"The door schedule identifies Door 12 as a 3'-0\\\" x 6'-8\\\" x 1 3/4\\\" solid-core wood door with a hollow-metal frame, while the hardware section identifies it as “DOOR #12 - SPRINKLER ROOM” and lists only three hinges and one ND80PD lock. The sheet does not show the door location, swing, closer condition, or relationship to an egress path.\",\"drawing_evidence\":\"Door schedule row 12; hardware schedule note block labeled “DOOR #12 - SPRINKLER ROOM,” listing “3 EA HINGE …” and “1 EA LOCK ND80PD RHO 626 SCHLAGE.”\",\"drawing_location\":\"Lower-right door schedule and lower-center hardware schedule, sheet A-6.00-00.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Coordinate Door 12 with the architectural plans and door/location details to confirm the intended swing, access control, closer requirements, and any fire- or smoke-separation requirements applicable to the sprinkler-room enclosure.\"},{\"category\":\"general coordination note\",\"severity\":\"advisory\",\"title\":\"Frame dimensions depend on referenced elevations and wall sections\",\"observation\":\"The door schedule includes frame size entries identified as “(NOTE 5),” and General Door Note 5 states “SEE ELEVATIONS AND WALL SECTIONS.” Those referenced documents are listed in the submitted sheet index but were not reviewed with this sheet, so the frame and wall-interface conditions cannot be verified here.\",\"drawing_evidence\":\"Door schedule frame column includes “(NOTE 5)”; General Door Note 5 reads “SEE ELEVATIONS AND WALL SECTIONS.”\",\"drawing_location\":\"Door schedule at lower right and General Door Notes immediately to its right, sheet A-6.00-00.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Cross-check the door frame sizes, jamb/head conditions, and wall construction shown on the referenced elevations and wall sections against this schedule before approval of the door package.\"}]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains door and hardware schedules, window types, door hardware notes, and related glazing/frame details for the McDonald’s project at 75 New York Avenue, Washington, DC. No confirmed code violation is established from this sheet alone. Two advisory coordination items warrant review against the referenced plans, elevations, wall sections, and door locations.",
+ "drafts": [
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Door 12 hardware and door function require plan coordination",
+   "observation": "The door schedule identifies Door 12 as a 3'-0\" x 6'-8\" x 1 3/4\" solid-core wood door with a hollow-metal frame, while the hardware section identifies it as “DOOR #12 - SPRINKLER ROOM” and lists only three hinges and one ND80PD lock. The sheet does not show the door location, swing, closer condition, or relationship to an egress path.",
+   "drawing_evidence": "Door schedule row 12; hardware schedule note block labeled “DOOR #12 - SPRINKLER ROOM,” listing “3 EA HINGE …” and “1 EA LOCK ND80PD RHO 626 SCHLAGE.”",
+   "drawing_location": "Lower-right door schedule and lower-center hardware schedule, sheet A-6.00-00.",
+   "suggested_code_reference": "",
+   "recommendation": "Coordinate Door 12 with the architectural plans and door/location details to confirm the intended swing, access control, closer requirements, and any fire- or smoke-separation requirements applicable to the sprinkler-room enclosure."
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Frame dimensions depend on referenced elevations and wall sections",
+   "observation": "The door schedule includes frame size entries identified as “(NOTE 5),” and General Door Note 5 states “SEE ELEVATIONS AND WALL SECTIONS.” Those referenced documents are listed in the submitted sheet index but were not reviewed with this sheet, so the frame and wall-interface conditions cannot be verified here.",
+   "drawing_evidence": "Door schedule frame column includes “(NOTE 5)”; General Door Note 5 reads “SEE ELEVATIONS AND WALL SECTIONS.”",
+   "drawing_location": "Door schedule at lower right and General Door Notes immediately to its right, sheet A-6.00-00.",
+   "suggested_code_reference": "",
+   "recommendation": "Cross-check the door frame sizes, jamb/head conditions, and wall construction shown on the referenced elevations and wall sections against this schedule before approval of the door package."
+  }
+ ],
+ "published": [
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Door 12 hardware and door function require plan coordination",
+   "observation": "The door schedule identifies Door 12 as a 3'-0\" x 6'-8\" x 1 3/4\" solid-core wood door with a hollow-metal frame, while the hardware section identifies it as “DOOR #12 - SPRINKLER ROOM” and lists only three hinges and one ND80PD lock. The sheet does not show the door location, swing, closer condition, or relationship to an egress path.",
+   "drawing_evidence": "Door schedule row 12; hardware schedule note block labeled “DOOR #12 - SPRINKLER ROOM,” listing “3 EA HINGE …” and “1 EA LOCK ND80PD RHO 626 SCHLAGE.”",
+   "drawing_location": "Lower-right door schedule and lower-center hardware schedule, sheet A-6.00-00.",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate Door 12 with the architectural plans and door/location details to confirm the intended swing, access control, closer requirements, and any fire- or smoke-separation requirements applicable to the sprinkler-room enclosure.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door 12 hardware and door function require plan coordination",
+    "originalObservation": "The door schedule identifies Door 12 as a 3'-0\" x 6'-8\" x 1 3/4\" solid-core wood door with a hollow-metal frame, while the hardware section identifies it as “DOOR #12 - SPRINKLER ROOM” and lists only three hinges and one ND80PD lock. The sheet does not show the door location, swing, closer condition, or relationship to an egress path.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Frame dimensions depend on referenced elevations and wall sections",
+   "observation": "The door schedule includes frame size entries identified as “(NOTE 5),” and General Door Note 5 states “SEE ELEVATIONS AND WALL SECTIONS.” Those referenced documents are listed in the submitted sheet index but were not reviewed with this sheet, so the frame and wall-interface conditions cannot be verified here.",
+   "drawing_evidence": "Door schedule frame column includes “(NOTE 5)”; General Door Note 5 reads “SEE ELEVATIONS AND WALL SECTIONS.”",
+   "drawing_location": "Door schedule at lower right and General Door Notes immediately to its right, sheet A-6.00-00.",
+   "suggested_code_reference": null,
+   "recommendation": "Cross-check the door frame sizes, jamb/head conditions, and wall construction shown on the referenced elevations and wall sections against this schedule before approval of the door package.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Frame dimensions depend on referenced elevations and wall sections",
+    "originalObservation": "The door schedule includes frame size entries identified as “(NOTE 5),” and General Door Note 5 states “SEE ELEVATIONS AND WALL SECTIONS.” Those referenced documents are listed in the submitted sheet index but were not reviewed with this sheet, so the frame and wall-interface conditions cannot be verified here.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

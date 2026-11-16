@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842254-Ibn5wxwsdAeZiMWi3qfP",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 0, 324, 46],\n        \"text_content\": \"5162-45 MILE @ 16\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 120, 220, 154],\n        \"text_content\": \"2X4 REPAIR\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 168, 406, 202],\n        \"text_content\": \"SEE TYPICAL SECTION\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [54, 430, 322, 466],\n        \"text_content\": \"CONNECTION 3\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [54, 480, 261, 514],\n        \"text_content\": \"EACH STUD\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 608, 340, 650],\n        \"text_content\": \"OOTI50-43, 33 KSI\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 660, 216, 694],\n        \"text_content\": \"TYPICAL TOP\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 708, 408, 742],\n        \"text_content\": \"ND BOTTOM OF STUDS\",\n        \"category\": \"label\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [144, 884, 412, 920],\n        \"text_content\": \"CONNECTION 4\",\n        \"category\": \"label\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 631,
+ "costUsd": 0.001864,
+ "reportedCostUsd": 0.0018638,
+ "latencyS": 12.34,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

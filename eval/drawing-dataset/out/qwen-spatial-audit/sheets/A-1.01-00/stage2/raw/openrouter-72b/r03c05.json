@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842515-HwMCGxL2gIoqthonSrZm",
+ "text": "```json\n[\n    {\"bbox_2d\": [496, 179, 929, 220], \"text_content\": \"G.C. TO PROVIDE CALL\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [496, 230, 897, 265], \"text_content\": \"STATION BUTTON FOR\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [496, 276, 860, 311], \"text_content\": \"COMMUNICATION TO\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [496, 321, 780, 356], \"text_content\": \"MASTER PANEL\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [549, 798, 925, 835], \"text_content\": \"EXIST. STAIR & RAILING\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [589, 938, 845, 973], \"text_content\": \"METAL STUDS\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [858, 938, 966, 973], \"text_content\": \"@ 16\\\"\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [40, 466, 100, 500], \"text_content\": \"DN\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [100, 90, 144, 114], \"text_content\": \"6\\\"\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [232, 170, 286, 206], \"text_content\": \"DS\", \"category\": \"label\", \"group\": 5, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 609,
+ "costUsd": 0.001842,
+ "reportedCostUsd": 0.0018418,
+ "latencyS": 14.39,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

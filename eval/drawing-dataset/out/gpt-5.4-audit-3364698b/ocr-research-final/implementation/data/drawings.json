@@ -1,0 +1,51 @@
+{
+  "note": "Phase 1 evaluation set. Ground truth: A-3.06 full sheet (stage 04); the others are regional (data/gt-windows.json). Page geometry (printed rules) from stage3PageGeometry.renderPageGeometry at 2 px/pt, cached in geometry/.",
+  "drawings": [
+    {
+      "sheetId": "A-3.06-00",
+      "kind": "technical detail (baseline)",
+      "groundTruth": "gt/A-3.06-00.ground-truth.json",
+      "layout": "../../../../mcd-649fdaa6/layout-full/pages/c20cc018310747ea435c888f7c1b1d4884ef8d1054b16da9ab770a504a33b6cf.json",
+      "recovery": "../../../../mcd-649fdaa6/recovery/c20cc018310747ea435c888f7c1b1d4884ef8d1054b16da9ab770a504a33b6cf.json",
+      "savedPack": "../../../A-3.06-00-mac-vision-ocr.json",
+      "ocr12x9": "ocr12x9/A-3.06-00.json",
+      "geometry": "geometry/A-3.06-00.page-geometry.json"
+    },
+    {
+      "sheetId": "A-4.00-00",
+      "kind": "technical detail",
+      "groundTruth": "gt/A-4.00-00.ground-truth.json",
+      "layout": "../../../../mcd-649fdaa6/layout-full/pages/1b94a7bfeb1f140675fb1f10ac52f01105ee0e04558c0c634d24193ea85eb074.json",
+      "recovery": "../../../../mcd-649fdaa6/recovery/1b94a7bfeb1f140675fb1f10ac52f01105ee0e04558c0c634d24193ea85eb074.json",
+      "ocr12x9": "ocr12x9/A-4.00-00.json",
+      "geometry": "geometry/A-4.00-00.page-geometry.json"
+    },
+    {
+      "sheetId": "A-1.01-00",
+      "kind": "plan",
+      "groundTruth": "gt/A-1.01-00.ground-truth.json",
+      "layout": "../../../../mcd-649fdaa6/layout-full/pages/953efd7b2d51941603f49d83ecaeb929c74b5071f959432a7023a3fbb1eb7906.json",
+      "recovery": "../../../../mcd-649fdaa6/recovery/953efd7b2d51941603f49d83ecaeb929c74b5071f959432a7023a3fbb1eb7906.json",
+      "ocr12x9": "ocr12x9/A-1.01-00.json",
+      "geometry": "geometry/A-1.01-00.page-geometry.json"
+    },
+    {
+      "sheetId": "A-6.00-00",
+      "kind": "schedule",
+      "groundTruth": "gt/A-6.00-00.ground-truth.json",
+      "layout": "../../../../mcd-649fdaa6/layout-full/pages/28369090ce34e1d503f9364bc293f9be51ff37bb521dd50a86968b472411c56d.json",
+      "recovery": "../../../../mcd-649fdaa6/recovery/28369090ce34e1d503f9364bc293f9be51ff37bb521dd50a86968b472411c56d.json",
+      "ocr12x9": "ocr12x9/A-6.00-00.json",
+      "geometry": "geometry/A-6.00-00.page-geometry.json"
+    },
+    {
+      "sheetId": "S-201.00",
+      "kind": "notes-heavy",
+      "groundTruth": "gt/S-201.00.ground-truth.json",
+      "layout": "../../../../mcd-649fdaa6/layout-full/pages/d11fd02d8a3859796f6f64ce745ce95ae93872f60534e606619c8954e228face.json",
+      "recovery": "../../../../mcd-649fdaa6/recovery/d11fd02d8a3859796f6f64ce745ce95ae93872f60534e606619c8954e228face.json",
+      "ocr12x9": "ocr12x9/S-201.00.json",
+      "geometry": "geometry/S-201.00.page-geometry.json"
+    }
+  ]
+}

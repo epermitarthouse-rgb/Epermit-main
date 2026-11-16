@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842936-cWw0UOVSjZcxFx1VF5Ky",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [234, 176, 980, 214],\n        \"text_content\": \"CONTRACTOR SHALL SUBMIT THE F\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [238, 230, 980, 270],\n        \"text_content\": \"A. LIGHT GAGE SHOP DRAWINGS\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [370, 286, 980, 324],\n        \"text_content\": \"PERFORMED BY A PROFESSI\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [370, 342, 980, 380],\n        \"text_content\": \"THE STATE IN WHICH THE PRO\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [370, 400, 980, 438],\n        \"text_content\": \"CALCULATIONS SHALL BE SIG\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [213, 624, 980, 690],\n        \"text_content\": \"SPECIAL INSPECTIC\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [209, 756, 980, 796],\n        \"text_content\": \"106.3 STATEMENT OF SPECIAL INSPE\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [213, 814, 980, 852],\n        \"text_content\": \"A STATEMENT OF SPECIAL INSPECTIC\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [213, 870, 980, 908],\n        \"text_content\": \"WHERE SPECIAL INSPECTIONS AND TE\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [213, 936, 436, 964],\n        \"text_content\": \"AND 1705.\",\n        \"category\": \"other\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 731,
+ "costUsd": 0.001964,
+ "reportedCostUsd": 0.0019638,
+ "latencyS": 19.69,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842271-3ltWh6wNxOxzqcWjPeS6",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [584, 169, 688, 208],\n        \"text_content\": \"NOTE:\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [584, 216, 975, 255],\n        \"text_content\": \"GC TO FIELD VERIFY\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [584, 263, 975, 302],\n        \"text_content\": \"TO PROJECT START D\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [584, 310, 975, 349],\n        \"text_content\": \"OF NEW DECOR FINISH\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [584, 367, 975, 406],\n        \"text_content\": \"COMPLIANCE ISSUE IN\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [584, 414, 975, 453],\n        \"text_content\": \"IF A CONFLICT WILL E\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [584, 459, 975, 498],\n        \"text_content\": \"ARCHITECT FOR APPR\",\n        \"category\": \"note\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [574, 622, 975, 661],\n        \"text_content\": \"1/2\\\" CEMENT BOARD O\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [574, 678, 975, 717],\n        \"text_content\": \"WALLS, ABUSE RESIST\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [574, 725, 866, 754],\n        \"text_content\": \"PURPLE BOARD\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [574, 768, 975, 807],\n        \"text_content\": \"ON CEILING IN TOILET\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [574, 815, 830, 844],\n        \"text_content\": \"ROOM, TYP.\",\n        \"category\": \"label\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 850,
+ "costUsd": 0.002083,
+ "reportedCostUsd": 0.0020828,
+ "latencyS": 17.86,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

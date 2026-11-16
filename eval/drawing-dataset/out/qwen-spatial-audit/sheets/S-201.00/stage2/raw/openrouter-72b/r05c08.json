@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842958-bjHeLoIyu8Nsdp6NcVyc",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 26, 324, 71], \"text_content\": \"LINTEL ANGLES.\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 82, 104, 115], \"text_content\": \"END.\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 216, 548, 288], \"text_content\": \"DATION NOTES\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 348, 542, 388], \"text_content\": \"ACITY OF SOIL IS 1,500 PSF.\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 397, 880, 435], \"text_content\": \"IMATE COMPRESSIVE STRENGTH OF 3,000 PSI\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 444, 662, 482], \"text_content\": \"3,500 PSI IN 28 DAYS IN SLABS.\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 489, 834, 530], \"text_content\": \"N SHALL BE 4,500 PSI IN 28 DAYS, WITH A\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 537, 816, 575], \"text_content\": \"IR ENTRAINED IN ACCORDANCE WITH ACI.\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 584, 816, 622], \"text_content\": \"BILLET STEEL ASTM A615, GRADE 60 AND\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 631, 168, 668], \"text_content\": \"A-307.\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 680, 818, 718], \"text_content\": \"AT ALL CORNERS AND INTERSECTIONS OF\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 775, 768, 813], \"text_content\": \"R DIAMETERS WHERE SPLICED AND ALL\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 822, 600, 860], \"text_content\": \"RS UNLESS NOTED OTHERWISE.\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 869, 872, 907], \"text_content\": \"OPENINGS, SLEEVES, INSERTS, ETC., REFER TO\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 922, 168, 950], \"text_content\": \"RAWINGS.\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 976,
+ "costUsd": 0.002209,
+ "reportedCostUsd": 0.0022088,
+ "latencyS": 25.07,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

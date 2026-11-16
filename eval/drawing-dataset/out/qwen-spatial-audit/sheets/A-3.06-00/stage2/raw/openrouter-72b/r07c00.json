@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842090-WwJPMKW0iCRhzAuSt6Qw",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [364, 0, 448, 980],\n        \"text_content\": \"S New York Ave & 1st St, Wash DC SECTIONS.DWG\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [454, 0, 474, 40],\n        \"text_content\": \"10/15\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 155,
+ "costUsd": 0.001388,
+ "reportedCostUsd": 0.0013878,
+ "latencyS": 6.38,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

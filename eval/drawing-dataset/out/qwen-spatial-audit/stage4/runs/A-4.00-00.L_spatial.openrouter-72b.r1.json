@@ -1,0 +1,37 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "L_spatial",
+ "rep": 1,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0dcb88fbb775f16a016afb2c9d3ddc87d2ad31dd1bbb13b2cd",
+ "latencyMs": 9619,
+ "inputTokens": 17529,
+ "outputTokens": 536,
+ "reasoningTokens": 406,
+ "costUsd": 0.004149,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-4.00-00.pdf",
+  "evidenceSha": "936aaeb9ac7a3644",
+  "userPromptChars": 13860,
+  "images": [
+   "P-R007 source",
+   "P-R007 target"
+  ],
+  "pairs": [
+   "P-R007"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-4.00-00\",\"detected_sheet_title\":\"ENLARGED TOILET PLANS & ADA DETAILS\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains enlarged toilet room plans, fixture plans, accessory elevations and schedules, signage details, a toilet stall door jamb detail, and a lavatory section. Door information is referenced to Sheet A-6.00, which is listed in the submitted project index. The reviewed sheet does not show a clearly supported discrepancy, conflict, or demonstrated omission warranting a finding.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains enlarged toilet room plans, fixture plans, accessory elevations and schedules, signage details, a toilet stall door jamb detail, and a lavatory section. Door information is referenced to Sheet A-6.00, which is listed in the submitted project index. The reviewed sheet does not show a clearly supported discrepancy, conflict, or demonstrated omission warranting a finding.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

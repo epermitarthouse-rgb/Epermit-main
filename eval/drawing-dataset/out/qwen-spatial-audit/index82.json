@@ -1,0 +1,3613 @@
+{
+ "source": "/Users/javerianaveed/Desktop/008-0003 New York Ave Wash DC_PERMIT REV5 SET_2026-10-15_Individual",
+ "files": 83,
+ "pdfs": 82,
+ "pdfsWithDetailTitles": 41,
+ "sheets": [
+  {
+   "fileName": "A-1.00-00.pdf",
+   "sheetKey": "A-1.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "1ST FLOOR ALTERATION  PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 498.41,
+      "width": 427.21,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "GENERAL NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 256.74,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "PLAN KEYED NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 833.28,
+      "y": 38.93,
+      "width": 294.48,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "SYMBOL LEGENDS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1546.44,
+      "y": 38.93,
+      "width": 274.92,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "TYPICAL INTERIOR PARTITION",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1852.8,
+      "y": 38.93,
+      "width": 416.0,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 73,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-1.01-00.pdf",
+   "sheetKey": "A-1.01",
+   "details": [
+    {
+     "detail": "1",
+     "title": "2ND FLOOR ALTERATION  FLOOR PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 569.81,
+      "width": 525.12,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "GENERAL NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 256.86,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "PLAN KEYED NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 845.16,
+      "y": 38.93,
+      "width": 294.48,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "SYMBOL LEGENDS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1266.24,
+      "y": 38.93,
+      "width": 274.92,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "BASEMENT ALTERATION  FLOOR PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1386.84,
+      "y": 569.81,
+      "width": 519.42,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 74,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-1.02-00.pdf",
+   "sheetKey": "A-1.02",
+   "details": [
+    {
+     "detail": "1",
+     "title": "1st FLOOR REFLECTED CEILING  PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 128.04,
+      "y": 421.37,
+      "width": 520.83,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "GYP BD CEILING DTL",
+     "scale": "1\"=1'-0\"",
+     "titleBox": {
+      "x": 2002.8,
+      "y": 1434.65,
+      "width": 300.18,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "KEY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1588.68,
+      "y": 421.37,
+      "width": 187.01,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "VALANCE SECTION",
+     "scale": "1\" = 1'-0\"",
+     "titleBox": {
+      "x": 1122.48,
+      "y": 421.37,
+      "width": 279.21,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "CEILING TRANSITION W/ SOFFIT",
+     "scale": "1\" = 1'-0\"",
+     "titleBox": {
+      "x": 128.04,
+      "y": 38.93,
+      "width": 436.94,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "CEILING DETAIL AT COOLER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 590.16,
+      "y": 38.93,
+      "width": 391.0,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "8",
+     "title": "CEILING GRID & LIGHT SUPPORT DETAIL",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1002.36,
+      "y": 38.93,
+      "width": 541.77,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "GENERAL NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1474.2,
+      "y": 1434.65,
+      "width": 256.74,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "9",
+     "title": "MONITOR INSTALLATION DET.",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1883.52,
+      "y": 38.93,
+      "width": 411.8,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.02"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 91,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-1.03-00.pdf",
+   "sheetKey": "A-1.03",
+   "details": [
+    {
+     "detail": "1",
+     "title": "2ND FLOOR REFLECTED CEILING  PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 436.85,
+      "width": 530.7,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "BASEMENT REFLECTED CEILING  PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1328.52,
+      "y": 436.85,
+      "width": 525.0,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "GENERAL NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 256.86,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "KEY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 728.16,
+      "y": 38.93,
+      "width": 187.01,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.03"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 70,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-1.04.00.pdf",
+   "sheetKey": "A-1.04",
+   "details": [
+    {
+     "detail": "1",
+     "title": "EGRESS PLAN \\ SEATING PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 535.97,
+      "width": 424.57,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "LEGEND",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 204.53,
+      "width": 146.47,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "TOILET FIXTURE CALC.",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 125.76,
+      "y": 38.56,
+      "width": 291.27,
+      "height": 38.36
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "TRAVEL DISTANCE CALCULATION",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 621.84,
+      "y": 152.2,
+      "width": 408.35,
+      "height": 38.36
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "DOOR/ STAIR CAPACITY & NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1056.48,
+      "y": 38.56,
+      "width": 407.12,
+      "height": 38.36
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "CAPACITY & SEATS COMPUTATIONS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1851.12,
+      "y": 38.56,
+      "width": 438.14,
+      "height": 38.36
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "WALL LEGEND",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 621.84,
+      "y": 38.56,
+      "width": 197.85,
+      "height": 38.36
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.04"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 141,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-1.05.00.pdf",
+   "sheetKey": "A-1.05",
+   "details": [
+    {
+     "detail": "1",
+     "title": "2ND FLOOR EGRESS PLAN \\ SEATING PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 665.69,
+      "width": 575.46,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "CAPACITY & SEATS COMPUTATIONS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1111.56,
+      "y": 38.93,
+      "width": 491.46,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "LEGEND",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 146.47,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "BASEMENT EGRESS PLAN \\ SEATING PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1315.2,
+      "y": 665.69,
+      "width": 569.76,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "TRAVEL DISTANCE CALCULATION",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 624.0,
+      "y": 182.21,
+      "width": 458.03,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "WALL LEGEND",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 624.0,
+      "y": 38.93,
+      "width": 221.93,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.05"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 137,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-1.06-00.pdf",
+   "sheetKey": "A-1.06",
+   "details": [
+    {
+     "detail": "1",
+     "title": "ROOF PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 509.21,
+      "width": 188.39,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "ROOFING SYSTEM",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 553.56,
+      "y": 38.93,
+      "width": 270.81,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "ROOF SYMBOL LEGEND",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 337.9,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "GENERAL NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 224.45,
+      "width": 256.86,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-1.06"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 72,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-2.00-00.pdf",
+   "sheetKey": "A-2.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "FRONT ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1003.73,
+      "width": 277.68,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "NON DRIVE THRU ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 302.57,
+      "width": 407.6,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1A",
+     "title": "SAFETY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1995.84,
+      "y": 1003.73,
+      "width": 242.78,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "ELEVATION KEY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.81,
+      "width": 335.01,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-2.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 74,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-2.01-00.pdf",
+   "sheetKey": "A-2.01",
+   "details": [
+    {
+     "detail": "1",
+     "title": "REAR ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1003.73,
+      "width": 261.06,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "DRIVE THRU ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 302.57,
+      "width": 344.86,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1A",
+     "title": "SAFETY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1995.84,
+      "y": 1003.73,
+      "width": 242.9,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "ELEVATION KEY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 335.13,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-2.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 74,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-2.02.00.pdf",
+   "sheetKey": "A-2.02",
+   "details": [
+    {
+     "detail": "1",
+     "title": "SERVICE AREA PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1367.93,
+      "width": 301.59,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "10",
+     "title": "PLAN DTL. @ DGTL. MERCH.",
+     "scale": "1\"=1'-0\"",
+     "titleBox": {
+      "x": 120.96,
+      "y": 247.13,
+      "width": 396.9,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "13",
+     "title": "SECTION @ DIGITAL MERCH.",
+     "scale": "1\"=1'-0\"",
+     "titleBox": {
+      "x": 1389.24,
+      "y": 247.13,
+      "width": 405.28,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "KITCHEN ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1396.2,
+      "y": 1367.93,
+      "width": 301.56,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "DGTL. BD / MERCH. BRACKET",
+     "scale": "1\"=1'-0\"",
+     "titleBox": {
+      "x": 1396.2,
+      "y": 1036.85,
+      "width": 404.93,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "8",
+     "title": "SECTION @ SERVICE POD",
+     "scale": "1\" = 1'-0\"",
+     "titleBox": {
+      "x": 1827.6,
+      "y": 1036.85,
+      "width": 366.09,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "SERVICE AREA ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1036.85,
+      "width": 377.05,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "SERVICE AREA ELEVATION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1827.48,
+      "y": 1367.93,
+      "width": 377.04,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "SERVICE AREA ELEVATION - CREW SIDE",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 684.36,
+      "y": 1367.93,
+      "width": 541.77,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "SERVICE AREA ELEVATION - CUSTOMER SIDE",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 684.36,
+      "y": 1036.85,
+      "width": 608.83,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "14",
+     "title": "SECTION @ DELIVERY POD",
+     "scale": "1\" = 1'-0\"",
+     "titleBox": {
+      "x": 1820.52,
+      "y": 247.13,
+      "width": 387.15,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "11",
+     "title": "LATE NIGHT WINDOW ELEVATION VESTIBULE SIDE",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 677.28,
+      "y": 670.49,
+      "width": 674.6,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "9",
+     "title": "LATE NIGHT WINDOW PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 556.73,
+      "width": 381.17,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "12",
+     "title": "LATE NIGHT WINDOW ELEVATION VESTIBULE SIDE",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 677.28,
+      "y": 247.13,
+      "width": 674.6,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-2.02"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 113,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.00-00.pdf",
+   "sheetKey": "A-3.00",
+   "details": [
+    {
+     "detail": "8",
+     "title": "PROPOSED BUILDING SECTION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.81,
+      "width": 429.98,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "PARAPET DETAIL @ ORDER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1295.81,
+      "width": 385.65,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "DETAIL @ DIAGONAL BRACING",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 596.64,
+      "y": 1295.81,
+      "width": 422.1,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "CANOPY DETAIL @ ORDER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1649.76,
+      "y": 778.97,
+      "width": 374.46,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "PARAPET DETAIL @ BOH",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1047.72,
+      "y": 1194.65,
+      "width": 349.34,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "WINDOW HEAD @ ORDER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 778.97,
+      "width": 360.43,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "WINDOW SILL @ ORDER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 596.64,
+      "y": 778.97,
+      "width": 342.42,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "NOT USED",
+     "scale": "1 1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1047.72,
+      "y": 778.97,
+      "width": 159.81,
+      "height": 41.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 85,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.01-00.pdf",
+   "sheetKey": "A-3.01",
+   "details": [
+    {
+     "detail": "3",
+     "title": "ASSEMBLY NOTES",
+     "scale": "NO SCALE",
+     "titleBox": {
+      "x": 1918.68,
+      "y": 38.93,
+      "width": 272.24,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "WALL SECTION @ LEFT SIDE DINING THRU PIER",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 634.45,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "WALL SECTION @ LEFT SIDE DINING GLAZING",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1011.12,
+      "y": 38.93,
+      "width": 609.21,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 65,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.02-00.pdf",
+   "sheetKey": "A-3.02",
+   "details": [
+    {
+     "detail": "1",
+     "title": "WALL SECTION @ RIGHT SIDE BATTEN",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 519.89,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "WALL SECTION @ SIDE STAIR TOWER",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 733.8,
+      "y": 38.93,
+      "width": 509.99,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "WALL SECTION @ LEFT SIDE BOH",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1839.24,
+      "y": 38.93,
+      "width": 458.44,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "CONTROL JOINT  @ BATTEN",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1839.24,
+      "y": 1154.09,
+      "width": 391.33,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.02"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 69,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.03-00.pdf",
+   "sheetKey": "A-3.03",
+   "details": [
+    {
+     "detail": "1",
+     "title": "WALL SECTION @ RIGHT SIDE ENTRY",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 128.16,
+      "y": 38.93,
+      "width": 505.79,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "CANOPY DETAIL @ VESTIBULE",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1434.6,
+      "y": 38.93,
+      "width": 422.01,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "PARAPET @ VESTIBULE",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1434.6,
+      "y": 1158.05,
+      "width": 338.18,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "WINDOW SILL DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1434.6,
+      "y": 509.93,
+      "width": 307.02,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "WINDOW HEAD DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1907.04,
+      "y": 1158.05,
+      "width": 325.27,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.03"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 73,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.04-00.pdf",
+   "sheetKey": "A-3.04",
+   "details": [
+    {
+     "detail": "8",
+     "title": "WALL SECTION @ RIGHT SIDE COOLER/FREEZER BEAM",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 524.64,
+      "y": 38.45,
+      "width": 729.47,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "CANOPY DETAIL @ PIER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1217.57,
+      "width": 342.47,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "CANOPY DETAIL @ GLAZING",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 783.0,
+      "y": 1217.57,
+      "width": 394.17,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "CANOPY DETAIL @ BATTEN",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1359.48,
+      "y": 1217.57,
+      "width": 382.98,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "BATTEN CURB DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1919.16,
+      "y": 1217.57,
+      "width": 315.52,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "WINDOW HEAD DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 896.21,
+      "width": 325.27,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "WINDOW SILL DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 577.85,
+      "width": 307.14,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "WINDOW SILL DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 307.14,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.04"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 85,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.05-00.pdf",
+   "sheetKey": "A-3.05",
+   "details": [
+    {
+     "detail": "6",
+     "title": "WALL SECTION @ REAR THIN BRICK",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 781.68,
+      "y": 38.93,
+      "width": 489.14,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "WALL SECTION @ REAR THIN BRICK THRU SCUPPER",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1560.0,
+      "y": 38.93,
+      "width": 694.37,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "PARAPET DETAIL @ THIN BRICK",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1263.41,
+      "width": 437.47,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "PARAPET DETAIL @ BATTEN",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 633.48,
+      "y": 1263.41,
+      "width": 394.17,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "PARAPET @ STAIR TOWER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1225.92,
+      "y": 1263.41,
+      "width": 374.46,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "SCUPPER DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1937.88,
+      "y": 1263.41,
+      "width": 259.53,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "WALL SECTION @ REAR DOOR",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 123.48,
+      "y": 38.93,
+      "width": 421.96,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.05"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 81,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-3.06-00.pdf",
+   "sheetKey": "A-3.06",
+   "details": [
+    {
+     "detail": "4",
+     "title": "WALL SECTION @ HIGH ROOF",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.8,
+      "y": 38.93,
+      "width": 412.18,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "WALL SECTION @ NEW ORDER WINDOW",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1523.88,
+      "y": 38.93,
+      "width": 543.46,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+     "scale": "1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.8,
+      "y": 1185.05,
+      "width": 621.78,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "GUARD RAIL DETAIL @ HIGH ROOF",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 849.84,
+      "y": 1185.05,
+      "width": 473.78,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "GUARD RAIL DETAIL @ HIGH ROOF",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1523.88,
+      "y": 1185.05,
+      "width": 473.66,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-3.06"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 73,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-4.00-00.pdf",
+   "sheetKey": "A-4.00",
+   "details": [
+    {
+     "detail": "4",
+     "title": "TYP. SIGNAGE HEIGHT ELEVATION",
+     "scale": "1/2\"=1'-0\"",
+     "titleBox": {
+      "x": 1759.32,
+      "y": 812.81,
+      "width": 470.54,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "TYP. TOILET ROOM ACCESSORY ELEV.",
+     "scale": "1/2\"=1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 522.23,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "GENERAL NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1759.2,
+      "y": 1396.25,
+      "width": 256.86,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "TOILET STALL DOOR JAMB",
+     "scale": "3\"=1'-0\"",
+     "titleBox": {
+      "x": 1756.44,
+      "y": 466.61,
+      "width": 371.32,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "TOILET ROOM ACCESSORY SCHEDULE",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1113.84,
+      "y": 38.93,
+      "width": 524.97,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "TOILET ROOM PLAN",
+     "scale": "3/8\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 812.81,
+      "width": 288.87,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "TOILET ROOM FIXTURE PLAN",
+     "scale": "3/8\" = 1'-0\"",
+     "titleBox": {
+      "x": 943.92,
+      "y": 812.81,
+      "width": 403.43,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "8",
+     "title": "LAVATORY SECTION",
+     "scale": "1\"=1'-0\"",
+     "titleBox": {
+      "x": 1759.2,
+      "y": 38.93,
+      "width": 295.98,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-4.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 91,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-4.01-00.pdf",
+   "sheetKey": "A-4.01",
+   "details": [
+    {
+     "detail": "14",
+     "title": "BATTEN TO THIN BRICK DETAIL",
+     "scale": "1-1/2\"=1'-0\"",
+     "titleBox": {
+      "x": 1813.32,
+      "y": 38.93,
+      "width": 435.65,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "BATTEN @  GLAZING TRANSITION",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1115.04,
+      "y": 1274.09,
+      "width": 458.29,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "EXT. DOOR JAMB DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 128.16,
+      "y": 1274.09,
+      "width": 350.35,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "PRESENTER WINDOW  JAMB DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1115.04,
+      "y": 894.77,
+      "width": 490.02,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "CASH BOOTH  JAMB DETAIL",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 603.6,
+      "y": 894.77,
+      "width": 385.27,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "8",
+     "title": "NOT USED",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 454.37,
+      "width": 173.0,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "1ST FLOOR GLAZING @ PIER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 894.77,
+      "width": 398.37,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "13",
+     "title": "EIFS TO THIN BRICK DETAIL",
+     "scale": "1-1/2\"=1'-0\"",
+     "titleBox": {
+      "x": 1387.44,
+      "y": 38.93,
+      "width": 392.35,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "BATTEN DETAIL @ 1ST FLOOR CORNER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1676.16,
+      "y": 894.77,
+      "width": 532.46,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "10",
+     "title": "BATTEN @ MEZZANINE",
+     "scale": null,
+     "titleBox": {
+      "x": 1107.96,
+      "y": 454.37,
+      "width": 334.02,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "BATTEN @ BRICK BELOW",
+     "scale": "1-1/2\"=1'-0\"",
+     "titleBox": {
+      "x": 603.6,
+      "y": 1274.09,
+      "width": 356.31,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "12",
+     "title": "ALUMINUM BATTEN DETAILS",
+     "scale": null,
+     "titleBox": {
+      "x": 120.96,
+      "y": 38.93,
+      "width": 402.11,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "11",
+     "title": "BATTEN DETAIL @ MEZZANINE CORNER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1669.2,
+      "y": 454.37,
+      "width": 544.98,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "9",
+     "title": "MEZZANINE GLAZING @ PIER",
+     "scale": "1-1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 603.6,
+      "y": 454.37,
+      "width": 403.8,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-4.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 108,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-4.02-00.pdf",
+   "sheetKey": "A-4.02",
+   "details": [
+    {
+     "detail": "1",
+     "title": "1ST FLOOR SEATING PLAN",
+     "scale": "1/8\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 866.81,
+      "width": 372.85,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "2ND FLOOR SEATING PLAN",
+     "scale": "1/8\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 377.02,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-4.02"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 343,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-6.00-00.pdf",
+   "sheetKey": "A-6.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "DOOR SCHEDULE",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1434.72,
+      "y": 38.93,
+      "width": 262.29,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "DOOR HARDWARE",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 272.17,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "WINDOW TYPES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 850.61,
+      "width": 242.85,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-6.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 68,
+   "status": "indexed"
+  },
+  {
+   "fileName": "A-6.01.00.pdf",
+   "sheetKey": "A-6.01",
+   "details": [
+    {
+     "detail": "1",
+     "title": "TOILET ROOM FLOORS",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 1228.37,
+      "width": 326.71,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "DINING ROOM FLOORS",
+     "scale": null,
+     "titleBox": {
+      "x": 529.32,
+      "y": 1228.37,
+      "width": 326.56,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "KITCHEN FLOORS",
+     "scale": null,
+     "titleBox": {
+      "x": 986.04,
+      "y": 1228.37,
+      "width": 263.7,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "DINING ROOM INTERIOR WALLS",
+     "scale": null,
+     "titleBox": {
+      "x": 1359.96,
+      "y": 1228.37,
+      "width": 435.54,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "DINING ROOM PERIMETER JOINT",
+     "scale": null,
+     "titleBox": {
+      "x": 1842.96,
+      "y": 1228.37,
+      "width": 449.49,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "NON-DRIVE THRU PEDI MAT",
+     "scale": "1/2\" = 1'-0\"",
+     "titleBox": {
+      "x": 1908.84,
+      "y": 38.93,
+      "width": 386.61,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "A-6.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 77,
+   "status": "indexed"
+  },
+  {
+   "fileName": "Archive.zip",
+   "status": "not_a_pdf_drawing"
+  },
+  {
+   "fileName": "CV-1.00-00.pdf",
+   "sheetKey": "CV-1.00",
+   "details": [
+    {
+     "detail": "6",
+     "title": "VICINITY MAP",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1099.92,
+      "y": 1640.81,
+      "width": 210.74,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "SYMBOLS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 583.97,
+      "width": 164.65,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "CODE ANALYSIS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 961.97,
+      "width": 245.69,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "CODE INFORMATION",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 1640.81,
+      "width": 298.72,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "PROJECT INFORMATION",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 613.92,
+      "y": 1640.81,
+      "width": 343.43,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "SCOPE OF WORK",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 613.92,
+      "y": 961.97,
+      "width": 258.24,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "INDEX OF SHEETS",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1099.92,
+      "y": 1190.81,
+      "width": 269.43,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "CV-1.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 85,
+   "status": "indexed"
+  },
+  {
+   "fileName": "DM-1.00-00.pdf",
+   "sheetKey": "DM-1.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "1st FLOOR DEMOLITION  PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 515.21,
+      "width": 413.35,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "DEMOLITION NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 293.16,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "DEMOLITION PLAN KEYED NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1344.0,
+      "y": 38.93,
+      "width": 458.06,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "DM-1.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 65,
+   "status": "indexed"
+  },
+  {
+   "fileName": "DM-1.01-00.pdf",
+   "sheetKey": "DM-1.01",
+   "details": [
+    {
+     "detail": "1",
+     "title": "MEZZANINE FLOOR DEMOLITION PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 569.81,
+      "width": 525.09,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "DEMOLITION NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 293.16,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "DEMOLITION PLAN KEYED NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1344.0,
+      "y": 38.93,
+      "width": 458.06,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "BASEMENT  FLOOR DEMOLITION PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1583.76,
+      "y": 569.81,
+      "width": 518.01,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "DM-1.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 70,
+   "status": "indexed"
+  },
+  {
+   "fileName": "DM-1.02-00.pdf",
+   "sheetKey": "DM-1.02",
+   "details": [
+    {
+     "detail": "1",
+     "title": "ROOF  DEMOLITION  PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 509.57,
+      "width": 365.83,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "DEMOLITION PLAN KEYED NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 458.06,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "DM-1.02"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 61,
+   "status": "indexed"
+  },
+  {
+   "fileName": "DM-2.00-00.pdf",
+   "sheetKey": "DM-2.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "FRONT ELEVATION DEMOLITION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 128.04,
+      "y": 986.69,
+      "width": 441.14,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "NON DRIVE THRU SIDE ELEVATION DEMOLITION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 128.04,
+      "y": 295.61,
+      "width": 636.74,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "DEMOLITION ELEVATION KEY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 128.04,
+      "y": 38.93,
+      "width": 498.47,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "DEMOLITION ELEVATION NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1433.4,
+      "y": 38.93,
+      "width": 441.17,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "DM-2.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 69,
+   "status": "indexed"
+  },
+  {
+   "fileName": "DM-2.01-00.pdf",
+   "sheetKey": "DM-2.01",
+   "details": [
+    {
+     "detail": "1",
+     "title": "REAR ELEVATION DEMOLTION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.44,
+      "y": 1015.61,
+      "width": 417.53,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "DRIVE THRU SIDE ELEVATION DEMOLITION",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.44,
+      "y": 289.61,
+      "width": 574.0,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "DEMOLITION ELEVATION KEY NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 127.44,
+      "y": 39.05,
+      "width": 498.59,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "DEMOLITION ELEVATION NOTES",
+     "scale": "N.T.S.",
+     "titleBox": {
+      "x": 1403.52,
+      "y": 39.05,
+      "width": 441.17,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "DM-2.01"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 69,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-1.0-00.pdf",
+   "sheetKey": "E-1.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-1.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 52,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-1.1-00.pdf",
+   "sheetKey": "E-1.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-1.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 402,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-1.2-00.pdf",
+   "sheetKey": "E-1.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-1.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 145,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-1.3-00.pdf",
+   "sheetKey": "E-1.3",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-1.3"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 241,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-2.1-00.pdf",
+   "sheetKey": "E-2.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-2.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 424,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-2.2-00.pdf",
+   "sheetKey": "E-2.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-2.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 415,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-3.0-00.pdf",
+   "sheetKey": "E-3.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-3.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 39,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-3.1-00.pdf",
+   "sheetKey": "E-3.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-3.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 43,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-3.2-00.pdf",
+   "sheetKey": "E-3.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-3.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 44,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-4.0-00.pdf",
+   "sheetKey": "E-4.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-4.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 36,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-4.1-00.pdf",
+   "sheetKey": "E-4.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-4.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 100,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-4.2-00.pdf",
+   "sheetKey": "E-4.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-4.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 279,
+   "status": "indexed"
+  },
+  {
+   "fileName": "E-4.3-00.pdf",
+   "sheetKey": "E-4.3",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "E-4.3"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 34,
+   "status": "indexed"
+  },
+  {
+   "fileName": "EN-1.00-0.pdf",
+   "sheetKey": "EN-1.00",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "EN-1.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 59,
+   "status": "indexed"
+  },
+  {
+   "fileName": "EQ-1.00-0.pdf",
+   "sheetKey": "EQ-1.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "1ST FLOOR EQUIPMENT PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 560.93,
+      "width": 411.95,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "EQ-1.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 407,
+   "status": "indexed"
+  },
+  {
+   "fileName": "EQ-2.00-0.pdf",
+   "sheetKey": "EQ-2.00",
+   "details": [
+    {
+     "detail": "2",
+     "title": "CELLAR EQUIPMENT PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 38.93,
+      "width": 370.03,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "2ST FLOOR EQUIPMENT PLAN",
+     "scale": "1/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.92,
+      "y": 722.93,
+      "width": 411.95,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "EQ-2.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 138,
+   "status": "indexed"
+  },
+  {
+   "fileName": "EQ-3.00-0.pdf",
+   "sheetKey": "EQ-3.00",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "EQ-3.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 1604,
+   "status": "indexed"
+  },
+  {
+   "fileName": "FP100.pdf",
+   "sheetKey": "FP-100",
+   "details": [
+    {
+     "detail": null,
+     "title": "SHEET:",
+     "scale": null,
+     "titleBox": {
+      "x": 2401.92,
+      "y": 179.54,
+      "width": 100.52,
+      "height": 6.34
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "FP-100"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 368,
+   "status": "indexed"
+  },
+  {
+   "fileName": "FP200 .pdf",
+   "sheetKey": "FP-200",
+   "details": [
+    {
+     "detail": null,
+     "title": "SHEET:",
+     "scale": null,
+     "titleBox": {
+      "x": 2401.92,
+      "y": 179.54,
+      "width": 100.52,
+      "height": 6.34
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "FP-200"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 484,
+   "status": "indexed"
+  },
+  {
+   "fileName": "FP201.pdf",
+   "sheetKey": "FP-201",
+   "details": [
+    {
+     "detail": null,
+     "title": "SHEET:",
+     "scale": null,
+     "titleBox": {
+      "x": 2401.92,
+      "y": 179.54,
+      "width": 100.52,
+      "height": 6.34
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "FP-201"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 322,
+   "status": "indexed"
+  },
+  {
+   "fileName": "FP300.pdf",
+   "sheetKey": "FP-300",
+   "details": [
+    {
+     "detail": null,
+     "title": "SHEET:",
+     "scale": null,
+     "titleBox": {
+      "x": 2401.92,
+      "y": 179.54,
+      "width": 100.52,
+      "height": 6.34
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "FP-300"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 257,
+   "status": "indexed"
+  },
+  {
+   "fileName": "G-0.00-0.pdf",
+   "sheetKey": "G-0.00",
+   "details": [
+    {
+     "detail": "1",
+     "title": "GENERAL NOTES",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 1640.81,
+      "width": 256.74,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "CONSTRUCTION NOTES",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 824.21,
+      "width": 339.11,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "LIFE SAFETY NOTES",
+     "scale": null,
+     "titleBox": {
+      "x": 127.92,
+      "y": 296.81,
+      "width": 294.48,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "ABBREVIATIONS",
+     "scale": null,
+     "titleBox": {
+      "x": 876.36,
+      "y": 1640.81,
+      "width": 245.57,
+      "height": 42.98
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "McDONALD'S ABBREVIATIONS",
+     "scale": null,
+     "titleBox": {
+      "x": 876.36,
+      "y": 296.81,
+      "width": 412.43,
+      "height": 43.1
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "G-0.00"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 75,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-1.1.pdf",
+   "sheetKey": "M-1.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-1.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 262,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-1.2.pdf",
+   "sheetKey": "M-1.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-1.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 106,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-1.3.pdf",
+   "sheetKey": "M-1.3",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-1.3"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 94,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-1.4.pdf",
+   "sheetKey": "M-1.4",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-1.4"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 61,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-2.0.pdf",
+   "sheetKey": "M-2.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-2.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 261,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-3.0.pdf",
+   "sheetKey": "M-3.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-3.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 44,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-4.0.pdf",
+   "sheetKey": "M-4.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-4.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 41,
+   "status": "indexed"
+  },
+  {
+   "fileName": "M-4.1.pdf",
+   "sheetKey": "M-4.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "M-4.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 334,
+   "status": "indexed"
+  },
+  {
+   "fileName": "MD-1.1.pdf",
+   "sheetKey": "MD-1.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "MD-1.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 72,
+   "status": "indexed"
+  },
+  {
+   "fileName": "MD-1.2.pdf",
+   "sheetKey": "MD-1.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "MD-1.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 90,
+   "status": "indexed"
+  },
+  {
+   "fileName": "MD-1.3.pdf",
+   "sheetKey": "MD-1.3",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "MD-1.3"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 61,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.0-00.pdf",
+   "sheetKey": "P-1.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 272,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.1-00.pdf",
+   "sheetKey": "P-1.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 208,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.2-00.pdf",
+   "sheetKey": "P-1.2",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.2"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 198,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.3-00.pdf",
+   "sheetKey": "P-1.3",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.3"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 238,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.4-00.pdf",
+   "sheetKey": "P-1.4",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.4"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 207,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.5-00.pdf",
+   "sheetKey": "P-1.5",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.5"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 60,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.6-00.pdf",
+   "sheetKey": "P-1.6",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.6"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 53,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.7-00.pdf",
+   "sheetKey": "P-1.7",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.7"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 560,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-1.8-00.pdf",
+   "sheetKey": "P-1.8",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-1.8"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 553,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-2.0-00.pdf",
+   "sheetKey": "P-2.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-2.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 169,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-2.1-00.pdf",
+   "sheetKey": "P-2.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "HS-1",
+    "P-2.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 316,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-3.0-00.pdf",
+   "sheetKey": "P-3.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-3.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 483,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-4.0-00.pdf",
+   "sheetKey": "P-4.0",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-4.0"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 513,
+   "status": "indexed"
+  },
+  {
+   "fileName": "P-4.1-00.pdf",
+   "sheetKey": "P-4.1",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "P-4.1"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 1161,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-001.00.pdf",
+   "sheetKey": "S-001",
+   "details": [
+    {
+     "detail": "1",
+     "title": "LOW ROOF FRAMING PLAN",
+     "scale": "1/4\"=1'-0\"",
+     "titleBox": {
+      "x": 91.92,
+      "y": 38.93,
+      "width": 375.55,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "S-001"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 36,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-002.00.pdf",
+   "sheetKey": "S-002",
+   "details": [
+    {
+     "detail": "1",
+     "title": "HIGH ROOF FRAMING PLAN",
+     "scale": "1/4\"=1'-0\"",
+     "titleBox": {
+      "x": 91.86,
+      "y": 38.93,
+      "width": 381.13,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "S-002"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 33,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-201.00.pdf",
+   "sheetKey": "S-201",
+   "details": [
+    {
+     "detail": null,
+     "title": "STRUCTURAL NOTES",
+     "scale": "NO SCALE",
+     "titleBox": {
+      "x": 1388.46,
+      "y": 38.93,
+      "width": 262.64,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 127.98,
+      "y": 38.93,
+      "width": 230.19,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "WALL SECTION",
+     "scale": "3/4\"1'-0\"",
+     "titleBox": {
+      "x": 787.26,
+      "y": 38.93,
+      "width": 237.24,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "S-201"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 48,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-202.00.pdf",
+   "sheetKey": "S-202",
+   "details": [
+    {
+     "detail": "1",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 127.98,
+      "y": 38.93,
+      "width": 230.19,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 831.78,
+      "y": 38.93,
+      "width": 237.18,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "S-202"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 37,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-203.00.pdf",
+   "sheetKey": "S-203",
+   "details": [
+    {
+     "detail": "1",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 127.98,
+      "y": 38.93,
+      "width": 230.19,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 609.0,
+      "y": 38.93,
+      "width": 237.18,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 1221.0,
+      "y": 38.93,
+      "width": 230.25,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 1702.02,
+      "y": 38.93,
+      "width": 237.18,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "S-203"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 45,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-204.00.pdf",
+   "sheetKey": "S-204",
+   "details": [
+    {
+     "detail": "8",
+     "title": "DETAIL",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.98,
+      "y": 38.93,
+      "width": 133.4,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "9",
+     "title": "WALL SECTION",
+     "scale": "3/4\"=1'-0\"",
+     "titleBox": {
+      "x": 609.0,
+      "y": 38.93,
+      "width": 237.18,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "10",
+     "title": "SECTION AT STEEL BEAM",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1031.4,
+      "y": 38.93,
+      "width": 365.78,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "11",
+     "title": "WALL SECTION",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1518.36,
+      "y": 38.93,
+      "width": 244.26,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "4",
+     "title": "DETAIL",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.98,
+      "y": 692.45,
+      "width": 133.4,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "5",
+     "title": "FRAMING SECTION",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 609.0,
+      "y": 692.45,
+      "width": 284.65,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "6",
+     "title": "GREASE INTERCEPTOR PLAN",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1038.42,
+      "y": 692.45,
+      "width": 407.64,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "1",
+     "title": "DETAIL",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 127.98,
+      "y": 1213.07,
+      "width": 133.4,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "2",
+     "title": "WALL SECTION",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 609.0,
+      "y": 1213.07,
+      "width": 237.18,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "3",
+     "title": "TYPICAL LINTELS",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1702.02,
+      "y": 1213.07,
+      "width": 256.77,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "7",
+     "title": "GREASE INTERCEPTOR SECTION",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1525.38,
+      "y": 692.45,
+      "width": 453.79,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    },
+    {
+     "detail": "11",
+     "title": "2X4 TRUSS REPAIR",
+     "scale": "3/4\" = 1'-0\"",
+     "titleBox": {
+      "x": 1941.72,
+      "y": 38.93,
+      "width": 287.53,
+      "height": 42.99
+     },
+     "source": "pdf_text_layer"
+    }
+   ],
+   "titleBlockSheetTokens": [
+    "S-204"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 84,
+   "status": "indexed"
+  },
+  {
+   "fileName": "S-300.00.pdf",
+   "sheetKey": "S-300",
+   "details": [],
+   "titleBlockSheetTokens": [
+    "S-204"
+   ],
+   "pages": 1,
+   "page": [
+    2592.0,
+    1728.0
+   ],
+   "textLayerLines": 552,
+   "status": "indexed"
+  }
+ ],
+ "note": "Sheet keys from filenames (canonical_sheet). Detail titles are text-layer groups (SCALE: / number / title / scale); the sheet title in the title block is outlined geometry on this set and is not read here."
+}

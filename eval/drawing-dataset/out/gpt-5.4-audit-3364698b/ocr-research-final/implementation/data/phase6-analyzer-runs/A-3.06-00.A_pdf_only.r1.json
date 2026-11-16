@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "A_pdf_only",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0ba6bb3a82c9c49f016aec8ec848c487d2a31d3ef4e691ca13",
+ "latencyMs": 12028,
+ "inputTokens": 3794,
+ "outputTokens": 386,
+ "costUsd": 0.013345000000000001,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architecture"
+ },
+ "summary": "This sheet provides guard rail and wall section details for a commercial project. It includes multiple details about the construction of guard rails at different scales and locations on the high roof, as well as wall sections at specified areas.",
+ "published": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Guard Rail Design Specification",
+   "observation": "Extension of the guard rail post by 6\" beyond edge of support is noted as a design detail.",
+   "drawing_evidence": "Guard rail elevation detail specifies 'Extend guard rail post by 6\" beyond edge of support.'",
+   "drawing_location": "Detail 1 - Guard Rail Elevation Detail @ High Roof",
+   "suggested_code_reference": null,
+   "recommendation": "Verify manufacturer specifications for guard rail posts to ensure compatibility with extension requirement.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guard Rail Design Specification",
+    "originalObservation": "Extension of the guard rail post by 6\" beyond edge of support is noted as a design detail.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Guard Rail Connection Detail",
+   "observation": "Details on connections between guard rail elements are specified for assembly.",
+   "drawing_evidence": "Note states 'Use type HSD as specified in project documents for connection.'",
+   "drawing_location": "Detail 2 - Guard Rail Detail @ High Roof",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure all connection details follow specified type HSD in accordance with project documents.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guard Rail Connection Detail",
+    "originalObservation": "Details on connections between guard rail elements are specified for assembly.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Information on Guard Rail Structural Supports",
+   "observation": "The drawing lacks information regarding the structural supports for the guard rails other than extensions.",
+   "drawing_evidence": "No specified structural support details visible for the guard rails; only extensions noted.",
+   "drawing_location": "Detail 3 - Guard Rail Detail @ High Roof",
+   "suggested_code_reference": "IBC 2015, Section 1607.8.1",
+   "recommendation": "Provide detailed structural support information to ensure compliance with IBC load requirements.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Information on Guard Rail Structural Supports",
+    "originalObservation": "The drawing lacks information regarding the structural supports for the guard rails other than extensions.",
+    "originalCodeReference": "IBC 2015, Section 1607.8.1",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": "IBC 2015, Section 1607.8.1",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

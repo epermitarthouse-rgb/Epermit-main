@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842559-pMIl2sGAsmIu5F3RfoLS",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [364, 0, 966, 26],\n        \"text_content\": \"INTERIOR 1 HR RATED PARTITION\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [364, 35, 979, 71],\n        \"text_content\": \"CORNER GUARDS AT ALL EXTERI\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [364, 120, 979, 176],\n        \"text_content\": \"\\\"D\\\" IHR. RATED PARTI\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 729, 948, 763],\n        \"text_content\": \"-3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 840, 747, 872],\n        \"text_content\": \"- SEE A-3.01 FOR ASSEMBLY NOTES, SEE\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 886, 204, 920],\n        \"text_content\": \"IS & SPECS\",\n        \"category\": \"note\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 446,
+ "costUsd": 0.001679,
+ "reportedCostUsd": 0.0016788,
+ "latencyS": 17.15,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

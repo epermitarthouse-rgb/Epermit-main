@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842979-z1yaZXd8m5FdY1h8zgQv",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 467, 298, 504],\n        \"text_content\": \"30 STEEL BEAM\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [844, 66, 864, 94],\n        \"text_content\": \"6.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [844, 155, 864, 183],\n        \"text_content\": \"7.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [844, 202, 864, 230],\n        \"text_content\": \"8.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 3,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [844, 720, 864, 748],\n        \"text_content\": \"9.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 4,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [844, 767, 864, 795],\n        \"text_content\": \"10.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 5,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [844, 879, 864, 907],\n        \"text_content\": \"II.\",\n        \"category\": \"schedule_cell\",\n        \"group\": 6,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 477,
+ "costUsd": 0.00171,
+ "reportedCostUsd": 0.0017098,
+ "latencyS": 10.3,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

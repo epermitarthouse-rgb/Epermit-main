@@ -1,0 +1,71 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "B_v1",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0f4dd12ea043db56016aec8f4d5c8887d2a8b4b7a49aff14a1",
+ "latencyMs": 6139,
+ "inputTokens": 4149,
+ "outputTokens": 307,
+ "costUsd": 0.0134425,
+ "userPromptChars": 1917,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet includes a door schedule and hardware details for a commercial building project. It includes notes on door types, window types, general door notes, and specific hardware specifications.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Incomplete door schedule details",
+   "observation": "The door schedule lists hardware and door types but lacks clear column titles and comprehensive descriptions for each door type.",
+   "drawing_evidence": "Observed in the 'DOOR SCHEDULE' section where individual rows for doors and hardware are listed without full descriptions or clearly labeled columns for each specification.",
+   "drawing_location": "Bottom right of the sheet, next to the title door schedule.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that each row in the door schedule includes full descriptions and clear column labels for all hardware and specification details.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Incomplete door schedule details",
+    "originalObservation": "The door schedule lists hardware and door types but lacks clear column titles and comprehensive descriptions for each door type.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Reference to exterior doors",
+   "observation": "The note indicates that panic hardware is to be provided for all exterior doors as referenced in the door schedule.",
+   "drawing_evidence": "\"PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.\"",
+   "drawing_location": "Within the door schedule notes section.",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate to ensure that panic hardware specifications are clear and consistent with project requirements for all exterior doors.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Reference to exterior doors",
+    "originalObservation": "The note indicates that panic hardware is to be provided for all exterior doors as referenced in the door schedule.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,121 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "C_v2_4x3",
+ "rep": 1,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_037466b0852a150f016aec8f77a7d887d295215601ce7b5b21",
+ "latencyMs": 8907,
+ "inputTokens": 4559,
+ "outputTokens": 561,
+ "costUsd": 0.017007500000000002,
+ "userPromptChars": 3602,
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet contains wall sections and structural notes for a commercial project, detailing connections, design criteria, and material specifications.",
+ "published": [
+  {
+   "category": "Missing required information",
+   "severity": "warning",
+   "title": "Seismic Design Criteria Clarification",
+   "observation": "The sheet notes 'SEISMIC DESIGN CATEGORY: ORD. PLAIN REINF MASONRY', but it does not explicitly state the seismic design category (e.g., A, B, C).",
+   "drawing_evidence": "SEISMIC IMPORTANCE FACTOR 1.0 / SEISMIC DESIGN CATEGORY / ORD. PLAIN REINF MASONRY / Cs= 0.095",
+   "drawing_location": "Structural notes section",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify the specific seismic design category in accordance with 2015 IBC or local amendments for seismic compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Seismic Design Criteria Clarification",
+    "originalObservation": "The sheet notes 'SEISMIC DESIGN CATEGORY: ORD. PLAIN REINF MASONRY', but it does not explicitly state the seismic design category (e.g., A, B, C).",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "Further professional review",
+   "severity": "advisory",
+   "title": "Concrete Compressive Strength Variability",
+   "observation": "Different compressive strengths are specified for different concrete applications (e.g., 3,000 PSI for footings and walls, 3,500 PSI for slabs).",
+   "drawing_evidence": "ALL CONCRETE TO DEVELOP AN ULTIMATE COMPRESSIVE STRENGTH OF 3,000 PSI IN 28 DAYS IN FOOTINGS AND WALLS, 3,500 PSI IN 28 DAYS IN SLABS",
+   "drawing_location": "Reinforced concrete notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure concrete mix designs align with structural requirements and verify their appropriateness for the intended applications.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Concrete Compressive Strength Variability",
+    "originalObservation": "Different compressive strengths are specified for different concrete applications (e.g., 3,000 PSI for footings and walls, 3,500 PSI for slabs).",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "Further professional review",
+   "severity": "advisory",
+   "title": "Special Inspections Statement",
+   "observation": "A statement regarding special inspections is mentioned but lacks detailed criteria.",
+   "drawing_evidence": "A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED.",
+   "drawing_location": "Special Inspections (Structural) section",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure compliance with IBC Section 1704 for special inspection requirements or refer to precise local amendments.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Special Inspections Statement",
+    "originalObservation": "A statement regarding special inspections is mentioned but lacks detailed criteria.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "General coordination note",
+   "severity": "advisory",
+   "title": "Horizontal Joint Accommodation",
+   "observation": "A horizontal joint is required full length just above the window header to accommodate downward deflection of 3/4\".",
+   "drawing_evidence": "PROVIDE HORIZONTAL JOINT FULL LENGTH JUST ABOVE WINDOW HEADER. WINDOW MUST BE ABLE TO ACCOMODATE DOWNWARD DEFLECTION OF 3/4\".",
+   "drawing_location": "Wall section detail",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate with window installation to ensure joint accommodation is constructed as required.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Horizontal Joint Accommodation",
+    "originalObservation": "A horizontal joint is required full length just above the window header to accommodate downward deflection of 3/4\".",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

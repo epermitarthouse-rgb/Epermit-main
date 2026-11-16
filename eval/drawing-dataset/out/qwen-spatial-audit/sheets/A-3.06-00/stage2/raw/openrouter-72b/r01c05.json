@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842021-tjjCj9cDkxLcFyZRz7s0",
+ "text": "```json\n[\n    {\"bbox_2d\": [114, 46, 144, 120], \"text_content\": \"3'-6\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [164, 0, 204, 330], \"text_content\": \"MIN. ABOVE DECK MI\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 0, 980, 20], \"text_content\": \"SECURED TO NEW WOOL\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 36, 980, 66], \"text_content\": \"BLOCK AS REQUIRED W\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 78, 834, 112], \"text_content\": \"FASTENERS.\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 148, 952, 182], \"text_content\": \"4x4 WOOD BLOCKING\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 194, 980, 224], \"text_content\": \"BETWEEN JOISTS AT NE\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 244, 980, 274], \"text_content\": \"GUARD RAIL PENETRAT\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 286, 804, 326], \"text_content\": \"LOCATIONS.\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 644, 980, 674], \"text_content\": \"EXISTING ROOF DECKIN\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 694, 980, 724], \"text_content\": \"MEMBRANE. ALL NEW P\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 736, 980, 766], \"text_content\": \"ROOFING SYSTEM MANU\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [614, 786, 980, 816], \"text_content\": \"RECOMMENDATIONS TO\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [46, 686, 70, 726], \"text_content\": \"3\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 730, 130, 776], \"text_content\": \"A-3.06\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 928,
+ "costUsd": 0.002161,
+ "reportedCostUsd": 0.0021608,
+ "latencyS": 24.04,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

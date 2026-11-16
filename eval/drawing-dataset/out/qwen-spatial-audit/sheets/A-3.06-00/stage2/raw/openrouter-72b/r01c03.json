@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842016-zhNhQLqVoSYD2y8GkSGE",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [76, 300, 349, 340],\n        \"text_content\": \"VARIES (V.I.F)\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [54, 352, 482, 388],\n        \"text_content\": \"T.O. ROOF MEMBRANE\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [70, 412, 235, 448],\n        \"text_content\": \"(E) JOISTS\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [70, 658, 744, 694],\n        \"text_content\": \"EXISTING ROOF DECKING, INSULATION, AND\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [70, 706, 700, 742],\n        \"text_content\": \"MEMBRANE. ALL NEW PENETRATIONS TO\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [70, 754, 773, 789],\n        \"text_content\": \"FOLLOW ROOFING SYSTEM MANUFACTURER'S\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [70, 801, 790, 837],\n        \"text_content\": \"RECOMMENDATIONS TO MAINTAIN WARRANTY.\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 516,
+ "costUsd": 0.001749,
+ "reportedCostUsd": 0.0017488,
+ "latencyS": 11.23,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

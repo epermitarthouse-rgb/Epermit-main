@@ -1,0 +1,37 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "B_v1",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0dfd52091fa02e88016aec8ee79b4487d2abd756ea8a9c3663",
+ "latencyMs": 8801,
+ "inputTokens": 4136,
+ "outputTokens": 328,
+ "costUsd": 0.01362,
+ "userPromptChars": 1884,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides detailed views of guard rail and wall sections at the high roof and new order window for a commercial project. It includes dimensions and construction notes, and is part of a revised permit set.",
+ "published": [],
+ "withheld": [
+  {
+   "title": "Guardrail Height Specification",
+   "originalSeverity": "critical",
+   "originalCodeReference": "IBC 2015 Section 1015.2",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  },
+  {
+   "title": "Guardrail Design Details",
+   "originalSeverity": "warning",
+   "originalCodeReference": "IBC 2015 Section 1015.6",
+   "rules": [
+    "documented_requirement_restatement"
+   ]
+  }
+ ]
+}

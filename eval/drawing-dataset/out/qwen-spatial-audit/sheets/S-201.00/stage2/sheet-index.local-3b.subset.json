@@ -1,0 +1,2679 @@
+{
+ "version": "qsa.stage2.v1",
+ "promptVersion": "qsa.tile-prompt.v1",
+ "backend": "local-3b",
+ "model": "Qwen2.5-VL-3B-Instruct-Q4_K_M",
+ "runtime": "llama.cpp b12438 llama-server, CPU (x86_64), GGUF ggml-org/Qwen2.5-VL-3B-Instruct-GGUF Q4_K_M + mmproj f16",
+ "sheetId": "S-201.00",
+ "discipline": "Structural",
+ "revision": {
+  "rows": [],
+  "dates": [
+   "10/14/26",
+   "10/15/2026"
+  ],
+  "basis": "text layer, title-block band x > 85% of width (heuristic)",
+  "status": "not determined"
+ },
+ "pdfName": "S-201.00.pdf",
+ "sha256": "d11fd02d8a3859796f6f64ce745ce95ae93872f60534e606619c8954e228face",
+ "page": {
+  "width": 2592.0,
+  "height": 1728.0,
+  "rotation": 0,
+  "mediabox": [
+   0.0,
+   0.0,
+   2592.0,
+   1728.0
+  ],
+  "cropbox": [
+   0.0,
+   0.0,
+   2592.0,
+   1728.0
+  ],
+  "frame": "pdf-point, bottom-left origin"
+ },
+ "coverage": {
+  "tilesTotal": 117,
+  "tilesBlank": 6,
+  "tilesRead": 5,
+  "tileIds": [
+   "r00c06",
+   "r00c07",
+   "r00c08",
+   "r00c09",
+   "r01c07"
+  ]
+ },
+ "lines": [
+  {
+   "lid": "L0000",
+   "text": "GEN",
+   "category": "title_block",
+   "box": {
+    "x": 1416.0,
+    "y": 1661.28,
+    "width": 17.76,
+    "height": 4.32
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1653.84,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": -22.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 0,
+     "text": "GEN",
+     "px": {
+      "x": 860.0,
+      "y": 260.0,
+      "w": 74.0,
+      "h": 18.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0001",
+   "text": "1. DE",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1650.48,
+    "width": 20.64,
+    "height": 11.76
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1633.2,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": -79.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "GENERAL NOTES"
+   ],
+   "conflict": true,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 2,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 1,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 1,
+     "text": "1. DE",
+     "px": {
+      "x": 848.0,
+      "y": 274.0,
+      "w": 86.0,
+      "h": 49.0
+     },
+     "group": 1
+    },
+    {
+     "tileId": "r00c07",
+     "k": 0,
+     "text": "GENERAL NOTES",
+     "px": {
+      "x": 8.0,
+      "y": 274.0,
+      "w": 591.0,
+      "h": 50.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0002",
+   "text": "LIGHT GAGE STEEL N",
+   "category": "title_block",
+   "box": {
+    "x": 1857.12,
+    "y": 1654.56,
+    "width": 167.76,
+    "height": 4.56
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1642.56,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -23.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 0,
+     "text": "LIGHT GAGE STEEL N",
+     "px": {
+      "x": 178.0,
+      "y": 287.0,
+      "w": 699.0,
+      "h": 19.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0003",
+   "text": "1. PROVIDE A CONTINUOUS STEEL",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1856.4,
+    "y": 1644.0,
+    "width": 168.48,
+    "height": 11.52
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1610.88,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -126.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 1,
+     "text": "1. PROVIDE A CONTINUOUS STEEL",
+     "px": {
+      "x": 175.0,
+      "y": 302.0,
+      "w": 702.0,
+      "h": 48.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0004",
+   "text": "2. THE",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1625.76,
+    "width": 4.32,
+    "height": 7.92
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1624.8,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": null,
+   "vertical": true,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.6,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": []
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 2,
+     "text": "2. THE",
+     "px": {
+      "x": 848.0,
+      "y": 393.0,
+      "w": 18.0,
+      "h": 33.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0005",
+   "text": "3. BR",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1625.76,
+    "width": 4.32,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1616.4,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": -38.5,
+   "vertical": true,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 3,
+     "text": "3. BR",
+     "px": {
+      "x": 848.0,
+      "y": 392.0,
+      "w": 18.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0006",
+   "text": "1. DETAILS SHOWN ARE TYPICAL, SIMILAR DETAILS",
+   "category": "note",
+   "box": {
+    "x": 1413.12,
+    "y": 1625.76,
+    "width": 145.44,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1411.44,
+    "y": 1632.96,
+    "width": 133.2,
+    "height": 8.64
+   },
+   "snapShiftPx": 31.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "details shown are typical, similar details"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c07",
+     "k": 1,
+     "text": "1. DETAILS SHOWN ARE TYPICAL, SIMILAR DETAILS",
+     "px": {
+      "x": 8.0,
+      "y": 392.0,
+      "w": 606.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0007",
+   "text": "R DETAILS APPLY TO SIMILAR CONDITIONS",
+   "category": "detail_title",
+   "box": {
+    "x": 1612.8,
+    "y": 1625.76,
+    "width": 204.0,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1612.8,
+    "y": 1624.8,
+    "width": 204.0,
+    "height": 9.6
+   },
+   "snapShiftPx": -1.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band",
+     "tile_edge"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c08",
+     "k": 0,
+     "text": "R DETAILS APPLY TO SIMILAR CONDITIONS",
+     "px": {
+      "x": 0.0,
+      "y": 392.0,
+      "w": 850.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0008",
+   "text": "BOTTOM OF ALL STUD WALLS",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1856.4,
+    "y": 1619.28,
+    "width": 168.72,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1593.6,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -88.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "1. PROVIDE A CONTINUOUS STEEL"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 2,
+     "text": "BOTTOM OF ALL STUD WALLS",
+     "px": {
+      "x": 175.0,
+      "y": 418.0,
+      "w": 703.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0009",
+   "text": "2. THESE DRAWINGS DO NOT INCLUDE NECESSAR",
+   "category": "note",
+   "box": {
+    "x": 1433.28,
+    "y": 1614.48,
+    "width": 124.32,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.44,
+    "y": 1623.36,
+    "width": 133.2,
+    "height": 8.64
+   },
+   "snapShiftPx": 37.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "these drawings do not include necessary safety"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c07",
+     "k": 2,
+     "text": "2. THESE DRAWINGS DO NOT INCLUDE NECESSAR",
+     "px": {
+      "x": 92.0,
+      "y": 438.0,
+      "w": 518.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0010",
+   "text": "MID-HEIGHT OF ALL WALLS UN",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1883.52,
+    "y": 1608.0,
+    "width": 141.6,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1576.32,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -113.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "2. PROVIDE A CONTINUOUS STEEL"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 3,
+     "text": "MID-HEIGHT OF ALL WALLS UN",
+     "px": {
+      "x": 288.0,
+      "y": 465.0,
+      "w": 590.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0011",
+   "text": "CESSARY COMPONENTS FOR CONSTRUCTION",
+   "category": "detail_title",
+   "box": {
+    "x": 1612.8,
+    "y": 1603.2,
+    "width": 208.08,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1612.8,
+    "y": 1605.6,
+    "width": 207.84,
+    "height": 9.6
+   },
+   "snapShiftPx": 12.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band",
+     "tile_edge"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c08",
+     "k": 1,
+     "text": "CESSARY COMPONENTS FOR CONSTRUCTION",
+     "px": {
+      "x": 0.0,
+      "y": 485.0,
+      "w": 867.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0012",
+   "text": "DES",
+   "category": "label",
+   "box": {
+    "x": 1412.4,
+    "y": 1603.2,
+    "width": 9.36,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1591.2,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": -49.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 6,
+     "text": "DES",
+     "px": {
+      "x": 845.0,
+      "y": 486.0,
+      "w": 39.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0013",
+   "text": "INS",
+   "category": "label",
+   "box": {
+    "x": 1413.36,
+    "y": 1607.52,
+    "width": 6.0,
+    "height": 3.84
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1608.0,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": null,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "3. BRACE BUILDING UNTIL ALL STRUCTURAL ELE"
+   ],
+   "conflict": true,
+   "confidence": 0.3,
+   "confidenceBasis": {
+    "tileReads": 2,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 1,
+    "flags": []
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 4,
+     "text": "INS",
+     "px": {
+      "x": 849.0,
+      "y": 486.0,
+      "w": 25.0,
+      "h": 16.0
+     },
+     "group": 1
+    },
+    {
+     "tileId": "r00c07",
+     "k": 3,
+     "text": "3. BRACE BUILDING UNTIL ALL STRUCTURAL ELE",
+     "px": {
+      "x": 5.0,
+      "y": 485.0,
+      "w": 598.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0014",
+   "text": "BR",
+   "category": "label",
+   "box": {
+    "x": 1412.4,
+    "y": 1603.2,
+    "width": 9.36,
+    "height": 5.28
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1599.6,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": null,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.6,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": []
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 5,
+     "text": "BR",
+     "px": {
+      "x": 845.0,
+      "y": 498.0,
+      "w": 39.0,
+      "h": 22.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0015",
+   "text": "CONTRACT DRAWINGS. CONNE",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1883.52,
+    "y": 1596.72,
+    "width": 141.6,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1559.04,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -138.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "2. PROVIDE A CONTINUOUS STEEL"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 4,
+     "text": "CONTRACT DRAWINGS. CONNE",
+     "px": {
+      "x": 288.0,
+      "y": 512.0,
+      "w": 590.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0016",
+   "text": "BRIDGING AND CROSS-BRACING.",
+   "category": "note",
+   "box": {
+    "x": 1433.28,
+    "y": 1591.92,
+    "width": 38.88,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.44,
+    "y": 1604.16,
+    "width": 133.2,
+    "height": 8.64
+   },
+   "snapShiftPx": 51.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "bridging and cross-bracing"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c07",
+     "k": 4,
+     "text": "BRIDGING AND CROSS-BRACING.",
+     "px": {
+      "x": 92.0,
+      "y": 532.0,
+      "w": 162.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0017",
+   "text": "ON EACH STUD. DETAILS SHAL",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1883.28,
+    "y": 1585.68,
+    "width": 141.84,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1541.76,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -164.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "3. PROVIDE A CONTINUOUS STEEL"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 5,
+     "text": "ON EACH STUD. DETAILS SHAL",
+     "px": {
+      "x": 287.0,
+      "y": 559.0,
+      "w": 591.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0018",
+   "text": "ERAL ELEMENTS REQUIRED FOR STABILITY ARE",
+   "category": "detail_title",
+   "box": {
+    "x": 1612.8,
+    "y": 1580.64,
+    "width": 212.16,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1612.8,
+    "y": 1586.4,
+    "width": 212.64,
+    "height": 9.6
+   },
+   "snapShiftPx": 26.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band",
+     "tile_edge"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c08",
+     "k": 2,
+     "text": "ERAL ELEMENTS REQUIRED FOR STABILITY ARE",
+     "px": {
+      "x": 0.0,
+      "y": 579.0,
+      "w": 884.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0019",
+   "text": "ALL LIGHT GAGE FRAMING SH",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1883.28,
+    "y": 1574.4,
+    "width": 141.84,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1524.48,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -189.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "2. PROVIDE A CONTINUOUS STEEL"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 6,
+     "text": "ALL LIGHT GAGE FRAMING SH",
+     "px": {
+      "x": 287.0,
+      "y": 606.0,
+      "w": 591.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0020",
+   "text": "DESIGN DATA",
+   "category": "title_block",
+   "box": {
+    "x": 1433.28,
+    "y": 1569.36,
+    "width": 125.28,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.44,
+    "y": 1584.24,
+    "width": 133.2,
+    "height": 13.68
+   },
+   "snapShiftPx": 73.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "design data"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c07",
+     "k": 5,
+     "text": "DESIGN DATA",
+     "px": {
+      "x": 92.0,
+      "y": 626.0,
+      "w": 522.0,
+      "h": 35.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0021",
+   "text": "FOLLOWS: ROOF DECK, ROOF SHEATHING,",
+   "category": "detail_title",
+   "box": {
+    "x": 1612.8,
+    "y": 1568.4,
+    "width": 132.48,
+    "height": 9.36
+   },
+   "modelBox": {
+    "x": 1612.8,
+    "y": 1572.0,
+    "width": 120.0,
+    "height": 9.6
+   },
+   "snapShiftPx": 15.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band",
+     "tile_edge"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c08",
+     "k": 3,
+     "text": "FOLLOWS: ROOF DECK, ROOF SHEATHING,",
+     "px": {
+      "x": 0.0,
+      "y": 626.0,
+      "w": 552.0,
+      "h": 39.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0022",
+   "text": "UNLESS NOTED OTHERWISE ON",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1855.92,
+    "y": 1562.88,
+    "width": 169.2,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1507.2,
+    "width": 153.6,
+    "height": 17.28
+   },
+   "snapShiftPx": -213.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "3. PROVIDE A CONTINUOUS STEEL",
+    "UNLESS NOTEDOTHERWISE ON"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 7,
+     "text": "UNLESS NOTED OTHERWISE ON",
+     "px": {
+      "x": 173.0,
+      "y": 653.0,
+      "w": 705.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0023",
+   "text": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+   "category": "note",
+   "box": {
+    "x": 1433.28,
+    "y": 1558.32,
+    "width": 125.28,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1411.44,
+    "y": 1569.84,
+    "width": 133.2,
+    "height": 8.16
+   },
+   "snapShiftPx": 48.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "1. international building code (IBC 2015)"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c07",
+     "k": 6,
+     "text": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+     "px": {
+      "x": 92.0,
+      "y": 673.0,
+      "w": 522.0,
+      "h": 34.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0024",
+   "text": "GALVANIZED. SEE PLAN AND",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1883.28,
+    "y": 1540.56,
+    "width": 141.84,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1855.68,
+    "y": 1492.8,
+    "width": 153.6,
+    "height": 14.4
+   },
+   "snapShiftPx": -192.5,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "3. PROVIDE A CONTINUOUS STEEL"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c09",
+     "k": 8,
+     "text": "GALVANIZED. SEE PLAN AND",
+     "px": {
+      "x": 287.0,
+      "y": 746.0,
+      "w": 591.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0025",
+   "text": "2. AM",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1538.88,
+    "width": 20.64,
+    "height": 5.04
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1524.0,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": -55.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "2. AMERICAN CONCRETE INSTITUTE (ACI)"
+   ],
+   "conflict": true,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 2,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 1,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 8,
+     "text": "2. AM",
+     "px": {
+      "x": 848.0,
+      "y": 767.0,
+      "w": 86.0,
+      "h": 21.0
+     },
+     "group": 2
+    },
+    {
+     "tileId": "r00c07",
+     "k": 7,
+     "text": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+     "px": {
+      "x": 8.0,
+      "y": 767.0,
+      "w": 521.0,
+      "h": 21.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0026",
+   "text": "1. INT",
+   "category": "label",
+   "box": {
+    "x": 1413.84,
+    "y": 1531.92,
+    "width": 17.76,
+    "height": 9.36
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1532.4,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": null,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.6,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": []
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 7,
+     "text": "1. INT",
+     "px": {
+      "x": 851.0,
+      "y": 778.0,
+      "w": 74.0,
+      "h": 39.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0027",
+   "text": "3. RE",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1529.04,
+    "width": 20.64,
+    "height": 10.8
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1515.6,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": -61.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 9,
+     "text": "3. RE",
+     "px": {
+      "x": 848.0,
+      "y": 784.0,
+      "w": 86.0,
+      "h": 45.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0028",
+   "text": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+   "category": "title_block",
+   "box": {
+    "x": 1413.12,
+    "y": 1502.88,
+    "width": 223.92,
+    "height": 10.08
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1502.88,
+    "width": 225.84,
+    "height": 10.08
+   },
+   "snapShiftPx": null,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.6,
+   "confidenceBasis": {
+    "tileReads": 2,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": []
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 0,
+     "text": "1. INTERNATIONAL BUILDING CODE (IBC 2015)",
+     "px": {
+      "x": 8.0,
+      "y": 56.0,
+      "w": 933.0,
+      "h": 42.0
+     },
+     "group": 1
+    },
+    {
+     "tileId": "r00c08",
+     "k": 4,
+     "text": "2015)",
+     "px": {
+      "x": 0.0,
+      "y": 900.0,
+      "w": 101.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": [
+    "2015)"
+   ]
+  },
+  {
+   "lid": "L0029",
+   "text": "4. RE 6. RE",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1503.84,
+    "width": 4.32,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1492.8,
+    "width": 20.88,
+    "height": 22.8
+   },
+   "snapShiftPx": null,
+   "vertical": true,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "joined_row_cells",
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 10,
+     "text": "4. RE 6. RE",
+     "px": {
+      "x": 848.0,
+      "y": 900.0,
+      "w": 18.0,
+      "h": 34.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0030",
+   "text": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+   "category": "title_block",
+   "box": {
+    "x": 1413.12,
+    "y": 1503.6,
+    "width": 128.4,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1493.76,
+    "width": 117.84,
+    "height": 9.12
+   },
+   "snapShiftPx": -39.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 1,
+     "text": "2. AMERICAN CONCRETE INSTITUTE (ACI)",
+     "px": {
+      "x": 8.0,
+      "y": 60.0,
+      "w": 535.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0031",
+   "text": "5. RE",
+   "category": "label",
+   "box": {
+    "x": 1413.12,
+    "y": 1498.32,
+    "width": 5.28,
+    "height": 9.36
+   },
+   "modelBox": {
+    "x": 1410.24,
+    "y": 1498.8,
+    "width": 20.88,
+    "height": 8.4
+   },
+   "snapShiftPx": null,
+   "vertical": true,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.6,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": []
+   },
+   "provenance": [
+    {
+     "tileId": "r00c06",
+     "k": 11,
+     "text": "5. RE",
+     "px": {
+      "x": 848.0,
+      "y": 918.0,
+      "w": 22.0,
+      "h": 39.0
+     },
+     "group": 2
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0032",
+   "text": "3. AMERICAN WOOD COUNCIL (AWC)",
+   "category": "title_block",
+   "box": {
+    "x": 1412.64,
+    "y": 1491.6,
+    "width": 123.6,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1484.64,
+    "width": 117.84,
+    "height": 9.12
+   },
+   "snapShiftPx": -27.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band",
+     "tile_edge"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 2,
+     "text": "3. AMERICAN WOOD COUNCIL (AWC)",
+     "px": {
+      "x": 6.0,
+      "y": 111.0,
+      "w": 515.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0033",
+   "text": "DESIGN CRITERIA",
+   "category": "title_block",
+   "box": {
+    "x": 1413.12,
+    "y": 1449.84,
+    "width": 152.88,
+    "height": 11.28
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1448.16,
+    "width": 140.16,
+    "height": 16.32
+   },
+   "snapShiftPx": 3.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 3,
+     "text": "DESIGN CRITERIA",
+     "px": {
+      "x": 8.0,
+      "y": 272.0,
+      "w": 637.0,
+      "h": 47.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0034",
+   "text": "FLOOR LIVE LOAD: 100 PSF",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1426.56,
+    "y": 1424.16,
+    "width": 126.0,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1423.68,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": -0.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 4,
+     "text": "FLOOR LIVE LOAD: 100 PSF",
+     "px": {
+      "x": 64.0,
+      "y": 391.0,
+      "w": 525.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0035",
+   "text": "ROOF LIVE LOAD: 30 PSF",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1425.36,
+    "y": 1412.88,
+    "width": 125.76,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1414.56,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 8.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 5,
+     "text": "ROOF LIVE LOAD: 30 PSF",
+     "px": {
+      "x": 59.0,
+      "y": 438.0,
+      "w": 524.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0036",
+   "text": "(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+   "category": "note",
+   "box": {
+    "x": 1426.08,
+    "y": 1397.04,
+    "width": 139.92,
+    "height": 12.96
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1405.44,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 27.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [
+    "NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED"
+   ],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 6,
+     "text": "(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+     "px": {
+      "x": 62.0,
+      "y": 485.0,
+      "w": 583.0,
+      "h": 54.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0037",
+   "text": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1423.68,
+    "y": 1386.72,
+    "width": 142.32,
+    "height": 11.28
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1396.32,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 35.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 7,
+     "text": "GROUND SNOW LOAD: 25 PSF + DRIFT",
+     "px": {
+      "x": 52.0,
+      "y": 535.0,
+      "w": 593.0,
+      "h": 47.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0038",
+   "text": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+   "category": "note",
+   "box": {
+    "x": 1423.44,
+    "y": 1378.08,
+    "width": 141.84,
+    "height": 9.6
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1387.2,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 37.0,
+   "vertical": false,
+   "uncertain": true,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.15,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": true,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 8,
+     "text": "OR 30 PSF EQUIVALENT UNIFORM LOAD",
+     "px": {
+      "x": 51.0,
+      "y": 578.0,
+      "w": 591.0,
+      "h": 40.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0039",
+   "text": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1424.88,
+    "y": 1367.04,
+    "width": 141.12,
+    "height": 12.0
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1378.08,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 40.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 9,
+     "text": "FLAT ROOF SNOW LOAD: 17.5 PSF",
+     "px": {
+      "x": 57.0,
+      "y": 614.0,
+      "w": 588.0,
+      "h": 50.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0040",
+   "text": "SNOW EXPOSURE FACTOR: 0.7",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1426.56,
+    "y": 1355.76,
+    "width": 136.56,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1368.96,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 56.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 10,
+     "text": "SNOW EXPOSURE FACTOR: 0.7",
+     "px": {
+      "x": 64.0,
+      "y": 676.0,
+      "w": 569.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0041",
+   "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1426.56,
+    "y": 1344.48,
+    "width": 139.44,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1359.84,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 65.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 11,
+     "text": "SNOW LOAD IMPORTANCE FACTOR: 1",
+     "px": {
+      "x": 64.0,
+      "y": 723.0,
+      "w": 581.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0042",
+   "text": "THERMAL FACTOR: 1",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1426.56,
+    "y": 1333.44,
+    "width": 95.04,
+    "height": 8.16
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1350.72,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 74.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 12,
+     "text": "THERMAL FACTOR: 1",
+     "px": {
+      "x": 64.0,
+      "y": 770.0,
+      "w": 396.0,
+      "h": 34.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0043",
+   "text": "WIND LOADING (IBC 2015)",
+   "category": "title_block",
+   "box": {
+    "x": 1426.8,
+    "y": 1318.32,
+    "width": 107.52,
+    "height": 10.56
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1341.6,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 95.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 13,
+     "text": "WIND LOADING (IBC 2015)",
+     "px": {
+      "x": 65.0,
+      "y": 823.0,
+      "w": 448.0,
+      "h": 44.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0044",
+   "text": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1426.8,
+    "y": 1306.56,
+    "width": 139.2,
+    "height": 10.08
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1332.48,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 102.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 14,
+     "text": "BASIC WIND SPEED (3 SECOND GUST) 115 MPH",
+     "px": {
+      "x": 65.0,
+      "y": 874.0,
+      "w": 580.0,
+      "h": 42.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0045",
+   "text": "RISK CATEGORY ii",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1425.36,
+    "y": 1296.24,
+    "width": 89.04,
+    "height": 8.4
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1323.36,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 109.0,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 15,
+     "text": "RISK CATEGORY ii",
+     "px": {
+      "x": 59.0,
+      "y": 924.0,
+      "w": 371.0,
+      "h": 35.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  },
+  {
+   "lid": "L0046",
+   "text": "WIND EXPOSURE CATEGORY 5",
+   "category": "schedule_cell",
+   "box": {
+    "x": 1427.04,
+    "y": 1291.2,
+    "width": 138.96,
+    "height": 2.16
+   },
+   "modelBox": {
+    "x": 1411.2,
+    "y": 1314.24,
+    "width": 140.16,
+    "height": 9.12
+   },
+   "snapShiftPx": 111.5,
+   "vertical": false,
+   "uncertain": false,
+   "alternatives": [],
+   "conflict": false,
+   "confidence": 0.45,
+   "confidenceBasis": {
+    "tileReads": 1,
+    "agreeingReads": 1,
+    "selfReportedUncertain": false,
+    "conflictingReads": 0,
+    "flags": [
+     "snapped_to_ink_band",
+     "tile_edge"
+    ]
+   },
+   "provenance": [
+    {
+     "tileId": "r01c07",
+     "k": 16,
+     "text": "WIND EXPOSURE CATEGORY 5",
+     "px": {
+      "x": 66.0,
+      "y": 971.0,
+      "w": 579.0,
+      "h": 9.0
+     },
+     "group": 1
+    }
+   ],
+   "cutReadings": []
+  }
+ ],
+ "annotations": [
+  {
+   "aid": "N0000",
+   "lines": [
+    "L0000",
+    "L0001",
+    "L0005",
+    "L0006",
+    "L0004",
+    "L0009",
+    "L0012",
+    "L0013",
+    "L0014",
+    "L0016"
+   ],
+   "box": {
+    "x": 1412.4,
+    "y": 1591.92,
+    "width": 146.16,
+    "height": 73.68
+   },
+   "categories": [
+    "label",
+    "note",
+    "title_block"
+   ]
+  },
+  {
+   "aid": "N0001",
+   "lines": [
+    "L0002",
+    "L0003",
+    "L0008",
+    "L0010",
+    "L0015",
+    "L0017",
+    "L0019",
+    "L0022",
+    "L0024"
+   ],
+   "box": {
+    "x": 1855.92,
+    "y": 1540.56,
+    "width": 169.2,
+    "height": 118.56
+   },
+   "categories": [
+    "schedule_cell",
+    "title_block"
+   ]
+  },
+  {
+   "aid": "N0002",
+   "lines": [
+    "L0007",
+    "L0011",
+    "L0018",
+    "L0021",
+    "L0028",
+    "L0030",
+    "L0032",
+    "L0033",
+    "L0034",
+    "L0035",
+    "L0036",
+    "L0037",
+    "L0038",
+    "L0039",
+    "L0040",
+    "L0041",
+    "L0042",
+    "L0043",
+    "L0044",
+    "L0045",
+    "L0046"
+   ],
+   "box": {
+    "x": 1412.64,
+    "y": 1291.2,
+    "width": 412.32,
+    "height": 342.72
+   },
+   "categories": [
+    "detail_title",
+    "note",
+    "schedule_cell",
+    "title_block"
+   ]
+  },
+  {
+   "aid": "N0003",
+   "lines": [
+    "L0020",
+    "L0023",
+    "L0025",
+    "L0026",
+    "L0027",
+    "L0029",
+    "L0031"
+   ],
+   "box": {
+    "x": 1413.12,
+    "y": 1498.32,
+    "width": 145.44,
+    "height": 79.44
+   },
+   "categories": [
+    "label",
+    "note",
+    "title_block"
+   ]
+  }
+ ],
+ "layout": null,
+ "tileReports": [
+  {
+   "tileId": "r00c06",
+   "parse": "recovered",
+   "truncated": true,
+   "convention": "absolute",
+   "conventionScores": {
+    "absolute": 0.31,
+    "norm1000": 0.31
+   },
+   "rejected": [
+    {
+     "k": 13,
+     "reason": "degenerate_box",
+     "text": "7. RE"
+    },
+    {
+     "k": 14,
+     "reason": "degenerate_box",
+     "text": "8. RE"
+    },
+    {
+     "k": 15,
+     "reason": "degenerate_box",
+     "text": "9. RE"
+    },
+    {
+     "k": 16,
+     "reason": "degenerate_box",
+     "text": "10. RE"
+    },
+    {
+     "k": 17,
+     "reason": "degenerate_box",
+     "text": "11. RE"
+    },
+    {
+     "k": 18,
+     "reason": "degenerate_box",
+     "text": "12. RE"
+    },
+    {
+     "k": 19,
+     "reason": "degenerate_box",
+     "text": "13. RE"
+    },
+    {
+     "k": 20,
+     "reason": "degenerate_box",
+     "text": "14. RE"
+    },
+    {
+     "k": 21,
+     "reason": "degenerate_box",
+     "text": "15. RE"
+    },
+    {
+     "k": 22,
+     "reason": "degenerate_box",
+     "text": "16. RE"
+    },
+    {
+     "k": 23,
+     "reason": "degenerate_box",
+     "text": "17. RE"
+    },
+    {
+     "k": 24,
+     "reason": "degenerate_box",
+     "text": "18. RE"
+    },
+    {
+     "k": 25,
+     "reason": "degenerate_box",
+     "text": "19. RE"
+    },
+    {
+     "k": 26,
+     "reason": "degenerate_box",
+     "text": "20. RE"
+    },
+    {
+     "k": 27,
+     "reason": "degenerate_box",
+     "text": "21. RE"
+    },
+    {
+     "k": 28,
+     "reason": "degenerate_box",
+     "text": "22. RE"
+    }
+   ],
+   "kept": 13,
+   "returned": 29,
+   "joinedRows": 1
+  },
+  {
+   "tileId": "r00c07",
+   "parse": "ok",
+   "truncated": false,
+   "convention": "absolute",
+   "conventionScores": {
+    "absolute": 0.875,
+    "norm1000": 0.875
+   },
+   "rejected": [],
+   "kept": 8,
+   "returned": 8,
+   "joinedRows": 0
+  },
+  {
+   "tileId": "r00c08",
+   "parse": "ok",
+   "truncated": false,
+   "convention": "absolute",
+   "conventionScores": {
+    "absolute": 1.0,
+    "norm1000": 0.8
+   },
+   "rejected": [],
+   "kept": 5,
+   "returned": 5,
+   "joinedRows": 0
+  },
+  {
+   "tileId": "r00c09",
+   "parse": "ok",
+   "truncated": false,
+   "convention": "absolute",
+   "conventionScores": {
+    "absolute": 0.692,
+    "norm1000": 0.692
+   },
+   "rejected": [
+    {
+     "k": 9,
+     "reason": "degenerate_box",
+     "text": "SPACING OF LIGHT GAGE FRAM"
+    },
+    {
+     "k": 10,
+     "reason": "degenerate_box",
+     "text": "3. SCREW ALL CONNECTIONS OF"
+    },
+    {
+     "k": 11,
+     "reason": "degenerate_box",
+     "text": "AND STUD TO FRAME USING 2"
+    },
+    {
+     "k": 12,
+     "reason": "degenerate_box",
+     "text": "SCREWS AT EACH CONNECTION"
+    }
+   ],
+   "kept": 9,
+   "returned": 13,
+   "joinedRows": 0
+  },
+  {
+   "tileId": "r01c07",
+   "parse": "ok",
+   "truncated": false,
+   "convention": "absolute",
+   "conventionScores": {
+    "absolute": 1.0,
+    "norm1000": 1.0
+   },
+   "rejected": [],
+   "kept": 17,
+   "returned": 17,
+   "joinedRows": 0
+  }
+ ],
+ "calls": [
+  {
+   "latencyS": 419.61,
+   "promptTokens": 1546,
+   "completionTokens": 2048,
+   "costUsd": 0.0,
+   "finishReason": "length",
+   "tileId": "r00c06"
+  },
+  {
+   "latencyS": 203.89,
+   "promptTokens": 1546,
+   "completionTokens": 687,
+   "costUsd": 0.0,
+   "finishReason": "stop",
+   "tileId": "r00c07"
+  },
+  {
+   "latencyS": 168.3,
+   "promptTokens": 1546,
+   "completionTokens": 437,
+   "costUsd": 0.0,
+   "finishReason": "stop",
+   "tileId": "r00c08"
+  },
+  {
+   "latencyS": 346.37,
+   "promptTokens": 1546,
+   "completionTokens": 1273,
+   "costUsd": 0.0,
+   "finishReason": "stop",
+   "tileId": "r00c09"
+  },
+  {
+   "latencyS": 291.44,
+   "promptTokens": 1546,
+   "completionTokens": 1309,
+   "costUsd": 0.0,
+   "finishReason": "stop",
+   "tileId": "r01c07"
+  }
+ ],
+ "totals": {
+  "calls": 5,
+  "latencyS": 1429.6,
+  "promptTokens": 7730,
+  "completionTokens": 5754,
+  "costUsd": 0,
+  "linesKept": 47,
+  "readsKept": 51,
+  "readsRejected": 20
+ }
+}

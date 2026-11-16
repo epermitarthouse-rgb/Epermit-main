@@ -1,0 +1,56 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "L_spatial",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0626ff43125b96dc016afb2ccea44887d2ab9754610c976fb2",
+ "latencyMs": 7184,
+ "inputTokens": 23914,
+ "outputTokens": 380,
+ "reasoningTokens": 257,
+ "costUsd": 0.0052388,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-1.01-00.pdf",
+  "evidenceSha": "2bc1bf13ebfb66c8",
+  "userPromptChars": 15772,
+  "images": [
+   "P-R018 source",
+   "P-R018 target",
+   "P-R016 source",
+   "P-R016 target",
+   "P-R023 source",
+   "P-R023 target",
+   "P-R024 source",
+   "P-R024 target"
+  ],
+  "pairs": [
+   "P-R018",
+   "P-R016",
+   "P-R023",
+   "P-R024",
+   "P-R025",
+   "P-R026",
+   "P-R027",
+   "P-R028",
+   "P-R029",
+   "P-R030",
+   "P-R031",
+   "P-R033",
+   "P-R035",
+   "P-R021"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-1.01-00\",\"detected_sheet_title\":\"MEZZANINE & BASEMENT FLOOR PLAN\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains a 2nd-floor alteration floor plan, basement alteration floor plan, general notes, keyed notes, and symbol legends. Referenced door, wall-type, elevation, and detail sheets are identified on the drawing and are listed in the submitted sheet index. No high-value, sheet-supported discrepancy or demonstrated omission was identified from the reviewed content.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains a 2nd-floor alteration floor plan, basement alteration floor plan, general notes, keyed notes, and symbol legends. Referenced door, wall-type, elevation, and detail sheets are identified on the drawing and are listed in the submitted sheet index. No high-value, sheet-supported discrepancy or demonstrated omission was identified from the reviewed content.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

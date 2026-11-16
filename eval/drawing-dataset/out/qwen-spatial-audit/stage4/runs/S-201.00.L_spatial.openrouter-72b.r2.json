@@ -1,0 +1,91 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "L_spatial",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0fcac4da2908d2ae016afb2d0f335887d28a40933ce988d446",
+ "latencyMs": 15505,
+ "inputTokens": 15690,
+ "outputTokens": 1409,
+ "reasoningTokens": 1034,
+ "costUsd": 0.0048288,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "S-201.00.pdf",
+  "evidenceSha": "23adde475ba79b53",
+  "userPromptChars": 15725,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"S-201.00\",\"detected_sheet_title\":\"WALL SECTIONS AND NOTES\",\"discipline\":\"Structural\",\"summary\":\"The sheet provides two wall sections, structural design data, material and connection notes, special-inspection notes, and foundation/masonry notes. One apparent inconsistency was identified between the stated soil bearing pressures and should be resolved by the structural/geotechnical design team.\",\"findings\":[{\"category\":\"Structural / geotechnical coordination\",\"severity\":\"warning\",\"title\":\"Conflicting soil bearing pressure values\",\"observation\":\"The structural notes state both an assumed allowable soil bearing capacity of 1,500 PSF and a minimum design soil pressure of 2,500 PSF. The sheet does not explain whether these values apply to different conditions or identify which value governs the footing design.\",\"drawing_evidence\":\"Under MASONRY AND FOUNDATION NOTES, Note 1 states: \\\"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.\\\" The same notes also identify a \\\"DESIGN SOIL PRESSURE 2,500 PSF\\\" in the footing/site-soil provisions.\",\"drawing_location\":\"Right-side structural notes column, MASONRY AND FOUNDATION NOTES, Notes 1 and 8.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Clarify the intended soil-pressure basis on the structural drawings and coordinate it with the geotechnical report and footing calculations. Identify whether 1,500 PSF or 2,500 PSF governs, or explicitly distinguish the soil conditions and design uses for each value.\",\"finding_type\":\"contradiction\",\"source_sheets\":[\"S-201.00\"],\"evidence_ids\":[\"e47\",\"e54\",\"o159\"],\"evidence_status\":\"confirmed_by_drawing\",\"confidence\":\"high\"}]}",
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet provides two wall sections, structural design data, material and connection notes, special-inspection notes, and foundation/masonry notes. One apparent inconsistency was identified between the stated soil bearing pressures and should be resolved by the structural/geotechnical design team.",
+ "drafts": [
+  {
+   "category": "Structural / geotechnical coordination",
+   "severity": "warning",
+   "title": "Conflicting soil bearing pressure values",
+   "observation": "The structural notes state both an assumed allowable soil bearing capacity of 1,500 PSF and a minimum design soil pressure of 2,500 PSF. The sheet does not explain whether these values apply to different conditions or identify which value governs the footing design.",
+   "drawing_evidence": "Under MASONRY AND FOUNDATION NOTES, Note 1 states: \"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.\" The same notes also identify a \"DESIGN SOIL PRESSURE 2,500 PSF\" in the footing/site-soil provisions.",
+   "drawing_location": "Right-side structural notes column, MASONRY AND FOUNDATION NOTES, Notes 1 and 8.",
+   "suggested_code_reference": "",
+   "recommendation": "Clarify the intended soil-pressure basis on the structural drawings and coordinate it with the geotechnical report and footing calculations. Identify whether 1,500 PSF or 2,500 PSF governs, or explicitly distinguish the soil conditions and design uses for each value.",
+   "finding_type": "contradiction",
+   "source_sheets": [
+    "S-201.00"
+   ],
+   "evidence_ids": [
+    "e47",
+    "e54",
+    "o159"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "published": [
+  {
+   "category": "Structural / geotechnical coordination",
+   "severity": "warning",
+   "title": "Conflicting soil bearing pressure values",
+   "observation": "The structural notes state both an assumed allowable soil bearing capacity of 1,500 PSF and a minimum design soil pressure of 2,500 PSF. The sheet does not explain whether these values apply to different conditions or identify which value governs the footing design.",
+   "drawing_evidence": "Under MASONRY AND FOUNDATION NOTES, Note 1 states: \"ASSUMED ALLOWABLE BEARING CAPACITY OF SOIL IS 1,500 PSF.\" The same notes also identify a \"DESIGN SOIL PRESSURE 2,500 PSF\" in the footing/site-soil provisions.",
+   "drawing_location": "Right-side structural notes column, MASONRY AND FOUNDATION NOTES, Notes 1 and 8.",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify the intended soil-pressure basis on the structural drawings and coordinate it with the geotechnical report and footing calculations. Identify whether 1,500 PSF or 2,500 PSF governs, or explicitly distinguish the soil conditions and design uses for each value.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Conflicting soil bearing pressure values",
+    "originalObservation": "The structural notes state both an assumed allowable soil bearing capacity of 1,500 PSF and a minimum design soil pressure of 2,500 PSF. The sheet does not explain whether these values apply to different conditions or identify which value governs the footing design.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   },
+   "finding_type": "contradiction",
+   "source_sheets": [
+    "S-201.00"
+   ],
+   "evidence_ids": [
+    "e47",
+    "e54",
+    "o159"
+   ],
+   "evidence_status": "confirmed_by_drawing",
+   "confidence": "high"
+  }
+ ],
+ "withheld": []
+}

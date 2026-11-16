@@ -1,0 +1,96 @@
+{
+ "sheetId": "A-4.00-00",
+ "arm": "A_pdf_only",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_089bf3b6a6b30a1c016aec8f01da3887d2a6bfb43b6338b9ca",
+ "latencyMs": 9154,
+ "inputTokens": 3922,
+ "outputTokens": 426,
+ "costUsd": 0.014065,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-4.00-00",
+  "title": "ENLARGED TOILET PLANS & ADA DETAILS",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet provides enlarged toilet plans and ADA details. It includes specific dimensions and layouts for accessibility compliance, typified signage height elevations, and a toilet room accessory schedule.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing tactile signage detail",
+   "observation": "Signage notes mention that doors are required to have tactile signs including raised letters and braille, but detailed specifications for tactile signs are not provided on this sheet.",
+   "drawing_evidence": "Signage notes section refers to tactile signs but does not provide detailed specifications.",
+   "drawing_location": "Lower right quadrant, general notes section.",
+   "suggested_code_reference": "2015 IBC Section 1111.3 or applicable 2017 DC amendment for signage.",
+   "recommendation": "Provide detailed specifications for tactile signage, including size, location, and content of the braille and raised letters.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Missing tactile signage detail",
+    "originalObservation": "Signage notes mention that doors are required to have tactile signs including raised letters and braille, but detailed specifications for tactile signs are not provided on this sheet.",
+    "originalCodeReference": "2015 IBC Section 1111.3 or applicable 2017 DC amendment for signage.",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": "2015 IBC Section 1111.3 or applicable 2017 DC amendment for signage.",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Lack of toilet partition details",
+   "observation": "Sheet includes a toilet room plan but lacks detailed construction or material specifications for toilet partitions.",
+   "drawing_evidence": "Toilet Room Plan section displays layout but not material specifications.",
+   "drawing_location": "Upper left quadrant, toilet room plan area.",
+   "suggested_code_reference": null,
+   "recommendation": "Include detailed specifications for toilet partitions, including materials, dimensions, and mounting methods, on relevant sheets.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Lack of toilet partition details",
+    "originalObservation": "Sheet includes a toilet room plan but lacks detailed construction or material specifications for toilet partitions.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Verify accessibility compliance",
+   "observation": "ADA details are provided, but a comprehensive review of compliance with all ADA dimensions and requirements is not possible from this sheet alone.",
+   "drawing_evidence": "Enlarged toilet room plans with dimensions for fixtures and clearances.",
+   "drawing_location": "Upper section, across layout plans.",
+   "suggested_code_reference": "2015 IBC Chapter 11 or corresponding DC amendments for accessibility.",
+   "recommendation": "Conduct a full review to ensure all ADA requirements are met, referring to additional sheets if necessary.",
+   "verification_status": "proposed_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Verify accessibility compliance",
+    "originalObservation": "ADA details are provided, but a comprehensive review of compliance with all ADA dimensions and requirements is not possible from this sheet alone.",
+    "originalCodeReference": "2015 IBC Chapter 11 or corresponding DC amendments for accessibility.",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": "2015 IBC Chapter 11 or corresponding DC amendments for accessibility.",
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

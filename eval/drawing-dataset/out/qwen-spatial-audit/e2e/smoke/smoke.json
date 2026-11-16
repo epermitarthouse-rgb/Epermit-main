@@ -1,0 +1,55 @@
+{
+ "url": "http://127.0.0.1:5191/",
+ "at": "2026-11-16T16:47:13.708Z",
+ "checks": [
+  {
+   "name": "8 finding cards",
+   "ok": true
+  },
+  {
+   "name": "5 drawings",
+   "ok": true
+  },
+  {
+   "name": "warning filter shows 3",
+   "ok": true
+  },
+  {
+   "name": "status filter preliminary shows 1",
+   "ok": true
+  },
+  {
+   "name": "drawing filter S-201 shows 5",
+   "ok": true
+  },
+  {
+   "name": "decisions recorded (accepted, rejected, modified)",
+   "ok": true
+  },
+  {
+   "name": "decisions persisted locally",
+   "ok": true
+  },
+  {
+   "name": "review details open with evidence",
+   "ok": true
+  },
+  {
+   "name": "JSON export downloaded (PermitPilot-Code-Analyzer-qwen-lun.json)",
+   "ok": true
+  },
+  {
+   "name": "JSON export carries 3 reviewer decisions (accepted, rejected, modified)",
+   "ok": true
+  },
+  {
+   "name": "PDF export downloaded (PermitPilot-Architect-Review-qwen-lun-3E29-82E6-794F.pdf)",
+   "ok": true
+  },
+  {
+   "name": "no page errors",
+   "ok": true
+  }
+ ],
+ "errors": []
+}

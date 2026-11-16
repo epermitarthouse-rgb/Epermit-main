@@ -1,0 +1,36 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_spatial",
+ "rep": 2,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_07672717b83274a0016afb2ceba70087d290f94681e55db230",
+ "latencyMs": 8923,
+ "inputTokens": 16533,
+ "outputTokens": 602,
+ "reasoningTokens": 485,
+ "costUsd": 0.0040290000000000005,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "413f8455e34a7a87",
+  "userPromptChars": 13890,
+  "images": [
+   "P-R038 source"
+  ],
+  "pairs": [
+   "P-R038"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains window types, a door hardware schedule, a door schedule, general door notes, and related door/window elevations. The visible schedules and notes provide door sizes, materials, frame types, hardware, glazing, and selected accessibility and fire-related requirements. No specific, drawing-supported discrepancy or demonstrated omission was identified on this sheet.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains window types, a door hardware schedule, a door schedule, general door notes, and related door/window elevations. The visible schedules and notes provide door sizes, materials, frame types, hardware, glazing, and selected accessibility and fire-related requirements. No specific, drawing-supported discrepancy or demonstrated omission was identified on this sheet.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

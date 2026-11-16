@@ -1,0 +1,8249 @@
+{
+ "version": "qsa.spatial-evidence.v1",
+ "sheetId": "A-1.01-00",
+ "source": "qwen-openrouter-72b-validated",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "page": {
+  "width": 2592,
+  "height": 1728,
+  "rotation": 0,
+  "mediabox": [
+   0,
+   0,
+   2592,
+   1728
+  ],
+  "cropbox": [
+   0,
+   0,
+   2592,
+   1728
+  ],
+  "frame": "pdf-point, bottom-left origin"
+ },
+ "maxChars": 3200,
+ "details": [
+  {
+   "number": "1",
+   "title": "2ND FLOOR ALTERATION  FLOOR PLAN",
+   "scale": "1/4\" = 1'-0\"",
+   "region": {
+    "x": 87.92,
+    "y": 549.81,
+    "width": 1288.9199999999998,
+    "height": 720
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "3",
+   "title": "GENERAL NOTES",
+   "scale": "N.T.S.",
+   "region": {
+    "x": 87.92,
+    "y": 18.93,
+    "width": 747.24,
+    "height": 540.88
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "4",
+   "title": "PLAN KEYED NOTES",
+   "scale": "N.T.S.",
+   "region": {
+    "x": 805.16,
+    "y": 18.93,
+    "width": 451.08000000000004,
+    "height": 540.88
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "5",
+   "title": "SYMBOL LEGENDS",
+   "scale": "N.T.S.",
+   "region": {
+    "x": 1226.24,
+    "y": 18.93,
+    "width": 939.9999999999998,
+    "height": 540.88
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  },
+  {
+   "number": "2",
+   "title": "BASEMENT ALTERATION  FLOOR PLAN",
+   "scale": "1/4\" = 1'-0\"",
+   "region": {
+    "x": 1346.84,
+    "y": 549.81,
+    "width": 882.28,
+    "height": 720
+   },
+   "regionMethod": "approximate: above the text-layer detail title"
+  }
+ ],
+ "shown": [
+  {
+   "id": "e30",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "9 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0113",
+     "box": {
+      "x": 681.6,
+      "y": 809.04,
+      "width": 24.24,
+      "height": 8.88
+     },
+     "lines": [
+      {
+       "lid": "L0208",
+       "text": "9 1/2\"",
+       "box": {
+        "x": 681.6,
+        "y": 809.04,
+        "width": 24.24,
+        "height": 8.88
+       },
+       "tiles": [
+        "r04c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0115",
+     "box": {
+      "x": 522.48,
+      "y": 806.64,
+      "width": 18.96,
+      "height": 8.88
+     },
+     "lines": [
+      {
+       "lid": "L0210",
+       "text": "9 1/2\"",
+       "box": {
+        "x": 522.48,
+        "y": 806.64,
+        "width": 18.96,
+        "height": 8.88
+       },
+       "tiles": [
+        "r04c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0120",
+     "box": {
+      "x": 847.92,
+      "y": 806.4,
+      "width": 23.04,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0215",
+       "text": "9 1/2\"",
+       "box": {
+        "x": 847.92,
+        "y": 806.4,
+        "width": 23.04,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e1",
+   "region": "sheet",
+   "text": "2 / A-2.00",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0000",
+     "box": {
+      "x": 702.24,
+      "y": 1651.92,
+      "width": 27.360000000000014,
+      "height": 20.639999999999873
+     },
+     "lines": [
+      {
+       "lid": "L0000",
+       "text": "2",
+       "box": {
+        "x": 711.84,
+        "y": 1665.6,
+        "width": 6,
+        "height": 6.96
+       },
+       "tiles": [
+        "r00c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0002",
+       "text": "A-2.00",
+       "box": {
+        "x": 702.24,
+        "y": 1651.92,
+        "width": 27.36,
+        "height": 7.92
+       },
+       "tiles": [
+        "r00c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e57",
+   "region": "3 GENERAL NOTES",
+   "text": "SHEET A-1.03",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 575.76,
+      "y": 337.92,
+      "width": 58.8,
+      "height": 6.72
+     },
+     "lines": [
+      {
+       "lid": "L0345",
+       "text": "SHEET A-1.03",
+       "box": {
+        "x": 575.76,
+        "y": 337.92,
+        "width": 58.8,
+        "height": 6.72
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e68",
+   "region": "5 SYMBOL LEGENDS",
+   "text": "STUD WALLS / ATED WALLS / = WALL TYPES - SEE 5/A-1.00 / ULE SHEET A-6.00 / = WINDOW TYPE - SEE ELEVATIONS",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value",
+    "elevation"
+   ],
+   "uncertain": false,
+   "value": 12.9,
+   "copies": [
+    {
+     "aid": "N0156",
+     "box": {
+      "x": 1301.52,
+      "y": 348.48,
+      "width": 190.55999999999995,
+      "height": 168.96000000000004
+     },
+     "lines": [
+      {
+       "lid": "L0282",
+       "text": "STUD WALLS",
+       "box": {
+        "x": 1411.68,
+        "y": 509.04,
+        "width": 54.96,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c07",
+        "r06c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0293",
+       "text": "ATED WALLS",
+       "box": {
+        "x": 1411.2,
+        "y": 484.8,
+        "width": 56.4,
+        "height": 6.48
+       },
+       "tiles": [
+        "r05c07",
+        "r06c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0305",
+       "text": "= WALL TYPES - SEE 5/A-1.00",
+       "box": {
+        "x": 1301.76,
+        "y": 444,
+        "width": 125.04,
+        "height": 8.88
+       },
+       "tiles": [
+        "r06c06",
+        "r06c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0317",
+       "text": "ULE SHEET A-6.00",
+       "box": {
+        "x": 1411.2,
+        "y": 410.64,
+        "width": 80.88,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0341",
+       "text": "= WINDOW TYPE - SEE ELEVATIONS",
+       "box": {
+        "x": 1301.52,
+        "y": 348.48,
+        "width": 143.28,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c06",
+        "r06c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e67",
+   "region": "4 PLAN KEYED NOTES",
+   "text": "ALUMINUM BATTENS - SEE A-3.01 FO / AL / SPECS",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0150",
+     "box": {
+      "x": 862.08,
+      "y": 526.08,
+      "width": 179.51999999999987,
+      "height": 19.67999999999995
+     },
+     "lines": [
+      {
+       "lid": "L0260",
+       "text": "ALUMINUM BATTENS - SEE A-3.01 FO",
+       "box": {
+        "x": 884.16,
+        "y": 537.36,
+        "width": 157.44,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0266",
+       "text": "AL",
+       "box": {
+        "x": 862.08,
+        "y": 532.32,
+        "width": 9.6,
+        "height": 7.2
+       },
+       "tiles": [
+        "r05c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0269",
+       "text": "SPECS",
+       "box": {
+        "x": 884.16,
+        "y": 526.08,
+        "width": 29.28,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e41",
+   "region": "2 BASEMENT ALTERATION  FLOOR PLAN",
+   "text": "CREW ROOM / 109",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0066",
+     "box": {
+      "x": 1777.92,
+      "y": 1054.32,
+      "width": 55.200000000000045,
+      "height": 23.2800000000002
+     },
+     "lines": [
+      {
+       "lid": "L0128",
+       "text": "CREW ROOM",
+       "box": {
+        "x": 1777.92,
+        "y": 1069.2,
+        "width": 55.2,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c08",
+        "r03c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0136",
+       "text": "109",
+       "box": {
+        "x": 1798.56,
+        "y": 1054.32,
+        "width": 13.92,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e34",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "8'-3\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0118",
+     "box": {
+      "x": 626.16,
+      "y": 806.16,
+      "width": 21.36,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0213",
+       "text": "8'-3\"",
+       "box": {
+        "x": 626.16,
+        "y": 806.16,
+        "width": 21.36,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c03",
+        "r04c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0119",
+     "box": {
+      "x": 788.88,
+      "y": 806.16,
+      "width": 21.36,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0214",
+       "text": "8'-3\"",
+       "box": {
+        "x": 788.88,
+        "y": 806.16,
+        "width": 21.36,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c03",
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e36",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "2",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0124",
+     "box": {
+      "x": 838.08,
+      "y": 786.72,
+      "width": 5.04,
+      "height": 5.28
+     },
+     "lines": [
+      {
+       "lid": "L0221",
+       "text": "2",
+       "box": {
+        "x": 838.08,
+        "y": 786.72,
+        "width": 5.04,
+        "height": 5.28
+       },
+       "tiles": [
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0131",
+     "box": {
+      "x": 827.76,
+      "y": 769.2,
+      "width": 5.52,
+      "height": 4.56
+     },
+     "lines": [
+      {
+       "lid": "L0230",
+       "text": "2",
+       "box": {
+        "x": 827.76,
+        "y": 769.2,
+        "width": 5.52,
+        "height": 4.56
+       },
+       "tiles": [
+        "r04c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0132",
+     "box": {
+      "x": 623.52,
+      "y": 766.56,
+      "width": 3.84,
+      "height": 6.72
+     },
+     "lines": [
+      {
+       "lid": "L0231",
+       "text": "2",
+       "box": {
+        "x": 623.52,
+        "y": 766.56,
+        "width": 3.84,
+        "height": 6.72
+       },
+       "tiles": [
+        "r04c03",
+        "r04c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e14",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "8 / A-3.00",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0041",
+     "box": {
+      "x": 1036.32,
+      "y": 1249.92,
+      "width": 27.11999999999989,
+      "height": 21.59999999999991
+     },
+     "lines": [
+      {
+       "lid": "L0081",
+       "text": "8",
+       "box": {
+        "x": 1046.16,
+        "y": 1264.32,
+        "width": 4.56,
+        "height": 7.2
+       },
+       "tiles": [
+        "r02c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0086",
+       "text": "A-3.00",
+       "box": {
+        "x": 1036.32,
+        "y": 1249.92,
+        "width": 27.12,
+        "height": 8.88
+       },
+       "tiles": [
+        "r02c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e7",
+   "region": "sheet",
+   "text": "A-3.02",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0018",
+     "box": {
+      "x": 594.72,
+      "y": 1440,
+      "width": 22.56,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0046",
+       "text": "A-3.02",
+       "box": {
+        "x": 594.72,
+        "y": 1440,
+        "width": 22.56,
+        "height": 8.64
+       },
+       "tiles": [
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e19",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "A-2.00",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0056",
+     "box": {
+      "x": 1315.92,
+      "y": 1157.76,
+      "width": 28.56,
+      "height": 8.88
+     },
+     "lines": [
+      {
+       "lid": "L0111",
+       "text": "A-2.00",
+       "box": {
+        "x": 1315.92,
+        "y": 1157.76,
+        "width": 28.56,
+        "height": 8.88
+       },
+       "tiles": [
+        "r02c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e38",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "A-2.01",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0135",
+     "box": {
+      "x": 611.52,
+      "y": 751.92,
+      "width": 26.88,
+      "height": 8.88
+     },
+     "lines": [
+      {
+       "lid": "L0236",
+       "text": "A-2.01",
+       "box": {
+        "x": 611.52,
+        "y": 751.92,
+        "width": 26.88,
+        "height": 8.88
+       },
+       "tiles": [
+        "r04c03",
+        "r04c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e20",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "6\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0061",
+     "box": {
+      "x": 1031.52,
+      "y": 1095.36,
+      "width": 11.52,
+      "height": 6.72
+     },
+     "lines": [
+      {
+       "lid": "L0122",
+       "text": "6\"",
+       "box": {
+        "x": 1031.52,
+        "y": 1095.36,
+        "width": 11.52,
+        "height": 6.72
+       },
+       "tiles": [
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e31",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "9\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0114",
+     "box": {
+      "x": 374.16,
+      "y": 807.36,
+      "width": 7.68,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0209",
+       "text": "9\"",
+       "box": {
+        "x": 374.16,
+        "y": 807.36,
+        "width": 7.68,
+        "height": 8.64
+       },
+       "tiles": [
+        "r04c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e21",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "3'-6\" / MIN.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 7.5,
+   "copies": [
+    {
+     "aid": "N0062",
+     "box": {
+      "x": 994.56,
+      "y": 1073.28,
+      "width": 21.120000000000005,
+      "height": 25.680000000000064
+     },
+     "lines": [
+      {
+       "lid": "L0123",
+       "text": "3'-6\"",
+       "box": {
+        "x": 994.56,
+        "y": 1088.88,
+        "width": 21.12,
+        "height": 10.08
+       },
+       "tiles": [
+        "r03c04",
+        "r02c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0126",
+       "text": "MIN.",
+       "box": {
+        "x": 996.72,
+        "y": 1073.28,
+        "width": 12.72,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e22",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "6'-6\" / MIN.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 7.5,
+   "copies": [
+    {
+     "aid": "N0069",
+     "box": {
+      "x": 967.44,
+      "y": 1044.96,
+      "width": 18,
+      "height": 24
+     },
+     "lines": [
+      {
+       "lid": "L0132",
+       "text": "6'-6\"",
+       "box": {
+        "x": 967.44,
+        "y": 1061.28,
+        "width": 18,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0140",
+       "text": "MIN.",
+       "box": {
+        "x": 969.6,
+        "y": 1044.96,
+        "width": 14.64,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e23",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "6'-9\" / MIN.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 7.5,
+   "copies": [
+    {
+     "aid": "N0071",
+     "box": {
+      "x": 970.08,
+      "y": 1006.08,
+      "width": 20.639999999999986,
+      "height": 24.479999999999905
+     },
+     "lines": [
+      {
+       "lid": "L0147",
+       "text": "6'-9\"",
+       "box": {
+        "x": 970.08,
+        "y": 1021.92,
+        "width": 20.64,
+        "height": 8.64
+       },
+       "tiles": [
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0152",
+       "text": "MIN.",
+       "box": {
+        "x": 971.28,
+        "y": 1006.08,
+        "width": 17.52,
+        "height": 9.12
+       },
+       "tiles": [
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e16",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "I / A-2.01",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0047",
+     "box": {
+      "x": 135.84,
+      "y": 1194,
+      "width": 22.80000000000001,
+      "height": 23.75999999999999
+     },
+     "lines": [
+      {
+       "lid": "L0094",
+       "text": "I",
+       "box": {
+        "x": 141.36,
+        "y": 1215.36,
+        "width": 3.6,
+        "height": 2.4
+       },
+       "tiles": [
+        "r02c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0097",
+       "text": "A-2.01",
+       "box": {
+        "x": 135.84,
+        "y": 1194,
+        "width": 22.8,
+        "height": 8.16
+       },
+       "tiles": [
+        "r02c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e12",
+   "region": "sheet",
+   "text": "II / A-4.01",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0028",
+     "box": {
+      "x": 1075.44,
+      "y": 1379.76,
+      "width": 25.440000000000055,
+      "height": 23.519999999999982
+     },
+     "lines": [
+      {
+       "lid": "L0059",
+       "text": "II",
+       "box": {
+        "x": 1075.44,
+        "y": 1393.68,
+        "width": 12.72,
+        "height": 9.6
+       },
+       "tiles": [
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0060",
+       "text": "A-4.01",
+       "box": {
+        "x": 1075.44,
+        "y": 1379.76,
+        "width": 25.44,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e11",
+   "region": "sheet",
+   "text": "8'-3\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0022",
+     "box": {
+      "x": 791.04,
+      "y": 1422.24,
+      "width": 17.04,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0051",
+       "text": "8'-3\"",
+       "box": {
+        "x": 791.04,
+        "y": 1422.24,
+        "width": 17.04,
+        "height": 7.2
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e13",
+   "region": "sheet",
+   "text": "2'-4\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0029",
+     "box": {
+      "x": 1028.4,
+      "y": 1368.96,
+      "width": 7.2,
+      "height": 10.56
+     },
+     "lines": [
+      {
+       "lid": "L0061",
+       "text": "2'-4\"",
+       "box": {
+        "x": 1028.4,
+        "y": 1368.96,
+        "width": 7.2,
+        "height": 10.56
+       },
+       "tiles": [
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e15",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "3'-2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0044",
+     "box": {
+      "x": 906.48,
+      "y": 1232.88,
+      "width": 8.64,
+      "height": 22.8
+     },
+     "lines": [
+      {
+       "lid": "L0087",
+       "text": "3'-2\"",
+       "box": {
+        "x": 906.48,
+        "y": 1232.88,
+        "width": 8.64,
+        "height": 22.8
+       },
+       "tiles": [
+        "r02c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e26",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "4'-3\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0082",
+     "box": {
+      "x": 860.4,
+      "y": 895.2,
+      "width": 8.64,
+      "height": 18.24
+     },
+     "lines": [
+      {
+       "lid": "L0169",
+       "text": "4'-3\"",
+       "box": {
+        "x": 860.4,
+        "y": 895.2,
+        "width": 8.64,
+        "height": 18.24
+       },
+       "tiles": [
+        "r03c04",
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e33",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "8'-2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0116",
+     "box": {
+      "x": 302.88,
+      "y": 806.16,
+      "width": 21.36,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0211",
+       "text": "8'-2\"",
+       "box": {
+        "x": 302.88,
+        "y": 806.16,
+        "width": 21.36,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e24",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "28'-9\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0075",
+     "box": {
+      "x": 639.6,
+      "y": 948.24,
+      "width": 27.12,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0161",
+       "text": "28'-9\"",
+       "box": {
+        "x": 639.6,
+        "y": 948.24,
+        "width": 27.12,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e9",
+   "region": "sheet",
+   "text": "?q 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0021",
+     "box": {
+      "x": 695.76,
+      "y": 1423.2,
+      "width": 5.52,
+      "height": 6.72
+     },
+     "lines": [
+      {
+       "lid": "L0049",
+       "text": "q 1/2\"",
+       "box": {
+        "x": 695.76,
+        "y": 1423.2,
+        "width": 5.52,
+        "height": 6.72
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "q",
+         "candidate": "9",
+         "reason": "digit_before_fraction",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e46",
+   "region": "3 GENERAL NOTES",
+   "text": "2. SEE A-3.01 FOR",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 128.4,
+      "y": 486.96,
+      "width": 80.16,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0287",
+       "text": "2. SEE A-3.01 FOR",
+       "box": {
+        "x": 128.4,
+        "y": 486.96,
+        "width": 80.16,
+        "height": 8.64
+       },
+       "tiles": [
+        "r05c00",
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e8",
+   "region": "sheet",
+   "text": "3'-5 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0019",
+     "box": {
+      "x": 582.48,
+      "y": 1421.76,
+      "width": 28.56,
+      "height": 9.12
+     },
+     "lines": [
+      {
+       "lid": "L0047",
+       "text": "3'-5 1/2\"",
+       "box": {
+        "x": 582.48,
+        "y": 1421.76,
+        "width": 28.56,
+        "height": 9.12
+       },
+       "tiles": [
+        "r01c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e10",
+   "region": "sheet",
+   "text": "4'-7 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0020",
+     "box": {
+      "x": 655.2,
+      "y": 1423.2,
+      "width": 31.2,
+      "height": 6.48
+     },
+     "lines": [
+      {
+       "lid": "L0048",
+       "text": "4'-7 1/2\"",
+       "box": {
+        "x": 655.2,
+        "y": 1423.2,
+        "width": 31.2,
+        "height": 6.48
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e32",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "8'-2 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0117",
+     "box": {
+      "x": 456,
+      "y": 806.64,
+      "width": 36.96,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0212",
+       "text": "8'-2 1/2\"",
+       "box": {
+        "x": 456,
+        "y": 806.64,
+        "width": 36.96,
+        "height": 8.64
+       },
+       "tiles": [
+        "r04c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e37",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "A-301",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0127",
+     "box": {
+      "x": 829.92,
+      "y": 773.76,
+      "width": 21.36,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0226",
+       "text": "A-301",
+       "box": {
+        "x": 829.92,
+        "y": 773.76,
+        "width": 21.36,
+        "height": 7.2
+       },
+       "tiles": [
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    },
+    {
+     "aid": "N0128",
+     "box": {
+      "x": 906.24,
+      "y": 772.08,
+      "width": 22.08,
+      "height": 8.88
+     },
+     "lines": [
+      {
+       "lid": "L0227",
+       "text": "A-301",
+       "box": {
+        "x": 906.24,
+        "y": 772.08,
+        "width": 22.08,
+        "height": 8.88
+       },
+       "tiles": [
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e54",
+   "region": "3 GENERAL NOTES",
+   "text": "(ICC/ANSI A117",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 5,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 575.76,
+      "y": 384.24,
+      "width": 62.4,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0326",
+       "text": "(ICC/ANSI A117",
+       "box": {
+        "x": 575.76,
+        "y": 384.24,
+        "width": 62.4,
+        "height": 7.2
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e25",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "1",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0076",
+     "box": {
+      "x": 386.16,
+      "y": 942.24,
+      "width": 14.16,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0162",
+       "text": "1",
+       "box": {
+        "x": 386.16,
+        "y": 942.24,
+        "width": 14.16,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e35",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "6'-11 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0121",
+     "box": {
+      "x": 932.64,
+      "y": 806.4,
+      "width": 36.24,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0216",
+       "text": "6'-11 1/2\"",
+       "box": {
+        "x": 932.64,
+        "y": 806.4,
+        "width": 36.24,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e65",
+   "region": "3 GENERAL NOTES",
+   "text": "HEIGHT A.F.F.",
+   "technical": true,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 148.8,
+      "y": 248.16,
+      "width": 67.44,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0374",
+       "text": "HEIGHT A.F.F.",
+       "box": {
+        "x": 148.8,
+        "y": 248.16,
+        "width": 67.44,
+        "height": 7.68
+       },
+       "tiles": [
+        "r07c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e63",
+   "region": "3 GENERAL NOTES",
+   "text": "BOARD BACKING 48\" IN",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 5,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 403.68,
+      "y": 258.96,
+      "width": 106.08,
+      "height": 10.08
+     },
+     "lines": [
+      {
+       "lid": "L0371",
+       "text": "BOARD BACKING 48\" IN",
+       "box": {
+        "x": 403.68,
+        "y": 258.96,
+        "width": 106.08,
+        "height": 10.08
+       },
+       "tiles": [
+        "r07c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e27",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "@ 16\" O.C. MIN. / TO BOTTOM OF / PER UL NO. U305.",
+   "technical": true,
+   "classes": [
+    "dimension",
+    "qualifier",
+    "datum",
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 10.1,
+   "copies": [
+    {
+     "aid": "N0085",
+     "box": {
+      "x": 1209.6,
+      "y": 866.88,
+      "width": 72.48000000000002,
+      "height": 31.199999999999932
+     },
+     "lines": [
+      {
+       "lid": "L0172",
+       "text": "@ 16\" O.C. MIN.",
+       "box": {
+        "x": 1209.6,
+        "y": 890.4,
+        "width": 71.28,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c06",
+        "r04c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0182",
+       "text": "TO BOTTOM OF",
+       "box": {
+        "x": 1209.6,
+        "y": 878.16,
+        "width": 67.68,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0185",
+       "text": "PER UL NO. U305.",
+       "box": {
+        "x": 1209.6,
+        "y": 866.88,
+        "width": 72.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e45",
+   "region": "3 GENERAL NOTES",
+   "text": "ES. SEE 6/A-1.00 FOR 2. G.C. TO INSTAL",
+   "technical": true,
+   "classes": [
+    "datum",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 404.16,
+      "y": 484.8,
+      "width": 123.6,
+      "height": 11.52
+     },
+     "lines": [
+      {
+       "lid": "L0289",
+       "text": "ES. SEE 6/A-1.00 FOR 2. G.C. TO INSTAL",
+       "box": {
+        "x": 404.16,
+        "y": 484.8,
+        "width": 123.6,
+        "height": 11.52
+       },
+       "tiles": [
+        "r05c02",
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "ES. SEE 6/A-1.00 FOR"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e28",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "4\" METAL STUDS @ 16\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0084",
+     "box": {
+      "x": 1150.32,
+      "y": 890.4,
+      "width": 83.76,
+      "height": 7.44
+     },
+     "lines": [
+      {
+       "lid": "L0171",
+       "text": "4\" METAL STUDS @ 16\"",
+       "box": {
+        "x": 1150.32,
+        "y": 890.4,
+        "width": 83.76,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c05",
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e50",
+   "region": "3 GENERAL NOTES",
+   "text": "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM",
+   "technical": true,
+   "classes": [
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.6,
+      "y": 417.84,
+      "width": 235.2,
+      "height": 9.36
+     },
+     "lines": [
+      {
+       "lid": "L0314",
+       "text": "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM",
+       "box": {
+        "x": 201.6,
+        "y": 417.84,
+        "width": 235.2,
+        "height": 9.36
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e48",
+   "region": "3 GENERAL NOTES",
+   "text": "3. G.C TO ENSUR",
+   "technical": true,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.6,
+      "y": 453.12,
+      "width": 82.8,
+      "height": 6.72
+     },
+     "lines": [
+      {
+       "lid": "L0303",
+       "text": "3. G.C TO ENSUR",
+       "box": {
+        "x": 555.6,
+        "y": 453.12,
+        "width": 82.8,
+        "height": 6.72
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e47",
+   "region": "3 GENERAL NOTES",
+   "text": "2. G.C. TO INSTA",
+   "technical": true,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.12,
+      "y": 485.28,
+      "width": 83.28,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0290",
+       "text": "2. G.C. TO INSTA",
+       "box": {
+        "x": 555.12,
+        "y": 485.28,
+        "width": 83.28,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e29",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "1/2\" FC \"X\" GYP. BD., I L",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0096",
+     "box": {
+      "x": 1137.6,
+      "y": 837.12,
+      "width": 102.48,
+      "height": 6.72
+     },
+     "lines": [
+      {
+       "lid": "L0187",
+       "text": "1/2\" FC \"X\" GYP. BD., I L",
+       "box": {
+        "x": 1137.6,
+        "y": 837.12,
+        "width": 102.48,
+        "height": 6.72
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e18",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "DINING / ?IOIB / 27'-6 1/2\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0051",
+     "box": {
+      "x": 648.24,
+      "y": 1094.16,
+      "width": 108.72000000000003,
+      "height": 100.31999999999994
+     },
+     "lines": [
+      {
+       "lid": "L0100",
+       "text": "DINING",
+       "box": {
+        "x": 648.24,
+        "y": 1186.32,
+        "width": 29.04,
+        "height": 8.16
+       },
+       "tiles": [
+        "r02c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0106",
+       "text": "IOIB",
+       "box": {
+        "x": 651.6,
+        "y": 1171.92,
+        "width": 20.64,
+        "height": 8.64
+       },
+       "tiles": [
+        "r02c03"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "IOIB",
+         "candidate": "101B",
+         "reason": "room_or_door_number",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      },
+      {
+       "lid": "L0117",
+       "text": "27'-6 1/2\"",
+       "box": {
+        "x": 748.08,
+        "y": 1094.16,
+        "width": 8.88,
+        "height": 42
+       },
+       "tiles": [
+        "r02c03",
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e4",
+   "region": "sheet",
+   "text": "q / ?A-4.0I",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0013",
+     "box": {
+      "x": 683.04,
+      "y": 1451.52,
+      "width": 22.559999999999945,
+      "height": 18.24000000000001
+     },
+     "lines": [
+      {
+       "lid": "L0036",
+       "text": "q",
+       "box": {
+        "x": 691.92,
+        "y": 1462.8,
+        "width": 4.8,
+        "height": 6.96
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0040",
+       "text": "A-4.0I",
+       "box": {
+        "x": 683.04,
+        "y": 1451.52,
+        "width": 22.56,
+        "height": 8.64
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "A-4.0I",
+         "candidate": "A-4.01",
+         "reason": "sheet_reference",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e6",
+   "region": "sheet",
+   "text": "IO / ?A-4.0I",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0015",
+     "box": {
+      "x": 641.52,
+      "y": 1449.84,
+      "width": 21.600000000000023,
+      "height": 14.160000000000082
+     },
+     "lines": [
+      {
+       "lid": "L0038",
+       "text": "IO",
+       "box": {
+        "x": 648.48,
+        "y": 1455.84,
+        "width": 9.6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0041",
+       "text": "A-4.0I",
+       "box": {
+        "x": 641.52,
+        "y": 1449.84,
+        "width": 21.6,
+        "height": 6.96
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "A-4.0I",
+         "candidate": "A-4.01",
+         "reason": "sheet_reference",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e69",
+   "region": "5 SYMBOL LEGENDS",
+   "text": "1H ONE HOUR FIRE RATED W",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0157",
+     "box": {
+      "x": 1289.28,
+      "y": 485.04,
+      "width": 155.52,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0292",
+       "text": "1H ONE HOUR FIRE RATED W",
+       "box": {
+        "x": 1289.28,
+        "y": 485.04,
+        "width": 155.52,
+        "height": 7.68
+       },
+       "tiles": [
+        "r06c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e66",
+   "region": "3 GENERAL NOTES",
+   "text": "7. SWEEP PERIOD F / FROM LATCH SHA",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 3.9,
+   "copies": [
+    {
+     "aid": "N0173",
+     "box": {
+      "x": 555.6,
+      "y": 236.16,
+      "width": 82.79999999999995,
+      "height": 19.680000000000007
+     },
+     "lines": [
+      {
+       "lid": "L0375",
+       "text": "7. SWEEP PERIOD F",
+       "box": {
+        "x": 555.6,
+        "y": 247.44,
+        "width": 82.8,
+        "height": 8.4
+       },
+       "tiles": [
+        "r07c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0378",
+       "text": "FROM LATCH SHA",
+       "box": {
+        "x": 576,
+        "y": 236.16,
+        "width": 62.4,
+        "height": 8.4
+       },
+       "tiles": [
+        "r07c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e59",
+   "region": "3 GENERAL NOTES",
+   "text": "6. ENSURE THAT",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.6,
+      "y": 316.08,
+      "width": 82.8,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0351",
+       "text": "6. ENSURE THAT",
+       "box": {
+        "x": 555.6,
+        "y": 316.08,
+        "width": 82.8,
+        "height": 7.2
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e64",
+   "region": "3 GENERAL NOTES",
+   "text": "{8. ALL HANDSINK L | F.F.}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 128.64,
+      "y": 260.16,
+      "width": 91.2,
+      "height": 7.92
+     },
+     "lines": [
+      {
+       "lid": "L0372",
+       "text": "8. ALL HANDSINK L",
+       "box": {
+        "x": 128.64,
+        "y": 260.16,
+        "width": 91.2,
+        "height": 7.92
+       },
+       "tiles": [
+        "r07c00",
+        "r07c01"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "F.F."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e52",
+   "region": "3 GENERAL NOTES",
+   "text": "4. ADJUST ALL S",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.36,
+      "y": 407.28,
+      "width": 83.04,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0320",
+       "text": "4. ADJUST ALL S",
+       "box": {
+        "x": 555.36,
+        "y": 407.28,
+        "width": 83.04,
+        "height": 7.2
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e56",
+   "region": "3 GENERAL NOTES",
+   "text": "5. REPLACE OR ,",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.6,
+      "y": 361.92,
+      "width": 78.24,
+      "height": 6.96
+     },
+     "lines": [
+      {
+       "lid": "L0332",
+       "text": "5. REPLACE OR ,",
+       "box": {
+        "x": 555.6,
+        "y": 361.92,
+        "width": 78.24,
+        "height": 6.96
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e51",
+   "region": "3 GENERAL NOTES",
+   "text": "4. SEE SHEET A-6.",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 128.4,
+      "y": 418.08,
+      "width": 105.84,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0313",
+       "text": "4. SEE SHEET A-6.",
+       "box": {
+        "x": 128.4,
+        "y": 418.08,
+        "width": 105.84,
+        "height": 8.64
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e49",
+   "region": "3 GENERAL NOTES",
+   "text": "3. SEE EXTERIOR E",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0160",
+     "box": {
+      "x": 128.64,
+      "y": 440.64,
+      "width": 105.12,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0307",
+       "text": "3. SEE EXTERIOR E",
+       "box": {
+        "x": 128.64,
+        "y": 440.64,
+        "width": 105.12,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e3",
+   "region": "sheet",
+   "text": "I / ?A-3.0I / OPP.",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0012",
+     "box": {
+      "x": 745.44,
+      "y": 1468.56,
+      "width": 39.360000000000014,
+      "height": 27.360000000000127
+     },
+     "lines": [
+      {
+       "lid": "L0029",
+       "text": "I",
+       "box": {
+        "x": 755.04,
+        "y": 1488.96,
+        "width": 1.68,
+        "height": 6.96
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0032",
+       "text": "A-3.0I",
+       "box": {
+        "x": 745.44,
+        "y": 1476,
+        "width": 23.04,
+        "height": 10.56
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "A-3.0I",
+         "candidate": "A-3.01",
+         "reason": "sheet_reference",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      },
+      {
+       "lid": "L0034",
+       "text": "OPP.",
+       "box": {
+        "x": 771.84,
+        "y": 1468.56,
+        "width": 12.96,
+        "height": 6
+       },
+       "tiles": [
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e42",
+   "region": "2 BASEMENT ALTERATION  FLOOR PLAN",
+   "text": "COORDINATE FINISHES IN / THIS AREA W/ / {MCDONALD'S ACM (TYP.) | SHEET NO.: 01}",
+   "technical": true,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": true,
+   "value": 3.5,
+   "copies": [
+    {
+     "aid": "N0067",
+     "box": {
+      "x": 1928.64,
+      "y": 1044.96,
+      "width": 94.79999999999995,
+      "height": 32.6400000000001
+     },
+     "lines": [
+      {
+       "lid": "L0129",
+       "text": "COORDINATE FINISHES IN",
+       "box": {
+        "x": 1928.64,
+        "y": 1069.44,
+        "width": 94.8,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c09",
+        "r03c10"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0134",
+       "text": "THIS AREA W/",
+       "box": {
+        "x": 1928.88,
+        "y": 1057.44,
+        "width": 52.56,
+        "height": 8.88
+       },
+       "tiles": [
+        "r03c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0139",
+       "text": "MCDONALD'S ACM (TYP.)",
+       "box": {
+        "x": 1928.88,
+        "y": 1044.96,
+        "width": 93.36,
+        "height": 9.84
+       },
+       "tiles": [
+        "r03c09",
+        "r03c10"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "SHEET NO.: 01"
+       ]
+      }
+     ]
+    },
+    {
+     "aid": "N0095",
+     "box": {
+      "x": 1903.2,
+      "y": 818.88,
+      "width": 94.79999999999995,
+      "height": 31.67999999999995
+     },
+     "lines": [
+      {
+       "lid": "L0186",
+       "text": "COORDINATE FINISHES IN",
+       "box": {
+        "x": 1903.2,
+        "y": 842.16,
+        "width": 94.8,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0189",
+       "text": "THIS AREA W/",
+       "box": {
+        "x": 1903.44,
+        "y": 830.64,
+        "width": 52.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0201",
+       "text": "MCDONALD'S ACM (TYP.)",
+       "box": {
+        "x": 1903.44,
+        "y": 818.88,
+        "width": 93.36,
+        "height": 8.88
+       },
+       "tiles": [
+        "r04c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e58",
+   "region": "3 GENERAL NOTES",
+   "text": "OCHELLE, NY 10802 -",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 404.16,
+      "y": 327.12,
+      "width": 119.28,
+      "height": 9.6
+     },
+     "lines": [
+      {
+       "lid": "L0347",
+       "text": "OCHELLE, NY 10802 -",
+       "box": {
+        "x": 404.16,
+        "y": 327.12,
+        "width": 119.28,
+        "height": 9.6
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e53",
+   "region": "3 GENERAL NOTES",
+   "text": "5. IF APPLICABLE, S",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0163",
+     "box": {
+      "x": 128.64,
+      "y": 383.28,
+      "width": 105.6,
+      "height": 9.6
+     },
+     "lines": [
+      {
+       "lid": "L0323",
+       "text": "5. IF APPLICABLE, S",
+       "box": {
+        "x": 128.64,
+        "y": 383.28,
+        "width": 105.6,
+        "height": 9.6
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e43",
+   "region": "3 GENERAL NOTES",
+   "text": "1. EXTERIOR DIMENS / EXTERIOR FACE ( / DIMENSIONS ARE / A-1.01-00 / STAN OVERBY / New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "reference",
+    "value"
+   ],
+   "uncertain": false,
+   "value": 10,
+   "copies": [
+    {
+     "aid": "N0151",
+     "box": {
+      "x": 99.12,
+      "y": 283.68,
+      "width": 136.07999999999998,
+      "height": 258.47999999999996
+     },
+     "lines": [
+      {
+       "lid": "L0262",
+       "text": "1. EXTERIOR DIMENS",
+       "box": {
+        "x": 128.64,
+        "y": 533.04,
+        "width": 106.56,
+        "height": 9.12
+       },
+       "tiles": [
+        "r05c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0273",
+       "text": "EXTERIOR FACE (",
+       "box": {
+        "x": 148.8,
+        "y": 522,
+        "width": 77.76,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0277",
+       "text": "DIMENSIONS ARE",
+       "box": {
+        "x": 148.8,
+        "y": 510.48,
+        "width": 84.72,
+        "height": 9.36
+       },
+       "tiles": [
+        "r05c00",
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0311",
+       "text": "A-1.01-00",
+       "box": {
+        "x": 99.12,
+        "y": 414.72,
+        "width": 4.56,
+        "height": 20.88
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0312",
+       "text": "STAN OVERBY",
+       "box": {
+        "x": 99.36,
+        "y": 321.84,
+        "width": 6.72,
+        "height": 113.76
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0360",
+       "text": "New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26",
+       "box": {
+        "x": 99.36,
+        "y": 283.68,
+        "width": 6.72,
+        "height": 20.16
+       },
+       "tiles": [
+        "r06c00",
+        "r07c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "15/26"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e55",
+   "region": "3 GENERAL NOTES",
+   "text": "6. GC TO PROVIDE / LOCATIONS AND / LOCAL CODES. S / PERMA-SIGN - / 1-800-214-876",
+   "technical": true,
+   "classes": [
+    "datum",
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 6,
+   "copies": [
+    {
+     "aid": "N0165",
+     "box": {
+      "x": 128.64,
+      "y": 316.8,
+      "width": 105.60000000000002,
+      "height": 53.27999999999997
+     },
+     "lines": [
+      {
+       "lid": "L0331",
+       "text": "6. GC TO PROVIDE",
+       "box": {
+        "x": 128.64,
+        "y": 361.68,
+        "width": 100.8,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0336",
+       "text": "LOCATIONS AND",
+       "box": {
+        "x": 148.8,
+        "y": 350.4,
+        "width": 79.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0346",
+       "text": "LOCAL CODES. S",
+       "box": {
+        "x": 148.8,
+        "y": 331.2,
+        "width": 85.44,
+        "height": 10.56
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0349",
+       "text": "PERMA-SIGN -",
+       "box": {
+        "x": 148.8,
+        "y": 321.6,
+        "width": 55.2,
+        "height": 10.56
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0353",
+       "text": "1-800-214-876",
+       "box": {
+        "x": 150.48,
+        "y": 316.8,
+        "width": 83.76,
+        "height": 2.4
+       },
+       "tiles": [
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e40",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "RTITION PROVIDE / EXTERIOR CORNERS / ARTITION / BASEMENT ALTER / 2 B / SCALE: 1/4\" = 1'-0\" / -3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR / {EXISTING WALL TO REMA | O REMAIN} / NEW STOREFRONT SYSTEM - SEE A- / - SEE A-3.01 FOR ASSEMBLY NOTES, SEE / NEW FULL HEIGHT STUD W / SF / {ELEVATIONS FOR LOCATIONS & SPE | IS & SPECS}",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "dimension",
+    "elevation",
+    "value",
+    "datum",
+    "reference"
+   ],
+   "uncertain": true,
+   "value": 20.8,
+   "copies": [
+    {
+     "aid": "N0139",
+     "box": {
+      "x": 862.08,
+      "y": 498.96,
+      "width": 784.3199999999998,
+      "height": 224.64000000000004
+     },
+     "lines": [
+      {
+       "lid": "L0241",
+       "text": "RTITION PROVIDE",
+       "box": {
+        "x": 1209.6,
+        "y": 715.44,
+        "width": 73.92,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c06",
+        "r05c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0244",
+       "text": "EXTERIOR CORNERS",
+       "box": {
+        "x": 1211.04,
+        "y": 704.16,
+        "width": 89.76,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c06",
+        "r05c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0247",
+       "text": "ARTITION",
+       "box": {
+        "x": 1209.6,
+        "y": 680.16,
+        "width": 59.76,
+        "height": 11.04
+       },
+       "tiles": [
+        "r05c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0253",
+       "text": "BASEMENT ALTER",
+       "box": {
+        "x": 1431.12,
+        "y": 592.56,
+        "width": 215.28,
+        "height": 19.44
+       },
+       "tiles": [
+        "r05c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0252",
+       "text": "2 B",
+       "box": {
+        "x": 1386.96,
+        "y": 584.4,
+        "width": 57.84,
+        "height": 27.36
+       },
+       "tiles": [
+        "r05c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0259",
+       "text": "SCALE: 1/4\" = 1'-0\"",
+       "box": {
+        "x": 1429.68,
+        "y": 571.2,
+        "width": 90.48,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c07",
+        "r05c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0261",
+       "text": "-3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR",
+       "box": {
+        "x": 1008,
+        "y": 536.4,
+        "width": 228,
+        "height": 9.12
+       },
+       "tiles": [
+        "r05c05",
+        "r05c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0265",
+       "text": "EXISTING WALL TO REMA",
+       "box": {
+        "x": 1333.2,
+        "y": 532.8,
+        "width": 111.12,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c06",
+        "r05c07"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "O REMAIN"
+       ]
+      },
+      {
+       "lid": "L0279",
+       "text": "NEW STOREFRONT SYSTEM - SEE A-",
+       "box": {
+        "x": 884.4,
+        "y": 510.48,
+        "width": 157.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c04",
+        "r06c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0280",
+       "text": "- SEE A-3.01 FOR ASSEMBLY NOTES, SEE",
+       "box": {
+        "x": 1008,
+        "y": 510.24,
+        "width": 179.76,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c05",
+        "r06c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0281",
+       "text": "NEW FULL HEIGHT STUD W",
+       "box": {
+        "x": 1333.2,
+        "y": 509.28,
+        "width": 111.6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c06",
+        "r06c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0284",
+       "text": "SF",
+       "box": {
+        "x": 862.08,
+        "y": 505.2,
+        "width": 9.6,
+        "height": 6.96
+       },
+       "tiles": [
+        "r05c04",
+        "r06c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0286",
+       "text": "ELEVATIONS FOR LOCATIONS & SPE",
+       "box": {
+        "x": 884.4,
+        "y": 498.96,
+        "width": 157.2,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c04",
+        "r05c05",
+        "r06c04",
+        "r06c05"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "IS & SPECS"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e2",
+   "region": "sheet",
+   "text": "STAIR TOWER \"B\" / 113 / AL",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0001",
+     "box": {
+      "x": 509.52,
+      "y": 1495.68,
+      "width": 96.72000000000003,
+      "height": 165.5999999999999
+     },
+     "lines": [
+      {
+       "lid": "L0001",
+       "text": "STAIR TOWER \"B\"",
+       "box": {
+        "x": 509.52,
+        "y": 1653.12,
+        "width": 76.8,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0004",
+       "text": "113",
+       "box": {
+        "x": 542.64,
+        "y": 1637.76,
+        "width": 10.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0025",
+       "text": "AL",
+       "box": {
+        "x": 594.72,
+        "y": 1495.68,
+        "width": 11.52,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c02",
+        "r00c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e5",
+   "region": "sheet",
+   "text": "SEE KITCHEN DRAWINGS FOR / EQUIPMENT IN THIS AREA TYP.",
+   "technical": true,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": false,
+   "value": 3.5,
+   "copies": [
+    {
+     "aid": "N0014",
+     "box": {
+      "x": 1831.2,
+      "y": 1445.52,
+      "width": 116.40000000000009,
+      "height": 19.680000000000064
+     },
+     "lines": [
+      {
+       "lid": "L0037",
+       "text": "SEE KITCHEN DRAWINGS FOR",
+       "box": {
+        "x": 1831.2,
+        "y": 1456.8,
+        "width": 109.92,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09",
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "SEE"
+       ]
+      },
+      {
+       "lid": "L0043",
+       "text": "EQUIPMENT IN THIS AREA TYP.",
+       "box": {
+        "x": 1831.44,
+        "y": 1445.52,
+        "width": 116.16,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c09",
+        "r01c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "EQUI"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e61",
+   "region": "3 GENERAL NOTES",
+   "text": "7. MAXIMUM OCCUPA / FURNISHED AND",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2.3,
+   "copies": [
+    {
+     "aid": "N0171",
+     "box": {
+      "x": 128.64,
+      "y": 283.2,
+      "width": 105.6,
+      "height": 19.680000000000007
+     },
+     "lines": [
+      {
+       "lid": "L0361",
+       "text": "7. MAXIMUM OCCUPA",
+       "box": {
+        "x": 128.64,
+        "y": 294.24,
+        "width": 105.6,
+        "height": 8.64
+       },
+       "tiles": [
+        "r06c00",
+        "r07c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0366",
+       "text": "FURNISHED AND",
+       "box": {
+        "x": 148.8,
+        "y": 283.2,
+        "width": 54.72,
+        "height": 8.16
+       },
+       "tiles": [
+        "r07c00",
+        "r06c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e39",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "NOTE: / INTERIOR 1 HR RATED PARTITION / CORNER GUARDS AT ALL EXTERI / \"D\" IHR. RATED PARTI",
+   "technical": true,
+   "classes": [
+    "value"
+   ],
+   "uncertain": false,
+   "value": 5.3,
+   "copies": [
+    {
+     "aid": "N0137",
+     "box": {
+      "x": 1094.88,
+      "y": 677.52,
+      "width": 148.31999999999994,
+      "height": 57.360000000000014
+     },
+     "lines": [
+      {
+       "lid": "L0238",
+       "text": "NOTE:",
+       "box": {
+        "x": 1094.88,
+        "y": 726.48,
+        "width": 24.96,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0240",
+       "text": "INTERIOR 1 HR RATED PARTITION",
+       "box": {
+        "x": 1094.88,
+        "y": 715.44,
+        "width": 145.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c05",
+        "r05c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0243",
+       "text": "CORNER GUARDS AT ALL EXTERI",
+       "box": {
+        "x": 1094.88,
+        "y": 703.92,
+        "width": 148.32,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c05",
+        "r05c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0246",
+       "text": "\"D\" IHR. RATED PARTI",
+       "box": {
+        "x": 1094.88,
+        "y": 677.52,
+        "width": 148.32,
+        "height": 14.16
+       },
+       "tiles": [
+        "r05c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e17",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "{STAIR TO | TAIR TOWER \"A\"} / 112",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0049",
+     "box": {
+      "x": 1202.64,
+      "y": 1174.32,
+      "width": 48.95999999999981,
+      "height": 24.480000000000018
+     },
+     "lines": [
+      {
+       "lid": "L0098",
+       "text": "STAIR TO",
+       "box": {
+        "x": 1202.64,
+        "y": 1191.36,
+        "width": 40.56,
+        "height": 7.44
+       },
+       "tiles": [
+        "r02c05",
+        "r02c06"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "TAIR TOWER \"A\""
+       ]
+      },
+      {
+       "lid": "L0103",
+       "text": "112",
+       "box": {
+        "x": 1230,
+        "y": 1174.32,
+        "width": 21.6,
+        "height": 9.36
+       },
+       "tiles": [
+        "r02c06",
+        "r02c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e60",
+   "region": "3 GENERAL NOTES",
+   "text": "4-8765 - www.forrestpermsigns.com",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 203.04,
+      "y": 314.64,
+      "width": 201.84,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0352",
+       "text": "4-8765 - www.forrestpermsigns.com",
+       "box": {
+        "x": 203.04,
+        "y": 314.64,
+        "width": 201.84,
+        "height": 7.2
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e44",
+   "region": "3 GENERAL NOTES",
+   "text": "ADDITIONAL ADA",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.6,
+      "y": 530.88,
+      "width": 78.48,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0267",
+       "text": "ADDITIONAL ADA",
+       "box": {
+        "x": 555.6,
+        "y": 530.88,
+        "width": 78.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "e62",
+   "region": "3 GENERAL NOTES",
+   "text": "LBS.",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 576,
+      "y": 270,
+      "width": 19.2,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0370",
+       "text": "LBS.",
+       "box": {
+        "x": 576,
+        "y": 270,
+        "width": 19.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r07c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "omitted": [
+  {
+   "id": "o1",
+   "region": "sheet",
+   "text": "TO REFER TO / COORDINATE",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0005",
+     "box": {
+      "x": 1209.6,
+      "y": 1568.64,
+      "width": 60.960000000000036,
+      "height": 19.440000000000055
+     },
+     "lines": [
+      {
+       "lid": "L0013",
+       "text": "TO REFER TO",
+       "box": {
+        "x": 1209.6,
+        "y": 1579.92,
+        "width": 56.4,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0015",
+       "text": "COORDINATE",
+       "box": {
+        "x": 1212.48,
+        "y": 1568.64,
+        "width": 58.08,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o2",
+   "region": "sheet",
+   "text": "NOTE: / NEW / {NEW LIGHT FIXTURES THROUGHOUT DINING AREA. G | REFE} / AREA. G.C. TO / {REEF | REFER TO DECOR DRAWINGS FOR SPECIFICATION | COOP | REFER TO DECOR DRAWINGS FOR SPECIFICATIONS} / CATIONS & / 2 / COORDINATE DETAILS WITH MCDONALD'S A.C.M. / A-301 / OPP. / AL / 9 1/2\" 3'-10\" / 3'-4\" / SF / DS / DS / SF",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "dimension"
+   ],
+   "uncertain": true,
+   "value": 12,
+   "copies": [
+    {
+     "aid": "N0009",
+     "box": {
+      "x": 801.12,
+      "y": 1296.96,
+      "width": 467.51999999999987,
+      "height": 225.3599999999999
+     },
+     "lines": [
+      {
+       "lid": "L0020",
+       "text": "NOTE:",
+       "box": {
+        "x": 1019.76,
+        "y": 1512.72,
+        "width": 24.96,
+        "height": 9.6
+       },
+       "tiles": [
+        "r00c05",
+        "r01c05",
+        "r00c04",
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0021",
+       "text": "NEW",
+       "box": {
+        "x": 1019.76,
+        "y": 1508.88,
+        "width": 21.84,
+        "height": 6.48
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0022",
+       "text": "NEW LIGHT FIXTURES THROUGHOUT DINING AREA. G",
+       "box": {
+        "x": 1019.76,
+        "y": 1502.88,
+        "width": 222.96,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c05",
+        "r01c05",
+        "r00c04",
+        "r01c04"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "REFE"
+       ]
+      },
+      {
+       "lid": "L0023",
+       "text": "AREA. G.C. TO",
+       "box": {
+        "x": 1209.6,
+        "y": 1502.64,
+        "width": 59.04,
+        "height": 8.16
+       },
+       "tiles": [
+        "r00c06",
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0027",
+       "text": "REEF",
+       "box": {
+        "x": 1018.8,
+        "y": 1492.8,
+        "width": 22.8,
+        "height": 6.96
+       },
+       "tiles": [
+        "r00c04",
+        "r00c05",
+        "r01c04",
+        "r01c05"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "REFER TO DECOR DRAWINGS FOR SPECIFICATION",
+        "COOP",
+        "REFER TO DECOR DRAWINGS FOR SPECIFICATIONS"
+       ]
+      },
+      {
+       "lid": "L0028",
+       "text": "CATIONS &",
+       "box": {
+        "x": 1209.6,
+        "y": 1492.8,
+        "width": 45.84,
+        "height": 6.72
+       },
+       "tiles": [
+        "r00c06",
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0030",
+       "text": "2",
+       "box": {
+        "x": 816.96,
+        "y": 1483.92,
+        "width": 6.72,
+        "height": 10.32
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0031",
+       "text": "COORDINATE DETAILS WITH MCDONALD'S A.C.M.",
+       "box": {
+        "x": 1019.76,
+        "y": 1479.84,
+        "width": 211.92,
+        "height": 8.64
+       },
+       "tiles": [
+        "r01c05",
+        "r01c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0033",
+       "text": "A-301",
+       "ocrText": "A-30I",
+       "box": {
+        "x": 801.12,
+        "y": 1471.68,
+        "width": 23.04,
+        "height": 9.84
+       },
+       "tiles": [
+        "r01c03",
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "A-30I",
+         "candidate": "A-301",
+         "reason": "sheet_reference",
+         "status": "corrected_overlap_tile"
+        }
+       ]
+      },
+      {
+       "lid": "L0035",
+       "text": "OPP.",
+       "box": {
+        "x": 829.68,
+        "y": 1466.88,
+        "width": 10.8,
+        "height": 6.96
+       },
+       "tiles": [
+        "r01c04",
+        "r01c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "OP"
+       ]
+      },
+      {
+       "lid": "L0045",
+       "text": "AL",
+       "box": {
+        "x": 1020.24,
+        "y": 1442.64,
+        "width": 11.76,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c05",
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0050",
+       "text": "9 1/2\" 3'-10\"",
+       "box": {
+        "x": 878.88,
+        "y": 1422.72,
+        "width": 53.52,
+        "height": 6.96
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0052",
+       "text": "3'-4\"",
+       "box": {
+        "x": 978.48,
+        "y": 1422.96,
+        "width": 16.8,
+        "height": 6.24
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0058",
+       "text": "SF",
+       "box": {
+        "x": 920.88,
+        "y": 1401.12,
+        "width": 4.56,
+        "height": 6.24
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0066",
+       "text": "DS",
+       "box": {
+        "x": 923.52,
+        "y": 1340.88,
+        "width": 12.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0070",
+       "text": "DS",
+       "box": {
+        "x": 947.04,
+        "y": 1308.48,
+        "width": 13.2,
+        "height": 9.84
+       },
+       "tiles": [
+        "r01c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0074",
+       "text": "SF",
+       "box": {
+        "x": 1025.04,
+        "y": 1296.96,
+        "width": 8.4,
+        "height": 6.96
+       },
+       "tiles": [
+        "r02c05",
+        "r02c04",
+        "r01c04",
+        "r01c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o3",
+   "region": "sheet",
+   "text": "G.C. TO APPLY OPAQUE FILM / ON INERIOR FACE OF GLAZING",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0030",
+     "box": {
+      "x": 243.84,
+      "y": 1332.48,
+      "width": 116.4,
+      "height": 19.440000000000055
+     },
+     "lines": [
+      {
+       "lid": "L0063",
+       "text": "G.C. TO APPLY OPAQUE FILM",
+       "box": {
+        "x": 243.84,
+        "y": 1343.52,
+        "width": 110.16,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0067",
+       "text": "ON INERIOR FACE OF GLAZING",
+       "box": {
+        "x": 243.84,
+        "y": 1332.48,
+        "width": 116.4,
+        "height": 8.4
+       },
+       "tiles": [
+        "r01c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o4",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "NEW 45 MIN / F.P.S.C. DOOR. / {PROVIDE | G.C. TO PROVID} / AREA OF REFUG / F REFUGE SIGN / ?NEW I HR. FIRE / RESISTIVE / WALL. SEE / PARTTION D / (THIS SHEET)",
+   "technical": true,
+   "classes": [
+    "qualifier"
+   ],
+   "uncertain": true,
+   "value": 4.1,
+   "copies": [
+    {
+     "aid": "N0063",
+     "box": {
+      "x": 769.92,
+      "y": 965.04,
+      "width": 105.12,
+      "height": 122.16000000000008
+     },
+     "lines": [
+      {
+       "lid": "L0124",
+       "text": "NEW 45 MIN",
+       "box": {
+        "x": 823.92,
+        "y": 1079.04,
+        "width": 43.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c04",
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0130",
+       "text": "F.P.S.C. DOOR.",
+       "box": {
+        "x": 823.92,
+        "y": 1068,
+        "width": 51.12,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c04",
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0137",
+       "text": "PROVIDE",
+       "box": {
+        "x": 806.64,
+        "y": 1050.24,
+        "width": 40.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c04",
+        "r03c03"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "G.C. TO PROVID"
+       ]
+      },
+      {
+       "lid": "L0142",
+       "text": "AREA OF REFUG",
+       "box": {
+        "x": 770.4,
+        "y": 1038.96,
+        "width": 69.6,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0143",
+       "text": "F REFUGE SIGN",
+       "box": {
+        "x": 806.4,
+        "y": 1039.44,
+        "width": 59.04,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0149",
+       "text": "NEW I HR. FIRE",
+       "box": {
+        "x": 770.4,
+        "y": 1011.36,
+        "width": 55.2,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c03",
+        "r03c04"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "FIRE"
+       ],
+       "valueChecks": [
+        {
+         "token": "I",
+         "candidate": "1",
+         "reason": "number_before_unit",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      },
+      {
+       "lid": "L0154",
+       "text": "RESISTIVE",
+       "box": {
+        "x": 769.92,
+        "y": 1000.08,
+        "width": 39.36,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0155",
+       "text": "WALL. SEE",
+       "box": {
+        "x": 770.64,
+        "y": 988.8,
+        "width": 38.64,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0156",
+       "text": "PARTTION D",
+       "box": {
+        "x": 770.64,
+        "y": 977.76,
+        "width": 45.6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c03",
+        "r03c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0158",
+       "text": "(THIS SHEET)",
+       "box": {
+        "x": 770.4,
+        "y": 965.04,
+        "width": 46.8,
+        "height": 10.08
+       },
+       "tiles": [
+        "r03c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o5",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "G.C. TO PROVIDE CALL / STATION BUTTON FOR / COMMUNICATION TO / MASTER PANEL",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0065",
+     "box": {
+      "x": 1127.52,
+      "y": 1037.52,
+      "width": 103.68000000000006,
+      "height": 42.24000000000001
+     },
+     "lines": [
+      {
+       "lid": "L0127",
+       "text": "G.C. TO PROVIDE CALL",
+       "box": {
+        "x": 1127.52,
+        "y": 1071.36,
+        "width": 103.68,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c05",
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0133",
+       "text": "STATION BUTTON FOR",
+       "box": {
+        "x": 1127.52,
+        "y": 1060.08,
+        "width": 95.76,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c05",
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0138",
+       "text": "COMMUNICATION TO",
+       "box": {
+        "x": 1127.52,
+        "y": 1049.04,
+        "width": 87.12,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c05",
+        "r03c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0144",
+       "text": "MASTER PANEL",
+       "box": {
+        "x": 1127.52,
+        "y": 1037.52,
+        "width": 68.16,
+        "height": 8.4
+       },
+       "tiles": [
+        "r03c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o6",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "FIRE STOPPED TO BOT",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0093",
+     "box": {
+      "x": 1137.6,
+      "y": 878.4,
+      "width": 105.6,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0181",
+       "text": "FIRE STOPPED TO BOT",
+       "box": {
+        "x": 1137.6,
+        "y": 878.4,
+        "width": 105.6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o7",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "STRUCTURE AS PER UL N",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0094",
+     "box": {
+      "x": 1137.36,
+      "y": 866.88,
+      "width": 105.84,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0184",
+       "text": "STRUCTURE AS PER UL N",
+       "box": {
+        "x": 1137.36,
+        "y": 866.88,
+        "width": 105.84,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o8",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "BD., I LAYER PER / FULL HEIGHT OF / TRUCTURE. ABOVE.",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0097",
+     "box": {
+      "x": 1209.6,
+      "y": 812.88,
+      "width": 81.59999999999991,
+      "height": 30.720000000000027
+     },
+     "lines": [
+      {
+       "lid": "L0188",
+       "text": "BD., I LAYER PER",
+       "box": {
+        "x": 1212,
+        "y": 834.24,
+        "width": 78,
+        "height": 9.36
+       },
+       "tiles": [
+        "r04c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0199",
+       "text": "FULL HEIGHT OF",
+       "box": {
+        "x": 1209.6,
+        "y": 823.92,
+        "width": 78.72,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0206",
+       "text": "TRUCTURE. ABOVE.",
+       "box": {
+        "x": 1209.6,
+        "y": 812.88,
+        "width": 81.6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o9",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "SIDE TO EXTEND FULL H",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0106",
+     "box": {
+      "x": 1137.6,
+      "y": 824.64,
+      "width": 105.6,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0198",
+       "text": "SIDE TO EXTEND FULL H",
+       "box": {
+        "x": 1137.6,
+        "y": 824.64,
+        "width": 105.6,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o10",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "PARTITION TO STRUCTUR",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0112",
+     "box": {
+      "x": 1137.6,
+      "y": 812.88,
+      "width": 105.6,
+      "height": 7.44
+     },
+     "lines": [
+      {
+       "lid": "L0207",
+       "text": "PARTITION TO STRUCTUR",
+       "box": {
+        "x": 1137.6,
+        "y": 812.88,
+        "width": 105.6,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o11",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "PROVIDE FINISH AS PER",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0123",
+     "box": {
+      "x": 1212.96,
+      "y": 792.72,
+      "width": 34.08,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0220",
+       "text": "PROVIDE FINISH AS PER",
+       "box": {
+        "x": 1212.96,
+        "y": 792.72,
+        "width": 34.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c06",
+        "r04c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "AS PER"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o12",
+   "region": "1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "G.C. TO APPLY G / ON INERIOR FAC",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0129",
+     "box": {
+      "x": 374.88,
+      "y": 754.32,
+      "width": 61.920000000000016,
+      "height": 19.67999999999995
+     },
+     "lines": [
+      {
+       "lid": "L0228",
+       "text": "G.C. TO APPLY G",
+       "box": {
+        "x": 374.88,
+        "y": 765.6,
+        "width": 61.92,
+        "height": 8.4
+       },
+       "tiles": [
+        "r04c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0234",
+       "text": "ON INERIOR FAC",
+       "box": {
+        "x": 374.88,
+        "y": 754.32,
+        "width": 61.92,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o13",
+   "region": "3 GENERAL NOTES",
+   "text": "DIMENSIONS ARE TO COLUMN REFERENCE LIM",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 202.56,
+      "y": 533.52,
+      "width": 234.24,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0263",
+       "text": "DIMENSIONS ARE TO COLUMN REFERENCE LIM",
+       "box": {
+        "x": 202.56,
+        "y": 533.52,
+        "width": 234.24,
+        "height": 8.64
+       },
+       "tiles": [
+        "r05c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o14",
+   "region": "3 GENERAL NOTES",
+   "text": "?I. G.C. TO INSTA",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 555.6,
+      "y": 519.36,
+      "width": 82.8,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0275",
+       "text": "I. G.C. TO INSTA",
+       "box": {
+        "x": 555.6,
+        "y": 519.36,
+        "width": 82.8,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c02"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "I.",
+         "candidate": "1.",
+         "reason": "list_number",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o15",
+   "region": "3 GENERAL NOTES",
+   "text": "S ARE TO FACE OF INTERIOR WALL BOARD",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.84,
+      "y": 510.48,
+      "width": 223.2,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0278",
+       "text": "S ARE TO FACE OF INTERIOR WALL BOARD",
+       "box": {
+        "x": 201.84,
+        "y": 510.48,
+        "width": 223.2,
+        "height": 8.64
+       },
+       "tiles": [
+        "r05c01",
+        "r05c02",
+        "r06c01",
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o16",
+   "region": "3 GENERAL NOTES",
+   "text": "01 FOR EXTERIOR WALL ASSEMBLY TYPES. SE",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.6,
+      "y": 486.96,
+      "width": 235.2,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0288",
+       "text": "01 FOR EXTERIOR WALL ASSEMBLY TYPES. SE",
+       "box": {
+        "x": 201.6,
+        "y": 486.96,
+        "width": 235.2,
+        "height": 8.64
+       },
+       "tiles": [
+        "r05c01",
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o17",
+   "region": "3 GENERAL NOTES",
+   "text": "RIOR ELEVATIONS FOR WINDOW TYPES",
+   "technical": false,
+   "classes": [
+    "elevation"
+   ],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.6,
+      "y": 440.16,
+      "width": 192.48,
+      "height": 9.36
+     },
+     "lines": [
+      {
+       "lid": "L0306",
+       "text": "RIOR ELEVATIONS FOR WINDOW TYPES",
+       "box": {
+        "x": 201.6,
+        "y": 440.16,
+        "width": 192.48,
+        "height": 9.36
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o18",
+   "region": "3 GENERAL NOTES",
+   "text": "OVIDE ADA SIGNAGE PACKAGE AND INSTALL S",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.6,
+      "y": 361.44,
+      "width": 235.2,
+      "height": 9.12
+     },
+     "lines": [
+      {
+       "lid": "L0329",
+       "text": "OVIDE ADA SIGNAGE PACKAGE AND INSTALL S",
+       "box": {
+        "x": 201.6,
+        "y": 361.44,
+        "width": 235.2,
+        "height": 9.12
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o19",
+   "region": "3 GENERAL NOTES",
+   "text": "E OR AS REQUIRED BY",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 404.4,
+      "y": 350.16,
+      "width": 120.48,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0338",
+       "text": "E OR AS REQUIRED BY",
+       "box": {
+        "x": 404.4,
+        "y": 350.16,
+        "width": 120.48,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o20",
+   "region": "3 GENERAL NOTES",
+   "text": "GN - 9292 1ST ST., BOX 588 NEW ROCHEL",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.6,
+      "y": 326.88,
+      "width": 235.2,
+      "height": 7.2
+     },
+     "lines": [
+      {
+       "lid": "L0348",
+       "text": "GN - 9292 1ST ST., BOX 588 NEW ROCHEL",
+       "box": {
+        "x": 201.6,
+        "y": 326.88,
+        "width": 235.2,
+        "height": 7.2
+       },
+       "tiles": [
+        "r06c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o21",
+   "region": "3 GENERAL NOTES",
+   "text": "{OCCUPANCY SIGN TO BE POSTED PER LOCAL | D AND INSTALLED BY GENERAL CONTRACTOR.}",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 201.6,
+      "y": 294,
+      "width": 235.2,
+      "height": 8.64
+     },
+     "lines": [
+      {
+       "lid": "L0362",
+       "text": "OCCUPANCY SIGN TO BE POSTED PER LOCAL",
+       "box": {
+        "x": 201.6,
+        "y": 294,
+        "width": 235.2,
+        "height": 8.64
+       },
+       "tiles": [
+        "r06c01",
+        "r07c01"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "D AND INSTALLED BY GENERAL CONTRACTOR."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o22",
+   "region": "3 GENERAL NOTES",
+   "text": "{CTOR. | ) AND INSTALLED BY GENERAL CONTRACTOR. | SINK LOCATIONS SHALL HAVE CEMENT BOARD}",
+   "technical": false,
+   "classes": [],
+   "uncertain": true,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 403.44,
+      "y": 283.2,
+      "width": 28.32,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0367",
+       "text": "CTOR.",
+       "box": {
+        "x": 403.44,
+        "y": 283.2,
+        "width": 28.32,
+        "height": 8.16
+       },
+       "tiles": [
+        "r07c02",
+        "r06c01",
+        "r06c02",
+        "r07c01"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        ") AND INSTALLED BY GENERAL CONTRACTOR.",
+        "SINK LOCATIONS SHALL HAVE CEMENT BOARD"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o23",
+   "region": "3 GENERAL NOTES",
+   "text": "R WALL HUNG",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 404.4,
+      "y": 225.36,
+      "width": 72,
+      "height": 8.88
+     },
+     "lines": [
+      {
+       "lid": "L0383",
+       "text": "R WALL HUNG",
+       "box": {
+        "x": 404.4,
+        "y": 225.36,
+        "width": 72,
+        "height": 8.88
+       },
+       "tiles": [
+        "r07c02",
+        "r08c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o24",
+   "region": "3 GENERAL NOTES",
+   "text": "LATION HEIGHTS.",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0152",
+     "box": {
+      "x": 403.68,
+      "y": 214.56,
+      "width": 81.12,
+      "height": 8.4
+     },
+     "lines": [
+      {
+       "lid": "L0387",
+       "text": "LATION HEIGHTS.",
+       "box": {
+        "x": 403.68,
+        "y": 214.56,
+        "width": 81.12,
+        "height": 8.4
+       },
+       "tiles": [
+        "r08c02",
+        "r07c02"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "_ATION HEIGHTS."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o25",
+   "region": "3 GENERAL NOTES",
+   "text": "L ADA NOTES: / D INSTALL ADAAG COMPLIANT BRAILLE / / RE MENU SIGNAGE / {D INSTALL ADAAG COMPLIANT \"STAFF | O INSTALL ADAAG COMPLIANT \"STAFF} / TANCE\" SIGNAGE",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 1.5,
+   "copies": [
+    {
+     "aid": "N0153",
+     "box": {
+      "x": 604.8,
+      "y": 474,
+      "width": 183.12,
+      "height": 65.27999999999997
+     },
+     "lines": [
+      {
+       "lid": "L0268",
+       "text": "L ADA NOTES:",
+       "box": {
+        "x": 604.8,
+        "y": 530.88,
+        "width": 66.72,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0276",
+       "text": "D INSTALL ADAAG COMPLIANT BRAILLE /",
+       "box": {
+        "x": 604.8,
+        "y": 519.12,
+        "width": 183.12,
+        "height": 8.64
+       },
+       "tiles": [
+        "r05c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0283",
+       "text": "RE MENU SIGNAGE",
+       "box": {
+        "x": 604.8,
+        "y": 508.08,
+        "width": 74.64,
+        "height": 8.4
+       },
+       "tiles": [
+        "r05c03",
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0291",
+       "text": "D INSTALL ADAAG COMPLIANT \"STAFF",
+       "box": {
+        "x": 604.8,
+        "y": 485.28,
+        "width": 169.2,
+        "height": 8.64
+       },
+       "tiles": [
+        "r05c03",
+        "r06c03"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "O INSTALL ADAAG COMPLIANT \"STAFF"
+       ]
+      },
+      {
+       "lid": "L0299",
+       "text": "TANCE\" SIGNAGE",
+       "box": {
+        "x": 604.8,
+        "y": 474,
+        "width": 71.76,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o26",
+   "region": "4 PLAN KEYED NOTES",
+   "text": "DROPPED SOFFIT ABOVE - SEE RE / DS",
+   "technical": false,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": false,
+   "value": 0.6,
+   "copies": [
+    {
+     "aid": "N0158",
+     "box": {
+      "x": 861.6,
+      "y": 469.2,
+      "width": 179.9999999999999,
+      "height": 13.440000000000055
+     },
+     "lines": [
+      {
+       "lid": "L0297",
+       "text": "DROPPED SOFFIT ABOVE - SEE RE",
+       "box": {
+        "x": 884.4,
+        "y": 474.48,
+        "width": 157.2,
+        "height": 8.16
+       },
+       "tiles": [
+        "r06c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0301",
+       "text": "DS",
+       "box": {
+        "x": 861.6,
+        "y": 469.2,
+        "width": 10.32,
+        "height": 6.96
+       },
+       "tiles": [
+        "r06c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o27",
+   "region": "3 GENERAL NOTES",
+   "text": "T ALL SELF SERVICE ITEMS TO BE WITHIN / SSIBILITY REACH RANGE REQUIREMENTS / NSI AII7.I-2003).",
+   "technical": true,
+   "classes": [
+    "datum",
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2.6,
+   "copies": [
+    {
+     "aid": "N0162",
+     "box": {
+      "x": 604.8,
+      "y": 382.56,
+      "width": 183.60000000000002,
+      "height": 32.15999999999997
+     },
+     "lines": [
+      {
+       "lid": "L0319",
+       "text": "T ALL SELF SERVICE ITEMS TO BE WITHIN",
+       "box": {
+        "x": 604.8,
+        "y": 406.32,
+        "width": 183.6,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0321",
+       "text": "SSIBILITY REACH RANGE REQUIREMENTS",
+       "box": {
+        "x": 604.8,
+        "y": 395.04,
+        "width": 173.76,
+        "height": 7.92
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0327",
+       "text": "NSI AII7.I-2003).",
+       "box": {
+        "x": 604.8,
+        "y": 382.56,
+        "width": 72.24,
+        "height": 8.64
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o28",
+   "region": "3 GENERAL NOTES",
+   "text": "CE OR ADD ADA COMPLAINT HARDWARE ON / OORS ALONG ADA ACCESSIBLE ROUTE. SEE / ?A-I.03 FOR SCHEDULE.",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 3.8,
+   "copies": [
+    {
+     "aid": "N0166",
+     "box": {
+      "x": 604.8,
+      "y": 337.92,
+      "width": 200.15999999999997,
+      "height": 30.95999999999998
+     },
+     "lines": [
+      {
+       "lid": "L0333",
+       "text": "CE OR ADD ADA COMPLAINT HARDWARE ON",
+       "box": {
+        "x": 604.8,
+        "y": 360.48,
+        "width": 200.16,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0340",
+       "text": "OORS ALONG ADA ACCESSIBLE ROUTE. SEE",
+       "box": {
+        "x": 604.8,
+        "y": 349.2,
+        "width": 194.64,
+        "height": 7.68
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0344",
+       "text": "A-I.03 FOR SCHEDULE.",
+       "box": {
+        "x": 606,
+        "y": 337.92,
+        "width": 100.56,
+        "height": 8.4
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": true,
+       "conflict": false,
+       "alternatives": [],
+       "valueChecks": [
+        {
+         "token": "A-I.03",
+         "candidate": "A-1.03",
+         "reason": "sheet_reference",
+         "status": "flagged_ambiguous"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o29",
+   "region": "3 GENERAL NOTES",
+   "text": "E THAT THE OPENING FORCE IS ADA / {LIANT. THE OPENING FORCE OF ALL EXT. | THAT THE OPENING FORCE IS ADA} / PULL DOORS SHALL NOT EXCEED 8½ LBS. / OR PUSH/PULL DOORS SHALL NOT EXCEED 5 / PERIOD FROM 90 DEGREES OPEN TO 12 DEGREES / ATCH SHALL BE AT LEAST 5 SECONDS.",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 12.9,
+   "copies": [
+    {
+     "aid": "N0167",
+     "box": {
+      "x": 604.8,
+      "y": 236.16,
+      "width": 194.88,
+      "height": 87.36000000000004
+     },
+     "lines": [
+      {
+       "lid": "L0350",
+       "text": "E THAT THE OPENING FORCE IS ADA",
+       "box": {
+        "x": 604.8,
+        "y": 315.6,
+        "width": 159.36,
+        "height": 7.92
+       },
+       "tiles": [
+        "r06c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0357",
+       "text": "LIANT. THE OPENING FORCE OF ALL EXT.",
+       "box": {
+        "x": 604.8,
+        "y": 304.56,
+        "width": 176.88,
+        "height": 7.92
+       },
+       "tiles": [
+        "r06c03",
+        "r07c03"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "THAT THE OPENING FORCE IS ADA"
+       ]
+      },
+      {
+       "lid": "L0364",
+       "text": "PULL DOORS SHALL NOT EXCEED 8½ LBS.",
+       "box": {
+        "x": 604.8,
+        "y": 292.8,
+        "width": 182.88,
+        "height": 8.64
+       },
+       "tiles": [
+        "r06c03",
+        "r07c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "ULL DOORS SHALL NOT EXCEED 8½ LBS."
+       ]
+      },
+      {
+       "lid": "L0368",
+       "text": "OR PUSH/PULL DOORS SHALL NOT EXCEED 5",
+       "box": {
+        "x": 604.8,
+        "y": 283.2,
+        "width": 194.88,
+        "height": 6.48
+       },
+       "tiles": [
+        "r06c03",
+        "r07c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0376",
+       "text": "PERIOD FROM 90 DEGREES OPEN TO 12 DEGREES",
+       "box": {
+        "x": 604.8,
+        "y": 247.44,
+        "width": 188.4,
+        "height": 8.4
+       },
+       "tiles": [
+        "r07c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0379",
+       "text": "ATCH SHALL BE AT LEAST 5 SECONDS.",
+       "box": {
+        "x": 604.8,
+        "y": 236.16,
+        "width": 148.08,
+        "height": 8.4
+       },
+       "tiles": [
+        "r07c03"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o30",
+   "region": "3 GENERAL NOTES",
+   "text": "9. GC TO COORDINA / {EQUIPMENT, SHE | 008-0003 75 New York Ave & 1st St, Wash DC ARCH 3 GENE} / ENERAL NOTES / {N.T.S. | SCALE: N.T.S.}",
+   "technical": true,
+   "classes": [
+    "datum"
+   ],
+   "uncertain": true,
+   "value": 4.3,
+   "copies": [
+    {
+     "aid": "N0174",
+     "box": {
+      "x": 128.64,
+      "y": 40.32,
+      "width": 255.36,
+      "height": 193.92
+     },
+     "lines": [
+      {
+       "lid": "L0381",
+       "text": "9. GC TO COORDINA",
+       "box": {
+        "x": 128.64,
+        "y": 227.04,
+        "width": 106.56,
+        "height": 7.2
+       },
+       "tiles": [
+        "r07c00",
+        "r08c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0384",
+       "text": "EQUIPMENT, SHE",
+       "box": {
+        "x": 148.8,
+        "y": 214.56,
+        "width": 57.84,
+        "height": 8.16
+       },
+       "tiles": [
+        "r07c00",
+        "r08c00"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "008-0003 75 New York Ave & 1st St, Wash DC ARCH 3 GENE"
+       ]
+      },
+      {
+       "lid": "L0405",
+       "text": "ENERAL NOTES",
+       "box": {
+        "x": 201.6,
+        "y": 61.68,
+        "width": 182.4,
+        "height": 19.44
+       },
+       "tiles": [
+        "r08c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0411",
+       "text": "N.T.S.",
+       "box": {
+        "x": 215.52,
+        "y": 40.32,
+        "width": 26.4,
+        "height": 8.16
+       },
+       "tiles": [
+        "r08c01",
+        "r08c00"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "SCALE: N.T.S."
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "o31",
+   "region": "3 GENERAL NOTES",
+   "text": "ORDINATE ALL REQUIRED BLOCKING FOR WAL / T, SHELVES, ETC. FOR PROPER INSTALLATION",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0175",
+     "box": {
+      "x": 201.6,
+      "y": 213.12,
+      "width": 235.20000000000002,
+      "height": 21.120000000000005
+     },
+     "lines": [
+      {
+       "lid": "L0382",
+       "text": "ORDINATE ALL REQUIRED BLOCKING FOR WAL",
+       "box": {
+        "x": 201.84,
+        "y": 225.12,
+        "width": 234.96,
+        "height": 9.12
+       },
+       "tiles": [
+        "r07c01",
+        "r08c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0386",
+       "text": "T, SHELVES, ETC. FOR PROPER INSTALLATION",
+       "box": {
+        "x": 201.6,
+        "y": 213.12,
+        "width": 232.08,
+        "height": 9.6
+       },
+       "tiles": [
+        "r07c01",
+        "r08c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "captions": [
+  {
+   "id": "c1",
+   "region": "title block",
+   "text": "McDonald's / HFA-AE , LTD. / 3700 O'Donnell Street, Suite 200 / Baltimore, Maryland 21224 / {t: 410.837.3622 | t. 410.837. | t: 410.837.3022} / f: 410.837.3621",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "value"
+   ],
+   "uncertain": true,
+   "value": 12,
+   "copies": [
+    {
+     "aid": "N0036",
+     "box": {
+      "x": 2345.28,
+      "y": 1109.28,
+      "width": 171.1199999999999,
+      "height": 199.44000000000005
+     },
+     "lines": [
+      {
+       "lid": "L0073",
+       "text": "McDonald's",
+       "box": {
+        "x": 2345.28,
+        "y": 1291.2,
+        "width": 107.52,
+        "height": 17.52
+       },
+       "tiles": [
+        "r01c11",
+        "r01c12",
+        "r02c11",
+        "r02c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "McDon"
+       ]
+      },
+      {
+       "lid": "L0105",
+       "text": "HFA-AE , LTD.",
+       "box": {
+        "x": 2368.08,
+        "y": 1167.84,
+        "width": 141.36,
+        "height": 14.16
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "HFA-AE"
+       ]
+      },
+      {
+       "lid": "L0115",
+       "text": "3700 O'Donnell Street, Suite 200",
+       "box": {
+        "x": 2361.6,
+        "y": 1138.8,
+        "width": 154.8,
+        "height": 9.36
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0116",
+       "text": "Baltimore, Maryland 21224",
+       "box": {
+        "x": 2375.76,
+        "y": 1128.96,
+        "width": 126.48,
+        "height": 9.12
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0118",
+       "text": "t: 410.837.3622",
+       "box": {
+        "x": 2402.16,
+        "y": 1119.36,
+        "width": 73.92,
+        "height": 8.64
+       },
+       "tiles": [
+        "r02c12",
+        "r02c11",
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "t. 410.837.",
+        "t: 410.837.3022"
+       ]
+      },
+      {
+       "lid": "L0120",
+       "text": "f: 410.837.3621",
+       "box": {
+        "x": 2404.32,
+        "y": 1109.28,
+        "width": 72.72,
+        "height": 8.4
+       },
+       "tiles": [
+        "r02c12",
+        "r03c12",
+        "r02c11",
+        "r03c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "region": "title block",
+   "text": "{PROFESSIONAL CERTIFICAT | ESSIONAL CERTIFICATION:} / {BY CERTIFY THAT THESE DOCUMENTS | I HEREBY CERTIFY THAT TH} / {PREPARED OR APPROVED BY ME, AND | WERE PREPARED OR APPR} / {AM A DULY LICENSED ARCHITECT | THAT I AM A DULY LICENSE} / {UNDER THE LAWS OF THE S | OR THE LAWS OF THE STATE OF DC} / LICENSE NO. ARC40001205",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0068",
+     "box": {
+      "x": 2325.84,
+      "y": 1010.88,
+      "width": 211.92000000000007,
+      "height": 64.56000000000006
+     },
+     "lines": [
+      {
+       "lid": "L0131",
+       "text": "PROFESSIONAL CERTIFICAT",
+       "box": {
+        "x": 2325.84,
+        "y": 1067.52,
+        "width": 126.96,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "ESSIONAL CERTIFICATION:"
+       ]
+      },
+      {
+       "lid": "L0135",
+       "text": "BY CERTIFY THAT THESE DOCUMENTS",
+       "box": {
+        "x": 2357.28,
+        "y": 1056,
+        "width": 180,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "I HEREBY CERTIFY THAT TH"
+       ]
+      },
+      {
+       "lid": "L0141",
+       "text": "PREPARED OR APPROVED BY ME, AND",
+       "box": {
+        "x": 2357.52,
+        "y": 1044.48,
+        "width": 180.24,
+        "height": 8.16
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "WERE PREPARED OR APPR"
+       ]
+      },
+      {
+       "lid": "L0145",
+       "text": "AM A DULY LICENSED ARCHITECT",
+       "box": {
+        "x": 2358.24,
+        "y": 1033.2,
+        "width": 157.44,
+        "height": 7.92
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "THAT I AM A DULY LICENSE"
+       ]
+      },
+      {
+       "lid": "L0148",
+       "text": "UNDER THE LAWS OF THE S",
+       "box": {
+        "x": 2325.84,
+        "y": 1022.4,
+        "width": 126.96,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "OR THE LAWS OF THE STATE OF DC"
+       ]
+      },
+      {
+       "lid": "L0150",
+       "text": "LICENSE NO. ARC40001205",
+       "box": {
+        "x": 2325.84,
+        "y": 1010.88,
+        "width": 125.76,
+        "height": 7.68
+       },
+       "tiles": [
+        "r03c11",
+        "r03c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "region": "title block",
+   "text": "{DISTRICT OF COLUMBIA | WARREN N} / {WARREN NAGEY | DISTRICT OF C} / No. ARC40001205 / LICENSED / ARCHITECT",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0074",
+     "box": {
+      "x": 2382.24,
+      "y": 858.24,
+      "width": 110.15999999999985,
+      "height": 115.20000000000005
+     },
+     "lines": [
+      {
+       "lid": "L0159",
+       "text": "DISTRICT OF COLUMBIA",
+       "box": {
+        "x": 2382.24,
+        "y": 927.36,
+        "width": 110.16,
+        "height": 46.08
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "WARREN N"
+       ]
+      },
+      {
+       "lid": "L0160",
+       "text": "WARREN NAGEY",
+       "box": {
+        "x": 2401.44,
+        "y": 931.2,
+        "width": 72.96,
+        "height": 26.88
+       },
+       "tiles": [
+        "r03c12",
+        "r03c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "DISTRICT OF C"
+       ]
+      },
+      {
+       "lid": "L0168",
+       "text": "No. ARC40001205",
+       "box": {
+        "x": 2402.16,
+        "y": 906.72,
+        "width": 72,
+        "height": 9.6
+       },
+       "tiles": [
+        "r03c12",
+        "r04c12",
+        "r03c11",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0177",
+       "text": "LICENSED",
+       "box": {
+        "x": 2411.52,
+        "y": 878.64,
+        "width": 58.56,
+        "height": 15.84
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0183",
+       "text": "ARCHITECT",
+       "box": {
+        "x": 2398.8,
+        "y": 858.24,
+        "width": 76.08,
+        "height": 23.52
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "region": "title block",
+   "text": "REVISIONS",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0111",
+     "box": {
+      "x": 2414.88,
+      "y": 814.32,
+      "width": 50.88,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0205",
+       "text": "REVISIONS",
+       "box": {
+        "x": 2414.88,
+        "y": 814.32,
+        "width": 50.88,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c5",
+   "region": "title block",
+   "text": "# / DESCRIPTION / DATE",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.9,
+   "copies": [
+    {
+     "aid": "N0122",
+     "box": {
+      "x": 2332.32,
+      "y": 795.84,
+      "width": 208.79999999999973,
+      "height": 8.159999999999968
+     },
+     "lines": [
+      {
+       "lid": "L0217",
+       "text": "#",
+       "box": {
+        "x": 2332.32,
+        "y": 795.84,
+        "width": 6,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0218",
+       "text": "DESCRIPTION",
+       "box": {
+        "x": 2390.4,
+        "y": 796.32,
+        "width": 64.08,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0219",
+       "text": "DATE",
+       "box": {
+        "x": 2516.4,
+        "y": 796.32,
+        "width": 24.72,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c6",
+   "region": "title block",
+   "text": "FIRST ISSUE / 00 / 00",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 6.3,
+   "copies": [
+    {
+     "aid": "N0126",
+     "box": {
+      "x": 2330.16,
+      "y": 777.84,
+      "width": 204,
+      "height": 8.159999999999968
+     },
+     "lines": [
+      {
+       "lid": "L0224",
+       "text": "FIRST ISSUE",
+       "box": {
+        "x": 2393.52,
+        "y": 778.32,
+        "width": 57.84,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0225",
+       "text": "00",
+       "box": {
+        "x": 2523.6,
+        "y": 778.32,
+        "width": 10.56,
+        "height": 7.44
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0223",
+       "text": "00",
+       "box": {
+        "x": 2330.16,
+        "y": 777.84,
+        "width": 10.8,
+        "height": 7.92
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c7",
+   "region": "title block",
+   "text": "01 PERMIT COMMEN",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0133",
+     "box": {
+      "x": 2330.88,
+      "y": 759.84,
+      "width": 121.92,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0232",
+       "text": "01 PERMIT COMMEN",
+       "box": {
+        "x": 2330.88,
+        "y": 759.84,
+        "width": 121.92,
+        "height": 8.16
+       },
+       "tiles": [
+        "r04c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c8",
+   "region": "title block",
+   "text": "PERMIT COMMENTS 10/29/25",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0134",
+     "box": {
+      "x": 2375.76,
+      "y": 760.32,
+      "width": 171.12,
+      "height": 7.68
+     },
+     "lines": [
+      {
+       "lid": "L0233",
+       "text": "PERMIT COMMENTS 10/29/25",
+       "box": {
+        "x": 2375.76,
+        "y": 760.32,
+        "width": 171.12,
+        "height": 7.68
+       },
+       "tiles": [
+        "r04c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c9",
+   "region": "title block",
+   "text": "{PERMIT COMMENTS 12/16/25 | 02 PERMIT COMMEN}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0136",
+     "box": {
+      "x": 2375.76,
+      "y": 741.84,
+      "width": 171.12,
+      "height": 7.92
+     },
+     "lines": [
+      {
+       "lid": "L0237",
+       "text": "PERMIT COMMENTS 12/16/25",
+       "box": {
+        "x": 2375.76,
+        "y": 741.84,
+        "width": 171.12,
+        "height": 7.92
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "02 PERMIT COMMEN"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c10",
+   "region": "title block",
+   "text": "{PERMIT COMMENTS 02/16/26 | 03 PERMIT COMMEN}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0138",
+     "box": {
+      "x": 2375.76,
+      "y": 723.6,
+      "width": 171.12,
+      "height": 7.92
+     },
+     "lines": [
+      {
+       "lid": "L0239",
+       "text": "PERMIT COMMENTS 02/16/26",
+       "box": {
+        "x": 2375.76,
+        "y": 723.6,
+        "width": 171.12,
+        "height": 7.92
+       },
+       "tiles": [
+        "r04c12",
+        "r04c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "03 PERMIT COMMEN"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c11",
+   "region": "title block",
+   "text": "{PERMIT COMMENTS 07/17/26 | 04 PERMIT COMMEN}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 3,
+   "copies": [
+    {
+     "aid": "N0140",
+     "box": {
+      "x": 2375.76,
+      "y": 705.6,
+      "width": 171.12,
+      "height": 7.92
+     },
+     "lines": [
+      {
+       "lid": "L0242",
+       "text": "PERMIT COMMENTS 07/17/26",
+       "box": {
+        "x": 2375.76,
+        "y": 705.6,
+        "width": 171.12,
+        "height": 7.92
+       },
+       "tiles": [
+        "r04c12",
+        "r05c12",
+        "r04c11",
+        "r05c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "04 PERMIT COMMEN"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c12",
+   "region": "title block",
+   "text": "{OWNER REVISIONS 10/15/26 | 05 OWNER REVISIC}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0141",
+     "box": {
+      "x": 2377.44,
+      "y": 687.6,
+      "width": 167.76,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0245",
+       "text": "OWNER REVISIONS 10/15/26",
+       "box": {
+        "x": 2377.44,
+        "y": 687.6,
+        "width": 167.76,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c12",
+        "r04c12",
+        "r04c11",
+        "r05c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "05 OWNER REVISIC"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c13",
+   "region": "title block",
+   "text": "confidential and proprietary property of ed or reproduced without written epared for use on this specific site in able for use on a different site or at ence or example on another project ects and engineers. Reproduction of other project is not authorized.",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0142",
+     "box": {
+      "x": 2487.84,
+      "y": 484.8,
+      "width": 7.2,
+      "height": 144.48
+     },
+     "lines": [
+      {
+       "lid": "L0248",
+       "text": "confidential and proprietary property of\ned or reproduced without written\nepared for use on this specific site in\nable for use on a different site or at\nence or example on another project\nects and engineers. Reproduction of\nother project is not authorized.",
+       "box": {
+        "x": 2487.84,
+        "y": 484.8,
+        "width": 7.2,
+        "height": 144.48
+       },
+       "tiles": [
+        "r05c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c14",
+   "region": "title block",
+   "text": "S USA, LLC",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0143",
+     "box": {
+      "x": 2459.28,
+      "y": 484.8,
+      "width": 20.4,
+      "height": 130.8
+     },
+     "lines": [
+      {
+       "lid": "L0249",
+       "text": "S USA, LLC",
+       "box": {
+        "x": 2459.28,
+        "y": 484.8,
+        "width": 20.4,
+        "height": 130.8
+       },
+       "tiles": [
+        "r05c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c15",
+   "region": "detail title 1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "D FLOOR ALTERAT",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0144",
+     "box": {
+      "x": 204.48,
+      "y": 592.56,
+      "width": 230.64,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0250",
+       "text": "D FLOOR ALTERAT",
+       "box": {
+        "x": 204.48,
+        "y": 592.56,
+        "width": 230.64,
+        "height": 19.44
+       },
+       "tiles": [
+        "r05c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c16",
+   "region": "detail title 1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "{LAN | ATION FLOOR PLAI}",
+   "technical": false,
+   "classes": [],
+   "uncertain": true,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0145",
+     "box": {
+      "x": 605.52,
+      "y": 592.8,
+      "width": 45.84,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0251",
+       "text": "LAN",
+       "box": {
+        "x": 605.52,
+        "y": 592.8,
+        "width": 45.84,
+        "height": 18.96
+       },
+       "tiles": [
+        "r05c03",
+        "r05c02"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "ATION FLOOR PLAI"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c17",
+   "region": "detail title 2 BASEMENT ALTERATION  FLOOR PLAN",
+   "text": "TERATION FLOOR F",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0146",
+     "box": {
+      "x": 1612.8,
+      "y": 592.56,
+      "width": 235.2,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0254",
+       "text": "TERATION FLOOR F",
+       "box": {
+        "x": 1612.8,
+        "y": 592.56,
+        "width": 235.2,
+        "height": 19.44
+       },
+       "tiles": [
+        "r05c08"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c18",
+   "region": "detail title 2 BASEMENT ALTERATION  FLOOR PLAN",
+   "text": "R PLAN",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0147",
+     "box": {
+      "x": 1816.8,
+      "y": 592.8,
+      "width": 87.84,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0255",
+       "text": "R PLAN",
+       "box": {
+        "x": 1816.8,
+        "y": 592.8,
+        "width": 87.84,
+        "height": 18.96
+       },
+       "tiles": [
+        "r05c09"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c19",
+   "region": "detail title 1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "1 / 1/4\"",
+   "technical": true,
+   "classes": [
+    "numeric",
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0148",
+     "box": {
+      "x": 130.08,
+      "y": 583.92,
+      "width": 105.12,
+      "height": 19.440000000000055
+     },
+     "lines": [
+      {
+       "lid": "L0256",
+       "text": "1",
+       "box": {
+        "x": 130.08,
+        "y": 595.92,
+        "width": 7.68,
+        "height": 7.44
+       },
+       "tiles": [
+        "r05c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0257",
+       "text": "1/4\"",
+       "box": {
+        "x": 210.96,
+        "y": 583.92,
+        "width": 24.24,
+        "height": 1.92
+       },
+       "tiles": [
+        "r05c00"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c20",
+   "region": "detail title 1 2ND FLOOR ALTERATION  FLOOR PLAN",
+   "text": "1/4\" = 1'-0\"",
+   "technical": true,
+   "classes": [
+    "dimension"
+   ],
+   "uncertain": false,
+   "value": 4,
+   "copies": [
+    {
+     "aid": "N0149",
+     "box": {
+      "x": 216,
+      "y": 571.2,
+      "width": 45.36,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0258",
+       "text": "1/4\" = 1'-0\"",
+       "box": {
+        "x": 216,
+        "y": 571.2,
+        "width": 45.36,
+        "height": 8.16
+       },
+       "tiles": [
+        "r05c01"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c21",
+   "region": "title block",
+   "text": "{AVENUE ON DC -0003 650 | 75 NEW YORK AVEN WASHINGTON DC SITE ID # 008-0003 NSN # 00650 McDonald's U These drawings and specifications are the confidential McDonald's USA, LLC and shall not be copied or re authorization. The contract documents were prepared fo conjunction with its issue date and are not suitable for a later time. Use of these drawings for reference or requires the services of properly licensed architects and the contract documents for reuse on another pro}",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0154",
+     "box": {
+      "x": 2361.84,
+      "y": 484.8,
+      "width": 55.92,
+      "height": 48.48
+     },
+     "lines": [
+      {
+       "lid": "L0270",
+       "text": "AVENUE ON DC -0003 650",
+       "box": {
+        "x": 2361.84,
+        "y": 484.8,
+        "width": 55.92,
+        "height": 48.48
+       },
+       "tiles": [
+        "r05c11",
+        "r06c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "75 NEW YORK AVEN WASHINGTON DC SITE ID # 008-0003 NSN # 00650 McDonald's U These drawings and specifications are the confidential McDonald's USA, LLC and shall not be copied or re authorization. The contract documents were prepared fo conjunction with its issue date and are not suitable for a later time. Use of these drawings for reference or requires the services of properly licensed architects and the contract documents for reuse on another pro"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c22",
+   "region": "title block",
+   "text": "{AVENUE ON DC -0003 50 | 75 NEW YORK AVEN WASHINGTON DC SITE ID # 008-0003 NSN # 00650} / SITE ADDRESS: PREPARED FOR:",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0155",
+     "box": {
+      "x": 2321.76,
+      "y": 283.2,
+      "width": 129.84000000000015,
+      "height": 250.07999999999998
+     },
+     "lines": [
+      {
+       "lid": "L0271",
+       "text": "AVENUE\nON DC\n-0003\n50",
+       "box": {
+        "x": 2361.84,
+        "y": 484.8,
+        "width": 10.32,
+        "height": 48.48
+       },
+       "tiles": [
+        "r05c12",
+        "r06c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "75 NEW YORK AVEN WASHINGTON DC SITE ID # 008-0003 NSN # 00650"
+       ]
+      },
+      {
+       "lid": "L0334",
+       "text": "SITE ADDRESS: PREPARED FOR:",
+       "box": {
+        "x": 2321.76,
+        "y": 283.2,
+        "width": 129.84,
+        "height": 79.68
+       },
+       "tiles": [
+        "r06c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c23",
+   "region": "title block",
+   "text": "PREPAR These Mo authoriz conjun a late require",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0170",
+     "box": {
+      "x": 2443.2,
+      "y": 281.76,
+      "width": 95.76,
+      "height": 35.04
+     },
+     "lines": [
+      {
+       "lid": "L0356",
+       "text": "PREPAR These Mo authoriz conjun a late require",
+       "box": {
+        "x": 2443.2,
+        "y": 281.76,
+        "width": 95.76,
+        "height": 35.04
+       },
+       "tiles": [
+        "r07c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c24",
+   "region": "title block",
+   "text": "DRAWING NAME: / {MEZZANINE & E | MEZZANINE & BASEMENT} / {FLOOR PLAN | FLOOR P} / DRAWN BY: / DESIGN BY: / DATE: / HFA / {HFA 09/20/25 | HFA} / CHECKED BY: / {SCALE: | BY: SCALE:} / SHEET: / WGN / AS NOTED 09 OF 28 / PROJECT # / PAGE # / {16-25-95017 | 25-95017 A-1.01-00} / A / A / PERMIT SET 10/15/2026",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": true,
+   "value": 8,
+   "copies": [
+    {
+     "aid": "N0172",
+     "box": {
+      "x": 2324.64,
+      "y": 18.96,
+      "width": 234.24000000000024,
+      "height": 239.28
+     },
+     "lines": [
+      {
+       "lid": "L0373",
+       "text": "DRAWING NAME:",
+       "box": {
+        "x": 2324.64,
+        "y": 252,
+        "width": 53.76,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c11",
+        "r07c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "NAME:"
+       ]
+      },
+      {
+       "lid": "L0377",
+       "text": "MEZZANINE & E",
+       "box": {
+        "x": 2360.4,
+        "y": 238.56,
+        "width": 84.48,
+        "height": 10.08
+       },
+       "tiles": [
+        "r07c11",
+        "r07c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "MEZZANINE & BASEMENT"
+       ]
+      },
+      {
+       "lid": "L0380",
+       "text": "FLOOR PLAN",
+       "box": {
+        "x": 2399.52,
+        "y": 228.48,
+        "width": 78.72,
+        "height": 9.6
+       },
+       "tiles": [
+        "r07c12",
+        "r07c11",
+        "r08c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "FLOOR P"
+       ]
+      },
+      {
+       "lid": "L0388",
+       "text": "DRAWN BY:",
+       "box": {
+        "x": 2324.64,
+        "y": 216,
+        "width": 38.64,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "Y:",
+        "Y:"
+       ]
+      },
+      {
+       "lid": "L0389",
+       "text": "DESIGN BY:",
+       "box": {
+        "x": 2402.64,
+        "y": 216,
+        "width": 32.64,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12",
+        "r08c11",
+        "r07c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0390",
+       "text": "DATE:",
+       "box": {
+        "x": 2481.12,
+        "y": 216,
+        "width": 18.96,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0391",
+       "text": "HFA",
+       "box": {
+        "x": 2325.84,
+        "y": 193.2,
+        "width": 24.24,
+        "height": 10.08
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0392",
+       "text": "HFA 09/20/25",
+       "box": {
+        "x": 2403.84,
+        "y": 192.96,
+        "width": 126.72,
+        "height": 10.32
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12",
+        "r08c11",
+        "r07c11"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "HFA"
+       ]
+      },
+      {
+       "lid": "L0393",
+       "text": "CHECKED BY:",
+       "box": {
+        "x": 2324.64,
+        "y": 180,
+        "width": 45.84,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0394",
+       "text": "SCALE:",
+       "box": {
+        "x": 2402.64,
+        "y": 180,
+        "width": 23.28,
+        "height": 6.24
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "BY: SCALE:"
+       ]
+      },
+      {
+       "lid": "L0395",
+       "text": "SHEET:",
+       "box": {
+        "x": 2480.64,
+        "y": 180.24,
+        "width": 17.28,
+        "height": 6
+       },
+       "tiles": [
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0396",
+       "text": "WGN",
+       "box": {
+        "x": 2326.08,
+        "y": 156.96,
+        "width": 24,
+        "height": 10.32
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0397",
+       "text": "AS NOTED 09 OF 28",
+       "box": {
+        "x": 2404.08,
+        "y": 157.92,
+        "width": 129.6,
+        "height": 9.36
+       },
+       "tiles": [
+        "r08c12",
+        "r07c12",
+        "r08c11",
+        "r07c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0398",
+       "text": "PROJECT #",
+       "box": {
+        "x": 2324.64,
+        "y": 143.28,
+        "width": 38.64,
+        "height": 6.96
+       },
+       "tiles": [
+        "r08c11",
+        "r07c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": [],
+       "seamResolved": true,
+       "cutReadings": [
+        "#",
+        "#"
+       ]
+      },
+      {
+       "lid": "L0399",
+       "text": "PAGE #",
+       "box": {
+        "x": 2441.52,
+        "y": 143.52,
+        "width": 26.88,
+        "height": 6.72
+       },
+       "tiles": [
+        "r08c12",
+        "r07c12",
+        "r07c11",
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0400",
+       "text": "16-25-95017",
+       "box": {
+        "x": 2325.84,
+        "y": 121.2,
+        "width": 98.64,
+        "height": 13.92
+       },
+       "tiles": [
+        "r07c11",
+        "r08c11",
+        "r07c12",
+        "r08c12"
+       ],
+       "uncertain": true,
+       "conflict": true,
+       "alternatives": [
+        "25-95017 A-1.01-00"
+       ]
+      },
+      {
+       "lid": "L0401",
+       "text": "A",
+       "box": {
+        "x": 2444.16,
+        "y": 124.08,
+        "width": 3.36,
+        "height": 6.96
+       },
+       "tiles": [
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0402",
+       "text": "A",
+       "box": {
+        "x": 2442.96,
+        "y": 121.2,
+        "width": 3.12,
+        "height": 6.48
+       },
+       "tiles": [
+        "r07c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0415",
+       "text": "PERMIT SET 10/15/2026",
+       "box": {
+        "x": 2357.28,
+        "y": 18.96,
+        "width": 201.6,
+        "height": 14.88
+       },
+       "tiles": [
+        "r08c12"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c25",
+   "region": "detail title 4 PLAN KEYED NOTES",
+   "text": "PLAN KEYED",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0178",
+     "box": {
+      "x": 889.44,
+      "y": 61.92,
+      "width": 152.16,
+      "height": 18.96
+     },
+     "lines": [
+      {
+       "lid": "L0406",
+       "text": "PLAN KEYED",
+       "box": {
+        "x": 889.44,
+        "y": 61.92,
+        "width": 152.16,
+        "height": 18.96
+       },
+       "tiles": [
+        "r08c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c26",
+   "region": "detail title 4 PLAN KEYED NOTES",
+   "text": "YED NOTES",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0179",
+     "box": {
+      "x": 1008,
+      "y": 61.68,
+      "width": 131.04,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0407",
+       "text": "YED NOTES",
+       "box": {
+        "x": 1008,
+        "y": 61.68,
+        "width": 131.04,
+        "height": 19.44
+       },
+       "tiles": [
+        "r08c05"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c27",
+   "region": "detail title 5 SYMBOL LEGENDS",
+   "text": "5 SYMBOL LE / SCALE: N.T.S.",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0180",
+     "box": {
+      "x": 1266.72,
+      "y": 40.32,
+      "width": 178.07999999999993,
+      "height": 40.800000000000004
+     },
+     "lines": [
+      {
+       "lid": "L0408",
+       "text": "5 SYMBOL LE",
+       "box": {
+        "x": 1266.72,
+        "y": 53.52,
+        "width": 178.08,
+        "height": 27.6
+       },
+       "tiles": [
+        "r08c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      },
+      {
+       "lid": "L0413",
+       "text": "SCALE: N.T.S.",
+       "box": {
+        "x": 1309.2,
+        "y": 40.32,
+        "width": 71.04,
+        "height": 8.16
+       },
+       "tiles": [
+        "r08c06"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c28",
+   "region": "detail title 5 SYMBOL LEGENDS",
+   "text": "LEGENDS",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0.3,
+   "copies": [
+    {
+     "aid": "N0181",
+     "box": {
+      "x": 1422.48,
+      "y": 61.68,
+      "width": 118.08,
+      "height": 19.44
+     },
+     "lines": [
+      {
+       "lid": "L0409",
+       "text": "LEGENDS",
+       "box": {
+        "x": 1422.48,
+        "y": 61.68,
+        "width": 118.08,
+        "height": 19.44
+       },
+       "tiles": [
+        "r08c07"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c29",
+   "region": "detail title 4 PLAN KEYED NOTES",
+   "text": "4",
+   "technical": true,
+   "classes": [
+    "numeric"
+   ],
+   "uncertain": false,
+   "value": 2,
+   "copies": [
+    {
+     "aid": "N0182",
+     "box": {
+      "x": 844.8,
+      "y": 53.76,
+      "width": 13.44,
+      "height": 18.72
+     },
+     "lines": [
+      {
+       "lid": "L0410",
+       "text": "4",
+       "box": {
+        "x": 844.8,
+        "y": 53.76,
+        "width": 13.44,
+        "height": 18.72
+       },
+       "tiles": [
+        "r08c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c30",
+   "region": "detail title 4 PLAN KEYED NOTES",
+   "text": "SCALE: N.T.S.",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0183",
+     "box": {
+      "x": 888,
+      "y": 40.32,
+      "width": 71.04,
+      "height": 8.16
+     },
+     "lines": [
+      {
+       "lid": "L0412",
+       "text": "SCALE: N.T.S.",
+       "box": {
+        "x": 888,
+        "y": 40.32,
+        "width": 71.04,
+        "height": 8.16
+       },
+       "tiles": [
+        "r08c04"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c31",
+   "region": "title block",
+   "text": "REVISED PERMIT SE",
+   "technical": false,
+   "classes": [],
+   "uncertain": false,
+   "value": 0,
+   "copies": [
+    {
+     "aid": "N0184",
+     "box": {
+      "x": 2273.28,
+      "y": 18.96,
+      "width": 179.52,
+      "height": 14.88
+     },
+     "lines": [
+      {
+       "lid": "L0414",
+       "text": "REVISED PERMIT SE",
+       "box": {
+        "x": 2273.28,
+        "y": 18.96,
+        "width": 179.52,
+        "height": 14.88
+       },
+       "tiles": [
+        "r08c11"
+       ],
+       "uncertain": false,
+       "conflict": false,
+       "alternatives": []
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "suppressedLines": [
+  {
+   "lid": "L0358",
+   "duplicateOf": "L0357"
+  },
+  {
+   "lid": "L0385",
+   "duplicateOf": "L0384"
+  },
+  {
+   "lid": "L0335",
+   "duplicateOf": "L0334"
+  },
+  {
+   "lid": "L0062",
+   "duplicateOf": "L0061"
+  },
+  {
+   "lid": "L0354",
+   "duplicateOf": "L0334"
+  },
+  {
+   "lid": "L0355",
+   "duplicateOf": "L0356"
+  },
+  {
+   "lid": "L0044",
+   "duplicateOf": "L0046"
+  },
+  {
+   "lid": "L0157",
+   "duplicateOf": "L0158"
+  },
+  {
+   "lid": "L0404",
+   "duplicateOf": "L0403"
+  }
+ ]
+}

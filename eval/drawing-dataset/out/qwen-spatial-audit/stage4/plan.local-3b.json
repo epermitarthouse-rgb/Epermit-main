@@ -1,0 +1,57 @@
+{
+ "generatedAt": "2026-11-16T13:30:21.598Z",
+ "backend": "local-3b",
+ "reasoning": "medium",
+ "jobs": 15,
+ "pending": 15,
+ "spentUsd": 0,
+ "expectedUsd": 0.2382,
+ "worstCaseUsd": 0.4842,
+ "rows": [
+  {
+   "arm": "G_av",
+   "sheet": "S-201.00",
+   "model": "gpt-4o",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 6293,
+   "expectedUsdPerCall": 0.0277,
+   "worstUsdPerCall": 0.0507
+  },
+  {
+   "arm": "G_qwen",
+   "sheet": "S-201.00",
+   "model": "gpt-4o",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 5779,
+   "expectedUsdPerCall": 0.0264,
+   "worstUsdPerCall": 0.0494
+  },
+  {
+   "arm": "L_av",
+   "sheet": "S-201.00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 6293,
+   "expectedUsdPerCall": 0.0085,
+   "worstUsdPerCall": 0.0205
+  },
+  {
+   "arm": "L_qwen",
+   "sheet": "S-201.00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 5779,
+   "expectedUsdPerCall": 0.0084,
+   "worstUsdPerCall": 0.0204
+  },
+  {
+   "arm": "L_full",
+   "sheet": "S-201.00",
+   "model": "gpt-5.6-luna",
+   "pendingCalls": 3,
+   "inputTokensPerCall": 6083,
+   "expectedUsdPerCall": 0.0084,
+   "worstUsdPerCall": 0.0204
+  }
+ ]
+}

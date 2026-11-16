@@ -1,0 +1,154 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "A_pdf_only",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0e43ed9cecd3fcdf016aec8edfa51c87d2a572328fbc0ea875",
+ "latencyMs": 13872,
+ "inputTokens": 3794,
+ "outputTokens": 584,
+ "costUsd": 0.015325,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "Wall Sections",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides detailed drawings for guard rails and wall sections at a high roof and a new order window. Observations are based on visible details.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Absence of guardrail height specification",
+   "observation": "The guard rail details on the sheet do not explicitly state the height of the guardrails.",
+   "drawing_evidence": "Details 1, 2, and 3 lack numeric guardrail height specifications.",
+   "drawing_location": "Details 1, 2, and 3 on the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Add explicit guardrail height dimensions to ensure compliance with minimum height requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Absence of guardrail height specification",
+    "originalObservation": "The guard rail details on the sheet do not explicitly state the height of the guardrails.",
+    "originalCodeReference": "IBC 2015, minimum guardrail height requirements apply.",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Guardrail construction notes",
+   "observation": "Notes indicate that guardrails are to be constructed in a manner preventing passage of a 4-inch sphere.",
+   "drawing_evidence": "Detail 1 specifies: \"Guard rail shall be constructed so as to prevent the passage of a sphere 4” Ø.\"",
+   "drawing_location": "Detail 1 at the high roof guardrail elevation.",
+   "suggested_code_reference": null,
+   "recommendation": "Verify compliance with guardrail opening size restrictions.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guardrail construction notes",
+    "originalObservation": "Notes indicate that guardrails are to be constructed in a manner preventing passage of a 4-inch sphere.",
+    "originalCodeReference": "IBC 2015 requirements for guardrail openings.",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Lack of material specifications for certain components",
+   "observation": "The details do not provide material specifications for some components like fasteners or rail finishes.",
+   "drawing_evidence": "Material specifications are not visible for certain components like fasteners.",
+   "drawing_location": "Detail 3 on the sheet.",
+   "suggested_code_reference": null,
+   "recommendation": "Consider including material specifications for all components.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Lack of material specifications for certain components",
+    "originalObservation": "The details do not provide material specifications for some components like fasteners or rail finishes.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "warning",
+   "title": "Potential conflict in anchoring details",
+   "observation": "The anchoring details of the guardrails do not clearly show the attachment method or any structural fastener details.",
+   "drawing_evidence": "Detail 3 shows a simplified anchoring representation without detailed fastener information.",
+   "drawing_location": "Detail 3 at high roof guard rail.",
+   "suggested_code_reference": null,
+   "recommendation": "Provide detailed anchoring specifications or cross-reference to structural drawings for clarity.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Potential conflict in anchoring details",
+    "originalObservation": "The anchoring details of the guardrails do not clearly show the attachment method or any structural fastener details.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Revision note consistency",
+   "observation": "The sheet includes multiple revisions marked as 'Permit Comments' and 'Owner Revisions', suggesting ongoing updates to specifications.",
+   "drawing_evidence": "Revision history indicates multiple revisions (e.g., 07/17/26, 10/07/26).",
+   "drawing_location": "Title block revision history.",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure all parties are working from the most recent revision and coordinate updates across disciplines.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Revision note consistency",
+    "originalObservation": "The sheet includes multiple revisions marked as 'Permit Comments' and 'Owner Revisions', suggesting ongoing updates to specifications.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

@@ -1,0 +1,165 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "C_v2_4x3",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0c1b852b154f6e3a016aecde24b7fc87d28d9bdc8d04c6b315",
+ "latencyMs": 6860,
+ "inputTokens": 6304,
+ "outputTokens": 311,
+ "costUsd": 0.018869999999999998,
+ "input": {
+  "systemPromptSha": "ceaf7fadc9d19913",
+  "pdf": "S-201.00.pdf",
+  "blockSha": "610b94a5c42d6873",
+  "sheetIndexRun": 1,
+  "sheetIndexProject": 81,
+  "userPromptChars": 9431,
+  "userPrompt": "Review this permit drawing sheet and return the structured preliminary observations.\n\nCurrent file: S-201.00.pdf\n\nSubmitted sheet index (filenames and detected numbers only; other sheets were not read in this request):\n- number not detected | S-201.00.pdf | current sheet\n- number not detected | A-1.00-00.pdf | in project, not in this analysis\n- number not detected | A-1.01-00.pdf | in project, not in this analysis\n- number not detected | A-1.02-00.pdf | in project, not in this analysis\n- number not detected | A-1.03-00.pdf | in project, not in this analysis\n- number not detected | A-1.04.00.pdf | in project, not in this analysis\n- number not detected | A-1.05.00.pdf | in project, not in this analysis\n- number not detected | A-1.06-00.pdf | in project, not in this analysis\n- number not detected | A-2.00-00.pdf | in project, not in this analysis\n- number not detected | A-2.01-00.pdf | in project, not in this analysis\n- number not detected | A-2.02.00.pdf | in project, not in this analysis\n- number not detected | A-3.00-00.pdf | in project, not in this analysis\n- number not detected | A-3.01-00.pdf | in project, not in this analysis\n- number not detected | A-3.02-00.pdf | in project, not in this analysis\n- number not detected | A-3.03-00.pdf | in project, not in this analysis\n- number not detected | A-3.04-00.pdf | in project, not in this analysis\n- number not detected | A-3.05-00.pdf | in project, not in this analysis\n- number not detected | A-3.06-00.pdf | in project, not in this analysis\n- number not detected | A-4.00-00.pdf | in project, not in this analysis\n- number not detected | A-4.01-00.pdf | in project, not in this analysis\n- number not detected | A-4.02-00.pdf | in project, not in this analysis\n- number not detected | A-6.00-00.pdf | in project, not in this analysis\n- number not detected | A-6.01.00.pdf | in project, not in this analysis\n- number not detected | CV-1.00-00.pdf | in project, not in this analysis\n- number not detected | DM-1.00-00.pdf | in project, not in this analysis\n- number not detected | DM-1.01-00.pdf | in project, not in this analysis\n- number not detected | DM-1.02-00.pdf | in project, not in this analysis\n- number not detected | DM-2.00-00.pdf | in project, not in this analysis\n- number not detected | DM-2.01-00.pdf | in project, not in this analysis\n- number not detected | E-1.0-00.pdf | in project, not in this analysis\n- number not detected | E-1.1-00.pdf | in project, not in this analysis\n- number not detected | E-1.2-00.pdf | in project, not in this analysis\n- number not detected | E-1.3-00.pdf | in project, not in this analysis\n- number not detected | E-2.1-00.pdf | in project, not in this analysis\n- number not detected | E-2.2-00.pdf | in project, not in this analysis\n- number not detected | E-3.0-00.pdf | in project, not in this analysis\n- number not detected | E-3.1-00.pdf | in project, not in this analysis\n- number not detected | E-3.2-00.pdf | in project, not in this analysis\n- number not detected | E-4.0-00.pdf | in project, not in this analysis\n- number not detected | E-4.1-00.pdf | in project, not in this analysis\n- number not detected | E-4.2-00.pdf | in project, not in this analysis\n- number not detected | E-4.3-00.pdf | in project, not in this analysis\n- number not detected | EN-1.00-0.pdf | in project, not in this analysis\n- number not detected | EQ-1.00-0.pdf | in project, not in this analysis\n- number not detected | EQ-2.00-0.pdf | in project, not in this analysis\n- number not detected | EQ-3.00-0.pdf | in project, not in this analysis\n- number not detected | FP100.pdf | in project, not in this analysis\n- number not detected | FP200 .pdf | in project, not in this analysis\n- number not detected | FP201.pdf | in project, not in this analysis\n- number not detected | FP300.pdf | in project, not in this analysis\n- number not detected | G-0.00-0.pdf | in project, not in this analysis\n- number not detected | M-1.1.pdf | in project, not in this analysis\n- number not detected | M-1.2.pdf | in project, not in this analysis\n- number not detected | M-1.3.pdf | in project, not in this analysis\n- number not detected | M-1.4.pdf | in project, not in this analysis\n- number not detected | M-2.0.pdf | in project, not in this analysis\n- number not detected | M-3.0.pdf | in project, not in this analysis\n- number not detected | M-4.0.pdf | in project, not in this analysis\n- number not detected | M-4.1.pdf | in project, not in this analysis\n- number not detected | MD-1.1.pdf | in project, not in this analysis\n- number not detected | MD-1.2.pdf | in project, not in this analysis\n- number not detected | MD-1.3.pdf | in project, not in this analysis\n- number not detected | P-1.0-00.pdf | in project, not in this analysis\n- number not detected | P-1.1-00.pdf | in project, not in this analysis\n- number not detected | P-1.2-00.pdf | in project, not in this analysis\n- number not detected | P-1.3-00.pdf | in project, not in this analysis\n- number not detected | P-1.4-00.pdf | in project, not in this analysis\n- number not detected | P-1.5-00.pdf | in project, not in this analysis\n- number not detected | P-1.6-00.pdf | in project, not in this analysis\n- number not detected | P-1.7-00.pdf | in project, not in this analysis\n- number not detected | P-1.8-00.pdf | in project, not in this analysis\n- number not detected | P-2.0-00.pdf | in project, not in this analysis\n- number not detected | P-2.1-00.pdf | in project, not in this analysis\n- number not detected | P-3.0-00.pdf | in project, not in this analysis\n- number not detected | P-4.0-00.pdf | in project, not in this analysis\n- number not detected | P-4.1-00.pdf | in project, not in this analysis\n- number not detected | S-001.00.pdf | in project, not in this analysis\n- number not detected | S-002.00.pdf | in project, not in this analysis\n- number not detected | S-202.00.pdf | in project, not in this analysis\n- number not detected | S-203.00.pdf | in project, not in this analysis\n- number not detected | S-204.00.pdf | in project, not in this analysis\n- number not detected | S-300.00.pdf | in project, not in this analysis\nIf a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.\n\nStage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.\nReading rules: each \"- \" line is one printed annotation; \" / \" separates its rows; \" ; \" separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.\nstage3_status=recovered version=phase3.stage3-visual-evidence.v2\nStage3 OCR evidence v2 sheet=S-201.00 source=4x3 annotations=182 technical=103 shown=30 independentlyVerified=false\n- (2) KWIK CON II+ TO MASONRY, (2)#12 SCREWS TO / METAL DECK / CONNECTION IA: STIFFCLIP AL800 (4)#12 SCREWS / AND (2) L\" KWIK CON II+ | 3\" EMBEDMENT TO MASONRY (ctx?)\n- SEISMIC LOADING (IBC 2015) (ctx?)\n- SEISMIC USE GROUP (ctx?)\n- 0.133 (ctx?)\n- 0.43 / Sds 0.142 (ctx?)\n- ?Sdl 0.069 (ctx?)\n- SITE CLASS D. ASSUMED (ctx?)\n- SEISMIC IMPORTANCE FACTOR 1.0 (ctx?)\n- SEISMIC DESIGN CATEGORY (ctx?)\n- BASIC SEISMIC FORCE RESISTING SYSTEM: / ORD. PLAIN REINF MASONRY (ctx?)\n- Cs= 0.095 (ctx?)\n- ?DESIGN BASE SHEAR 15T KIPS3\n- ANALYSIS PROCEDURE: / EQUIVALENT LATERAL FORCE PROCEDURE (ctx?)\n- RISK CATEGORY II (ctx?)\n- ROOF LIVE LOAD: 30 PSF / (NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED) / ?(GROUND SNOW LOAD: (ctx?)\n- 3\" MIN EDGE DISTANCE AND 3/8\" EMBEDMENT INTO STEEL. (ctx?)\n- EX\n- 3. SLUMP 3\" MAX. FOR FOUNDATIONS & 4\" FOR WALLS, PRIOR TO MRWR. (ctx?)\n- ?6005162-43 MIL @ 16\" O/C\n- AND SLABS EXPOSED TO VIEW 3/4\" UNLESS OTHERWISE NOTED. (ctx?)\n- 600\n- PROVIDE HORIZONTAL / JOINT FULL LENGTH / JUST ABOVE WINDOW HEADER / WINDOW MUST BE / ABLE TO ACCOMODATE / DOWNWARD DEFLECTION OF 3/4\"\n- A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION / {WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 | WHERE SPECIAL INSPECTIONS AND 1} / AND 1705. (ctx?)\n- A. SPECIAL INSPECTIONS / {B. B B. CONCRETE CONSTRUCTION 1705.3 | CONGRETE CONSTRUCTION} (ctx?)\n- 2. ALL CONCRETE TO DEVELOP AN ULTIMATE COMPRESSIVE STRENGTH OF 3,000 PSI\n- IN 28 DAYS IN FOOTINGS AND WALLS, 3,500 PSI IN 28 DAYS IN SLABS / CONCRETE EXPOSED TO FREEZE THAW SHALL BE 4,500 PSI IN 28 DAYS, WITH A / {W/C RATIO OF 0.45, AND SHALL BE AIR ENTRAINED IN ACCORDANCE WITH ACI. | WVC RATIO OF 0.45, AND SHALL BE AIR ENTRAINED IN ACCORDANCE WITH ACI.} (ctx?)\n- IO. CONTRACTOR SHALL REMOVE ALL LOOSE, ORGANIC OR OTHERWISE UNSUITABLE / SOIL UNDER THE FLOOR SLAB AREA AND FILL IN WITH APPROVED MATERIAL IN 9\" / LIFTS COMPACTED TO 95% MAXIMUM DENSITY AS PER ASTM 1557. (ctx?)\n- ?I3. GROUT SHALL MEET THE REQUIREMENTS OF ASTM C476. COMPRESSIVE STRENGTH / OF 2,500 PSI AND 8\"-10\" SLUMP. GROUTING SHALL BE IN ACCORDANCE WITH / RECOMMENDATIONS NCMA-TEK 23A. (ctx?)\n- - STIFFCLIP LS 18\" LONG / ?(2)#I0 SCREWS / TYP\n- ANCHOR ALL VERTICAL REINFORCEMENT TO FOOTINGS WITH HOOKED DOWEL / BARS, LAP 24\". (ctx?)\nomitted: 152 annotations (80 technical: datum 20, numeric 40, dimension 9, value 10, qualifier 1; 72 other) by budget; not shown is not absent"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"S-201.00\",\"detected_sheet_title\":\"WALL SECTIONS AND NOTES\",\"discipline\":\"Structural\",\"summary\":\"The sheet contains wall sections and structural notes related to a commercial building project, depicting details for connections, materials, and load specifications.\",\"findings\":[{\"category\":\"explicit drawing requirement\",\"severity\":\"advisory\",\"title\":\"Special inspections requirement\",\"observation\":\"The sheet includes a requirement for a statement of special inspections per sections 109.3.13 and 1705.\",\"drawing_evidence\":\"A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.\",\"drawing_location\":\"Right column, under Special Inspections (Structural) notes\",\"suggested_code_reference\":\"\",\"recommendation\":\"Ensure that all required special inspections are documented and included with the application.\"},{\"category\":\"missing required information\",\"severity\":\"warning\",\"title\":\"Missing structural load information\",\"observation\":\"Seismic Design Category and Basic Seismic Force Resisting System are mentioned but not fully detailed.\",\"drawing_evidence\":\"SEISMIC DESIGN CATEGORY / BASIC SEISMIC FORCE RESISTING SYSTEM: ORD. PLAIN REINF MASONRY\",\"drawing_location\":\"Design Criteria section, under SEISMIC DESIGN CATEGORY\",\"suggested_code_reference\":\"2015 IBC Table 1613.3.5(1)\",\"recommendation\":\"Provide the complete details and calculations for seismic design as per IBC requirements.\"}]}",
+ "detected": {
+  "number": "S-201.00",
+  "title": "WALL SECTIONS AND NOTES",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet contains wall sections and structural notes related to a commercial building project, depicting details for connections, materials, and load specifications.",
+ "drafts": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Special inspections requirement",
+   "observation": "The sheet includes a requirement for a statement of special inspections per sections 109.3.13 and 1705.",
+   "drawing_evidence": "A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.",
+   "drawing_location": "Right column, under Special Inspections (Structural) notes",
+   "suggested_code_reference": "",
+   "recommendation": "Ensure that all required special inspections are documented and included with the application."
+  },
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing structural load information",
+   "observation": "Seismic Design Category and Basic Seismic Force Resisting System are mentioned but not fully detailed.",
+   "drawing_evidence": "SEISMIC DESIGN CATEGORY / BASIC SEISMIC FORCE RESISTING SYSTEM: ORD. PLAIN REINF MASONRY",
+   "drawing_location": "Design Criteria section, under SEISMIC DESIGN CATEGORY",
+   "suggested_code_reference": "2015 IBC Table 1613.3.5(1)",
+   "recommendation": "Provide the complete details and calculations for seismic design as per IBC requirements."
+  }
+ ],
+ "published": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Special inspections requirement",
+   "observation": "The sheet includes a requirement for a statement of special inspections per sections 109.3.13 and 1705.",
+   "drawing_evidence": "A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.",
+   "drawing_location": "Right column, under Special Inspections (Structural) notes",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that all required special inspections are documented and included with the application.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Special inspections requirement",
+    "originalObservation": "The sheet includes a requirement for a statement of special inspections per sections 109.3.13 and 1705.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Missing structural load information",
+   "observation": "Seismic Design Category and Basic Seismic Force Resisting System are mentioned but not fully detailed.",
+   "drawing_evidence": "SEISMIC DESIGN CATEGORY / BASIC SEISMIC FORCE RESISTING SYSTEM: ORD. PLAIN REINF MASONRY",
+   "drawing_location": "Design Criteria section, under SEISMIC DESIGN CATEGORY",
+   "suggested_code_reference": null,
+   "recommendation": "Provide the complete details and calculations for seismic design as per IBC requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Missing structural load information",
+    "originalObservation": "Seismic Design Category and Basic Seismic Force Resisting System are mentioned but not fully detailed.",
+    "originalCodeReference": "2015 IBC Table 1613.3.5(1)",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": [],
+ "oneSheetIndexReplay": {
+  "published": [
+   {
+    "category": "explicit drawing requirement",
+    "severity": "advisory",
+    "title": "Special inspections requirement",
+    "observation": "The sheet includes a requirement for a statement of special inspections per sections 109.3.13 and 1705.",
+    "drawing_evidence": "A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.",
+    "drawing_location": "Right column, under Special Inspections (Structural) notes",
+    "suggested_code_reference": null,
+    "recommendation": "Ensure that all required special inspections are documented and included with the application.",
+    "verification_status": "unresolved_reference",
+    "validation": {
+     "outcome": "accepted",
+     "rules": [],
+     "originalSeverity": "advisory",
+     "originalTitle": "Special inspections requirement",
+     "originalObservation": "The sheet includes a requirement for a statement of special inspections per sections 109.3.13 and 1705.",
+     "originalCodeReference": "",
+     "publishedSeverity": "advisory",
+     "publishedCodeReference": null,
+     "citationIssues": [],
+     "editionMappingApplied": false,
+     "independentlyVerified": false,
+     "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+    }
+   },
+   {
+    "category": "missing required information",
+    "severity": "warning",
+    "title": "Missing structural load information",
+    "observation": "Seismic Design Category and Basic Seismic Force Resisting System are mentioned but not fully detailed.",
+    "drawing_evidence": "SEISMIC DESIGN CATEGORY / BASIC SEISMIC FORCE RESISTING SYSTEM: ORD. PLAIN REINF MASONRY",
+    "drawing_location": "Design Criteria section, under SEISMIC DESIGN CATEGORY",
+    "suggested_code_reference": null,
+    "recommendation": "Provide the complete details and calculations for seismic design as per IBC requirements.",
+    "verification_status": "unresolved_reference",
+    "validation": {
+     "outcome": "adjusted",
+     "rules": [
+      "section_not_supported"
+     ],
+     "originalSeverity": "warning",
+     "originalTitle": "Missing structural load information",
+     "originalObservation": "Seismic Design Category and Basic Seismic Force Resisting System are mentioned but not fully detailed.",
+     "originalCodeReference": "2015 IBC Table 1613.3.5(1)",
+     "publishedSeverity": "warning",
+     "publishedCodeReference": null,
+     "citationIssues": [
+      "section_not_supported"
+     ],
+     "editionMappingApplied": false,
+     "independentlyVerified": false,
+     "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+    }
+   }
+  ],
+  "withheld": []
+ }
+}

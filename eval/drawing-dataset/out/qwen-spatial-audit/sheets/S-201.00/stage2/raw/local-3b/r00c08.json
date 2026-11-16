@@ -1,0 +1,22 @@
+{
+ "backend": "local-3b",
+ "model": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 390, 850, 430],\n        \"text_content\": \"R DETAILS APPLY TO SIMILAR CONDITIONS\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": true,\n        \"alternatives\": [\n            \"R DETAILS APPLY TO SIMILAR CONDITIONS\"\n        ]\n    },\n    {\n        \"bbox_2d\": [0, 470, 866, 510],\n        \"text_content\": \"CESSARY COMPONENTS FOR CONSTRUCTION\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": true,\n        \"alternatives\": [\n            \"CESSARY COMPONENTS FOR CONSTRUCTION\"\n        ]\n    },\n    {\n        \"bbox_2d\": [0, 550, 886, 590],\n        \"text_content\": \"ERAL ELEMENTS REQUIRED FOR STABILITY ARE\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": true,\n        \"alternatives\": [\n            \"ERAL ELEMENTS REQUIRED FOR STABILITY ARE\"\n        ]\n    },\n    {\n        \"bbox_2d\": [0, 610, 500, 650],\n        \"text_content\": \"FOLLOWS: ROOF DECK, ROOF SHEATHING,\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": true,\n        \"alternatives\": [\n            \"FOLLOWS: ROOF DECK, ROOF SHEATHING,\"\n        ]\n    },\n    {\n        \"bbox_2d\": [0, 890, 100, 930],\n        \"text_content\": \"2015)\",\n        \"category\": \"detail_title\",\n        \"group\": 1,\n        \"uncertain\": true,\n        \"alternatives\": [\n            \"2015)\"\n        ]\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1546,
+ "completionTokens": 437,
+ "costUsd": 0.0,
+ "latencyS": 168.3,
+ "timings": {
+  "cache_n": 15,
+  "prompt_n": 1531,
+  "prompt_ms": 103639.637,
+  "prompt_per_token_ms": 67.69408033964729,
+  "prompt_per_second": 14.772340431875499,
+  "predicted_n": 437,
+  "predicted_ms": 64475.0,
+  "predicted_per_token_ms": 147.87844036697248,
+  "predicted_per_second": 6.7623109732454445
+ },
+ "promptVersion": "qsa.tile-prompt.v1"
+}

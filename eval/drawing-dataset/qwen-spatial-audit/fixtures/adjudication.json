@@ -1,0 +1,1543 @@
+{
+ "version": "qsa.adjudication.v1",
+ "note": "Saved baseline classes are copied from the research CSVs; new-run entries are added by hand after reading the finding and the sheet.",
+ "findings": {
+  "a0a8ff29a476": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "no defect named",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F001"
+  },
+  "ee7691c6fc72": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "'SEE CODE' not on sheet (OCR has '1 HR RATED PARTITION PROVIDE')",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F002"
+  },
+  "5d9f1fe9b2ba": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "existing stair; no deficiency shown; quoted label not machine-located",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F003"
+  },
+  "26f2174416a9": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "sheet prints 'SEE SHEET A-6.00 FOR DOOR AND A-6.01 FOR ROOM FINISH'; 'A-600' invented",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F004"
+  },
+  "8367a80a4b59": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "'1-HOUR PARTITION AS TYPE X' not machine-located",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F005"
+  },
+  "929172875419": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "'EXIT STAIR RAILING' not machine-located (OCR reads 'STAIR TOWER')",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F006"
+  },
+  "151a392990ea": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "paraphrase of a printed note",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F007"
+  },
+  "501d9e724780": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "notes are not required to cite code sections",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F008"
+  },
+  "f34625cb4da4": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "A-3.01 is in the 82-sheet set; single-sheet harness index",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F009"
+  },
+  "4b03facb1c01": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "A-3.01 in set; validator regex missed 'not resolved in the submitted sheet index'",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F010"
+  },
+  "199df780f9ca": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "validator neutralized (keynote_citation_mismatch) from warning",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F011"
+  },
+  "d6b07647ea26": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "validator neutralized",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F012"
+  },
+  "5012de86e5e7": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "a pointer to 6/A-1.00 called 'potential confusion'; no conflict exists",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F013"
+  },
+  "6674ce005ce5": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F014"
+  },
+  "65c45a303242": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "a SEE SHEET pointer treated as an omission",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F015"
+  },
+  "822e629dec2d": {
+   "class": "E",
+   "cause": "XREF-POINTER",
+   "note": "'no detail 6/A-1.00 on this sheet' - detail 6 is on A-1.00 by definition",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F016"
+  },
+  "b61fa12aa4db": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F017"
+  },
+  "619c1a4a42d9": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F018"
+  },
+  "4e957ac9c432": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "A-1.03 in set; rule cross_sheet_reference_unresolved fired, severity kept by design",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F019"
+  },
+  "3d12ebc94847": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F020"
+  },
+  "fa23fe689ec4": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "also misattributes partition types to A-3.01 (sheet: A-3.01 = exterior wall assemblies)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F021"
+  },
+  "1ce24d9cdbf3": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "schedule is on A-1.03 (in set)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F022"
+  },
+  "77315cabbc4a": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F023"
+  },
+  "e54671444587": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F024"
+  },
+  "34546b20e1e2": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F025"
+  },
+  "4b7f17729e9d": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F026"
+  },
+  "9d06afed0c46": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "quote absent from full-sheet ground truth",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F027"
+  },
+  "cc843dbda98a": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "'type HSD' absent from full-sheet ground truth",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F028"
+  },
+  "06ef481eed57": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "sheet shows 4x4 blocking at guard rail penetrations and connection details",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F029"
+  },
+  "e3ef004965d8": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "sheet prints 3'-6\\\" MIN HEIGHT FROM T.O. ROOF DECK MEMBRANE",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F030"
+  },
+  "43ee892ba3d4": {
+   "class": "Q",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F031"
+  },
+  "ea6971073510": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "as F030",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F032"
+  },
+  "5ae23488b3b3": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "quotes sphere 4\\\"; sheet prints 21\\\" IN DIA",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F033"
+  },
+  "8b9e6e4f9e33": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F034"
+  },
+  "c920cdf3c4a2": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "titled conflict; observation names no conflict",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F035"
+  },
+  "6a8e0f92ab9c": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "ordinary revision history",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F036"
+  },
+  "55f2034c7b52": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F037"
+  },
+  "ab9b29c55689": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F038"
+  },
+  "65fe54318726": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F039"
+  },
+  "b03faf14b4cb": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F040"
+  },
+  "8af3ca597461": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "21\\\" sphere and 30\\\" extension are the IBC 2015 1015.6 rooftop-equipment guard values",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F041"
+  },
+  "875124264d36": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F042"
+  },
+  "40e5814eca98": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F043"
+  },
+  "d00dffeac55d": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "categorised conflicting information; no conflict",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F044"
+  },
+  "63d4b20b6e89": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F045"
+  },
+  "7a2c0c4f3dfe": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F046"
+  },
+  "901f3aa43118": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "6\\\" studs are printed (both 4\\\" and 6\\\" exist)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F047"
+  },
+  "6b17a76ac257": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "validator neutralized absence claim (worked)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F048"
+  },
+  "5cc05d67b78a": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F049"
+  },
+  "bbc91a731e86": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F050"
+  },
+  "7dd605514540": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F051"
+  },
+  "b1dec6c6a383": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F052"
+  },
+  "12ce02b714c7": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F053"
+  },
+  "8b34bfad2bd5": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F054"
+  },
+  "ffe8b6694c25": {
+   "class": "Q",
+   "cause": "GENERIC",
+   "note": "outside ground-truth window",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F055"
+  },
+  "9a963e1f4baf": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "no values cited for the claimed discrepancy",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F056"
+  },
+  "328b386d127f": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F057"
+  },
+  "4e2c37bd431c": {
+   "class": "U",
+   "cause": "ABSENCE-FALSE?",
+   "note": "sheet has tactile/braille notes and a signage height elevation",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F058"
+  },
+  "05f3f77259d0": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F059"
+  },
+  "9f39d716f279": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F060"
+  },
+  "4f4df6a85382": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "benign",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F061"
+  },
+  "fe19d8820c34": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "A-6.00 in set; rule fired, severity kept",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F062"
+  },
+  "9d1861536f29": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F063"
+  },
+  "d2dde9ff16a9": {
+   "class": "Q",
+   "cause": "GENERIC",
+   "note": "mirror/dryer heights not verified",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F064"
+  },
+  "0518bbddc2ff": {
+   "class": "Q",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F065"
+  },
+  "ce755dc40d91": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F066"
+  },
+  "7faaabfde258": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "quote correct (70 DEGREES); no deficiency",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F067"
+  },
+  "f48bd13ccd14": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F068"
+  },
+  "1f014d0c9373": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "42\\\" (36\\\" MIN.) and 42\\\" MAX are different dimensions",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F069"
+  },
+  "f31c4dbf4004": {
+   "class": "E",
+   "cause": "OCR-MISREAD",
+   "note": "all three printed notes say 70 DEGREES; OCR read 10 at two",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F070"
+  },
+  "94f89dc5b053": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "validator regex missed 'not part of the submitted set'",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F071"
+  },
+  "374a0ab915d4": {
+   "class": "E",
+   "cause": "OCR-MISREAD",
+   "note": "quotes 10 DEGREES as the printed value",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F072"
+  },
+  "90d1b64a0cda": {
+   "class": "H",
+   "cause": "XREF-INDEX",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F073"
+  },
+  "6ba0eb02a5a5": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F074"
+  },
+  "4adcd5beadd2": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F075"
+  },
+  "a435e23e40ce": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F076"
+  },
+  "1b9325160953": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "'Door E1' absent from door-schedule ground truth",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F077"
+  },
+  "05d55884599e": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "W3 exists; claimed dimensions not machine-located",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F078"
+  },
+  "91d8cffdabfb": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "no 'Fire Rating' column in the door-schedule ground truth",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F079"
+  },
+  "bf51cbf30fc3": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "'DOOR 2A' and 'Panic Device' not on sheet",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F080"
+  },
+  "63ef4aea201e": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "'closer/holder' not machine-located",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F081"
+  },
+  "50458d023349": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "no 'TBD' in door-schedule ground truth",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F082"
+  },
+  "e58e23897bac": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F083"
+  },
+  "4b398e32a359": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "validator neutralized (worked)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F084"
+  },
+  "15a058909cc4": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F085"
+  },
+  "4da68fd025a1": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "schedule has headed columns",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F086"
+  },
+  "bb5c01c8612a": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F087"
+  },
+  "9f358150e904": {
+   "class": "E",
+   "cause": "OCR-VARIANT",
+   "note": "same printed row read 9975EO and 9975E0 by different tiles; v1 lists both",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F088"
+  },
+  "9b614b7e9ac0": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "validator neutralized (worked)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F089"
+  },
+  "f257b68769d7": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F090"
+  },
+  "82871f23e4a8": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "closer models (LCN 4111, 1461) are printed; validator missed (evidence does not quote them)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F091"
+  },
+  "fd227ef2c6e0": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F092"
+  },
+  "95b957ef73e7": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F093"
+  },
+  "7810f24539ee": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F094"
+  },
+  "10862c845955": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F095"
+  },
+  "86c008dcdc72": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F096"
+  },
+  "02509fed8d0a": {
+   "class": "E",
+   "cause": "MARKER-MISREAD",
+   "note": "one printed note; v2 showed a truncated OCR read as a competing reading {..|..|DOOR 3, 4, & 4A TO HAVE}",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F097"
+  },
+  "c93f6e271a8f": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F098"
+  },
+  "cb5d901e3692": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "quoted push plate spec is complete; recommends NEC",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F099"
+  },
+  "3feff40feb40": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F100"
+  },
+  "509ca74513a8": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F101"
+  },
+  "663cd0ff3734": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F102"
+  },
+  "9cc27157cade": {
+   "class": "Q",
+   "cause": "PLAUSIBLE",
+   "note": "no rating column; note 11 calls for fire-rated gaskets at door #11",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F103"
+  },
+  "a483ed3f5ed8": {
+   "class": "Q",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F104"
+  },
+  "307ffb9c5dc9": {
+   "class": "Q",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F105"
+  },
+  "71e005dc822a": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F106"
+  },
+  "c5f92edb804a": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F107"
+  },
+  "0a8e062ba0bd": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "ordinary revision history",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F108"
+  },
+  "197e09c2a6d6": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "'three hinges' not machine-located",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F109"
+  },
+  "f1fda98411df": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F110"
+  },
+  "140987bafa3d": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F111"
+  },
+  "79c58d4c82bc": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "wall sections carry CONNECTION 1/1A/2/3/3A callouts",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F112"
+  },
+  "e02b58387834": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "quotes 20 PSF; sheet prints ROOF LIVE LOAD: 30 PSF",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F113"
+  },
+  "f64d467210fb": {
+   "class": "OKs",
+   "cause": "TITLE-BLOCK",
+   "note": "text layer prints 'OF 00'; warning is high",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F114"
+  },
+  "25911ca4d5ab": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "NO SCALE is normal for notes",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F115"
+  },
+  "316305bda90e": {
+   "class": "OKs",
+   "cause": "TITLE-BLOCK",
+   "note": "text layer prints 3/4\\\"1'-0\\\" for wall section 2",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F116"
+  },
+  "eea23425709b": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "labels A1/A2/B1/C1 not on sheet (sheet: 1, 1A, 2, 3, 3A)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F117"
+  },
+  "d0b1cb908201": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "design loads are printed",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F118"
+  },
+  "4e9f5d3539ad": {
+   "class": "OKs",
+   "cause": "TITLE-BLOCK",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F119"
+  },
+  "ee275adcccc9": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "list printed (A. LIGHT GAGE SHOP DRAWINGS AND CALCULATIONS ...)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F120"
+  },
+  "c31a9eedb842": {
+   "class": "E",
+   "cause": "PACK-GAP",
+   "note": "WIND LOADING and SEISMIC LOADING sections are printed; v1 pack did not carry them",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F121"
+  },
+  "5f162a390402": {
+   "class": "U",
+   "cause": "MISINTERP",
+   "note": "typical connection callouts repeated by design",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F122"
+  },
+  "44416df78efb": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F123"
+  },
+  "032dc40f1ced": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F124"
+  },
+  "add8eac4a5ba": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F125"
+  },
+  "df4e1dd7987d": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "'IBC 2009' not on sheet",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F126"
+  },
+  "3c6340c2bb2e": {
+   "class": "OK",
+   "cause": "TRUE-GAP",
+   "note": "ground truth: SEISMIC DESIGN CATEGORY has no printed value",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F127"
+  },
+  "90277258621e": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F128"
+  },
+  "3df820a6af92": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F129"
+  },
+  "2b9cce0c5723": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F130"
+  },
+  "2ba3369a2e65": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "a design stipulation, not a defect",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F131"
+  },
+  "4dec1ba19981": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F132"
+  },
+  "f1504d6b009c": {
+   "class": "OK",
+   "cause": "TRUE-GAP",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F133"
+  },
+  "4885d0a92e32": {
+   "class": "OKs",
+   "cause": "TITLE-BLOCK",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F134"
+  },
+  "020495ea68fc": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "reads SITE CLASS D as the design category; v2 grouped them in one annotation",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F135"
+  },
+  "40d965a1fec4": {
+   "class": "E",
+   "cause": "MARKER-LEAK",
+   "note": "finding is about 'OCR reading uncertainty', not the drawing",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F136"
+  },
+  "9d738c59e77f": {
+   "class": "E",
+   "cause": "FABRICATED",
+   "note": "quotes 150 psf; sheet prints FLOOR LIVE LOAD: 100 PSF (not in block)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F137"
+  },
+  "c351efc48120": {
+   "class": "Q",
+   "cause": "TRUE-GAP?",
+   "note": "real gap, wrong premise (says the category is listed)",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F138"
+  },
+  "ce4f856a5916": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F139"
+  },
+  "6c570caff3f0": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "'air barriers' not machine-located",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F140"
+  },
+  "aabc86561d37": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "sheet prints 0\\\" OFFSET for 3A (OCR O for 0); a deliberate value called a typo at Critical",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F141"
+  },
+  "16a2ea566f08": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F142"
+  },
+  "b89aea3f33c6": {
+   "class": "OK",
+   "cause": "TITLE-BLOCK",
+   "note": "",
+   "source": "07-finding-root-cause/data/finding-inventory.csv F143"
+  },
+  "42ac47d74d6c": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "sheet named only in evidence/recommendation; C6 rule does not apply",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "dbcb68d14ba7": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "quote correct; no deficiency",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "63637b991ec4": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "691b8fa83db4": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "aeb289165ddb": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "179677af85a9": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "draft 'Door Schedule Reference' (warning) rewritten by keynote_citation_mismatch",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "e4e02f9e8683": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "says 'to top of sign'; quoted evidence says 'to the centerline'",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "aad74382e176": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "22453f8c36f2": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "eb3d4ad24381": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "quotes 70 DEGREES correctly",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "a7347e7c0940": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "62d00a0522e2": {
+   "class": "U",
+   "cause": "XREF-POINTER",
+   "note": "observation restates the pointer with no status claim; C6 rule does not apply",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "99511aa3f7ce": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "fb97914f9e19": {
+   "class": "Q",
+   "cause": "UNSUPPORTED-ASSOC",
+   "note": "'door D2' not machine-located anywhere on the sheet; v1 excerpts carry no door/row context",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "f8043d1a16b8": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "d26722208bc2": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "1cc30d99c376": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "af8b26bb7f75": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "vague; like F099",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "d56e326952be": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "6907d6d66822": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "value 0.61 correct; no conflict (F097 class gone)",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "299c4390fc11": {
+   "class": "E",
+   "cause": "MARKER-MISREAD",
+   "note": "'EXTERIC' is a truncated OCR alternative {..EXTERIOR.. | ..EXTERIC | ..} that C3 does not absorb (misread last char)",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "75aa1caedeed": {
+   "class": "Q",
+   "cause": "UNSUPPORTED",
+   "note": "'two sets for door type 8' not supported; 36in and 48in panic rows are different entries (EO/E0 read across places)",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "54aa0d3d5070": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "b2bc77935bcb": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "8 1/2 lb exterior and 5 lb interior are different requirements, not a conflict",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "8e8693a25e0d": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "restates values; 'does not affirm compliance'",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "ba7ed785373d": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "1b51d936d170": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "b6241717a1bb": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "1f966e35f487": {
+   "class": "Q",
+   "cause": "FABRICATED?",
+   "note": "1705.2.1 and 1704.3.3 not machine-located; not in the v1 block",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "30f0e9cec6b4": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "ab75760482e7": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "53ee3ee2728d": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "2f7331e95bf4": {
+   "class": "OKs",
+   "cause": "TITLE-BLOCK",
+   "note": "same as F119/F134",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "d8e9e3341cd0": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "e8c426e8378e": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "21ded7fdfb46": {
+   "class": "E",
+   "cause": "ABSENCE-FALSE",
+   "note": "GROUND SNOW LOAD: 25 PSF + DRIFT is printed; block shows tile-edge fragment ?(GROUND SNOW LOAD: (ctx?)",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "b01ad5e35473": {
+   "class": "E",
+   "cause": "MISINTERP",
+   "note": "Sds 0.142 and Cs 0.095 are different parameters; values shown without their labels after the C4 split + budget",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "86e7f9e3dd29": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "9962b97cfda7": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "e759258fd51a": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "08d2321dd6ca": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "b30eecab7c80": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "07-finding-root-cause/impl/verify/scoring.csv"
+  },
+  "e2c826d092d6": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "asks for UL listings / compliance documentation; like F099",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "a6c0839132c5": {
+   "class": "Q",
+   "cause": "XREF-UNSUPPORTED",
+   "note": "'SEE ELEVATIONS AND WALL SECTIONS' names no sheet; the claim that the index has no elevation sheet is unsupported (index is file names only; A-2.00-A-2.02 and A-3.00-A-3.06 exist); no sheet reference, so C6 does not apply",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "0861c004a122": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "cda19a07ee2b": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "interior 5 lb, correct; no contradiction",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "a519f4f8f81f": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "the note covers doors 3, 4, 4A only, as printed; no requirement shown to be missing",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "50abce467e28": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "4a72b8801c4f": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "revision dates are printed",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "93e98b174247": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "a2abe87f36d2": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "interior 5 lb, correct",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "697780b57935": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "the statement is a separate submittal; no deficiency on the sheet",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "7f7b6ecac841": {
+   "class": "Q",
+   "cause": "TRUE-GAP?",
+   "note": "mentions the category but calls it 'assumed information'; does not say it has no value (F138 pattern)",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "ea37a56b2b99": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "3,000 / 3,500 / 4,500 PSI correct",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "1cff40e1fc98": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "d0513b1e717e": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "lists SEISMIC DESIGN CATEGORY as a criterion; no gap stated",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "28dc6c32681e": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "93c10d422240": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "852ec8a40264": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "d1a829aab110": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "852856ef0909": {
+   "class": "OK",
+   "cause": "TRUE-GAP",
+   "note": "quotes the empty SEISMIC DESIGN CATEGORY caption; same level as F133 ('implied but not explicitly stated'); also calls the force-resisting system 'not fully detailed', which is printed",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "a07221a4b626": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "115 MPH correct (block {|15 MPH, ground truth R016 115 MPH)",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "a7e62058618e": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "9a5f7b6d073b": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "412129b58aa1": {
+   "class": "U",
+   "cause": "RESTATE",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "5cd2019f7aa0": {
+   "class": "E",
+   "cause": "MARKER-MISREAD",
+   "note": "printed (4)#12; this font draws 1 as a bare stroke (crop S-201-connection-3-3A: #I2, 0.I57); block shows ?(4)#|2 glyph-marked, identical in the Phase 6 r4 block",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "35a1b02d54c0": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "SITE CLASS D, ASSUMED is printed",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "51fbb7ac58a0": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "366a114add42": {
+   "class": "OKs",
+   "cause": "TITLE-BLOCK",
+   "note": "text layer prints 3/4\\1'-0\\ for wall section 2 (F116/F134/F143); warning is high",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "72ab827695dd": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "",
+   "source": "09-v2-downstream/verify/scoring.csv"
+  },
+  "fe33d06a7541": {
+   "class": "OKs",
+   "cause": "VALID",
+   "note": "As C-A101-LEVEL; warning is high for a naming inconsistency.",
+   "claim": "C-A101-LEVEL-W",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "7b1583bf170f": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Note 5 prints 'ADA COMPLAINT HARDWARE' (crop A-1.01-00.adanotes2.png).",
+   "claim": "C-A101-TYPO",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "0e5e4da25b13": {
+   "class": "OK",
+   "cause": "VALID-CODE-UNVERIFIED",
+   "note": "Note 4 prints 'ICC/ANSI A117.1-2003'; the 2015 IBC base references a later edition. Code text not retrieved: requires code verification.",
+   "claim": "C-A101-A117",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "51128fdf3f2e": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "Coordination request; no defect named.",
+   "claim": "C-A101-STAIR",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "944eba59d119": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Note 5 prints 'ADA COMPLAINT HARDWARE' (crop A-1.01-00.adanotes2.png).",
+   "claim": "C-A101-TYPO",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "ed4306f18096": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Title block 'MEZZANINE & BASEMENT FLOOR PLAN' vs plan titles '2ND FLOOR ALTERATION FLOOR PLAN' / 'BASEMENT ALTERATION FLOOR PLAN' (text layer). Mezzanine vs story classification needs the designer.",
+   "claim": "C-A101-LEVEL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "1055746c05e2": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Text layer prints '00 / FIRST ISSUE / 00' in the revision table on every sheet: a template placeholder, not a demonstrated error.",
+   "claim": "C-REV00",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "d74e268de206": {
+   "class": "OK",
+   "cause": "VALID-CODE-UNVERIFIED",
+   "note": "Note 4 prints 'ICC/ANSI A117.1-2003'; the 2015 IBC base references a later edition. Code text not retrieved: requires code verification.",
+   "claim": "C-A101-A117",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "604dd4c3c0cb": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Text layer prints '00 / FIRST ISSUE / 00' in the revision table on every sheet: a template placeholder, not a demonstrated error.",
+   "claim": "C-REV00",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "b73241d52d33": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Title block 'MEZZANINE & BASEMENT FLOOR PLAN' vs plan titles '2ND FLOOR ALTERATION FLOOR PLAN' / 'BASEMENT ALTERATION FLOOR PLAN' (text layer). Mezzanine vs story classification needs the designer.",
+   "claim": "C-A101-LEVEL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "f1ed73c20562": {
+   "class": "U",
+   "cause": "RESTATES-CODE",
+   "note": "The 21-inch sphere and 3'-6\" height match the guard provision for roof equipment; drawing language is not permissive. Code text not retrieved.",
+   "claim": "C-A306-SPHERE",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "9a8a72673396": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "Blocking, flange and lag bolts are detailed; coordination request only.",
+   "claim": "C-A306-ATTACH",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "ce9d838b7316": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "Blocking, flange and lag bolts are detailed; coordination request only.",
+   "claim": "C-A306-ATTACH",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "62c30e85169a": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Text layer prints '00 / FIRST ISSUE / 00' in the revision table on every sheet: a template placeholder, not a demonstrated error.",
+   "claim": "C-REV00",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "2abc38a190a3": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Text layer prints '00 / FIRST ISSUE / 00' in the revision table on every sheet: a template placeholder, not a demonstrated error.",
+   "claim": "C-REV00",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "2a6656079ae5": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Callout bubble 8/A400 under detail 5 points to detail 8 LAVATORY SECTION, which is drawn empty and marked NOT USED (crops A-4.00-00.callout1.png, detail8.png).",
+   "claim": "C-A400-NOTUSED",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "8ab2c86f00a6": {
+   "class": "U",
+   "cause": "SEVERITY",
+   "note": "Terminology point published as warning.",
+   "claim": "C-A400-FLUSH-W",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "baf8a314882a": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Signage note 2: mounting 60\" AFF to centerline of sign; detail 4: 48\" MIN to bottom of Braille, 60\" MAX to top of tactile, and 4'-0\" MIN / 5'-0\" MAX to characters. Different datums on one sheet (crop A-4.00-00.signnote.png). Code basis requires verification.",
+   "claim": "C-A400-SIGN",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "ee62666a544a": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "'PROVIDE AUTOMATIC FLUSH VALVES ON ALL LAVATORIES, TOILETS & URINALS' is printed; terminology only, no compliance consequence shown.",
+   "claim": "C-A400-FLUSH",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "23d0cb9792f1": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Note prints 'SEE EXTERIOR WINDOW ASSEMBLY, 4/A5.0' (crop A-6.00-00.a501.png); the 82-sheet set has no A-5 series sheet.",
+   "claim": "C-A600-A50",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "9fa6a62c0866": {
+   "class": "U",
+   "cause": "RESTATES-CODE",
+   "note": "Note restates the egress-side operation requirement.",
+   "claim": "C-A600-KEYLESS",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "37c9c6610198": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "No defect named.",
+   "claim": "C-A600-D12",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "7fe0ad083dc6": {
+   "class": "U",
+   "cause": "SEE-POINTER",
+   "note": "'SEE ELEVATIONS AND WALL SECTIONS' is a pointer, not an omission.",
+   "claim": "C-A600-NOTE5",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "e2368bb07611": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Text layer prints '00 / FIRST ISSUE / 00' in the revision table on every sheet: a template placeholder, not a demonstrated error.",
+   "claim": "C-REV00",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "aa9ef68cc43e": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Text layer prints '00 / FIRST ISSUE / 00' in the revision table on every sheet: a template placeholder, not a demonstrated error.",
+   "claim": "C-REV00",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "c5c4e00c7d61": {
+   "class": "Q",
+   "cause": "XREF-UNRESOLVED",
+   "note": "'2X4 REPAIR SEE TYPICAL SECTION' printed; no typical section titled on S-201; target not identified.",
+   "claim": "C-S201-TYPSEC",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "ddaa33ee64ae": {
+   "class": "U",
+   "cause": "GENERIC",
+   "note": "Asks to clarify printed snow and live loads; no defect shown.",
+   "claim": "C-S201-SNOW",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "4148ea24428f": {
+   "class": "Q",
+   "cause": "CODE-UNVERIFIED",
+   "note": "Cloud prints 'D. COLD-FORMED STEEL 1705.3.4' (crop S-201.00.specialD.png); whether the section is correct needs the code text.",
+   "claim": "C-S201-1705",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "c1ff55adf6d1": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "'REFER TO SECTION 23 OF IBC 2015' printed; Chapter vs Section wording only.",
+   "claim": "C-S201-WOOD23",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "5c37605dd6ce": {
+   "class": "OK",
+   "cause": "VALID-CODE-UNVERIFIED",
+   "note": "Reinforced concrete note 1 prints 'ACI 318-06' while design data cites IBC 2015 (crop S-201.00.aci0.png). Edition referenced by the 2015 IBC requires code verification.",
+   "claim": "C-S201-ACI",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "fd84f0f1d0de": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' vs note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' (crops S-201.00.soil*.png). Engineer to reconcile.",
+   "claim": "C-S201-SOIL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "f44a44a65674": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' vs note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' (crops S-201.00.soil*.png). Engineer to reconcile.",
+   "claim": "C-S201-SOIL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "f9b093a6d988": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' vs note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' (crops S-201.00.soil*.png). Engineer to reconcile.",
+   "claim": "C-S201-SOIL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "ccf938483d45": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' vs note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' (crops S-201.00.soil*.png). Engineer to reconcile.",
+   "claim": "C-S201-SOIL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "9edc70679861": {
+   "class": "OK",
+   "cause": "VALID",
+   "note": "Masonry and foundation note 1 'ASSUMED BEARING CAPACITY OF SOIL IS 1,500 PSF' vs note 8 'FIRM UNDISTURBED SOIL, OF MINIMUM DESIGN SOIL PRESSURE 2,500 PSF' (crops S-201.00.soil*.png). Engineer to reconcile.",
+   "claim": "C-S201-SOIL",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "6ee76a51221e": {
+   "class": "Q",
+   "cause": "CODE-UNVERIFIED",
+   "note": "Cloud prints 'D. COLD-FORMED STEEL 1705.3.4' (crop S-201.00.specialD.png); whether the section is correct needs the code text.",
+   "claim": "C-S201-1705",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  },
+  "e2f118dfba1b": {
+   "class": "Q",
+   "cause": "LOW-VALUE",
+   "note": "Revision table headers with no rows while the sheet is stamped REVISED PERMIT SET 10/15/2026 (text layer).",
+   "claim": "C-S201-REVTABLE",
+   "source": "stage4 luna-e2e; read against PDF crops in out/qwen-spatial-audit/inspect/findings/"
+  }
+ }
+}

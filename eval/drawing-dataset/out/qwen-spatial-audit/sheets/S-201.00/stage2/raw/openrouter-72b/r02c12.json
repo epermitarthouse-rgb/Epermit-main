@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842906-LDiLyisS0436Y4sab6Dl",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 106, 743, 218],\n        \"text_content\": \"McDonald's\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [241, 364, 454, 397],\n        \"text_content\": \"REVISIONS\",\n        \"category\": \"schedule_title\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [138, 437, 406, 470],\n        \"text_content\": \"DESCRIPTION\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [665, 437, 767, 470],\n        \"text_content\": \"DATE\",\n        \"category\": \"schedule_cell\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 277,
+ "costUsd": 0.00151,
+ "reportedCostUsd": 0.0015098,
+ "latencyS": 8.17,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

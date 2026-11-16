@@ -1,0 +1,219 @@
+Review this permit drawing sheet and return the structured preliminary observations.
+
+Current file: A-1.01-00.pdf
+
+Submitted sheet index (filenames and detected numbers only; other sheets were not read in this request):
+- number not detected | A-1.01-00.pdf | current sheet
+- number not detected | A-1.00-00.pdf | in project, not in this analysis
+- number not detected | A-1.02-00.pdf | in project, not in this analysis
+- number not detected | A-1.03-00.pdf | in project, not in this analysis
+- number not detected | A-1.04.00.pdf | in project, not in this analysis
+- number not detected | A-1.05.00.pdf | in project, not in this analysis
+- number not detected | A-1.06-00.pdf | in project, not in this analysis
+- number not detected | A-2.00-00.pdf | in project, not in this analysis
+- number not detected | A-2.01-00.pdf | in project, not in this analysis
+- number not detected | A-2.02.00.pdf | in project, not in this analysis
+- number not detected | A-3.00-00.pdf | in project, not in this analysis
+- number not detected | A-3.01-00.pdf | in project, not in this analysis
+- number not detected | A-3.02-00.pdf | in project, not in this analysis
+- number not detected | A-3.03-00.pdf | in project, not in this analysis
+- number not detected | A-3.04-00.pdf | in project, not in this analysis
+- number not detected | A-3.05-00.pdf | in project, not in this analysis
+- number not detected | A-3.06-00.pdf | in project, not in this analysis
+- number not detected | A-4.00-00.pdf | in project, not in this analysis
+- number not detected | A-4.01-00.pdf | in project, not in this analysis
+- number not detected | A-4.02-00.pdf | in project, not in this analysis
+- number not detected | A-6.00-00.pdf | in project, not in this analysis
+- number not detected | A-6.01.00.pdf | in project, not in this analysis
+- number not detected | CV-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.01-00.pdf | in project, not in this analysis
+- number not detected | DM-1.02-00.pdf | in project, not in this analysis
+- number not detected | DM-2.00-00.pdf | in project, not in this analysis
+- number not detected | DM-2.01-00.pdf | in project, not in this analysis
+- number not detected | E-1.0-00.pdf | in project, not in this analysis
+- number not detected | E-1.1-00.pdf | in project, not in this analysis
+- number not detected | E-1.2-00.pdf | in project, not in this analysis
+- number not detected | E-1.3-00.pdf | in project, not in this analysis
+- number not detected | E-2.1-00.pdf | in project, not in this analysis
+- number not detected | E-2.2-00.pdf | in project, not in this analysis
+- number not detected | E-3.0-00.pdf | in project, not in this analysis
+- number not detected | E-3.1-00.pdf | in project, not in this analysis
+- number not detected | E-3.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.0-00.pdf | in project, not in this analysis
+- number not detected | E-4.1-00.pdf | in project, not in this analysis
+- number not detected | E-4.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.3-00.pdf | in project, not in this analysis
+- number not detected | EN-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-2.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-3.00-0.pdf | in project, not in this analysis
+- number not detected | FP100.pdf | in project, not in this analysis
+- number not detected | FP200 .pdf | in project, not in this analysis
+- number not detected | FP201.pdf | in project, not in this analysis
+- number not detected | FP300.pdf | in project, not in this analysis
+- number not detected | G-0.00-0.pdf | in project, not in this analysis
+- number not detected | M-1.1.pdf | in project, not in this analysis
+- number not detected | M-1.2.pdf | in project, not in this analysis
+- number not detected | M-1.3.pdf | in project, not in this analysis
+- number not detected | M-1.4.pdf | in project, not in this analysis
+- number not detected | M-2.0.pdf | in project, not in this analysis
+- number not detected | M-3.0.pdf | in project, not in this analysis
+- number not detected | M-4.0.pdf | in project, not in this analysis
+- number not detected | M-4.1.pdf | in project, not in this analysis
+- number not detected | MD-1.1.pdf | in project, not in this analysis
+- number not detected | MD-1.2.pdf | in project, not in this analysis
+- number not detected | MD-1.3.pdf | in project, not in this analysis
+- number not detected | P-1.0-00.pdf | in project, not in this analysis
+- number not detected | P-1.1-00.pdf | in project, not in this analysis
+- number not detected | P-1.2-00.pdf | in project, not in this analysis
+- number not detected | P-1.3-00.pdf | in project, not in this analysis
+- number not detected | P-1.4-00.pdf | in project, not in this analysis
+- number not detected | P-1.5-00.pdf | in project, not in this analysis
+- number not detected | P-1.6-00.pdf | in project, not in this analysis
+- number not detected | P-1.7-00.pdf | in project, not in this analysis
+- number not detected | P-1.8-00.pdf | in project, not in this analysis
+- number not detected | P-2.0-00.pdf | in project, not in this analysis
+- number not detected | P-2.1-00.pdf | in project, not in this analysis
+- number not detected | P-3.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.1-00.pdf | in project, not in this analysis
+- number not detected | S-001.00.pdf | in project, not in this analysis
+- number not detected | S-002.00.pdf | in project, not in this analysis
+- number not detected | S-201.00.pdf | in project, not in this analysis
+- number not detected | S-202.00.pdf | in project, not in this analysis
+- number not detected | S-203.00.pdf | in project, not in this analysis
+- number not detected | S-204.00.pdf | in project, not in this analysis
+- number not detected | S-300.00.pdf | in project, not in this analysis
+If a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.
+
+Stage3 spatial evidence (experimental; machine-extracted; independentlyVerified=false). sheet=A-1.01-00 discipline=Architectural source=qwen-openrouter-72b-validated model=qwen/qwen2.5-vl-72b-instruct
+Rules: each "- " line is one printed annotation; " / " separates its rows; ×n = same text printed n times in that detail. ?text = look-alike glyph or model doubt, unverified; {A | B} = overlapping tiles disagree, neither confirmed. eN cites boxes and tiles in the evidence pack. Not shown is not absent.
+## sheet
+- e1 2 / A-2.00
+- e2 STAIR TOWER "B" / 113 / AL
+- e3 I / ?A-3.0I / OPP.
+- e4 q / ?A-4.0I
+- e5 SEE KITCHEN DRAWINGS FOR / EQUIPMENT IN THIS AREA TYP.
+- e6 IO / ?A-4.0I
+- e7 A-3.02
+- e8 3'-5 1/2"
+- e9 ?q 1/2"
+- e10 4'-7 1/2"
+- e11 8'-3"
+- e12 II / A-4.01
+- e13 2'-4"
+## 1 2ND FLOOR ALTERATION  FLOOR PLAN (1/4" = 1'-0")
+- e14 8 / A-3.00
+- e15 3'-2"
+- e16 I / A-2.01
+- e17 {STAIR TO | TAIR TOWER "A"} / 112
+- e18 DINING / ?IOIB / 27'-6 1/2"
+- e19 A-2.00
+- e20 6"
+- e21 3'-6" / MIN.
+- e22 6'-6" / MIN.
+- e23 6'-9" / MIN.
+- e24 28'-9"
+- e25 1
+- e26 4'-3"
+- e27 @ 16" O.C. MIN. / TO BOTTOM OF / PER UL NO. U305.
+- e28 4" METAL STUDS @ 16"
+- e29 1/2" FC "X" GYP. BD., I L
+- e30 9 1/2" ×3
+- e31 9"
+- e32 8'-2 1/2"
+- e33 8'-2"
+- e34 8'-3" ×2
+- e35 6'-11 1/2"
+- e36 2 ×3
+- e37 A-301 ×2
+- e38 A-2.01
+- e39 NOTE: / INTERIOR 1 HR RATED PARTITION / CORNER GUARDS AT ALL EXTERI / "D" IHR. RATED PARTI
+- e40 RTITION PROVIDE / EXTERIOR CORNERS / ARTITION / BASEMENT ALTER / 2 B / SCALE: 1/4" = 1'-0" / -3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR / {EXISTING WALL TO REMA | O REMAIN} / NEW STOREFRONT SYSTEM - SEE A- / - SEE A-3.01 FOR ASSEMBLY NOTES, SEE / NEW FULL HEIGHT STUD W / SF / {ELEVATIONS FOR LOCATIONS & SPE | IS & SPECS}
+## 2 BASEMENT ALTERATION  FLOOR PLAN (1/4" = 1'-0")
+- e41 CREW ROOM / 109
+- e42 COORDINATE FINISHES IN / THIS AREA W/ / {MCDONALD'S ACM (TYP.) | SHEET NO.: 01} ×2
+## 3 GENERAL NOTES (N.T.S.)
+- e43 1. EXTERIOR DIMENS / EXTERIOR FACE ( / DIMENSIONS ARE / A-1.01-00 / STAN OVERBY / New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26
+- e44 ADDITIONAL ADA
+- e45 ES. SEE 6/A-1.00 FOR 2. G.C. TO INSTAL
+- e46 2. SEE A-3.01 FOR
+- e47 2. G.C. TO INSTA
+- e48 3. G.C TO ENSUR
+- e49 3. SEE EXTERIOR E
+- e50 T A-6.00 FOR DOOR AND A-6.01 FOR ROOM
+- e51 4. SEE SHEET A-6.
+- e52 4. ADJUST ALL S
+- e53 5. IF APPLICABLE, S
+- e54 (ICC/ANSI A117
+- e55 6. GC TO PROVIDE / LOCATIONS AND / LOCAL CODES. S / PERMA-SIGN - / 1-800-214-876
+- e56 5. REPLACE OR ,
+- e57 SHEET A-1.03
+- e58 OCHELLE, NY 10802 -
+- e59 6. ENSURE THAT
+- e60 4-8765 - www.forrestpermsigns.com
+- e61 7. MAXIMUM OCCUPA / FURNISHED AND
+- e62 LBS.
+- e63 BOARD BACKING 48" IN
+- e64 {8. ALL HANDSINK L | F.F.}
+- e65 HEIGHT A.F.F.
+- e66 7. SWEEP PERIOD F / FROM LATCH SHA
+## 4 PLAN KEYED NOTES (N.T.S.)
+- e67 ALUMINUM BATTENS - SEE A-3.01 FO / AL / SPECS
+## 5 SYMBOL LEGENDS (N.T.S.)
+- e68 STUD WALLS / ATED WALLS / = WALL TYPES - SEE 5/A-1.00 / ULE SHEET A-6.00 / = WINDOW TYPE - SEE ELEVATIONS
+- e69 1H ONE HOUR FIRE RATED W
+shown 69/100 units; omitted 31 (8 technical) by budget; title block, detail titles (in headers) and duplicates excluded
+
+Question-targeted evidence from the full sheet index. Units already in the summary above are listed by id; units the summary omitted (oN) and title-block or detail-caption readings (cN) are quoted. Same markers: ?text unverified, {A | B} tiles disagree.
+### Q-TITLE Title block, sheet numbering, detail titles and scale notations.
+- in summary: e40
+- c24 [title block] DRAWING NAME: / {MEZZANINE & E | MEZZANINE & BASEMENT} / {FLOOR PLAN | FLOOR P} / DRAWN BY: / DESIGN BY: / DATE: / HFA / {HFA 09/20/25 | HFA} / CHECKED BY: / {SCALE: | BY: SCALE:} / SHEET: / WGN / AS NOTED 09 OF 28 / PROJECT # / PAGE # / {16-25-95017 | 25-95017 A-1.01-00} / A / A / PERMIT SET 10/15/2026
+- c27 [detail title 5 SYMBOL LEGENDS] 5 SYMBOL LE / SCALE: N.T.S.
+- c30 [detail title 4 PLAN KEYED NOTES] SCALE: N.T.S.
+- c29 [detail title 4 PLAN KEYED NOTES] 4
+### Q-ELEV Elevations, heights and dimensions that must agree across details.
+- in summary: e65, e64, e61
+### Q-DOOR Door schedule: sizes, types, frames, hardware and fire ratings.
+- in summary: e50
+- o16 [3 GENERAL NOTES] 01 FOR EXTERIOR WALL ASSEMBLY TYPES. SE
+- o20 [3 GENERAL NOTES] GN - 9292 1ST ST., BOX 588 NEW ROCHEL
+- o4 [1 2ND FLOOR ALTERATION  FLOOR PLAN] NEW 45 MIN / F.P.S.C. DOOR. / {PROVIDE | G.C. TO PROVID} / AREA OF REFUG / F REFUGE SIGN / ?NEW I HR. FIRE / RESISTIVE / WALL. SEE / PARTTION D / (THIS SHEET)
+- o28 [3 GENERAL NOTES] CE OR ADD ADA COMPLAINT HARDWARE ON / OORS ALONG ADA ACCESSIBLE ROUTE. SEE / ?A-I.03 FOR SCHEDULE.
+- o27 [3 GENERAL NOTES] T ALL SELF SERVICE ITEMS TO BE WITHIN / SSIBILITY REACH RANGE REQUIREMENTS / NSI AII7.I-2003).
+### Q-FORCE Door opening force and accessible operation.
+- in summary: e66, e62, e59, e57
+- o29 [3 GENERAL NOTES] E THAT THE OPENING FORCE IS ADA / {LIANT. THE OPENING FORCE OF ALL EXT. | THAT THE OPENING FORCE IS ADA} / PULL DOORS SHALL NOT EXCEED 8½ LBS. / OR PUSH/PULL DOORS SHALL NOT EXCEED 5 / PERIOD FROM 90 DEGREES OPEN TO 12 DEGREES / ATCH SHALL BE AT LEAST 5 SECONDS.
+- o28 [3 GENERAL NOTES] CE OR ADD ADA COMPLAINT HARDWARE ON / OORS ALONG ADA ACCESSIBLE ROUTE. SEE / ?A-I.03 FOR SCHEDULE.
+### Q-FIRE Fire-resistance ratings, rated assemblies and listings.
+- in summary: e27, e28, e29, e39, e69, e68
+- o4 [1 2ND FLOOR ALTERATION  FLOOR PLAN] NEW 45 MIN / F.P.S.C. DOOR. / {PROVIDE | G.C. TO PROVID} / AREA OF REFUG / F REFUGE SIGN / ?NEW I HR. FIRE / RESISTIVE / WALL. SEE / PARTTION D / (THIS SHEET)
+- o6 [1 2ND FLOOR ALTERATION  FLOOR PLAN] FIRE STOPPED TO BOT
+- o7 [1 2ND FLOOR ALTERATION  FLOOR PLAN] STRUCTURE AS PER UL N
+### Q-ACCESS Accessibility: clearances, mounting heights, grab bars, lavatories, signage.
+- in summary: e47, e60, e66, e55, e53, e61, e54, e52, e56, e57, e59, e44, e48
+- o25 [3 GENERAL NOTES] L ADA NOTES: / D INSTALL ADAAG COMPLIANT BRAILLE / / RE MENU SIGNAGE / {D INSTALL ADAAG COMPLIANT "STAFF | O INSTALL ADAAG COMPLIANT "STAFF} / TANCE" SIGNAGE
+- o27 [3 GENERAL NOTES] T ALL SELF SERVICE ITEMS TO BE WITHIN / SSIBILITY REACH RANGE REQUIREMENTS / NSI AII7.I-2003).
+- o18 [3 GENERAL NOTES] OVIDE ADA SIGNAGE PACKAGE AND INSTALL S
+- o20 [3 GENERAL NOTES] GN - 9292 1ST ST., BOX 588 NEW ROCHEL
+### Q-XREF Referenced sheets and details that must be checked together.
+- in summary: e40, e68, e69, e13, e12, e1, e14, e45, e67, e46, e49, e51, e5, e43, e53, e55, e50
+- o2 [sheet] NOTE: / NEW / {NEW LIGHT FIXTURES THROUGHOUT DINING AREA. G | REFE} / AREA. G.C. TO / {REEF | REFER TO DECOR DRAWINGS FOR SPECIFICATION | COOP | REFER TO DECOR DRAWINGS FOR SPECIFICATIONS} / CATIONS & / 2 / COORDINATE DETAILS WITH MCDONALD'S A.C.M. / A-301 / OPP. / AL / 9 1/2" 3'-10" / 3'-4" / SF / DS / DS / SF
+- o4 [1 2ND FLOOR ALTERATION  FLOOR PLAN] NEW 45 MIN / F.P.S.C. DOOR. / {PROVIDE | G.C. TO PROVID} / AREA OF REFUG / F REFUGE SIGN / ?NEW I HR. FIRE / RESISTIVE / WALL. SEE / PARTTION D / (THIS SHEET)
+
+Cross-sheet pairs (resolved through the project sheet index; targets were not reviewed in this request unless their lines are quoted):
+- P-R018 plan_to_schedule: "T A-6.00 FOR DOOR AND A-6.01 FOR ROOM" @202,418 -> A-6.00-00.pdf detail 1 "DOOR SCHEDULE" (scale N.T.S.) [topic_resolved] image#1=source image#2=target target lines: [L0202] 4. NOT USED. / [L0205] 5 S.C. WOOD W/ LAM. / [L0206] 3'-0"x6'-8"x1 3/4" / [L0207] 3/4" C H.M. 2"JAMB & HEAD / [L0211] WALL SECTIONS / [L0212] 5. SEE ELEVATIONS AND WALL S / [L0213] 5 / [L0218] 3/4" D H.M. 2"JAMB & HEAD
+- P-R016 plan_to_detail: "= WALL TYPES - SEE 5/A-1.00" @1302,444 -> A-1.00-00.pdf detail 5 "TYPICAL INTERIOR PARTITION" (scale N.T.S.) [detail_resolved] image#3=source image#4=target
+- P-R023 plan_to_detail: "A-2.00" @702,1652 -> A-2.00-00.pdf detail 2 "NON DRIVE THRU ELEVATION" (scale 1/4" = 1'-0") [detail_resolved] image#5=source image#6=target
+- P-R024 plan_to_detail: "A-3.0I" @745,1476 -> A-3.01-00.pdf detail 1 "WALL SECTION @ LEFT SIDE DINING THRU PIER" (scale 3/4" = 1'-0") [detail_resolved] (sheet printed "A-3.0I" read as A-3.01; detail number printed "I" read as 1, matched to the target's detail list; OCR reading unchanged) image#7=source image#8=target
+- P-R025 plan_to_detail: "A-301" @801,1472 -> A-3.01-00.pdf detail 2 "WALL SECTION @ LEFT SIDE DINING GLAZING" (scale 3/4" = 1'-0") [detail_resolved]
+- P-R026 plan_to_detail: "A-4.0I" @683,1452 -> A-4.01-00.pdf detail 9 "MEZZANINE GLAZING @ PIER" (scale 1-1/2" = 1'-0") [detail_resolved] (sheet printed "A-4.0I" read as A-4.01; detail number printed "q" read as 9, matched to the target's detail list; OCR reading unchanged)
+- P-R027 plan_to_detail: "A-4.0I" @642,1450 -> A-4.01-00.pdf detail 10 "BATTEN @ MEZZANINE" (scale n/a) [detail_resolved] (sheet printed "A-4.0I" read as A-4.01; detail number printed "IO" read as 10, matched to the target's detail list; OCR reading unchanged)
+- P-R028 plan_to_detail: "A-3.02" @595,1440 -> A-3.02-00.pdf detail 1 "WALL SECTION @ RIGHT SIDE BATTEN" (scale 3/4" = 1'-0") [detail_resolved] (detail number printed "I" read as 1, matched to the target's detail list; OCR reading unchanged)
+- P-R029 plan_to_detail: "A-4.01" @1075,1380 -> A-4.01-00.pdf detail 11 "BATTEN DETAIL @ MEZZANINE CORNER" (scale 1-1/2" = 1'-0") [detail_resolved] (detail number printed "II" read as 11, matched to the target's detail list; OCR reading unchanged)
+- P-R030 plan_to_detail: "A-3.00" @1036,1250 -> A-3.00-00.pdf detail 8 "PROPOSED BUILDING SECTION" (scale 1/4" = 1'-0") [detail_resolved]
+- P-R031 plan_to_detail: "A-2.01" @136,1194 -> A-2.01-00.pdf detail 1 "REAR ELEVATION" (scale 1/4" = 1'-0") [detail_resolved] (detail number printed "I" read as 1, matched to the target's detail list; OCR reading unchanged)
+- P-R033 plan_to_detail: "A-301" @830,774 -> A-3.01-00.pdf detail 2 "WALL SECTION @ LEFT SIDE DINING GLAZING" (scale 3/4" = 1'-0") [detail_resolved]
+- P-R035 plan_to_detail: "A-2.01" @612,752 -> A-2.01-00.pdf detail 2 "DRIVE THRU ELEVATION" (scale 1/4" = 1'-0") [detail_resolved]
+- P-R021 plan_to_schedule: "A-I.03 FOR SCHEDULE." @606,338 -> A-1.03-00.pdf [sheet_resolved] (sheet printed "A-I.03" read as A-1.03; OCR reading unchanged)

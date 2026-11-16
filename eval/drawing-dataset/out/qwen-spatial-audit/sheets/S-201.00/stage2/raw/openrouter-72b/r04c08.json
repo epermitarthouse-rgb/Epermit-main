@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842940-PbiwyiLZ7kO4qbOQGhVb",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 0, 346, 48], \"text_content\": \"BE ADHERED TO:\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 56, 880, 96], \"text_content\": \"\\\" O.C. AT INTERMEDIATE SUPPORTS, 6\\\" O.C. ALONG\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 156, 56, 192], \"text_content\": \"END\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 204, 816, 246], \"text_content\": \"TO EACH END (SILL PLATE BELOW) AND (2) 16D\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 300, 374, 346], \"text_content\": \"RDER - (3) 8d NAILS\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 406, 810, 444], \"text_content\": \"NON-SUPPORTED EDGES OF ROOF SHEATHING.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 454, 856, 492], \"text_content\": \"TS, 48\\\" LAP. TOP PLATES SHALL BE CONNECTED\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 504, 754, 542], \"text_content\": \"DE OF JOINT AND WITH 16d NAILS AT 16\\\" ON\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 600, 438, 636], \"text_content\": \"DDITIONAL INFORMATION.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 870, 322, 906], \"text_content\": \"LINTEL ANGLES.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 924, 74, 954], \"text_content\": \"END.\", \"category\": \"other\", \"group\": 0, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 712,
+ "costUsd": 0.001945,
+ "reportedCostUsd": 0.0019448,
+ "latencyS": 22.8,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

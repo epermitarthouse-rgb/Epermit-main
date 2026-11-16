@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842811-4aePccm5ppJMULZ9Jgua",
+ "text": "```json\n[\n    {\"bbox_2d\": [0, 0, 124, 46], \"text_content\": \"F.SAFE\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 62, 124, 95], \"text_content\": \"F.SAFE\", \"category\": \"label\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 250, 90, 282], \"text_content\": \"HAGER\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [30, 297, 136, 329], \"text_content\": \"HAGER\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 344, 530, 376], \"text_content\": \"X 12 X 291 X 626 SCHLAGE\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 391, 820, 423], \"text_content\": \"OLE, 16\\\"L, 1\\\"DIA #S-16-1000 BTB-UMCO 32D\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 438, 495, 470], \"text_content\": \"ENTER OF SCREWS - 28\u00bd\\\"\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 487, 245, 519], \"text_content\": \"C/L OF PULL\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 728, 90, 760], \"text_content\": \"HAGER\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [30, 775, 136, 807], \"text_content\": \"HAGER\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 822, 530, 854], \"text_content\": \"X 12 X 291 X 626 SCHLAGE\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 869, 820, 901], \"text_content\": \"OLE, 16\\\"L, 1\\\"DIA #S-16-1000 BTB-UMCO 32D\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 918, 495, 950], \"text_content\": \"ENTER OF SCREWS - 28\u00bd\\\"\", \"category\": \"label\", \"group\": 2, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 854,
+ "costUsd": 0.002087,
+ "reportedCostUsd": 0.0020868,
+ "latencyS": 21.44,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

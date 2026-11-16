@@ -1,0 +1,79 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "B_v1",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_06645f87c3636a46016aec8ee8d51087d29f449e0b2f2609c5",
+ "latencyMs": 6752,
+ "inputTokens": 4136,
+ "outputTokens": 255,
+ "costUsd": 0.01289,
+ "userPromptChars": 1884,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architecture"
+ },
+ "summary": "The sheet provides details and sections related to guard rails and wall sections at a high roof and a new order window.",
+ "published": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Guardrail Height Requirement",
+   "observation": "The guardrail detail specifies '3'-6\" MIN HEIGHT FROM.'",
+   "drawing_evidence": "Detail: GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "drawing_location": "Top left corner of sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Verify that the guardrail height meets applicable building codes for safety.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guardrail Height Requirement",
+    "originalObservation": "The guardrail detail specifies '3'-6\" MIN HEIGHT FROM.'",
+    "originalCodeReference": "IBC 2015",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Guardrail Extension Beyond Equipment",
+   "observation": "Guard rails are required to extend 'MIN. 30\" BEYOND EACH END OF EQUIPMENT.'",
+   "drawing_evidence": "Detail: GUARD RAIL ELEVATION DETAIL @ HIGH ROOF",
+   "drawing_location": "Top left corner of sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that guardrail extensions beyond equipment comply with all safety standards and requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Guardrail Extension Beyond Equipment",
+    "originalObservation": "Guard rails are required to extend 'MIN. 30\" BEYOND EACH END OF EQUIPMENT.'",
+    "originalCodeReference": "IBC 2015",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

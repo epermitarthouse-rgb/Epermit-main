@@ -1,0 +1,95 @@
+Stage3 spatial evidence (experimental; machine-extracted; independentlyVerified=false). sheet=A-4.00-00 discipline=Architectural source=qwen-openrouter-72b-validated model=qwen/qwen2.5-vl-72b-instruct
+Rules: each "- " line is one printed annotation; " / " separates its rows; ×n = same text printed n times in that detail. ?text = look-alike glyph or model doubt, unverified; {A | B} = overlapping tiles disagree, neither confirmed. eN cites boxes and tiles in the evidence pack. Not shown is not absent.
+## 3 GENERAL NOTES (N.T.S.)
+- e1 2. INTERIOR DIMENS
+- e2 3. PROVIDE AUTOMA
+- e3 4. ALL LAVATORY
+- e4 5. SEE SHEET A-6.0
+- e5 T A-6.00 FOR DOOR SCHEDULE.
+- e6 6. SEE PLUMBING FI
+## sheet
+- e7 TABLE HANDLES AND / ED TO MEET MAX. / URE. SWEEP PERIOD / A POINT 3" FROM / ST 3 SECONDS.
+- e8 12'-0"
+## 2 TOILET ROOM FIXTURE PLAN (3/8" = 1'-0")
+- e9 6B
+- e10 4A ×2
+- e11 7
+- e12 5 ×2
+- e13 54x60 ×2
+- e14 9 ×2
+- e15 1B ×2
+- e16 1C
+- e17 2 ×2
+- e18 1A / 59x60
+- e19 48x48 ×2
+- e20 4 / A-4.00 ×2
+- e21 G.C. TO PROVIDE & / INSTALL ADA / COMPLIANT SIGNAGE. / SEE DETAIL 4-A-4.00.
+- e22 59x60 / 1A / {1C | 2 1C}
+- e23 1A
+## 1 TOILET ROOM PLAN (3/8" = 1'-0")
+- e24 5'-0"
+- e25 4" / MAX.
+- e26 6'-8"
+- e27 7'-1" ×2
+- e28 4'-10"
+- e29 7"
+- e30 16'-7"
+- e31 4'-6"
+- e32 7'-5 1/2"
+- e33 6'-0"
+- e34 5'-2"
+- e35 4" MAX.
+## 4 TYP. SIGNAGE HEIGHT ELEVATION (1/2"=1'-0")
+- e36 ?q" / MIN.
+- e37 2"
+- e38 6" min
+- e39 48" MIN. AFF. B. OF BRAILLE 60" MAX. AFF. T. OF TACTILE
+- e40 1-800-214-8765
+- e41 SHALL BE 60" ABOVE THE FINISHED FLOOR TO
+## 5 TYP. TOILET ROOM ACCESSORY ELEV. (1/2"=1'-0")
+- e42 54" MIN.
+- e43 42" MIN.
+- e44 12" ×2
+- e45 MAX.
+- e46 40"
+- e47 4"
+- e48 FACE OF / FINISHED WALL / 1C / ALTERNATIVE / 2'-0" / DISPENSER / LOCATION / 1A / TOP OF GRAB BAR / HOLD / 40" / 34" / 2" MIN. / 2 / 15" MIN. / 18" / 24" MIN. / 40" / FINISHED FLOOR
+- e49 42" (36" MIN.)
+- e50 1C
+- e51 24" MIN. ×2
+- e52 MIN. ×2
+- e53 1B ×2
+- e54 48" MAX. TO TOP OF HOOK.
+- e55 2" MIN.
+- e56 42" MAX
+- e57 34"
+- e58 29"
+- e59 18"
+- e60 16-18
+- e61 A-4.00-00 / STAN OVERBY / New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26
+- e62 4A
+- e63 5
+- e64 2"
+- e65 NOTE: / HAND DRYER / PROJECTION FROM / FINISHED WALL TO / BE 4" MAX.
+- e66 3'-4" MAX TO REFLECTIVE SURFACE
+- e67 48" MAX. AFF ×2
+- e68 34" MAX. ×3
+- e69 29" MIN.
+- e70 48" MAX.
+- e71 8 / A400
+## 7 TOILET STALL DOOR JAMB (3"=1'-0")
+- e72 ALE: 1/2”=1'-0”
+- e73 4" MAX. ×2
+## 6 TOILET ROOM ACCESSORY SCHEDULE (N.T.S.)
+- e74 HUGHES SUPPLY (1)2x6 4'-0" LONG C / (866) 310-3576 MOUNTED / MCDCOORD@HAJOCA.COM
+- e75 1B GRAB BAR
+- e76 HUGHES SUPPLY / (866) 310-3576 / MCDCOORD@HAJOCA.COM ×3
+- e77 5 MIRROR, CHANNEL
+- e78 SOAP DISPENSER, / ENSER, COUNTER / HUGHES SUPPLY / BOBRICK / MOUNTED, 6" SPOU / (866) 310-3576 / {6A (OPTIONAL) | 6”SPOUT} / B-82216 / MCDCOORD@HAJOCA.COM
+- e79 SOAP DISPENSER, / 6B WALL-MOUNTED / NTED / B-2112 MCDCO
+- e80 OUNTED, ADA COMPLIANT, KB310-SSWM
+- e81 8 DIAPER CONTAINER
+- e82 (866) 310- 3576
+- e83 917
+- e84 917 MCDCO
+shown 84/161 units; omitted 77 (43 technical) by budget; title block, detail titles (in headers) and duplicates excluded

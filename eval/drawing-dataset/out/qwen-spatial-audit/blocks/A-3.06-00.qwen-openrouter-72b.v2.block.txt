@@ -1,0 +1,78 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-3.06-00 source=qwen-openrouter-72b annotations=211 technical=94 shown=73 independentlyVerified=false
+- 2 / A-3.06
+- {I-1/4" PIPE RAILING. PAI | LING. PAINT} / {TO MATCH NEW METAL | N METAL} / PARAPET CAP.
+- EXTEND GUARD RAIL MIN. 30" BEYO (ctx?)
+- NOTE: CONTRACTOR / TO FIELD VERIFY / LOCATION OF / MECHANICAL / EQUIPMENT ON THE / ROOF. PROVIDE AND / INSTALL GUARD RAILS / EN WO0D AT LOCATION as AS / QUIRED WITH SHOWN ON ROOF PLAN.
+- EQ (ctx?)
+- EQ (ctx?)
+- {PIPE RAILING. PAINT PEX-I | I-1/4" PIPE RAIL} / {ATCH METAL PANELS | TO MATCH MET} / {OR (E) CORNICE | AND/OR (E) CO} (ctx?)
+- {I-1/4" PIPE RAILING. PAINT TO MATCH | I-I/4} / NEW METAL PARAPET CAP.
+- GUARD RAIL SHALL BE CONSTRUCTED SO AS TO / PREVENT THE PASSAGE OF A SPHERE 21" IN DIA
+- EQ
+- {LESS STEEL BAND | STAINLESS STE} / {IONED 1/4" FROM THE TOP | POSITIONED 1/} / {E STACK FLASHING | OF THE STACK} (ctx?)
+- 31-6"
+- 3'-6"MIN HEIGHT T.O. ROOF DECK M
+- 3'-6"
+- MIN. ABOVE DECK MI
+- 4x4 WOOD BLOCKING / BETWEEN JOISTS AT NE / {GUARD RAIL PENETRAT | PENETRATION} / LOCATIONS. (ctx?)
+- 3 / A-3.06
+- EQ
+- MIN.
+- 8"
+- {AMETER PIPE & BASE | 2" DIAMETER F} (ctx?)
+- VARIES (V.I.F) / T.O. ROOF MEMBRANE (ctx?)
+- |
+- {AMETER X 3" LAG BOLTS | DIAMETER X}
+- 3
+- A-3.06 / A-3.06
+- I
+- A-3.00
+- T/ BLK'G @ PARAPET / ELEV. + 17'-4"
+- i
+- 29'-0" A.F.F. (V.I.F.) / T/BLK'G @ PARAPET
+- 29'-0" (ctx?)
+- EXTERIOR ASSEMBLY-4 / (SEE ASSEMBLY NOTES) (ctx?)
+- 1/2" EXTERIOR PLYWOOD (ctx?)
+- 4" METAL STUDS @ 16" O.C.SEE / STRUCTURAL DRAWINGS. (ctx?)
+- {6" METAL STUDS @ 16" O.C.S | 6" O.C.SEE} / STRUCTURAL DRAWINGS. (ctx?)
+- 2'-10"
+- NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.
+- NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.
+- 3'-6"
+- MIN.
+- 26'-2" A.F.F. (V.I.F.) / {EXIST. ROOF @ H.P. | EXIST. 6'}
+- 1:12 MIN.
+- 1:12 MIN.
+- 25'-0" A.F.F. / {TING ROOF @ L.P. (V.I.F.) | EXISTING ROO}
+- X
+- 7 / A-3.00
+- 1
+- 1
+- B/ UNDERCSORE / ELEV. + 10'-8"
+- EXIST. DOUBLE / ROOF TRUSS TO / REMAIN. TYP.
+- EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES) (ctx?)
+- X
+- X
+- 3 / A-3.00
+- EXIST. ROOF TRUSSES / TO REMAIN. TYP.
+- EXIST. ROOF TRUSSES / TO REMAIN. TYP.
+- T/WINDOW / ELEV. + 8'-0"
+- 2 / A-3.00
+- A-3.06-00
+- 10/15/26
+- 10/15
+- EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES)
+- T/ SLAB / ELEV. + O'-O"
+- 3/4" = 1'
+- 3/4" = 1'-0"
+- 3/4" = 1'-0"
+- UARD RAIL ELEVATI
+- 3 SCALE:
+- 1/2" = 1'-0"
+- 1-1/2" = 1'-0"
+- 1/2"
+- 3/4" = 1'-0"
+omitted: 138 annotations (32 technical: numeric 30, value 1, reference 1; 106 other) by budget; not shown is not absent

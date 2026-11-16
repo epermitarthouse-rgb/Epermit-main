@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842954-PJTFxxwPAXnHRk8CrDyf",
+ "text": "```json\n[\n    {\"bbox_2d\": [10, 46, 324, 86], \"text_content\": \"WINDOW MUST BE\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [10, 96, 453, 132], \"text_content\": \"ABLE TO ACCOMODATE\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [10, 144, 620, 182], \"text_content\": \"DOWNWARD DEFLECTION OF 3/4\\\"\", \"category\": \"note\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [168, 708, 622, 752], \"text_content\": \"(2)#10 SCREWS AT EACH\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [170, 758, 620, 798], \"text_content\": \"STUD, TYP THIS SECTION\", \"category\": \"note\", \"group\": 2, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 320,
+ "costUsd": 0.001553,
+ "reportedCostUsd": 0.0015528,
+ "latencyS": 8.21,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

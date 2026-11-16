@@ -1,0 +1,44 @@
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=S-201.00 source=qwen-local-3b annotations=39 technical=25 shown=39 independentlyVerified=false
+- GEN
+- 1. DE
+- GENERAL NOTES
+- LIGHT GAGE STEEL N
+- 1. PROVIDE A CONTINUOUS STEEL (ctx?)
+- 3. BR
+- 1. DETAILS SHOWN ARE TYPICAL, SIMILAR DETAILS
+- R DETAILS APPLY TO SIMILAR CONDITIONS
+- 2. THE
+- BOTTOM OF ALL STUD WALLS (ctx?)
+- 2. THESE DRAWINGS DO NOT INCLUDE NECESSAR
+- MID-HEIGHT OF ALL WALLS UN / CONTRACT DRAWINGS. CONNE / ON EACH STUD. DETAILS SHAL / ALL LIGHT GAGE FRAMING SH (ctx?)
+- CESSARY COMPONENTS FOR CONSTRUCTION
+- DES
+- {3. BRACE BUILDING UNTIL ALL STRUCTURAL ELE | INS} / BR
+- BRIDGING AND CROSS-BRACING.
+- ERAL ELEMENTS REQUIRED FOR STABILITY ARE / FOLLOWS: ROOF DECK, ROOF SHEATHING,
+- DESIGN DATA
+- UNLESS NOTED OTHERWISE ON (ctx?)
+- 1. INTERNATIONAL BUILDING CODE (IBC 2015)
+- GALVANIZED. SEE PLAN AND
+- 2. AMERICAN CONCRETE INSTITUTE (ACI)
+- 1. INT
+- 3. RE (ctx?)
+- 1. INTERNATIONAL BUILDING CODE (IBC 2015) (ctx?)
+- 4. RE 6. RE
+- 2. AMERICAN CONCRETE INSTITUTE (ACI) (ctx?)
+- 5. RE
+- 3. AMERICAN WOOD COUNCIL (AWC) (ctx?)
+- DESIGN CRITERIA (ctx?)
+- FLOOR LIVE LOAD: 100 PSF (ctx?)
+- ROOF LIVE LOAD: 30 PSF (ctx?)
+- (NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED) / GROUND SNOW LOAD: 25 PSF + DRIFT / OR 30 PSF EQUIVALENT UNIFORM LOAD / FLAT ROOF SNOW LOAD: 17.5 PSF (ctx?)
+- SNOW EXPOSURE FACTOR: 0.7 (ctx?)
+- SNOW LOAD IMPORTANCE FACTOR: 1 (ctx?)
+- THERMAL FACTOR: 1
+- WIND LOADING (IBC 2015) (ctx?)
+- BASIC WIND SPEED (3 SECOND GUST) 115 MPH / RISK CATEGORY ii (ctx?)
+- WIND EXPOSURE CATEGORY 5
+omitted: none

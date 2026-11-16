@@ -1,0 +1,69 @@
+{
+ "sheetId": "A-1.01-00",
+ "arm": "L_av",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_00ba8c2dbc41c191016afb2da18ea087d2b123b2ffc23a99cb",
+ "latencyMs": 16366,
+ "inputTokens": 12667,
+ "outputTokens": 1387,
+ "reasoningTokens": 1034,
+ "costUsd": 0.0041978,
+ "input": {
+  "systemPromptSha": "508a348963db4f14",
+  "pdf": "A-1.01-00.pdf",
+  "evidenceSha": "b686320b2f1bf2c3",
+  "userPromptChars": 9372,
+  "images": [],
+  "pairs": [],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-1.01-00\",\"detected_sheet_title\":\"MEZZANINE & BASEMENT FLOOR PLAN\",\"discipline\":\"Architectural\",\"summary\":\"The sheet presents second-floor and basement alteration floor plans with general notes, keyed notes, symbols, stair conditions, fire-resistive construction, accessibility notes, and references to other architectural sheets. One documentation clarification is recommended; no confirmed code violation is established from this sheet alone.\",\"findings\":[{\"category\":\"Accessibility / Documentation\",\"severity\":\"advisory\",\"title\":\"Clarify accessibility hardware note and referenced standard\",\"observation\":\"General Note 5 states: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.” The word “COMPLAINT” appears inconsistent with the intended term “COMPLIANT.” The same note block references “ICC/ANSI A117.1-2003” for accessibility reach-range requirements.\",\"drawing_evidence\":\"In the General Notes area at the lower left, Note 5 reads “ADA COMPLAINT HARDWARE”; Note 4 references “ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).”\",\"drawing_location\":\"General Notes, lower-left portion of sheet, Notes 4 and 5.\",\"suggested_code_reference\":\"\",\"recommendation\":\"Correct the apparent “COMPLAINT” typographical error and confirm that the referenced accessibility standard and the door-hardware schedule on A-1.03 are the standards intended for this permit set. A-1.03 is listed in the submitted sheet index but was not reviewed.\"}]}",
+ "detected": {
+  "number": "A-1.01-00",
+  "title": "MEZZANINE & BASEMENT FLOOR PLAN",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet presents second-floor and basement alteration floor plans with general notes, keyed notes, symbols, stair conditions, fire-resistive construction, accessibility notes, and references to other architectural sheets. One documentation clarification is recommended; no confirmed code violation is established from this sheet alone.",
+ "drafts": [
+  {
+   "category": "Accessibility / Documentation",
+   "severity": "advisory",
+   "title": "Clarify accessibility hardware note and referenced standard",
+   "observation": "General Note 5 states: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.” The word “COMPLAINT” appears inconsistent with the intended term “COMPLIANT.” The same note block references “ICC/ANSI A117.1-2003” for accessibility reach-range requirements.",
+   "drawing_evidence": "In the General Notes area at the lower left, Note 5 reads “ADA COMPLAINT HARDWARE”; Note 4 references “ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).”",
+   "drawing_location": "General Notes, lower-left portion of sheet, Notes 4 and 5.",
+   "suggested_code_reference": "",
+   "recommendation": "Correct the apparent “COMPLAINT” typographical error and confirm that the referenced accessibility standard and the door-hardware schedule on A-1.03 are the standards intended for this permit set. A-1.03 is listed in the submitted sheet index but was not reviewed."
+  }
+ ],
+ "published": [
+  {
+   "category": "Accessibility / Documentation",
+   "severity": "advisory",
+   "title": "Clarify accessibility hardware note and referenced standard",
+   "observation": "General Note 5 states: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.” The word “COMPLAINT” appears inconsistent with the intended term “COMPLIANT.” The same note block references “ICC/ANSI A117.1-2003” for accessibility reach-range requirements.",
+   "drawing_evidence": "In the General Notes area at the lower left, Note 5 reads “ADA COMPLAINT HARDWARE”; Note 4 references “ACCESSIBILITY REACH RANGE REQUIREMENTS (ICC/ANSI A117.1-2003).”",
+   "drawing_location": "General Notes, lower-left portion of sheet, Notes 4 and 5.",
+   "suggested_code_reference": null,
+   "recommendation": "Correct the apparent “COMPLAINT” typographical error and confirm that the referenced accessibility standard and the door-hardware schedule on A-1.03 are the standards intended for this permit set. A-1.03 is listed in the submitted sheet index but was not reviewed.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Clarify accessibility hardware note and referenced standard",
+    "originalObservation": "General Note 5 states: “REPLACE OR ADD ADA COMPLAINT HARDWARE ON ALL DOORS ALONG ADA ACCESSIBLE ROUTE. SEE SHEET A-1.03 FOR SCHEDULE.” The word “COMPLAINT” appears inconsistent with the intended term “COMPLIANT.” The same note block references “ICC/ANSI A117.1-2003” for accessibility reach-range requirements.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

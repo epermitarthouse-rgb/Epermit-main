@@ -1,0 +1,78 @@
+Stage3 spatial evidence (experimental; machine-extracted; independentlyVerified=false). sheet=A-1.01-00 discipline=Architectural source=qwen-openrouter-72b-validated model=qwen/qwen2.5-vl-72b-instruct
+Rules: each "- " line is one printed annotation; " / " separates its rows; ×n = same text printed n times in that detail. ?text = look-alike glyph or model doubt, unverified; {A | B} = overlapping tiles disagree, neither confirmed. eN cites boxes and tiles in the evidence pack. Not shown is not absent.
+## sheet
+- e1 2 / A-2.00
+- e2 STAIR TOWER "B" / 113 / AL
+- e3 I / ?A-3.0I / OPP.
+- e4 q / ?A-4.0I
+- e5 SEE KITCHEN DRAWINGS FOR / EQUIPMENT IN THIS AREA TYP.
+- e6 IO / ?A-4.0I
+- e7 A-3.02
+- e8 3'-5 1/2"
+- e9 ?q 1/2"
+- e10 4'-7 1/2"
+- e11 8'-3"
+- e12 II / A-4.01
+- e13 2'-4"
+## 1 2ND FLOOR ALTERATION  FLOOR PLAN (1/4" = 1'-0")
+- e14 8 / A-3.00
+- e15 3'-2"
+- e16 I / A-2.01
+- e17 {STAIR TO | TAIR TOWER "A"} / 112
+- e18 DINING / ?IOIB / 27'-6 1/2"
+- e19 A-2.00
+- e20 6"
+- e21 3'-6" / MIN.
+- e22 6'-6" / MIN.
+- e23 6'-9" / MIN.
+- e24 28'-9"
+- e25 1
+- e26 4'-3"
+- e27 @ 16" O.C. MIN. / TO BOTTOM OF / PER UL NO. U305.
+- e28 4" METAL STUDS @ 16"
+- e29 1/2" FC "X" GYP. BD., I L
+- e30 9 1/2" ×3
+- e31 9"
+- e32 8'-2 1/2"
+- e33 8'-2"
+- e34 8'-3" ×2
+- e35 6'-11 1/2"
+- e36 2 ×3
+- e37 A-301 ×2
+- e38 A-2.01
+- e39 NOTE: / INTERIOR 1 HR RATED PARTITION / CORNER GUARDS AT ALL EXTERI / "D" IHR. RATED PARTI
+- e40 RTITION PROVIDE / EXTERIOR CORNERS / ARTITION / BASEMENT ALTER / 2 B / SCALE: 1/4" = 1'-0" / -3.01 FOR ASSEMBLY NOTES, SEE ELEVATIONS FOR / {EXISTING WALL TO REMA | O REMAIN} / NEW STOREFRONT SYSTEM - SEE A- / - SEE A-3.01 FOR ASSEMBLY NOTES, SEE / NEW FULL HEIGHT STUD W / SF / {ELEVATIONS FOR LOCATIONS & SPE | IS & SPECS}
+## 2 BASEMENT ALTERATION  FLOOR PLAN (1/4" = 1'-0")
+- e41 CREW ROOM / 109
+- e42 COORDINATE FINISHES IN / THIS AREA W/ / {MCDONALD'S ACM (TYP.) | SHEET NO.: 01} ×2
+## 3 GENERAL NOTES (N.T.S.)
+- e43 1. EXTERIOR DIMENS / EXTERIOR FACE ( / DIMENSIONS ARE / A-1.01-00 / STAN OVERBY / New York Ave & 1st St, Wash DC ARCH.dwg 10/15/26
+- e44 ADDITIONAL ADA
+- e45 ES. SEE 6/A-1.00 FOR 2. G.C. TO INSTAL
+- e46 2. SEE A-3.01 FOR
+- e47 2. G.C. TO INSTA
+- e48 3. G.C TO ENSUR
+- e49 3. SEE EXTERIOR E
+- e50 T A-6.00 FOR DOOR AND A-6.01 FOR ROOM
+- e51 4. SEE SHEET A-6.
+- e52 4. ADJUST ALL S
+- e53 5. IF APPLICABLE, S
+- e54 (ICC/ANSI A117
+- e55 6. GC TO PROVIDE / LOCATIONS AND / LOCAL CODES. S / PERMA-SIGN - / 1-800-214-876
+- e56 5. REPLACE OR ,
+- e57 SHEET A-1.03
+- e58 OCHELLE, NY 10802 -
+- e59 6. ENSURE THAT
+- e60 4-8765 - www.forrestpermsigns.com
+- e61 7. MAXIMUM OCCUPA / FURNISHED AND
+- e62 LBS.
+- e63 BOARD BACKING 48" IN
+- e64 {8. ALL HANDSINK L | F.F.}
+- e65 HEIGHT A.F.F.
+- e66 7. SWEEP PERIOD F / FROM LATCH SHA
+## 4 PLAN KEYED NOTES (N.T.S.)
+- e67 ALUMINUM BATTENS - SEE A-3.01 FO / AL / SPECS
+## 5 SYMBOL LEGENDS (N.T.S.)
+- e68 STUD WALLS / ATED WALLS / = WALL TYPES - SEE 5/A-1.00 / ULE SHEET A-6.00 / = WINDOW TYPE - SEE ELEVATIONS
+- e69 1H ONE HOUR FIRE RATED W
+shown 69/100 units; omitted 31 (8 technical) by budget; title block, detail titles (in headers) and duplicates excluded

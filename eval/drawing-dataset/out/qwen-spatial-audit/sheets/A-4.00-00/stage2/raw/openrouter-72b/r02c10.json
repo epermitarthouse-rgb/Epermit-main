@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842314-i0D1QzcaBkr7iQMZYU46",
+ "text": "```json\n[\n    {\"bbox_2d\": [820, 4, 910, 18], \"text_content\": \"RESTROOM\", \"category\": \"room_or_tag\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [56, 339, 160, 364], \"text_content\": \"PLATE\", \"category\": \"label\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [454, 824, 653, 854], \"text_content\": \"TOILET ROOM\", \"category\": \"room_or_tag\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [76, 903, 554, 933], \"text_content\": \"FORREST PERMA-SIGN\", \"category\": \"title_block\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [76, 946, 585, 976], \"text_content\": \"9292 1ST ST., BOX 588\", \"category\": \"title_block\", \"group\": 3, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 320,
+ "costUsd": 0.001553,
+ "reportedCostUsd": 0.0015528,
+ "latencyS": 7.82,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

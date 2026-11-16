@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842874-58296DDYWERjKMf1MvcF",
+ "text": "```json\n[\n    {\"bbox_2d\": [46, 385, 105, 490], \"text_content\": \"1'-0\\\"\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [30, 0, 105, 114], \"text_content\": \"1'-0\\\"\", \"category\": \"dimension\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [470, 244, 524, 440], \"text_content\": \"40\\\" TYP.\", \"category\": \"dimension\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [713, 88, 777, 108], \"text_content\": \"STAFF\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [713, 114, 775, 133], \"text_content\": \"ONLY\", \"category\": \"label\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [765, 252, 810, 283], \"text_content\": \"4\\\"\", \"category\": \"dimension\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [920, 108, 956, 200], \"text_content\": \"25\\\"\", \"category\": \"dimension\", \"group\": 5, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [910, 335, 956, 440], \"text_content\": \"42\\\"\", \"category\": \"dimension\", \"group\": 6, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [274, 548, 308, 578], \"text_content\": \"D\", \"category\": \"label\", \"group\": 7, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [782, 526, 810, 556], \"text_content\": \"F\", \"category\": \"label\", \"group\": 8, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [105, 678, 174, 758], \"text_content\": \"1\", \"category\": \"schedule_cell\", \"group\": 9, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [280, 639, 979, 728], \"text_content\": \"DOOR SCHED\", \"category\": \"schedule_title\", \"group\": 10, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [278, 778, 424, 808], \"text_content\": \"SCALE:\", \"category\": \"schedule_cell\", \"group\": 11, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [460, 780, 548, 808], \"text_content\": \"N.T.S.\", \"category\": \"schedule_cell\", \"group\": 11, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 837,
+ "costUsd": 0.00207,
+ "reportedCostUsd": 0.0020698,
+ "latencyS": 15.58,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

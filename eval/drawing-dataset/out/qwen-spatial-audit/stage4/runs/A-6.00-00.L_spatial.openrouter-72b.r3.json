@@ -1,0 +1,36 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "L_spatial",
+ "rep": 3,
+ "model": "gpt-5.6-luna",
+ "backend": "openrouter-72b",
+ "responseId": "resp_0dcc62358c10429f016afb2cf4a24487d2a1d3d16089a82be8",
+ "latencyMs": 9988,
+ "inputTokens": 16533,
+ "outputTokens": 539,
+ "reasoningTokens": 408,
+ "costUsd": 0.0039534,
+ "input": {
+  "systemPromptSha": "218bc2b273177277",
+  "pdf": "A-6.00-00.pdf",
+  "evidenceSha": "413f8455e34a7a87",
+  "userPromptChars": 13890,
+  "images": [
+   "P-R038 source"
+  ],
+  "pairs": [
+   "P-R038"
+  ],
+  "reasoning": "medium"
+ },
+ "rawOutput": "{\"detected_sheet_number\":\"A-6.00-00\",\"detected_sheet_title\":\"DOOR & HARDWARE SCHEDULE\",\"discipline\":\"Architectural\",\"summary\":\"The sheet contains window types, a door hardware schedule, a door schedule, hardware notes, window assembly notes, and related door/window elevations. The reviewed content does not show a clearly supported discrepancy or demonstrated omission requiring a permit finding. Referenced sheets A-1.00-00 and A-5.0 are identified on the sheet and are listed in the submitted index, but were not reviewed.\",\"findings\":[]}",
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet contains window types, a door hardware schedule, a door schedule, hardware notes, window assembly notes, and related door/window elevations. The reviewed content does not show a clearly supported discrepancy or demonstrated omission requiring a permit finding. Referenced sheets A-1.00-00 and A-5.0 are identified on the sheet and are listed in the submitted index, but were not reviewed.",
+ "drafts": [],
+ "published": [],
+ "withheld": []
+}

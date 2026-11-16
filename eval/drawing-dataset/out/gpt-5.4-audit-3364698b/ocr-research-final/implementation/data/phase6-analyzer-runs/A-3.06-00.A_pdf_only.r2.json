@@ -1,0 +1,71 @@
+{
+ "sheetId": "A-3.06-00",
+ "arm": "A_pdf_only",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_0e15d6082e47ef9d016aec8ee0044c87d296eae35f2dd7dda7",
+ "latencyMs": 7845,
+ "inputTokens": 3794,
+ "outputTokens": 284,
+ "costUsd": 0.012325000000000001,
+ "userPromptChars": 424,
+ "detected": {
+  "number": "A-3.06-00",
+  "title": "WALL SECTIONS",
+  "discipline": "Architecture"
+ },
+ "summary": "The drawing sheet shows guard rail and wall section details for a commercial project in Washington, DC, with various scales for different details. The sheet's title block indicates it was revised for a permit set on 10/15/2026.",
+ "published": [
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Guard rail height specification missing",
+   "observation": "The guard rail elevation detail at high roof lacks a specific dimension for the height above the roof surface.",
+   "drawing_evidence": "Detail 1, GUARD RAIL ELEVATION DETAIL @ HIGH ROOF, shows the layout but does not specify a height dimension.",
+   "drawing_location": "Detail 1",
+   "suggested_code_reference": null,
+   "recommendation": "Include the exact guard rail height, ensuring compliance with applicable standards for safety.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Guard rail height specification missing",
+    "originalObservation": "The guard rail elevation detail at high roof lacks a specific dimension for the height above the roof surface.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Material specification for guard rail",
+   "observation": "Material type and thickness for the guard rail components are not specified.",
+   "drawing_evidence": "Details 1-3 do not specify material types for components such as rails or posts.",
+   "drawing_location": "Details 1, 2, 3",
+   "suggested_code_reference": null,
+   "recommendation": "Specify the material type and thickness to confirm conformance with the structural requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Material specification for guard rail",
+    "originalObservation": "Material type and thickness for the guard rail components are not specified.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

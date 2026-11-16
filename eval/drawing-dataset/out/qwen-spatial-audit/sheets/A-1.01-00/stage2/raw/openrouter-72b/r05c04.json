@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842556-z09L0x9ZVoR09ImFjj2b",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [234, 746, 270, 798],\n        \"text_content\": \"AL\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 728, 979, 764],\n        \"text_content\": \"ALUMINUM BATTENS - SEE A-3.01 FO\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 770, 444, 806],\n        \"text_content\": \"SPECS\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [234, 844, 270, 896],\n        \"text_content\": \"SF\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 838, 979, 874],\n        \"text_content\": \"NEW STOREFRONT SYSTEM - SEE A-\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [324, 884, 979, 920],\n        \"text_content\": \"ELEVATIONS FOR LOCATIONS & SPE\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 435,
+ "costUsd": 0.001668,
+ "reportedCostUsd": 0.0016678,
+ "latencyS": 15.71,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

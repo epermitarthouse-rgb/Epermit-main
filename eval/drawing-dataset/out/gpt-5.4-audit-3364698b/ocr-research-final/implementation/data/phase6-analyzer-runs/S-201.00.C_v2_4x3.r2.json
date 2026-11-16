@@ -1,0 +1,100 @@
+{
+ "sheetId": "S-201.00",
+ "arm": "C_v2_4x3",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_06eb099949953449016aec8f78cd2487d2b46a36fb1f445d74",
+ "latencyMs": 10138,
+ "inputTokens": 4559,
+ "outputTokens": 457,
+ "costUsd": 0.0159675,
+ "userPromptChars": 3602,
+ "detected": {
+  "number": "S-201.00",
+  "title": "Wall Sections and Notes",
+  "discipline": "Structural"
+ },
+ "summary": "The sheet includes wall sections and structural notes for a commercial project. It details connections, design criteria, seismic data, concrete specifications, and special inspections. Key observations focus on design data, material specifications, projected loads, and procedural notes for construction compliance.",
+ "published": [
+  {
+   "category": "actual discrepancy",
+   "severity": "warning",
+   "title": "Live load reduction",
+   "observation": "The note states, '(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED),' but no specific local amendment or code citation is visible to contextualize this limitation.",
+   "drawing_evidence": "General Notes - Design Criteria: ROOF LIVE LOAD: 30 PSF (NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED)",
+   "drawing_location": "Top right, General Notes section",
+   "suggested_code_reference": null,
+   "recommendation": "Verify if there's a local amendment or specific guideline necessitating this stipulation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Live load reduction",
+    "originalObservation": "The note states, '(NO REDUCTIONS IN ROOF LIVE LOAD PERMITTED),' but no specific local amendment or code citation is visible to contextualize this limitation.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Special Inspections Requirement",
+   "observation": "A statement of special inspections is mentioned but must accompany each application where required by sections 109.3.13 and 1705, yet no specific detail about the sections is provided here.",
+   "drawing_evidence": "Special Inspections (Structural): A STATEMENT OF SPECIAL INSPECTIONS SHALL ACCOMPANY EACH APPLICATION WHERE SPECIAL INSPECTIONS AND TESTS ARE REQUIRED BY SECTIONS 109.3.13 AND 1705.",
+   "drawing_location": "Bottom right, Special Inspections (Structural) section",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure compliance with special inspection documentation requirements at the time of permit application.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "section_not_supported"
+    ],
+    "originalSeverity": "advisory",
+    "originalTitle": "Special Inspections Requirement",
+    "originalObservation": "A statement of special inspections is mentioned but must accompany each application where required by sections 109.3.13 and 1705, yet no specific detail about the sections is provided here.",
+    "originalCodeReference": "IBC 2015 (or local equivalent)",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [
+     "section_not_supported"
+    ],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "warning",
+   "title": "Seismic Design Category",
+   "observation": "Seismic Design Category information is implied but not explicitly stated, which is critical for structural performance criteria.",
+   "drawing_evidence": "Design Data: SITE CLASS D. ASSUMED / SEISMIC DESIGN CATEGORY",
+   "drawing_location": "Top right, Design Data section",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify the Seismic Design Category explicitly on the sheet to ensure alignment with structural design parameters.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Seismic Design Category",
+    "originalObservation": "Seismic Design Category information is implied but not explicitly stated, which is critical for structural performance criteria.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

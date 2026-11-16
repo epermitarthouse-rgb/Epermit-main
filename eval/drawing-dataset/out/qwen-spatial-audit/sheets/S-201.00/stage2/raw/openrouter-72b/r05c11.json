@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842962-9fg7EN4Zhv6L7I92KGWJ",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [0, 0, 226, 24],\n        \"text_content\": \"FICATION\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [0, 34, 185, 75],\n        \"text_content\": \"S 109.3.13\",\n        \"category\": \"title_block\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [739, 0, 980, 34],\n        \"text_content\": \"ICENS\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [739, 34, 980, 100],\n        \"text_content\": \"ESSIONAL\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [598, 765, 640, 980],\n        \"text_content\": \"AVENUE\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [656, 827, 702, 980],\n        \"text_content\": \"ON DC\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [724, 830, 766, 980],\n        \"text_content\": \"8-0003\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [778, 898, 832, 980],\n        \"text_content\": \"650\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 553,
+ "costUsd": 0.001786,
+ "reportedCostUsd": 0.0017858,
+ "latencyS": 14.55,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

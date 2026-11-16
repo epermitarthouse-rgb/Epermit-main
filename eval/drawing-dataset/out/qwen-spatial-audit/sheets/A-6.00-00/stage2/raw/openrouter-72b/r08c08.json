@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842875-oa8AqS5Ys0YlrQvzYuZc",
+ "text": "```json\n[\n    {\"bbox_2d\": [124, 0, 206, 20], \"text_content\": \"1/4\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [121, 30, 344, 67], \"text_content\": \"TEMPERED\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [363, 32, 495, 67], \"text_content\": \"GLASS\", \"category\": \"dimension\", \"group\": 0, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [70, 135, 129, 220], \"text_content\": \"25\\\"\", \"category\": \"dimension\", \"group\": 1, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [68, 308, 127, 395], \"text_content\": \"42\\\"\", \"category\": \"dimension\", \"group\": 2, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [907, 150, 960, 187], \"text_content\": \"45\", \"category\": \"dimension\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [907, 199, 974, 232], \"text_content\": \"F.P.\", \"category\": \"dimension\", \"group\": 3, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [699, 523, 733, 552], \"text_content\": \"G\", \"category\": \"label\", \"group\": 4, \"uncertain\": false, \"alternatives\": []},\n    {\"bbox_2d\": [0, 642, 346, 723], \"text_content\": \"EDULE\", \"category\": \"schedule_title\", \"group\": 5, \"uncertain\": false, \"alternatives\": []}\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 529,
+ "costUsd": 0.001762,
+ "reportedCostUsd": 0.0017618,
+ "latencyS": 10.35,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

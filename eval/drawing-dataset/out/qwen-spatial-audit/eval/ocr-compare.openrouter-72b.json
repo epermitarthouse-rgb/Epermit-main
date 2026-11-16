@@ -1,0 +1,1043 @@
+{
+ "generatedAt": "2026-11-16T15:32:05.823Z",
+ "backend": "openrouter-72b",
+ "subset": false,
+ "scorer": "stage3-evidence-eval.v1 (unchanged)",
+ "results": [
+  {
+   "sheet": "A-3.06-00",
+   "coverage": {
+    "gtRows": 183,
+    "gtRowsInReadTiles": 182,
+    "tilesRead": 112
+   },
+   "appleVision4x3": {
+    "lines": {
+     "units": 200,
+     "summary": {
+      "techRowsExact": 33,
+      "techRowsClean": 32,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 3,
+      "techRowsWrong": 6,
+      "techRowsNone": 30,
+      "techRows": 72,
+      "techAnnComplete": 20,
+      "techAnnClean": 17,
+      "techAnnContext": 2,
+      "techAnn": 49,
+      "mixedSegments": 5,
+      "mixedItems": 5,
+      "crossColumn": 5,
+      "wrongTechUnmarked": 10,
+      "wrongDimUnmarked": 6,
+      "items": 200,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "v2Rows": {
+     "units": 196,
+     "summary": {
+      "techRowsExact": 33,
+      "techRowsClean": 32,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 3,
+      "techRowsWrong": 6,
+      "techRowsNone": 30,
+      "techRows": 72,
+      "techAnnComplete": 20,
+      "techAnnClean": 17,
+      "techAnnContext": 2,
+      "techAnn": 49,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 10,
+      "wrongDimUnmarked": 6,
+      "items": 196,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "v2Block": {
+     "units": 71,
+     "chars": 3120,
+     "summary": {
+      "techRowsExact": 32,
+      "techRowsClean": 32,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 1,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 7,
+      "techRowsNone": 30,
+      "techRows": 72,
+      "techAnnComplete": 20,
+      "techAnnClean": 17,
+      "techAnnContext": 18,
+      "techAnn": 49,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 2,
+      "wrongDimUnmarked": 0,
+      "items": 71,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 45,
+     "boxOnRow": 33,
+     "medianOverlap": 0.969
+    }
+   },
+   "qwen": {
+    "backend": "openrouter-72b",
+    "model": "qwen/qwen2.5-vl-72b-instruct",
+    "lines": {
+     "units": 316,
+     "summary": {
+      "techRowsExact": 43,
+      "techRowsClean": 42,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 5,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 14,
+      "techRowsWrong": 3,
+      "techRowsNone": 7,
+      "techRows": 72,
+      "techAnnComplete": 27,
+      "techAnnClean": 22,
+      "techAnnContext": 5,
+      "techAnn": 49,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 7,
+      "wrongDimUnmarked": 4,
+      "items": 316,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "linesModelBoxes": {
+     "units": 316,
+     "summary": {
+      "techRowsExact": 46,
+      "techRowsClean": 45,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 5,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 14,
+      "techRowsWrong": 3,
+      "techRowsNone": 4,
+      "techRows": 72,
+      "techAnnComplete": 29,
+      "techAnnClean": 24,
+      "techAnnContext": 6,
+      "techAnn": 49,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 9,
+      "wrongDimUnmarked": 6,
+      "items": 316,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "v2Rows": {
+     "units": 356,
+     "summary": {
+      "techRowsExact": 48,
+      "techRowsClean": 46,
+      "techRowsContradicted": 2,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 14,
+      "techRowsWrong": 3,
+      "techRowsNone": 7,
+      "techRows": 72,
+      "techAnnComplete": 27,
+      "techAnnClean": 25,
+      "techAnnContext": 5,
+      "techAnn": 49,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 11,
+      "wrongDimUnmarked": 7,
+      "items": 356,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "v2Block": {
+     "units": 73,
+     "chars": 3155,
+     "summary": {
+      "techRowsExact": 47,
+      "techRowsClean": 46,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 1,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 9,
+      "techRowsWrong": 3,
+      "techRowsNone": 12,
+      "techRows": 72,
+      "techAnnComplete": 26,
+      "techAnnClean": 25,
+      "techAnnContext": 25,
+      "techAnn": 49,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 3,
+      "wrongDimUnmarked": 2,
+      "items": 73,
+      "segmentsOutOfScope": 0
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 54,
+     "boxOnRow": 47,
+     "medianOverlap": 0.964
+    },
+    "spatialModelBoxes": {
+     "technicalRowsTextFound": 54,
+     "boxOnRow": 50,
+     "medianOverlap": 0.982
+    },
+    "snapped": 312
+   }
+  },
+  {
+   "sheet": "A-4.00-00",
+   "coverage": {
+    "gtRows": 50,
+    "gtRowsInReadTiles": 50,
+    "tilesRead": 116
+   },
+   "appleVision4x3": {
+    "lines": {
+     "units": 413,
+     "summary": {
+      "techRowsExact": 13,
+      "techRowsClean": 13,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 0,
+      "techRowsNone": 19,
+      "techRows": 33,
+      "techAnnComplete": 11,
+      "techAnnClean": 11,
+      "techAnnContext": 10,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 413,
+      "segmentsOutOfScope": 376
+     }
+    },
+    "v2Rows": {
+     "units": 411,
+     "summary": {
+      "techRowsExact": 13,
+      "techRowsClean": 13,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 0,
+      "techRowsNone": 19,
+      "techRows": 33,
+      "techAnnComplete": 11,
+      "techAnnClean": 11,
+      "techAnnContext": 10,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 411,
+      "segmentsOutOfScope": 374
+     }
+    },
+    "v2Block": {
+     "units": 45,
+     "chars": 3157,
+     "summary": {
+      "techRowsExact": 12,
+      "techRowsClean": 12,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 0,
+      "techRowsNone": 20,
+      "techRows": 33,
+      "techAnnComplete": 10,
+      "techAnnClean": 10,
+      "techAnnContext": 10,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 45,
+      "segmentsOutOfScope": 71
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 21,
+     "boxOnRow": 13,
+     "medianOverlap": 0.917
+    }
+   },
+   "qwen": {
+    "backend": "openrouter-72b",
+    "model": "qwen/qwen2.5-vl-72b-instruct",
+    "lines": {
+     "units": 643,
+     "summary": {
+      "techRowsExact": 15,
+      "techRowsClean": 15,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 2,
+      "techRowsNone": 16,
+      "techRows": 33,
+      "techAnnComplete": 15,
+      "techAnnClean": 15,
+      "techAnnContext": 13,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 2,
+      "wrongDimUnmarked": 1,
+      "items": 643,
+      "segmentsOutOfScope": 663
+     }
+    },
+    "linesModelBoxes": {
+     "units": 643,
+     "summary": {
+      "techRowsExact": 19,
+      "techRowsClean": 19,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 0,
+      "techRowsNone": 13,
+      "techRows": 33,
+      "techAnnComplete": 17,
+      "techAnnClean": 17,
+      "techAnnContext": 14,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 643,
+      "segmentsOutOfScope": 663
+     }
+    },
+    "v2Rows": {
+     "units": 712,
+     "summary": {
+      "techRowsExact": 15,
+      "techRowsClean": 15,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 2,
+      "techRowsNone": 16,
+      "techRows": 33,
+      "techAnnComplete": 15,
+      "techAnnClean": 15,
+      "techAnnContext": 13,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 2,
+      "wrongDimUnmarked": 1,
+      "items": 712,
+      "segmentsOutOfScope": 651
+     }
+    },
+    "v2Block": {
+     "units": 92,
+     "chars": 3181,
+     "summary": {
+      "techRowsExact": 10,
+      "techRowsClean": 10,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 2,
+      "techRowsNone": 21,
+      "techRows": 33,
+      "techAnnComplete": 9,
+      "techAnnClean": 9,
+      "techAnnContext": 8,
+      "techAnn": 30,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 2,
+      "wrongDimUnmarked": 1,
+      "items": 92,
+      "segmentsOutOfScope": 104
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 29,
+     "boxOnRow": 15,
+     "medianOverlap": 0.843
+    },
+    "spatialModelBoxes": {
+     "technicalRowsTextFound": 29,
+     "boxOnRow": 18,
+     "medianOverlap": 0.864
+    },
+    "snapped": 621
+   }
+  },
+  {
+   "sheet": "A-1.01-00",
+   "coverage": {
+    "gtRows": 76,
+    "gtRowsInReadTiles": 76,
+    "tilesRead": 112
+   },
+   "appleVision4x3": {
+    "lines": {
+     "units": 218,
+     "summary": {
+      "techRowsExact": 3,
+      "techRowsClean": 3,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 1,
+      "techRowsNone": 29,
+      "techRows": 33,
+      "techAnnComplete": 2,
+      "techAnnClean": 2,
+      "techAnnContext": 2,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 218,
+      "segmentsOutOfScope": 178
+     }
+    },
+    "v2Rows": {
+     "units": 214,
+     "summary": {
+      "techRowsExact": 3,
+      "techRowsClean": 3,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 1,
+      "techRowsNone": 29,
+      "techRows": 33,
+      "techAnnComplete": 2,
+      "techAnnClean": 2,
+      "techAnnContext": 2,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 214,
+      "segmentsOutOfScope": 174
+     }
+    },
+    "v2Block": {
+     "units": 72,
+     "chars": 3118,
+     "summary": {
+      "techRowsExact": 3,
+      "techRowsClean": 3,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 0,
+      "techRowsNone": 30,
+      "techRows": 33,
+      "techAnnComplete": 2,
+      "techAnnClean": 2,
+      "techAnnContext": 2,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 72,
+      "segmentsOutOfScope": 82
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 9,
+     "boxOnRow": 3,
+     "medianOverlap": 0
+    }
+   },
+   "qwen": {
+    "backend": "openrouter-72b",
+    "model": "qwen/qwen2.5-vl-72b-instruct",
+    "lines": {
+     "units": 452,
+     "summary": {
+      "techRowsExact": 8,
+      "techRowsClean": 8,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 9,
+      "techRowsNone": 15,
+      "techRows": 33,
+      "techAnnComplete": 4,
+      "techAnnClean": 4,
+      "techAnnContext": 2,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 9,
+      "wrongDimUnmarked": 0,
+      "items": 452,
+      "segmentsOutOfScope": 400
+     }
+    },
+    "linesModelBoxes": {
+     "units": 452,
+     "summary": {
+      "techRowsExact": 16,
+      "techRowsClean": 15,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 8,
+      "techRowsNone": 8,
+      "techRows": 33,
+      "techAnnComplete": 8,
+      "techAnnClean": 8,
+      "techAnnContext": 5,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 10,
+      "wrongDimUnmarked": 0,
+      "items": 452,
+      "segmentsOutOfScope": 398
+     }
+    },
+    "v2Rows": {
+     "units": 497,
+     "summary": {
+      "techRowsExact": 8,
+      "techRowsClean": 8,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 9,
+      "techRowsNone": 15,
+      "techRows": 33,
+      "techAnnComplete": 4,
+      "techAnnClean": 4,
+      "techAnnContext": 2,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 9,
+      "wrongDimUnmarked": 0,
+      "items": 497,
+      "segmentsOutOfScope": 395
+     }
+    },
+    "v2Block": {
+     "units": 78,
+     "chars": 3167,
+     "summary": {
+      "techRowsExact": 5,
+      "techRowsClean": 5,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 1,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 1,
+      "techRowsWrong": 4,
+      "techRowsNone": 22,
+      "techRows": 33,
+      "techAnnComplete": 3,
+      "techAnnClean": 2,
+      "techAnnContext": 3,
+      "techAnn": 23,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 2,
+      "wrongDimUnmarked": 0,
+      "items": 78,
+      "segmentsOutOfScope": 92
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 27,
+     "boxOnRow": 9,
+     "medianOverlap": 0
+    },
+    "spatialModelBoxes": {
+     "technicalRowsTextFound": 27,
+     "boxOnRow": 15,
+     "medianOverlap": 0.69
+    },
+    "snapped": 442
+   }
+  },
+  {
+   "sheet": "A-6.00-00",
+   "coverage": {
+    "gtRows": 111,
+    "gtRowsInReadTiles": 111,
+    "tilesRead": 108
+   },
+   "appleVision4x3": {
+    "lines": {
+     "units": 412,
+     "summary": {
+      "techRowsExact": 8,
+      "techRowsClean": 8,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 17,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 32,
+      "techRows": 60,
+      "techAnnComplete": 5,
+      "techAnnClean": 5,
+      "techAnnContext": 5,
+      "techAnn": 35,
+      "mixedSegments": 2,
+      "mixedItems": 2,
+      "crossColumn": 17,
+      "wrongTechUnmarked": 3,
+      "wrongDimUnmarked": 3,
+      "items": 412,
+      "segmentsOutOfScope": 360
+     }
+    },
+    "v2Rows": {
+     "units": 426,
+     "summary": {
+      "techRowsExact": 24,
+      "techRowsClean": 22,
+      "techRowsContradicted": 2,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 1,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 32,
+      "techRows": 60,
+      "techAnnComplete": 6,
+      "techAnnClean": 6,
+      "techAnnContext": 6,
+      "techAnn": 35,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 1,
+      "wrongTechUnmarked": 3,
+      "wrongDimUnmarked": 3,
+      "items": 426,
+      "segmentsOutOfScope": 356
+     }
+    },
+    "v2Block": {
+     "units": 43,
+     "chars": 3196,
+     "summary": {
+      "techRowsExact": 15,
+      "techRowsClean": 15,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 2,
+      "techRowsInMerge": 1,
+      "techRowsPartial": 2,
+      "techRowsWrong": 1,
+      "techRowsNone": 39,
+      "techRows": 60,
+      "techAnnComplete": 2,
+      "techAnnClean": 2,
+      "techAnnContext": 2,
+      "techAnn": 35,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 1,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 43,
+      "segmentsOutOfScope": 45
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 31,
+     "boxOnRow": 15,
+     "medianOverlap": 0
+    }
+   },
+   "qwen": {
+    "backend": "openrouter-72b",
+    "model": "qwen/qwen2.5-vl-72b-instruct",
+    "lines": {
+     "units": 644,
+     "summary": {
+      "techRowsExact": 37,
+      "techRowsClean": 34,
+      "techRowsContradicted": 3,
+      "techRowsMarked": 7,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 2,
+      "techRowsNone": 14,
+      "techRows": 60,
+      "techAnnComplete": 16,
+      "techAnnClean": 15,
+      "techAnnContext": 16,
+      "techAnn": 35,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 5,
+      "wrongDimUnmarked": 2,
+      "items": 644,
+      "segmentsOutOfScope": 609
+     }
+    },
+    "linesModelBoxes": {
+     "units": 644,
+     "summary": {
+      "techRowsExact": 44,
+      "techRowsClean": 44,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 2,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 3,
+      "techRowsWrong": 0,
+      "techRowsNone": 11,
+      "techRows": 60,
+      "techAnnComplete": 20,
+      "techAnnClean": 19,
+      "techAnnContext": 20,
+      "techAnn": 35,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 644,
+      "segmentsOutOfScope": 609
+     }
+    },
+    "v2Rows": {
+     "units": 736,
+     "summary": {
+      "techRowsExact": 44,
+      "techRowsClean": 40,
+      "techRowsContradicted": 4,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 2,
+      "techRowsNone": 14,
+      "techRows": 60,
+      "techAnnComplete": 16,
+      "techAnnClean": 16,
+      "techAnnContext": 16,
+      "techAnn": 35,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 6,
+      "wrongDimUnmarked": 2,
+      "items": 736,
+      "segmentsOutOfScope": 604
+     }
+    },
+    "v2Block": {
+     "units": 37,
+     "chars": 3198,
+     "summary": {
+      "techRowsExact": 16,
+      "techRowsClean": 16,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 0,
+      "techRowsWrong": 1,
+      "techRowsNone": 43,
+      "techRows": 60,
+      "techAnnComplete": 0,
+      "techAnnClean": 0,
+      "techAnnContext": 0,
+      "techAnn": 35,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 1,
+      "wrongDimUnmarked": 0,
+      "items": 37,
+      "segmentsOutOfScope": 52
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 53,
+     "boxOnRow": 41,
+     "medianOverlap": 0.931
+    },
+    "spatialModelBoxes": {
+     "technicalRowsTextFound": 53,
+     "boxOnRow": 45,
+     "medianOverlap": 0.92
+    },
+    "snapped": 601
+   }
+  },
+  {
+   "sheet": "S-201.00",
+   "coverage": {
+    "gtRows": 55,
+    "gtRowsInReadTiles": 55,
+    "tilesRead": 111
+   },
+   "appleVision4x3": {
+    "lines": {
+     "units": 385,
+     "summary": {
+      "techRowsExact": 12,
+      "techRowsClean": 12,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 6,
+      "techRowsWrong": 9,
+      "techRowsNone": 7,
+      "techRows": 34,
+      "techAnnComplete": 12,
+      "techAnnClean": 12,
+      "techAnnContext": 9,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 10,
+      "wrongDimUnmarked": 0,
+      "items": 385,
+      "segmentsOutOfScope": 334
+     }
+    },
+    "v2Rows": {
+     "units": 383,
+     "summary": {
+      "techRowsExact": 12,
+      "techRowsClean": 12,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 6,
+      "techRowsWrong": 9,
+      "techRowsNone": 7,
+      "techRows": 34,
+      "techAnnComplete": 12,
+      "techAnnClean": 12,
+      "techAnnContext": 9,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 10,
+      "wrongDimUnmarked": 0,
+      "items": 383,
+      "segmentsOutOfScope": 332
+     }
+    },
+    "v2Block": {
+     "units": 30,
+     "chars": 3178,
+     "summary": {
+      "techRowsExact": 5,
+      "techRowsClean": 5,
+      "techRowsContradicted": 0,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 4,
+      "techRowsNone": 23,
+      "techRows": 34,
+      "techAnnComplete": 5,
+      "techAnnClean": 5,
+      "techAnnContext": 3,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 0,
+      "wrongDimUnmarked": 0,
+      "items": 30,
+      "segmentsOutOfScope": 38
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 15,
+     "boxOnRow": 12,
+     "medianOverlap": 0.944
+    }
+   },
+   "qwen": {
+    "backend": "openrouter-72b",
+    "model": "qwen/qwen2.5-vl-72b-instruct",
+    "lines": {
+     "units": 559,
+     "summary": {
+      "techRowsExact": 20,
+      "techRowsClean": 17,
+      "techRowsContradicted": 3,
+      "techRowsMarked": 5,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 4,
+      "techRowsWrong": 4,
+      "techRowsNone": 1,
+      "techRows": 34,
+      "techAnnComplete": 24,
+      "techAnnClean": 15,
+      "techAnnContext": 19,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 6,
+      "wrongDimUnmarked": 0,
+      "items": 559,
+      "segmentsOutOfScope": 588
+     }
+    },
+    "linesModelBoxes": {
+     "units": 559,
+     "summary": {
+      "techRowsExact": 18,
+      "techRowsClean": 17,
+      "techRowsContradicted": 1,
+      "techRowsMarked": 7,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 4,
+      "techRowsWrong": 4,
+      "techRowsNone": 1,
+      "techRows": 34,
+      "techAnnComplete": 24,
+      "techAnnClean": 15,
+      "techAnnContext": 19,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 4,
+      "wrongDimUnmarked": 0,
+      "items": 559,
+      "segmentsOutOfScope": 588
+     }
+    },
+    "v2Rows": {
+     "units": 671,
+     "summary": {
+      "techRowsExact": 25,
+      "techRowsClean": 17,
+      "techRowsContradicted": 8,
+      "techRowsMarked": 0,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 4,
+      "techRowsWrong": 4,
+      "techRowsNone": 1,
+      "techRows": 34,
+      "techAnnComplete": 24,
+      "techAnnClean": 15,
+      "techAnnContext": 19,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 0,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 20,
+      "wrongDimUnmarked": 2,
+      "items": 671,
+      "segmentsOutOfScope": 584
+     }
+    },
+    "v2Block": {
+     "units": 56,
+     "chars": 3184,
+     "summary": {
+      "techRowsExact": 17,
+      "techRowsClean": 15,
+      "techRowsContradicted": 2,
+      "techRowsMarked": 2,
+      "techRowsInMerge": 0,
+      "techRowsPartial": 2,
+      "techRowsWrong": 4,
+      "techRowsNone": 9,
+      "techRows": 34,
+      "techAnnComplete": 18,
+      "techAnnClean": 13,
+      "techAnnContext": 13,
+      "techAnn": 33,
+      "mixedSegments": 0,
+      "mixedItems": 1,
+      "crossColumn": 0,
+      "wrongTechUnmarked": 5,
+      "wrongDimUnmarked": 0,
+      "items": 56,
+      "segmentsOutOfScope": 33
+     }
+    },
+    "spatial": {
+     "technicalRowsTextFound": 25,
+     "boxOnRow": 22,
+     "medianOverlap": 0.954
+    },
+    "spatialModelBoxes": {
+     "technicalRowsTextFound": 25,
+     "boxOnRow": 22,
+     "medianOverlap": 1
+    },
+    "snapped": 493
+   }
+  }
+ ]
+}

@@ -1,0 +1,165 @@
+Review this permit drawing sheet and return the structured preliminary observations.
+
+Current file: A-3.06-00.pdf
+
+Submitted sheet index (filenames and detected numbers only; other sheets were not read in this request):
+- number not detected | A-3.06-00.pdf | current sheet
+- number not detected | A-1.00-00.pdf | in project, not in this analysis
+- number not detected | A-1.01-00.pdf | in project, not in this analysis
+- number not detected | A-1.02-00.pdf | in project, not in this analysis
+- number not detected | A-1.03-00.pdf | in project, not in this analysis
+- number not detected | A-1.04.00.pdf | in project, not in this analysis
+- number not detected | A-1.05.00.pdf | in project, not in this analysis
+- number not detected | A-1.06-00.pdf | in project, not in this analysis
+- number not detected | A-2.00-00.pdf | in project, not in this analysis
+- number not detected | A-2.01-00.pdf | in project, not in this analysis
+- number not detected | A-2.02.00.pdf | in project, not in this analysis
+- number not detected | A-3.00-00.pdf | in project, not in this analysis
+- number not detected | A-3.01-00.pdf | in project, not in this analysis
+- number not detected | A-3.02-00.pdf | in project, not in this analysis
+- number not detected | A-3.03-00.pdf | in project, not in this analysis
+- number not detected | A-3.04-00.pdf | in project, not in this analysis
+- number not detected | A-3.05-00.pdf | in project, not in this analysis
+- number not detected | A-4.00-00.pdf | in project, not in this analysis
+- number not detected | A-4.01-00.pdf | in project, not in this analysis
+- number not detected | A-4.02-00.pdf | in project, not in this analysis
+- number not detected | A-6.00-00.pdf | in project, not in this analysis
+- number not detected | A-6.01.00.pdf | in project, not in this analysis
+- number not detected | CV-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.00-00.pdf | in project, not in this analysis
+- number not detected | DM-1.01-00.pdf | in project, not in this analysis
+- number not detected | DM-1.02-00.pdf | in project, not in this analysis
+- number not detected | DM-2.00-00.pdf | in project, not in this analysis
+- number not detected | DM-2.01-00.pdf | in project, not in this analysis
+- number not detected | E-1.0-00.pdf | in project, not in this analysis
+- number not detected | E-1.1-00.pdf | in project, not in this analysis
+- number not detected | E-1.2-00.pdf | in project, not in this analysis
+- number not detected | E-1.3-00.pdf | in project, not in this analysis
+- number not detected | E-2.1-00.pdf | in project, not in this analysis
+- number not detected | E-2.2-00.pdf | in project, not in this analysis
+- number not detected | E-3.0-00.pdf | in project, not in this analysis
+- number not detected | E-3.1-00.pdf | in project, not in this analysis
+- number not detected | E-3.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.0-00.pdf | in project, not in this analysis
+- number not detected | E-4.1-00.pdf | in project, not in this analysis
+- number not detected | E-4.2-00.pdf | in project, not in this analysis
+- number not detected | E-4.3-00.pdf | in project, not in this analysis
+- number not detected | EN-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-1.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-2.00-0.pdf | in project, not in this analysis
+- number not detected | EQ-3.00-0.pdf | in project, not in this analysis
+- number not detected | FP100.pdf | in project, not in this analysis
+- number not detected | FP200 .pdf | in project, not in this analysis
+- number not detected | FP201.pdf | in project, not in this analysis
+- number not detected | FP300.pdf | in project, not in this analysis
+- number not detected | G-0.00-0.pdf | in project, not in this analysis
+- number not detected | M-1.1.pdf | in project, not in this analysis
+- number not detected | M-1.2.pdf | in project, not in this analysis
+- number not detected | M-1.3.pdf | in project, not in this analysis
+- number not detected | M-1.4.pdf | in project, not in this analysis
+- number not detected | M-2.0.pdf | in project, not in this analysis
+- number not detected | M-3.0.pdf | in project, not in this analysis
+- number not detected | M-4.0.pdf | in project, not in this analysis
+- number not detected | M-4.1.pdf | in project, not in this analysis
+- number not detected | MD-1.1.pdf | in project, not in this analysis
+- number not detected | MD-1.2.pdf | in project, not in this analysis
+- number not detected | MD-1.3.pdf | in project, not in this analysis
+- number not detected | P-1.0-00.pdf | in project, not in this analysis
+- number not detected | P-1.1-00.pdf | in project, not in this analysis
+- number not detected | P-1.2-00.pdf | in project, not in this analysis
+- number not detected | P-1.3-00.pdf | in project, not in this analysis
+- number not detected | P-1.4-00.pdf | in project, not in this analysis
+- number not detected | P-1.5-00.pdf | in project, not in this analysis
+- number not detected | P-1.6-00.pdf | in project, not in this analysis
+- number not detected | P-1.7-00.pdf | in project, not in this analysis
+- number not detected | P-1.8-00.pdf | in project, not in this analysis
+- number not detected | P-2.0-00.pdf | in project, not in this analysis
+- number not detected | P-2.1-00.pdf | in project, not in this analysis
+- number not detected | P-3.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.0-00.pdf | in project, not in this analysis
+- number not detected | P-4.1-00.pdf | in project, not in this analysis
+- number not detected | S-001.00.pdf | in project, not in this analysis
+- number not detected | S-002.00.pdf | in project, not in this analysis
+- number not detected | S-201.00.pdf | in project, not in this analysis
+- number not detected | S-202.00.pdf | in project, not in this analysis
+- number not detected | S-203.00.pdf | in project, not in this analysis
+- number not detected | S-204.00.pdf | in project, not in this analysis
+- number not detected | S-300.00.pdf | in project, not in this analysis
+If a note refers to a sheet on this index, that sheet is in the project. Do not report it as missing. Do not treat its listing as proof of compliance.
+
+Stage 3 Apple Vision OCR evidence v2 (machine-extracted; independentlyVerified=false). Not professionally verified. Quote before Critical absence. Omitted or missing items mean not recovered — not proof of absence.
+Reading rules: each "- " line is one printed annotation; " / " separates its rows; " ; " separates the cells of one table row. {A | B} = conflicting OCR readings of one place, neither confirmed. ?text = OCR format or glyph doubt; verify on the PDF before relying on it. (ctx?) = relation to nearby items unconfirmed. Never combine values from different lines.
+stage3_status=recovered version=phase3.stage3-visual-evidence.v2
+Stage3 OCR evidence v2 sheet=A-3.06-00 source=4x3 annotations=82 technical=36 shown=71 independentlyVerified=false
+- A-3.06
+- ?-I-1/4" PIPE RAILING. PAINT / TO MATCH NEW METAL / PARAPET CAP.
+- EXTEND GUARD RAIL MIN. 30" BEYOND EACH END OF EQUIPMENT (ctx?)
+- THIS DETAIL IS BASED ON DURO-LAST DETAIL 4010
+- EQ (ctx?)
+- {I-1/4" PIPE RAILING. PAINT PEX-I | - I-I/4" PIPE RA} / TO MATCH METAL PANELS / AND/OR (E) CORNICE
+- -1-1/4" PIPE RAILING. PAINT TO MATCH / NEW METAL PARAPET CAP. (ctx?)
+- 3'-6"MIN HEIGHT FROM / T.O. ROOF DECK MEMBRANE
+- MIN. ABOVE DECK MEMBRANE
+- CAULK BEHIND FLASHING (ctx?)
+- AND ALONG TOP EDGE OF / FLASHING (ctx?)
+- -DURA-LAST CAULK (ctx?)
+- -GUARD RAIL SHALL BE CONSTRUCTED SO AS TO / PREVENT THE PASSAGE OF A SPHERE 21" IN DIA (ctx?)
+- - STAINLESS STEEL BAND / {POSITIONED 1/4" FROM THE TOP | POSITIONED I/} / OF THE STACK FLASHING (ctx?)
+- -4x4 WOOD BLOCKING / {BETWEEN JOISTS AT NEW | JDISTS AT NEW} / GUARD RAIL PENETRATION / LOCATIONS. (ctx?)
+- STRUCTIONS. (ctx?)
+- {• GUIDELINES FOR | PELINES FOR}
+- VARIES (V.I.F)
+- T.O. ROOF MEMBRANE
+- — (E) INSULATION
+- -(E) JOISTS
+- - (E) WOOD DECKING
+- SQUARE FLOOR FLANGE
+- 4x4 HORIZONTAL BLOCKING
+- (E) JOIST TOP CHORD
+- A-3.00/
+- PARAPET BEYOND D
+- PARAPET BEYOND
+- 29'-0" A.F.F. V.
+- ?7/ BLOCKING & PARAPET
+- EXTERIOR ASSEMBLY-4 / (SEE ASSEMBLY NOTES) (ctx?)
+- - 1/2" EXTERIOR PLYWOOD / SHEATHING
+- 4" METAL STUDS @ 16" O.C.SEE / STRUCTURAL DRAWINGS. (ctx?)
+- 6" METAL STUDS @ 16" O.C.SEE / STRUCTURAL DRAWINGS.
+- ?2'-10'
+- LINE OF EXISTING / STAIR TOWER.
+- NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.
+- NEW MEMBRANE / ROOFING OVER / BUILT-UP ROOF TYP.
+- MIN.
+- DIAGONAL BRACING, SEE / STRUCTURAL DRAWINGS
+- STANDING SEAM METAL / ROOF TO REMAIN
+- ?26'-2" A.F.F. (V.I.F.
+- ROOF MEMBRANE
+- 25'-0" A.F.F.
+- EXISTING ROOF @ L.P. (V.I.F.)
+- UNDERCSOR / ?EV. + 10'-1
+- NEW CANOPY (ctx?)
+- {EXIST. DOUBLE | EXISI. DOUBLE} / ROOF TRUSS TO / REMAIN. TYP.
+- EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES) (ctx?)
+- EXIST. ROOF TRUSSES ES / TO REMAIN. TYP.
+- EXIST. ROOF TRUSSES / TO REMAIN. TYP.
+- A-3.00
+- {EXIST. ROOF | EXIST. R0OF} / JOISTS TO / REMAIN
+- EXIST. LOWER ROOF / SLOPE TO REMAIN.
+- EXTERIOR ASSEMBLY-5 / (SEE ASSEMBLY NOTES)
+- EXIST. MASONRY -
+- M
+- Medonald's
+- HFA
+- PREPARED FOR:
+- SITE ADDRESS:
+- DRAWING NAME: (ctx?)
+- DESIGN BY:
+- DRAWN BY: (ctx?)
+- DATE:
+- CHECKED BY:
+- SCALE:
+- SHEET:
+- 20
+- PROJECT #
+- PAGE #
+omitted: 11 annotations (0 technical; 11 other) by budget; not shown is not absent

@@ -1,0 +1,98 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "B_v1",
+ "rep": 3,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_00036352164f5830016aec8f505c2c87d2998a2754d510e642",
+ "latencyMs": 10872,
+ "inputTokens": 4149,
+ "outputTokens": 493,
+ "costUsd": 0.0153025,
+ "userPromptChars": 1917,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architecture"
+ },
+ "summary": "This sheet provides a door and hardware schedule, along with window types, for a commercial project in Washington, DC. Key information includes hardware specifications and scheduling for various door types and configurations.",
+ "published": [
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "Discrepancy in Panic Hardware Specification",
+   "observation": "The door schedule includes items '1 EA PANIC 9975EO-LD 36\" SP28 V.DUPRIN' and '1 EA PANIC 9975E0-LD 36\" SP28 V.DUPRIN', which may represent a typo or formatting inconsistency.",
+   "drawing_evidence": "\"1 EA PANIC 9975EO-LD 36\" SP28 V.DUPRIN\" vs. \"1 EA PANIC 9975E0-LD 36\" SP28 V.DUPRIN\"",
+   "drawing_location": "Door Schedule",
+   "suggested_code_reference": null,
+   "recommendation": "Verify the correct specification of panic hardware to ensure consistent purchasing and installation.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "Discrepancy in Panic Hardware Specification",
+    "originalObservation": "The door schedule includes items '1 EA PANIC 9975EO-LD 36\" SP28 V.DUPRIN' and '1 EA PANIC 9975E0-LD 36\" SP28 V.DUPRIN', which may represent a typo or formatting inconsistency.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "missing required information",
+   "severity": "advisory",
+   "title": "Specification appears in the cited evidence",
+   "observation": "The cited drawing evidence already includes specification content related to this topic. A missing-specification conclusion is not established from that evidence alone.",
+   "drawing_evidence": "\"PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.\"",
+   "drawing_location": "General Notes for Doors",
+   "suggested_code_reference": null,
+   "recommendation": "Re-read the cited notes or details and identify any remaining gap that is not already stated in the quoted evidence.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "adjusted",
+    "rules": [
+     "absence_claim_contradicted_by_evidence"
+    ],
+    "originalSeverity": "warning",
+    "originalTitle": "Potential Missing Door Hardware Information",
+    "originalObservation": "The general notes specify 'PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE,' yet the specific panic hardware details for each exterior door are not explicitly listed beside each door entry.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "further professional review",
+   "severity": "advisory",
+   "title": "Verification of Window and Door Compliance",
+   "observation": "Window types and door schedule are provided without detailed performance or compliance attributes related to energy, fire rating, or security.",
+   "drawing_evidence": "\"WINDOW TYPES SCALE: N.T.S.\" and \"DOOR SCHEDULE SCALE: N.T.S.\"",
+   "drawing_location": "Entire Sheet",
+   "suggested_code_reference": null,
+   "recommendation": "Conduct a detailed review to add specific compliance details for windows and doors, referencing relevant building code requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Verification of Window and Door Compliance",
+    "originalObservation": "Window types and door schedule are provided without detailed performance or compliance attributes related to energy, fire rating, or security.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}

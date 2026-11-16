@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842637-XyHW4CYBkFXtV3ZuOktM",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [160, 674, 216, 754],\n        \"text_content\": \"4\",\n        \"category\": \"sheet_reference\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [342, 639, 980, 724],\n        \"text_content\": \"PLAN KEYED\",\n        \"category\": \"title_block\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [342, 776, 494, 813],\n        \"text_content\": \"SCALE:\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [525, 776, 636, 813],\n        \"text_content\": \"N.T.S.\",\n        \"category\": \"title_block\",\n        \"group\": 2,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 279,
+ "costUsd": 0.001512,
+ "reportedCostUsd": 0.0015118,
+ "latencyS": 6.39,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

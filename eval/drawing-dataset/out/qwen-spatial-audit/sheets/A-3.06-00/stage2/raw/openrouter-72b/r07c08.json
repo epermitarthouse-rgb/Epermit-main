@@ -1,0 +1,15 @@
+{
+ "backend": "openrouter-72b",
+ "model": "qwen/qwen2.5-vl-72b-instruct",
+ "provider": "Parasail",
+ "generationId": "gen-1794842103-WA9tekBfW8UwAiWHghgH",
+ "text": "```json\n[\n    {\n        \"bbox_2d\": [413, 341, 852, 386],\n        \"text_content\": \"EXTERIOR ASSEMBLY-5\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [413, 389, 858, 434],\n        \"text_content\": \"(SEE ASSEMBLY NOTES)\",\n        \"category\": \"label\",\n        \"group\": 0,\n        \"uncertain\": false,\n        \"alternatives\": []\n    },\n    {\n        \"bbox_2d\": [423, 534, 700, 570],\n        \"text_content\": \"EXIST. MASONRY\",\n        \"category\": \"label\",\n        \"group\": 1,\n        \"uncertain\": false,\n        \"alternatives\": []\n    }\n]\n```",
+ "finishReason": "stop",
+ "promptTokens": 1541,
+ "completionTokens": 220,
+ "costUsd": 0.001453,
+ "reportedCostUsd": 0.0014528,
+ "latencyS": 9.96,
+ "timings": null,
+ "promptVersion": "qsa.tile-prompt.v1"
+}

@@ -1,0 +1,121 @@
+{
+ "sheetId": "A-6.00-00",
+ "arm": "C_v2_4x3",
+ "rep": 2,
+ "model": "gpt-4o-2024-08-06",
+ "responseId": "resp_02d5f909918696fa016aec8f5380f487d28fbdf879f67c6114",
+ "latencyMs": 10810,
+ "inputTokens": 5040,
+ "outputTokens": 512,
+ "costUsd": 0.01772,
+ "userPromptChars": 3612,
+ "detected": {
+  "number": "A-6.00-00",
+  "title": "DOOR & HARDWARE SCHEDULE",
+  "discipline": "Architectural"
+ },
+ "summary": "The sheet provides detailed information on door and hardware schedules, window types, and general notes applicable to the project's openings.",
+ "published": [
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Door Opening Force Requirements",
+   "observation": "The opening force of all exterior push/pull doors shall not exceed 8.5 lb; the opening force of all interior push/pull doors shall not exceed 5 lb.",
+   "drawing_evidence": ".. THE OPENING FORCE OF ALL EXT. PUSH/PULL DOORS SHALL NOT EXCEED 8 1/2 LB: / HE OPENING FORCE OF ALL INTERIOR PUSH/PULL DOORS SHALL NOT EXCEED 5 LB",
+   "drawing_location": "General Notes, Door Hardware schedule section",
+   "suggested_code_reference": null,
+   "recommendation": "Ensure that the specified door opening forces are verified on-site to meet these requirements.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Door Opening Force Requirements",
+    "originalObservation": "The opening force of all exterior push/pull doors shall not exceed 8.5 lb; the opening force of all interior push/pull doors shall not exceed 5 lb.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "explicit drawing requirement",
+   "severity": "advisory",
+   "title": "Panic Hardware Requirement",
+   "observation": "Provide panic hardware for all exterior doors as noted on the door schedule.",
+   "drawing_evidence": "PROVIDE PANIC HARDWARE FOR ALL EXTERIOR DOORS AS NOTED ON THE DOOR SCHEDULE.",
+   "drawing_location": "General Notes, Door Hardware schedule section",
+   "suggested_code_reference": null,
+   "recommendation": "Verify installation of panic hardware on all designated exterior doors as required by the drawing.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Panic Hardware Requirement",
+    "originalObservation": "Provide panic hardware for all exterior doors as noted on the door schedule.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "conflicting information",
+   "severity": "warning",
+   "title": "U-Value Specification for Doors",
+   "observation": "Conflicting entries detected for maximum U-value requirements for specific doors.",
+   "drawing_evidence": "DOOR 3, 4, & 4A TO HAVE MAXIMUM U VALUE = 0.61",
+   "drawing_location": "Door Schedule",
+   "suggested_code_reference": null,
+   "recommendation": "Clarify which U-value applies to the listed doors to ensure energy code compliance.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "warning",
+    "originalTitle": "U-Value Specification for Doors",
+    "originalObservation": "Conflicting entries detected for maximum U-value requirements for specific doors.",
+    "originalCodeReference": "",
+    "publishedSeverity": "warning",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  },
+  {
+   "category": "general coordination note",
+   "severity": "advisory",
+   "title": "Hinge Specifications",
+   "observation": "Hinge types are specified for several doors by manufacturer part numbers and standards.",
+   "drawing_evidence": "2. 6 EA HINGES OFFSET PIVOT ANSI -A-156.4 GRADE 1; BY DOOR MANUFACTURER. (ctx?)",
+   "drawing_location": "Door Hardware schedule section",
+   "suggested_code_reference": null,
+   "recommendation": "Coordinate with the manufacturer to ensure all hinge specifications meet the stated standards.",
+   "verification_status": "unresolved_reference",
+   "validation": {
+    "outcome": "accepted",
+    "rules": [],
+    "originalSeverity": "advisory",
+    "originalTitle": "Hinge Specifications",
+    "originalObservation": "Hinge types are specified for several doors by manufacturer part numbers and standards.",
+    "originalCodeReference": "",
+    "publishedSeverity": "advisory",
+    "publishedCodeReference": null,
+    "citationIssues": [],
+    "editionMappingApplied": false,
+    "independentlyVerified": false,
+    "coverageLimitation": "Registry edition checks are not confirmation of legal applicability."
+   }
+  }
+ ],
+ "withheld": []
+}
