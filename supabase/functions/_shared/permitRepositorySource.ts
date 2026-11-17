@@ -20,7 +20,7 @@ type QueryResult<T> = PromiseLike<{ data: T | null; error: { message: string } |
 export type ServiceClient = { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => QueryResult<unknown> };
 
 export const PARSED_COMMENT_MERGE_COLUMNS =
-  "id, original_text, comment_number, status, ingest_source, response_text, response_status, approved_at, last_edited_by, " +
+  "id, original_text, comment_number, status, ingest_source, response_text, response_status, approved_at, last_edited_by, assigned_to, " +
   "portal_permit_id, portal_comment_key, portal_content_hash, portal_status_raw, portal_removed_at, portal_latest_text, portal_changed_at";
 
 export type RepositorySource = {
@@ -62,6 +62,17 @@ export async function loadRepositorySource(client: ServiceClient, projectId: str
     .in("permit_id", readable)
     .is("removed_at", null);
   if (commentErr) throw new Error(`Failed to read permit comments: ${commentErr.message}`);
+  const { data: responseRows, error: responseErr } = await client
+    .from("permit_review_responses")
+    .select("permit_id, comment_key")
+    .in("permit_id", readable)
+    .is("removed_at", null);
+  if (responseErr) throw new Error(`Failed to read permit comment responses: ${responseErr.message}`);
+  const responseCounts = new Map<string, number>();
+  for (const r of (responseRows ?? []) as Array<{ permit_id: string; comment_key: string }>) {
+    const k = `${r.permit_id}\u241f${r.comment_key}`;
+    responseCounts.set(k, (responseCounts.get(k) ?? 0) + 1);
+  }
 
   return {
     linkedPermitIds: linked,
@@ -70,7 +81,10 @@ export async function loadRepositorySource(client: ServiceClient, projectId: str
       permit_number: p.permit_number,
       reviews_complete: complete.has(p.id),
     })),
-    comments: (commentRows ?? []) as RepositoryComment[],
+    comments: ((commentRows ?? []) as RepositoryComment[]).map((c) => ({
+      ...c,
+      response_count: responseCounts.get(`${c.permit_id}\u241f${c.portal_comment_key}`) ?? 0,
+    })),
   };
 }
 

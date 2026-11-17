@@ -31,6 +31,11 @@ export type RepositoryComment = {
   body: string | null;
   status: string | null;
   reviewed_at: string | null;
+  /**
+   * Responses on this comment in the repository (permit_review_responses, not removed). When known and 0,
+   * the stored discussion is not split at response headers. Undefined = not loaded (headers alone decide).
+   */
+  response_count?: number;
 };
 
 export type ExistingParsedComment = {
@@ -43,6 +48,7 @@ export type ExistingParsedComment = {
   response_status?: string | null;
   approved_at?: string | null;
   last_edited_by?: string | null;
+  assigned_to?: string | null;
   portal_permit_id?: string | null;
   portal_comment_key?: string | null;
   portal_content_hash?: string | null;
@@ -183,15 +189,39 @@ export function existingDiscussion(text: string | null | undefined): string {
 }
 
 /**
- * Whether a persisted discussion still shows this portal comment. Report-parsed rows hold the whole thread
- * (the reviewer comment followed by every response), while the repository `body` is the reviewer comment
- * alone, so a thread that starts with the comment is the same comment.
+ * A response header line in the Review Comments report thread: "<Label>: <who> - <m/d/yyyy h:mm AM>".
+ * The report writes the reviewer comment first and then, for each response, a header line, the response text
+ * and a dashed rule. Matching is by shape (a label, a colon, a dash and a date-time), never by a name or label.
+ * The same rule is applied in SQL by scripts/permit-repo/repairs/d118-false-portal-change-marks.sql.
  */
-export function discussionMatchesComment(discussion: string | null | undefined, body: string | null | undefined): boolean {
-  const d = looseText(discussion);
-  const b = looseText(body);
-  if (!b) return !d;
-  return d === b || d.startsWith(b);
+export const RESPONSE_HEADER_LINE =
+  /(?:^|\r?\n)[ \t]*[A-Za-z][A-Za-z .'-]{0,40}:[^\r\n]{0,200} - \d{1,2}\/\d{1,2}\/\d{2,4}[ ,]+\d{1,2}:\d{2}(?::\d{2})?[ \t]*(?:[AaPp][Mm])?[ \t]*(?=\r?\n|$)/;
+
+/**
+ * The reviewer-comment part of a persisted discussion: everything before the first response header.
+ * `hasResponses = false` (the repository says the comment has no responses) keeps the whole text, so a
+ * header-looking line inside a comment is never treated as the start of a response.
+ */
+export function commentPortionOf(discussion: string | null | undefined, hasResponses = true): string {
+  const text = String(discussion ?? "");
+  if (!hasResponses) return text;
+  const m = RESPONSE_HEADER_LINE.exec(text);
+  return m ? text.slice(0, m.index) : text;
+}
+
+/**
+ * Whether a persisted discussion still shows this portal comment. Report-parsed rows hold the whole thread
+ * (the reviewer comment, then each response behind a header line), while the repository `body` is the
+ * reviewer comment alone. The comment part of the thread must equal the body (case, punctuation, spacing,
+ * line breaks and e-mail redaction ignored). A shortened, truncated, extended or reworded comment differs,
+ * and so does one that only lost trailing sentences, because those stay in the part before the first response.
+ */
+export function discussionMatchesComment(
+  discussion: string | null | undefined,
+  body: string | null | undefined,
+  hasResponses = true,
+): boolean {
+  return looseText(commentPortionOf(discussion, hasResponses)) === looseText(body);
 }
 
 function statusLineOf(text: string | null | undefined): string | null {
@@ -199,13 +229,14 @@ function statusLineOf(text: string | null | undefined): string | null {
   return m ? m[1].trim() : null;
 }
 
-/** A response exists or a person edited, reviewed or approved the row. */
+/** A response exists, or a person edited, assigned, reviewed or approved the row. */
 export function hasHumanWork(row: ExistingParsedComment): boolean {
   return Boolean(
     String(row.response_text ?? "").trim() ||
       row.response_status ||
       row.approved_at ||
-      row.last_edited_by,
+      row.last_edited_by ||
+      String(row.assigned_to ?? "").trim(),
   );
 }
 
@@ -336,9 +367,15 @@ export function planRepositoryCommentMerge(input: {
       plan.stats.restored++;
     }
 
+    // The stored hash (over the source comment and its metadata, never the thread or any drafted text) is the
+    // fast path. A different hash is only a change when the comment the row shows differs from the portal's
+    // comment; a formatting-only difference in the source (spacing, punctuation, e-mail redaction) is not.
+    // A row without a hash (first adoption) is compared with the text it shows.
+    const hasResponses = c.response_count === undefined ? true : c.response_count > 0;
+    const showsPortalComment = discussionMatchesComment(existingDiscussion(row.original_text), c.body, hasResponses);
     const textChanged = row.portal_content_hash
-      ? row.portal_content_hash !== hash
-      : !discussionMatchesComment(existingDiscussion(row.original_text), c.body);
+      ? row.portal_content_hash !== hash && !showsPortalComment
+      : !showsPortalComment;
     if (textChanged) {
       if (hasHumanWork(row)) {
         set("portal_latest_text", text);
@@ -350,7 +387,7 @@ export function planRepositoryCommentMerge(input: {
         set("portal_changed_at", null);
         plan.stats.text_replaced++;
       }
-    } else if (row.portal_latest_text && discussionMatchesComment(existingDiscussion(row.original_text), c.body)) {
+    } else if (row.portal_latest_text && showsPortalComment) {
       // The portal went back to the text the row already shows: the pending notice no longer applies.
       set("portal_latest_text", null);
       set("portal_changed_at", null);
