@@ -45,7 +45,14 @@ scope (must read "All permits") and per-run limits. Nothing is queued by the dep
 
 ### Deploys and rollback
 
-- Enable "Wait for CI" on both Railway services so a commit deploys only after `PermitPilot CI` passes.
+- The worker service has no repo source, so Railway's "Wait for CI" cannot gate it. Deploy it only with
+  `scripts/permit-repo/deploy-worker.sh <commit> --i-have-approval` **(approval)**. It refuses unless the commit
+  is on `origin/main`, `PermitPilot CI` succeeded for that exact commit, and the CLI points at PermitPilot /
+  production. It uploads a clean `git archive` of `scraper-service` with the worker toml as `railway.toml` and
+  `BUILD_VERSION`, and appends to `exports.local/worker-deploys.log`. Run it with `--dry-run` first.
+- After it: `railway deployment list --service permit-sync-worker` shows SUCCESS, and Sync workers shows the
+  12-character commit as the version (D-105). Rollback: the same script with the previous commit from the log.
+- Enable "Wait for CI" on the HTTP scraper service so a commit deploys only after `PermitPilot CI` passes.
 - The worker has watch patterns; it rebuilds only for worker-relevant paths. The HTTP scraper (`railway.toml`)
   has none and rebuilds on every push to its root, which restarts any manual scrape in progress. Recommended
   (approval): add watch patterns to `railway.toml` so worker-only changes do not redeploy it.
@@ -70,6 +77,16 @@ scope (must read "All permits") and per-run limits. Nothing is queued by the dep
 2. Install the scheduler: `scripts/permit-repo/scheduling/02-enable-sync-cron.sql` **(approval)**. It refuses
    unless every scheduled source has a finished full deep refresh.
 3. A schedule never fires for a slot before it was enabled and is skipped while a refresh is in flight.
+4. The tick runs every 5 minutes in UTC; the slot is computed in the source's time zone, so 04:00
+   America/New_York is 09:00 UTC in winter and 08:00 UTC in summer (D-106). After an outage only the latest
+   missed slot runs. Scheduling is production-verified only after a scheduled job has run and finished:
+   `select id, status, created_at, completed_at from permit_sync_jobs where trigger = 'scheduled' order by created_at desc limit 3;`
+
+### One-time repair for text-only reports (D-102)
+
+After the worker with D-102 is deployed: run `scripts/permit-repo/repairs/d102-text-only-reports.sql`
+**(approval)**. It previews the reports, refuses unless exactly 8 match, marks them failed and retryable, and
+checks the result. The next deep refresh captures them again. Rollback statement in the file header.
 
 ## 5. Monitoring and alerts
 

@@ -345,6 +345,58 @@ test("reports tab unavailable (D-074, D-080): reports marked failed with back-of
   assert.equal(flaky.calls.scrapes.length, 0);
 });
 
+test("D-102: a report that renders error text without an exported file is recorded failed and retried, never captured", async () => {
+  const s = await setup();
+  const { h } = s;
+  const textOnly = fakeDcDeep(h, { reportEntry: (r) => (r.reportId === "14" ? { pdfStorageRef: undefined, text: "An error has occurred during report processing." } : {}) });
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r1 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep: textOnly, ...s }), workerId: "w1" });
+  assert.equal(r1.outcome, "completed_with_warnings", JSON.stringify(r1.metrics));
+  assert.equal(r1.metrics.deep.reports_failed, 1);
+  assert.equal(r1.metrics.deep.reports_captured, 4);
+  assert.equal(await h.count("permit_reports", "report_key = '14' AND content_status = 'failed' AND content_error = 'report rendered without an exported file'"), 1);
+  assert.equal(await h.count("permit_report_contents", "pdf_storage_path IS NULL AND excel_storage_path IS NULL"), 0, "no version without a file");
+  assert.equal([...s.storage.objects.keys()].filter((k) => k.includes("/reports/")).length, 4, "the unreferenced upload of the failed report is removed");
+  const row = (await h.db.query(`SELECT phase, message FROM permit_sync_job_permits WHERE portal_record_id = '11105' ORDER BY updated_at DESC LIMIT 1`)).rows[0];
+  assert.deepEqual(row, { phase: "completed_with_warnings", message: "1 report not captured yet" }, "D-104: the Permit Queue row says what is outstanding");
+
+  await h.db.query(`UPDATE permit_reports SET content_next_attempt_at = now() - interval '1 minute'`);
+  const working = fakeDcDeep(h);
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r2 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep: working, ...s }), workerId: "w1" });
+  assert.equal(r2.outcome, "completed", JSON.stringify(r2.metrics));
+  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 5);
+});
+
+test("D-102 repair script: refuses an unexpected count, then makes text-only captured reports retryable; the next pass captures them", async () => {
+  const s = await setup();
+  const { h } = s;
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  assert.equal((await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep: fakeDcDeep(h), ...s }), workerId: "w1" })).outcome, "completed");
+  // What production holds from before D-102: captured versions with error text and no exported file.
+  const reps = (await h.db.query(`SELECT permit_id, report_key FROM permit_reports WHERE content_status = 'captured' ORDER BY report_key LIMIT 4`)).rows;
+  for (const r of reps) {
+    const v = (await h.db.query(
+      `INSERT INTO permit_report_contents (permit_id, report_key, version, content_sha256, text_content)
+       SELECT $1, $2, max(version) + 1, md5($2) || md5($2), 'An error has occurred during report processing.' FROM permit_report_contents WHERE permit_id = $1 AND report_key = $2
+       RETURNING id`, [r.permit_id, r.report_key])).rows[0].id;
+    await h.db.query(`UPDATE permit_reports SET latest_content_id = $3 WHERE permit_id = $1 AND report_key = $2`, [r.permit_id, r.report_key, v]);
+  }
+  const sql = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../scripts/permit-repo/repairs/d102-text-only-reports.sql"), "utf8");
+  await assert.rejects(h.db.exec(sql), /expected 8 reports, matched 4/);
+  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 5, "a refused repair changes nothing");
+
+  await h.db.exec(sql.replace("v_expected CONSTANT INTEGER := 8", "v_expected CONSTANT INTEGER := 4"));
+  assert.equal(await h.count("permit_reports", "content_status = 'failed' AND latest_content_id IS NULL AND content_attempts = 0"), 4);
+  assert.equal(await h.count("permit_report_contents"), 9, "history is kept");
+
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r2 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep: fakeDcDeep(h), ...s }), workerId: "w1" });
+  assert.equal(r2.outcome, "completed", JSON.stringify(r2.metrics));
+  assert.equal(await h.count("permit_reports", "content_status = 'captured' AND latest_content_id IS NOT NULL"), 5);
+  assert.equal(await h.count(`permit_reports r JOIN permit_report_contents c ON c.id = r.latest_content_id`, "c.pdf_storage_path IS NULL AND c.excel_storage_path IS NULL"), 0);
+});
+
 test("files: failed captures retry with back-off and stop at the cap; invalid bodies are never stored; originals are compared to FileSize (D-080, D-084, 3f)", async () => {
   const s = await setup();
   const { h } = s;

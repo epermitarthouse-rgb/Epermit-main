@@ -88,6 +88,9 @@ verify_jwt = false
 [functions.auto-router-agent]
 verify_jwt = false
 
+[functions.permit-comment-pipeline]
+verify_jwt = false
+
 [functions.validate-completeness-agent]
 verify_jwt = false
 

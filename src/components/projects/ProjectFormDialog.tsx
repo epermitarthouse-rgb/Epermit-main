@@ -31,6 +31,10 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { FEATURE_FLAG, useFeatureFlag } from '@/hooks/useFeatureFlags';
+import { ProjectPermitPicker } from '@/components/permits/ProjectPermitPicker';
+import type { PermitListRow } from '@/lib/centralPermits';
+import { prefillFromPermit } from '@/lib/projectPermits';
 
 interface ProjectFormDialogProps {
   open: boolean;
@@ -221,6 +225,20 @@ export function ProjectFormDialog({
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [credentials, setCredentials] = useState<CredentialOption[]>([]);
+  const { enabled: centralPermitsEnabled } = useFeatureFlag(FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
+  const [permitChoice, setPermitChoice] = useState<PermitListRow[]>([]);
+
+  useEffect(() => {
+    if (!open) setPermitChoice([]);
+  }, [open]);
+
+  const handlePermitChoice = (rows: PermitListRow[]) => {
+    if (permitChoice.length === 0 && rows.length > 0) {
+      const fill = prefillFromPermit(formData, rows[0]);
+      if (Object.keys(fill).length > 0) setFormData((prev) => ({ ...prev, ...fill }));
+    }
+    setPermitChoice(rows);
+  };
 
   useEffect(() => {
     if (!user || !open) return;
@@ -434,6 +452,7 @@ export function ProjectFormDialog({
       if (reimbursementDescription) data.reimbursement_description = reimbursementDescription;
       if (formData.credential_id) data.credential_id = formData.credential_id;
       if (formData.permit_number.trim()) data.permit_number = formData.permit_number.trim();
+      if (permitChoice.length > 0) (data as CreateProjectData).permit_ids = permitChoice.map((r) => r.id);
     }
 
     await onSubmit(data);
@@ -452,6 +471,19 @@ export function ProjectFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {!project && centralPermitsEnabled ? (
+            <div className="space-y-3 rounded-lg border border-border bg-muted/25 p-4">
+              <div>
+                <h3 className="font-tight text-sm font-semibold text-foreground">Permit record (optional)</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Start from a permit on your portal account. Its review comments go straight to the Response Matrix.
+                  You can also create the project without a permit and link one later.
+                </p>
+              </div>
+              <ProjectPermitPicker selected={permitChoice} onChange={handlePermitChoice} />
+            </div>
+          ) : null}
+
           {/* Basic Info */}
           <div className="space-y-4">
             <h3 className="font-tight text-sm font-semibold text-muted-foreground">Basic Information</h3>

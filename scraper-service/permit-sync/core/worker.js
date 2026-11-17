@@ -45,6 +45,27 @@ function permitOutcome(extra, warnings) {
   return deepWarnings(extra).length || Number(extra && extra.reports_failed) > 0 || warnings > 0 ? "completed_with_warnings" : "completed";
 }
 
+const SECTION_LABELS = Object.freeze({ status: "Status", reviews: "Reviews", files: "Files", tasks: "Tasks", workflows: "Workflows", info: "Info", reports: "Reports" });
+
+function countText(n, one, many) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * What a permit that finished with warnings still lacks, in plain words for the Permit Queue (D-104), from the
+ * deep pass's post-pass open items and the sections not fully read. null when nothing specific is known.
+ */
+function outstandingMessage(extra, incompleteSections = []) {
+  const e = extra || {};
+  const parts = [];
+  if (e.files_pending > 0) parts.push(`${countText(e.files_pending, "file", "files")} left for the next refresh`);
+  if (e.files_failed_open > 0) parts.push(`${countText(e.files_failed_open, "file", "files")} failed and will be retried`);
+  if (e.files_deferred_oversize > 0) parts.push(`${countText(e.files_deferred_oversize, "file is", "files are")} too large to capture`);
+  if (e.reports_open > 0) parts.push(`${countText(e.reports_open, "report", "reports")} not captured yet`);
+  if (incompleteSections.length) parts.push(`${incompleteSections.map((s) => SECTION_LABELS[s] || s).join(", ")} not fully read`);
+  return parts.length ? parts.join("; ") : null;
+}
+
 /** Best-effort progress writer over rpc.progress (absent in older rpc implementations). */
 function createProgress(rpc, job, workerId) {
   if (!rpc || typeof rpc.progress !== "function") return { job: async () => {}, permit: async () => {} };
@@ -160,6 +181,7 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
       await progress.job("processing", { current_portal_record_id: String(id) });
       await progress.permit(id, { phase: "reading_info" });
       let permitWarnings = 0;
+      const incomplete = [];
       try {
         const { sections } = await adapter.fetchPermit(record);
         const { batch, warnings } = buildBatch({
@@ -174,7 +196,10 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
         for (const [name, s] of Object.entries(res.sections || {})) {
           const tally = metrics.sections[name] || (metrics.sections[name] = emptySectionTally());
           tally[s.status] = (tally[s.status] || 0) + 1;
-          if (s.status === "partial" || s.status === "failed" || s.status === "suspect_empty") permitWarnings += 1;
+          if (s.status === "partial" || s.status === "failed" || s.status === "suspect_empty") {
+            permitWarnings += 1;
+            incomplete.push(name);
+          }
         }
         metrics.permits_ok += 1;
         let extra = null;
@@ -197,11 +222,10 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
         }
         checkpoint.done.push(id);
         const outcome = permitOutcome(extra, permitWarnings);
-        await progress.permit(id, {
-          phase: outcome,
-          error_code: null,
-          message: extra && extra.deep_skipped ? "no portal changes; nothing new to capture" : null,
-        });
+        let message = null;
+        if (outcome === "completed_with_warnings") message = outstandingMessage(extra, incomplete) || "some portal details could not be confirmed";
+        else if (extra && extra.deep_skipped) message = "no portal changes; nothing new to capture";
+        await progress.permit(id, { phase: outcome, error_code: null, message });
       } catch (err) {
         if (err instanceof LeaseLostError || ABORT_CODES.has(err && err.code) || err instanceof ShutdownError) throw err;
         metrics.permits_failed += 1;
@@ -324,4 +348,4 @@ function supabaseWorkerRpc(client, { mode = "json" } = {}) {
   };
 }
 
-module.exports = { runJob, runOnce, runLoop, supabaseWorkerRpc, jobScope, deepWarnings, permitOutcome, abortableSleep, DEEP_WARNING_KEYS };
+module.exports = { runJob, runOnce, runLoop, supabaseWorkerRpc, jobScope, deepWarnings, permitOutcome, outstandingMessage, abortableSleep, DEEP_WARNING_KEYS };

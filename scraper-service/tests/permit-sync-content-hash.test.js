@@ -116,3 +116,15 @@ test("D-101: a Files tab without a folder list keeps its page text as content", 
   b.tabs.files.rawText = "A-101.pdf Resubmit";
   assert.notEqual(portalContentHash(a), portalContentHash(b));
 });
+
+test("D-107: ProjectDox elapsed-time counters do not count; other values on the status tab do", () => {
+  const a = payload(1);
+  const b = payload(1);
+  a.tabs.status.keyValues = [{ key: "Time Elapsed", value: "309 days 16 hrs" }, { key: "Workflow", value: "Resubmit" }];
+  b.tabs.status.keyValues = [{ key: "Time Elapsed", value: "310 days 2.5 hrs" }, { key: "Workflow", value: "Resubmit" }];
+  a.tabs.status.rawText = "Time Elapsed 309 days 16 hrs";
+  b.tabs.status.rawText = "Time Elapsed 310 days 2.5 hrs";
+  assert.equal(portalContentHash(a), portalContentHash(b));
+  b.tabs.status.keyValues[1].value = "Approved";
+  assert.notEqual(portalContentHash(a), portalContentHash(b), "a workflow change still counts");
+});

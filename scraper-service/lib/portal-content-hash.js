@@ -48,6 +48,9 @@ const SIGNED_URL_RE = /^https?:\/\/\S*[?&](token|X-Amz-Signature|X-Amz-Credentia
 /** SSRS stamps the render time on every report ("Generated: 11/11/2026 10:42 AM", "Report date: ..."). */
 const REPORT_STAMP_RE = /\b(Generated|Report date|Printed(?: on)?|Run date|Print date|Date printed|Run on)\s*:?\s*\d{1,2}\/\d{1,2}\/\d{2,4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]\.?M\.?)?)?/gi;
 
+/** ProjectDox elapsed-time counters ("309 days 16 hrs"), on the status tab and in reports; they grow every hour (D-107). */
+const ELAPSED_RE = /\b\d+\s+days?\s+\d+(?:\.\d+)?\s+hrs?\b/gi;
+
 function normalizeReportText(text) {
   return String(text == null ? "" : text).replace(REPORT_STAMP_RE, (_m, label) => `${label}: <render-time>`);
 }
@@ -68,7 +71,9 @@ function stripVolatile(value, key = null) {
   }
   if (typeof value === "string") {
     if (SIGNED_URL_RE.test(value)) return "<signed-url>";
-    if (key === "text" || key === "rawText") return normalizeReportText(value);
+    const s = value.replace(ELAPSED_RE, "<elapsed>");
+    if (key === "text" || key === "rawText") return normalizeReportText(s);
+    return s;
   }
   return value;
 }

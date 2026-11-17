@@ -235,3 +235,14 @@ test("D-086: deep warnings list only open or failed deep items; a clean pass has
   assert.deepEqual(deepWarnings({ files_pending: 1, reports_guard_denied: 1, files_failed: 0 }), ["reports_guard_denied", "files_pending"]);
   assert.deepEqual([...DEEP_WARNING_KEYS], ["reports_failed", "files_failed", "reports_guard_denied", "files_pending", "files_deferred_oversize", "files_failed_open", "reports_open"]);
 });
+
+test("D-104: a permit with warnings says what is outstanding in plain words", () => {
+  const { outstandingMessage } = require("../permit-sync/core/worker");
+  assert.equal(outstandingMessage({ files_deferred_oversize: 1 }), "1 file is too large to capture");
+  assert.equal(
+    outstandingMessage({ files_pending: 3, files_failed_open: 1, reports_open: 2 }, ["reviews", "status"]),
+    "3 files left for the next refresh; 1 file failed and will be retried; 2 reports not captured yet; Reviews, Status not fully read",
+  );
+  assert.equal(outstandingMessage({ files_downloaded: 4 }, []), null);
+  assert.equal(outstandingMessage(null, ["reviews"]), "Reviews not fully read");
+});

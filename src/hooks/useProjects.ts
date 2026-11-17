@@ -14,6 +14,7 @@ import {
   DASHBOARD_SELECTED_PROJECT_QUERY_KEY,
   SIDEBAR_PORTAL_CREDENTIAL_QUERY_KEY,
 } from '@/lib/portalMonitorScrapeOptions';
+import { linkPermitsToProject, requestCommentProcessing } from '@/lib/projectPermits';
 
 /** Shared cache key — every useProjects() caller must see the same list. */
 export const PROJECTS_QUERY_KEY = 'projects' as const;
@@ -197,15 +198,29 @@ export interface CreateProjectData {
   contract_value?: number | null;
   reimbursement_amount?: number | null;
   reimbursement_description?: string | null;
+  /** Permits to link right after the project is created (not a projects column). */
+  permit_ids?: string[];
 }
 
-export interface UpdateProjectData extends Partial<CreateProjectData> {
+export interface UpdateProjectData extends Partial<Omit<CreateProjectData, 'permit_ids'>> {
   status?: ProjectStatus;
   permit_number?: string;
   submitted_at?: string;
   approved_at?: string;
   rejection_count?: number;
   rejection_reasons?: string[];
+}
+
+/** The project already exists, so a link failure is reported without failing creation; it can be linked later. */
+async function linkPermitsAfterCreate(projectId: string, permitIds: string[]): Promise<void> {
+  try {
+    await linkPermitsToProject(projectId, permitIds);
+    await requestCommentProcessing(projectId).catch(() => undefined);
+  } catch (err) {
+    toast.warning('Project created, but the permit could not be linked', {
+      description: `${err instanceof Error ? err.message : 'Please try again'} You can link it from Portal Harvest.`,
+    });
+  }
 }
 
 async function loadProjectsFromDb(): Promise<Project[]> {
@@ -282,10 +297,11 @@ export function useProjects() {
     }
 
     try {
+      const { permit_ids: permitIds, ...projectData } = data;
       const { data: newProject, error: insertError } = await supabase
         .from('projects')
         .insert({
-          ...data,
+          ...projectData,
           user_id: user.id,
           status: 'draft' as ProjectStatus,
         })
@@ -313,6 +329,7 @@ export function useProjects() {
       );
 
       toast.success('Project created successfully');
+      if (permitIds?.length) await linkPermitsAfterCreate(normalized.id, permitIds);
       return normalized;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create project';

@@ -317,9 +317,12 @@ function reportContent(entry, refs = {}) {
   return content;
 }
 
-/** True when the manual entry carries report content worth recording. */
+/**
+ * True when the manual entry carries report content worth recording: an exported PDF or Excel file (D-102).
+ * Text alone is not enough: an SSRS error render has text but no export, and a captured report is not retried.
+ */
 function reportCaptured(entry) {
-  return Boolean(entry && !entry.error && ((entry.text && entry.text.length > 0) || entry.pdfStorageRef || entry.excelStorageRef));
+  return Boolean(entry && !entry.error && (entry.pdfStorageRef || entry.excelStorageRef));
 }
 
 function normName(s) {

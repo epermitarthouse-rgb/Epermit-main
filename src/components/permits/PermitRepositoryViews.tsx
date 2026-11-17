@@ -45,12 +45,13 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 const MATCH_LABEL: Record<string, string> = { permit_number: "Permit #", permit: "Details", comments: "Comments" };
 
 /** Permit Queue list, in the columns of the DC portal dashboard plus the project link and freshness. */
-export function PermitListTable({ rows, now, linkCounts, syncCell }: {
+export function PermitListTable({ rows, now, linkCounts, syncCell, commentsCell }: {
   rows: PermitListRow[];
   now?: Date;
   linkCounts?: ReadonlyMap<string, number>;
   /** Optional "Portal refresh" column (progress and the per-row Refresh action). */
   syncCell?: (row: PermitListRow) => React.ReactNode;
+  commentsCell?: (row: PermitListRow) => React.ReactNode;
 }) {
   if (!rows.length) return <EmptyState>No permits match. You only see permits you have been granted access to.</EmptyState>;
   return (
@@ -65,6 +66,7 @@ export function PermitListTable({ rows, now, linkCounts, syncCell }: {
             <TableHead className="text-right">Tasks</TableHead>
             <TableHead>Project</TableHead>
             <TableHead>Freshness</TableHead>
+            {commentsCell ? <TableHead>Review comments</TableHead> : null}
             {syncCell ? <TableHead>Portal refresh</TableHead> : null}
           </TableRow>
         </TableHeader>
@@ -91,6 +93,7 @@ export function PermitListTable({ rows, now, linkCounts, syncCell }: {
                   {linkCounts ? (linked ? <StatusPill tone="info">Linked{linked > 1 ? ` (${linked})` : ""}</StatusPill> : <span className="text-muted-foreground">Not linked</span>) : "—"}
                 </TableCell>
                 <TableCell><FreshnessPill lastSyncedAt={r.last_synced_at} now={now} /></TableCell>
+                {commentsCell ? <TableCell className="align-top">{commentsCell(r)}</TableCell> : null}
                 {syncCell ? <TableCell className="align-top">{syncCell(r)}</TableCell> : null}
               </TableRow>
             );

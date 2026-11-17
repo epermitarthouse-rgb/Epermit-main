@@ -1,6 +1,13 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-13 (continuous deep scraping P0–P2 deployed; first full refresh not started). Read "Production rollout" first.
+Last updated: 2026-11-17 (nightly DC refresh prepared locally; nothing pushed, deployed, applied or scheduled). Read "Nightly DC refresh readiness" first.
+
+## Nightly DC refresh readiness (2026-11-17, local commits only)
+- Production state (read-only checks): first full refresh `3b7e46a5` (de8592f9, deep, all permits) ran 2026-11-12 20:31 → 11-13 16:11 UTC, `completed_with_warnings`, 21 permits completed and 7 with warnings, one attempt. Worker idle, version null (code 563cb9e), RSS about 3 GB. No open alerts. de8592f9 `inactive`, 0610eaa5 `paused`, automation false, no schedule, sync cron not installed.
+- Fixed locally: report capture needs an exported file (D-102, plus a repair script for the 8 bad production rows); Reviews fall back to the stored Review Comments export (D-103); outstanding-items message per permit, shown in Permit Queue rows (D-104); worker version + heap in heartbeats and a CI-gated deploy script (D-105); DST test for the 04:00 slot (D-106); elapsed-time counters no longer change hashes, which made every active permit run a deep pass nightly (D-107).
+- Tests: `npm run test:permit-sync` 261/261; frontend suite 116 files, 16 known failures, 0 unexpected; tsc 194 = baseline; build passes; eslint clean on changed files (the full local eslint run runs out of memory on untracked data folders).
+- Approval order and rollbacks: see the final report of this session and `RUNBOOK_WORKER.md` §2–4. In short: push and fast-forward `main`, wait for CI, `deploy-worker.sh`, approve the HTTP scraper build (D-061 lock), the D-102 repair, optionally the notifier, enable the de8592f9 schedule (daily 04:00 America/New_York) in Management Admin, install `02-enable-sync-cron.sql`, watch the first scheduled run.
+- Supabase CLI `db query --linked` returns 403 for the logged-in role; approved SQL needs the owning account's CLI login or the dashboard SQL editor.
 
 ## Production rollout (2026-11-12 ~19:40–20:25 UTC, approved)
 - `main` = 14516b2 (fast-forward from dd08ed1). Frontend live on Vercel. Migration `20261113100000` applied and recorded. `module.central_permits` ON.

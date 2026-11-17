@@ -237,3 +237,11 @@ test("startup: new tunables are validated and nothing is claimed when the worker
   }
   assert.equal(JSON.parse(logs[0]).event, "worker_not_started");
 });
+
+test("D-105: the worker reports its code version from Railway's SHA or the deploy's BUILD_VERSION file", () => {
+  const sha = "563cb9e2f4aa0000000000000000000000000000";
+  assert.equal(entry.buildVersion({ RAILWAY_GIT_COMMIT_SHA: sha }, () => { throw new Error("not read"); }), "563cb9e2f4aa");
+  assert.equal(entry.buildVersion({}, (p) => { assert.match(p, /scraper-service[\\/]BUILD_VERSION$/); return `${sha}\n`; }), "563cb9e2f4aa");
+  assert.equal(entry.buildVersion({}, () => "not a sha"), null);
+  assert.equal(entry.buildVersion({}, () => { throw Object.assign(new Error("missing"), { code: "ENOENT" }); }), null);
+});

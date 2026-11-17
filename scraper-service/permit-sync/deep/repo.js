@@ -61,6 +61,17 @@ function supabaseDeepRepo(client) {
         "permit_report_contents");
       return r.length > 0;
     },
+    /** Latest stored Review Comments export of a DC permit (structured rows, text, Excel path), or null. */
+    async storedReviewReport(portalRecordId) {
+      const p = await rows(client.from("permits").select("id").eq("adapter_key", "dc-projectdox").eq("portal_record_id", String(portalRecordId)).limit(1), "permits");
+      if (!p[0]) return null;
+      const rep = await rows(
+        client.from("permit_reports").select("latest_content_id").eq("permit_id", p[0].id).ilike("name", "%review comments%").is("removed_at", null).not("latest_content_id", "is", null).limit(1),
+        "permit_reports");
+      if (!rep[0]) return null;
+      const c = await rows(client.from("permit_report_contents").select("structured_rows, text_content, excel_storage_path").eq("id", rep[0].latest_content_id).limit(1), "permit_report_contents");
+      return c[0] || null;
+    },
     async projectHash(projectId) {
       const r = await rows(client.from("projects").select("portal_data_hash").eq("id", projectId).limit(1), "projects");
       return r[0] ? r[0].portal_data_hash : null;

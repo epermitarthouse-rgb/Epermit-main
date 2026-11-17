@@ -198,7 +198,15 @@ serve(async (req) => {
     const portalDataHash = (body.portal_data_hash as string | undefined) ??
       (projectRow?.portal_data_hash as string | undefined) ??
       null;
-    const idempotencyKey = portalDataHash ? `hash:${portalDataHash}` : null;
+    // Linked-permit runs are keyed by the content of the project's permit comments, which is stable when a
+    // re-scrape changes nothing (D-112); report-export runs keep the portal_data hash key (D-088).
+    const commentFingerprint = typeof body.comment_fingerprint === "string" && body.comment_fingerprint
+      ? body.comment_fingerprint as string
+      : null;
+    const commentSource = typeof body.comment_source === "string" ? body.comment_source as string : undefined;
+    const idempotencyKey = commentFingerprint
+      ? `comments:${commentFingerprint}`
+      : portalDataHash ? `hash:${portalDataHash}` : null;
 
     let runId = pipelineRunId;
     let stages: PipelineStages = defaultStages();
@@ -216,12 +224,10 @@ serve(async (req) => {
         if (existingRun.stages && typeof existingRun.stages === "object") {
           stages = { ...defaultStages(), ...(existingRun.stages as PipelineStages) };
         }
-        if (
-          existingRun.portal_data_hash &&
-          portalDataHash &&
-          existingRun.portal_data_hash !== portalDataHash &&
-          !forceRetry
-        ) {
+        const staleRun = commentFingerprint
+          ? Boolean(existingRun.idempotency_key && existingRun.idempotency_key !== idempotencyKey)
+          : Boolean(existingRun.portal_data_hash && portalDataHash && existingRun.portal_data_hash !== portalDataHash);
+        if (staleRun && !forceRetry) {
           return new Response(
             JSON.stringify({
               code: 409,
@@ -436,6 +442,7 @@ serve(async (req) => {
             cursor,
             max_pdfs: 2,
             ...(fullRefresh ? { full_refresh: true } : {}),
+            ...(commentSource ? { comment_source: commentSource } : {}),
             ...(capturePipelineEvidence ? { capture_pipeline_evidence: true } : {}),
           }),
           timeoutMs: parserTimeout,

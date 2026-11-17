@@ -19,7 +19,9 @@
  * PERMIT_SYNC_DEEP_MAX_FILES / _MAX_BYTES / _MAX_FILE_BYTES / _MAX_ATTEMPTS (deep/policy.js).
  */
 
+const fs = require("node:fs");
 const os = require("node:os");
+const path = require("node:path");
 const { runLoop, supabaseWorkerRpc } = require("./core/worker");
 const { AuthError, PortalChangedError } = require("./core/errors");
 const { createDcAdapter } = require("./adapters/dc-projectdox/adapter");
@@ -85,6 +87,20 @@ async function deferWhileManualScrape({ supabase, username, now = new Date() }) 
   const credentialIds = await dcCredentialLock.sameLoginCredentialIds(supabase, username);
   if (await dcCredentialLock.manualDcScrapeActive(supabase, { credentialIds, now })) {
     throw new DeferredError("a manual DC scrape is using this portal login; deferred");
+  }
+}
+
+/**
+ * Code version for heartbeats and logs (D-105): Railway's git SHA for repo deploys, else the BUILD_VERSION file
+ * that scripts/permit-repo/deploy-worker.sh writes into a CLI upload. null when neither is present.
+ */
+function buildVersion(env, readFile = (p) => fs.readFileSync(p, "utf8")) {
+  if (env.RAILWAY_GIT_COMMIT_SHA) return String(env.RAILWAY_GIT_COMMIT_SHA).slice(0, 12);
+  try {
+    const v = String(readFile(path.join(__dirname, "..", "BUILD_VERSION"))).trim();
+    return /^[0-9a-f]{7,40}$/i.test(v) ? v.slice(0, 12) : null;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -241,20 +257,20 @@ async function main(env = process.env) {
   if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET && keyFormat !== "legacy_service_role_jwt") {
     log("warn", "agent_trigger_off", { reason: `service key format ${keyFormat} is not accepted by the pipeline functions` });
   } else if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET) {
-    const { createPipelineDriver } = require("./deep/pipeline");
-    pipeline = createPipelineDriver({
+    // Linked projects are processed by the permit-comment-pipeline edge function, keyed by comment content (D-113).
+    const { createCommentPipelineDispatcher } = require("./deep/commentDispatch");
+    pipeline = createCommentPipelineDispatcher({
       fetch: globalThis.fetch,
       supabaseUrl: env.SUPABASE_URL,
       serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
       serviceSecret: env.PERMITPILOT_SERVICE_PIPELINE_SECRET,
-      supabase,
     });
   }
   const scope = workerScope(env);
   const deepPolicy = require("./deep/policy");
   const limits = { ...deepPolicy.downloadLimits(env), ...deepPolicy.captureLimits(env) };
   const details = {
-    version: env.RAILWAY_GIT_COMMIT_SHA ? String(env.RAILWAY_GIT_COMMIT_SHA).slice(0, 12) : null,
+    version: buildVersion(env),
     agent_trigger: Boolean(pipeline),
     scope: scope ? scope.length : "all",
     limits: deep ? { max_files: limits.maxFiles, max_bytes: limits.maxBytes, max_file_bytes: limits.maxFileBytes, max_attempts: limits.maxAttempts } : null,
@@ -265,8 +281,11 @@ async function main(env = process.env) {
   const rpc = supabaseWorkerRpc(supabase, { mode });
   const beat = async () => {
     const s = state.get();
-    const rssMb = Math.round(process.memoryUsage().rss / 1048576);
-    await rpc.workerBeat(workerId, s.status === "starting" ? "idle" : s.status, s.jobId, { ...details, rss_mb: rssMb, jobs_run: s.jobsRun, last_outcome: s.lastOutcome })
+    const mem = process.memoryUsage();
+    const mb = (n) => Math.round(n / 1048576);
+    await rpc.workerBeat(workerId, s.status === "starting" ? "idle" : s.status, s.jobId, {
+      ...details, rss_mb: mb(mem.rss), heap_mb: mb(mem.heapUsed), external_mb: mb(mem.external + (mem.arrayBuffers || 0)), jobs_run: s.jobsRun, last_outcome: s.lastOutcome,
+    })
       .catch((err) => log("warn", "worker_heartbeat_failed", { error: String((err && err.message) || err).slice(0, 200) }));
   };
   const beatTimer = setInterval(() => { void beat(); }, beatMs);
@@ -328,4 +347,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, main };
+module.exports = { startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };

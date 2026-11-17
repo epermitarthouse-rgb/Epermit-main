@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { serviceUserResponse } from "../_shared/serviceExecution.ts";
 import { resolveServiceExecution } from "../_shared/serviceExecutionDeno.ts";
 import { planPortalCommentRefresh } from "../_shared/portalCommentRefresh.ts";
+import { loadRepositorySource, refreshFromRepository } from "../_shared/permitRepositorySource.ts";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 import {
   extractMontgomeryGridRefOrder,
@@ -383,17 +384,17 @@ async function finalizePortalCommentRefresh(
     inserted_count++;
   }
 
-  const toDeleteIds = plan.deletions;
+  // Comments no longer on the portal are soft-marked so responses, assignments and approvals survive (D-111).
   let deleted_count = 0;
-  if (toDeleteIds.length > 0) {
-    const { error: delErr } = await supabase
+  if (plan.removals.length > 0) {
+    const { error: remErr } = await supabase
       .from("parsed_comments")
-      .delete()
-      .in("id", toDeleteIds);
-    if (delErr) {
-      throw new Error(`Failed to remove stale portal comments: ${delErr.message}`);
+      .update({ portal_removed_at: new Date().toISOString() })
+      .in("id", plan.removals);
+    if (remErr) {
+      throw new Error(`Failed to mark stale portal comments: ${remErr.message}`);
     }
-    deleted_count = toDeleteIds.length;
+    deleted_count = plan.removals.length;
   }
 
   await supabase
@@ -1015,6 +1016,63 @@ serve(async (req) => {
 
     const fullRefresh = body.full_refresh === true;
 
+    // Linked permits are the comment source when present (D-110); `comment_source: "portal_data"` forces
+    // the report-export path, `"permit_repository"` requires the repository.
+    const commentSource = body.comment_source as string | undefined;
+    if (commentSource !== "portal_data") {
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!serviceKey) {
+        return new Response(
+          JSON.stringify({ code: 500, message: "SUPABASE_SERVICE_ROLE_KEY not configured" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const serviceClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+      const source = await loadRepositorySource(serviceClient, projectId, user.id);
+      if (source.permits.length > 0) {
+        const refreshed = await refreshFromRepository(serviceClient, projectId, user.id);
+        return new Response(
+          JSON.stringify({
+            parsed_count: refreshed.stats.inserted,
+            skipped_count: 0,
+            insert_error_count: 0,
+            next_cursor: { pdfIndex: 0 },
+            done: true,
+            total_pdfs: 0,
+            comment_source: "permit_repository",
+            reason: "permit_repository",
+            portal_refresh: {
+              previous_portal_count: refreshed.stats.matched + refreshed.stats.soft_removed,
+              new_staging_count: refreshed.stats.incoming,
+              deleted_count: 0,
+              soft_removed_count: refreshed.stats.soft_removed,
+              updated_count: refreshed.stats.updated,
+              inserted_count: refreshed.stats.inserted,
+              final_portal_count: refreshed.final_portal_count,
+            },
+            repository: { permits: refreshed.permits, ...refreshed.stats },
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (commentSource === "permit_repository") {
+        return new Response(
+          JSON.stringify({
+            parsed_count: 0,
+            skipped_count: 0,
+            insert_error_count: 0,
+            next_cursor: { pdfIndex: 0 },
+            done: true,
+            total_pdfs: 0,
+            comment_source: "permit_repository",
+            reason: source.linkedPermitIds.length > 0 ? "linked_permits_not_readable" : "no_linked_permits",
+            message: "No linked permit this account can read.",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     let portalData = (project.portal_data as PortalData | null) ?? {};
 
     const savedCursorEarly = portalData.meta?.comment_parse_cursor;
@@ -1145,7 +1203,13 @@ serve(async (req) => {
           .from("parsed_comments")
           .delete()
           .eq("project_id", projectId)
-          .in("ingest_source", ["raw_ref", "fallback_llm", "raw_ref_staging"]);
+          .eq("ingest_source", "raw_ref_staging");
+        await supabase
+          .from("parsed_comments")
+          .update({ portal_removed_at: new Date().toISOString() })
+          .eq("project_id", projectId)
+          .in("ingest_source", ["raw_ref", "fallback_llm"])
+          .is("portal_removed_at", null);
       }
       const mergedPortalData = {
         ...portalData,

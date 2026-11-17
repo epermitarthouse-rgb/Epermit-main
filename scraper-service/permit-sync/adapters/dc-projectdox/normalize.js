@@ -106,7 +106,11 @@ function discoveryRecord(row) {
   };
 }
 
-/** GetWorkflowInstanceStatusData → permit fields (status section). */
+/**
+ * GetWorkflowInstanceStatusData → permit fields (status section).
+ * TimeElapsed and the *Duration counters are not kept: they grow every hour, so they would change the status
+ * hash on every refresh and start a deep pass and a recorded change without any portal change (D-107).
+ */
 function statusFields(data) {
   const subs = Array.isArray(data.SubWorkflows) ? data.SubWorkflows : [];
   const unresolved = subs.reduce((n, s) => n + (int(s.UnresolvedComments) || 0), 0);
@@ -120,7 +124,6 @@ function statusFields(data) {
     uncompleted_tasks: int(data.UncompleteTaskCount) ?? (subs.length ? tasks : null),
     summary: {
       calendar_type: str(data.CalendarType),
-      time_elapsed: str(data.TimeElapsed && data.TimeElapsed.FormattedText),
       unresolved_by_group: subs.flatMap((s) =>
         (s.UnresolvedByGroup || []).map((g) => ({ group: str(g.GroupName), unresolved: int(g.UnresolvedComments) || 0 })),
       ),
@@ -338,6 +341,69 @@ function correctionRowsFromJson(data) {
   });
 }
 
+const US_DATETIME = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)\s*$/i;
+const DISCUSSION_SEPARATOR = /\n\s*-{10,}\s*(?:\n|$)/;
+
+/** Trailing "11/5/2025 3:04 PM" (portal wall clock) → "2025-11-05T15:04:00" for date(); null when absent. */
+function usDateTimeToLocal(v) {
+  const m = US_DATETIME.exec(String(v || "").trim());
+  if (!m) return null;
+  let h = Number(m[4]) % 12;
+  if (/pm/i.test(m[7])) h += 12;
+  const p = (n) => String(n).padStart(2, "0");
+  return `${m[3]}-${p(m[1])}-${p(m[2])}T${p(h)}:${m[5]}:${m[6] || "00"}`;
+}
+
+/**
+ * Review Comments report Excel rows (deep capture `structured_rows`) → the rows reviewItems reads (D-103).
+ * Layout seen live: `type` is the type line then the comment text; `reviewed_by` is department, reviewer and
+ * date; `discussion` holds the responses separated by dashed lines, each headed "<who> <date>" ("Reviewer
+ * Response: …" for the reviewer). Reviewer and responder names are not kept, as on the JSON path.
+ */
+function correctionRowsFromReportExcel(structuredRows, workflowInstanceId = null) {
+  return (structuredRows || []).filter((r) => r && String(r.ref ?? "").trim() !== "").map((r) => {
+    const [typeLine, ...body] = String(r.type || "").split("\n");
+    const hasBody = body.join("").trim() !== "";
+    const by = String(r.reviewed_by || "").split("\n").map((l) => l.trim()).filter(Boolean);
+    const status = str(r.status);
+    const fileName = str(r.filename);
+    const responses = String(r.discussion || "")
+      .split(DISCUSSION_SEPARATOR)
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .map((chunk) => {
+        const [head, ...rest] = chunk.split("\n");
+        return { by: /^reviewer response/i.test(head.trim()) ? "reviewer" : "applicant", at: usDateTimeToLocal(head), text: str(rest.join("\n")) };
+      });
+    return {
+      ref: int(r.ref),
+      workflowInstanceId: str(workflowInstanceId),
+      department: by.length >= 3 ? by[0] : null,
+      reviewer: by.length >= 2 ? "reviewer" : null,
+      reviewedAt: by.length ? usDateTimeToLocal(by[by.length - 1]) : null,
+      cycle: int(r.cycle),
+      status,
+      type: hasBody ? str(typeLine) : null,
+      text: hasBody ? str(body.join("\n")) : str(typeLine),
+      fileName: fileName && !/^none$/i.test(fileName) ? fileName : null,
+      responses,
+      responseColumn: status === "Info Only" ? "No response required." : "none",
+    };
+  });
+}
+
+/**
+ * Stored Review Comments export → report rows, [] when the report confirms it has none, or null when it cannot
+ * tell (no export, or rows that were not parsed). An empty SSRS export prints "No data found." under the title.
+ */
+function reviewRowsFromStoredReport(content, workflowInstanceId = null) {
+  if (!content) return null;
+  const rows = content.structured_rows;
+  if (Array.isArray(rows) && rows.length > 0) return correctionRowsFromReportExcel(rows, workflowInstanceId);
+  if (content.excel_storage_path && /^\s*no data found\.?\s*$/im.test(String(content.text_content || ""))) return [];
+  return null;
+}
+
 /**
  * GetReportList items → listReports shape. `viewer` holds the ReportViewer.aspx query parts the Reports tab
  * opens, so the deep pass can check each report's URL against the guard before opening it (D-079).
@@ -399,6 +465,9 @@ module.exports = {
   reviewItems,
   htmlToText,
   correctionRowsFromJson,
+  correctionRowsFromReportExcel,
+  reviewRowsFromStoredReport,
+  usDateTimeToLocal,
   reportListItems,
   reportItems,
   infoFields,

@@ -294,6 +294,10 @@ test("private paths follow D-058 and report content is versioned by text and row
   assert.notEqual(a.sha256, policy.reportContent({ text: "t2" }).sha256);
   assert.equal(policy.matchReport([{ name: "Review  Comments", report_key: "1" }], "review comments").report_key, "1");
   assert.equal(policy.reportCaptured({ text: "", error: "No content extracted" }), false);
+  // D-102: an SSRS error render has text but no exported file; it must stay retryable, not "captured".
+  assert.equal(policy.reportCaptured({ text: "An error has occurred during report processing." }), false);
+  assert.equal(policy.reportCaptured({ text: "t", pdfStorageRef: { path: "p" } }), true);
+  assert.equal(policy.reportCaptured({ text: "", excelStorageRef: { path: "x" } }), true);
 });
 
 test("manual scraper console output is dropped during the deep pass; errors are redacted; console is restored", async () => {
@@ -431,6 +435,72 @@ test("Reviews: an empty corrections JSON for a completed workflow falls back to 
   const before = t.requests.filter((q) => q.route === "review_comments_report").length;
   await adapter.fetchPermit(active);
   assert.equal(t.requests.filter((q) => q.route === "review_comments_report").length, before, "active workflows keep the JSON read only");
+});
+
+test("D-103: Review Comments Excel rows map to review rows; names are dropped; dates are portal wall clock", () => {
+  const dc = require("../permit-sync/adapters/dc-projectdox/normalize");
+  const sep = "\n----------------------------------------\n";
+  const rows = dc.correctionRowsFromReportExcel([
+    { ref: "2", cycle: "3", status: "Resolved", filename: "", type: "Comment\nShow the incoming line\non the riser.",
+      reviewed_by: "Plumbing\nPat Example\n11/5/2025 3:04 PM",
+      discussion: `Sam Applicant 11/6/2025 9:15 AM\nLine added on P-201.\n${sep}Reviewer Response: Pat Example 3/10/2026 10:00 AM\nAccepted.\n${sep}` },
+    { ref: "1", cycle: "", status: "Info Only", filename: "None", type: "Comment\nFor information.", reviewed_by: "Zoning\nPat Example\n11/5/2025 3:00 PM", discussion: "" },
+    { ref: "", type: "", reviewed_by: "", discussion: "" },
+  ], 50001);
+  assert.equal(rows.length, 2, "a row without REF # is not a comment");
+  assert.deepEqual(rows[0].responses.map((r) => [r.by, r.at, r.text]), [["applicant", "2025-11-06T09:15:00", "Line added on P-201."], ["reviewer", "2026-03-10T10:00:00", "Accepted."]]);
+  const { comments, responses } = dc.reviewItems(rows, { sourceKind: "report" });
+  assert.equal(comments[0].fields.department, "Plumbing");
+  assert.equal(comments[0].fields.comment_type, "Comment");
+  assert.equal(comments[0].fields.body, "Show the incoming line\non the riser.");
+  assert.equal(comments[0].fields.cycle, 3);
+  assert.equal(comments[0].fields.reviewed_at, "2025-11-05T20:04:00.000Z", "EST in November");
+  assert.equal(comments[0].fields.workflow_portal_id, "50001");
+  assert.equal(responses.find((r) => r.fields.seq === 2).fields.responded_at, "2026-03-10T14:00:00.000Z", "EDT after the March change");
+  assert.equal(comments[1].fields.file_name, null);
+  assert.equal(comments[1].fields.response_required, false);
+  assert.equal(comments[1].fields.cycle, null);
+  const out = JSON.stringify({ comments, responses });
+  assert.doesNotMatch(out, /Pat Example|Sam Applicant/, "reviewer and responder names are not kept");
+
+  assert.equal(dc.reviewRowsFromStoredReport(null), null);
+  assert.equal(dc.reviewRowsFromStoredReport({ structured_rows: null, excel_storage_path: "p.xlsx", text_content: "Review Comments\nNo data found.\n" }).length, 0, "an empty export confirms no comments");
+  assert.equal(dc.reviewRowsFromStoredReport({ structured_rows: null, excel_storage_path: null, text_content: "No data found." }), null, "no export: cannot tell");
+  assert.equal(dc.reviewRowsFromStoredReport({ structured_rows: null, excel_storage_path: "p.xlsx", text_content: "Review Comments\nREF # 1 ..." }), null, "rows not parsed: cannot tell");
+});
+
+test("D-103: deep mode reads Reviews from the stored Excel export when the one-page HTML report cannot be read", async () => {
+  const { createDeepPass } = require("../permit-sync/deep/runner");
+  const { SafetyViolationError } = require("../permit-sync/core/errors");
+  const stored = { structured_rows: [{ ref: "1", cycle: "1", status: "Resolved", filename: "", type: "Comment\nA.", reviewed_by: "Zoning\nX Y\n11/5/2025 3:00 PM", discussion: "" },
+    { ref: "2", cycle: "1", status: "Info Only", filename: "", type: "Comment\nB.", reviewed_by: "Zoning\nX Y\n11/5/2025 3:00 PM", discussion: "" }], text_content: "", excel_storage_path: "p.xlsx" };
+  const asked = [];
+  const wrapAdapter = (transport, report) => {
+    const repo = { storedReviewReport: async (id) => { asked.push(id); return report; } };
+    const deep = createDeepPass({ dcDeep: {}, transport, repo, storage: {}, username: "acct", trace: () => {} });
+    return createDcAdapter({ transport: deep.wrapTransport(transport), accountDownload: false });
+  };
+  const failing = createDcFixtureTransport({ fail: { review_comments_report: new Set(["11105"]) } });
+  const adapter = wrapAdapter(failing, stored);
+  const { records } = await adapter.discover();
+  const approved = records.find((r) => r.portal_record_id === "11105");
+  const s1 = (await adapter.fetchPermit(approved)).sections;
+  assert.equal(s1.reviews.status, "ok");
+  assert.equal(s1.reviews.sourceKind, "report");
+  assert.equal(s1.reviews.tables.permit_review_comments.length, 2);
+  assert.deepEqual(asked, ["11105"]);
+
+  const empty = wrapAdapter(createDcFixtureTransport({ fail: { review_comments_report: new Set(["11105"]) } }), { structured_rows: null, excel_storage_path: "p.xlsx", text_content: "No data found." });
+  const s2 = (await empty.fetchPermit(approved)).sections;
+  assert.equal(s2.reviews.status, "ok", "the stored export confirms there are no comments");
+  assert.equal(s2.reviews.tables.permit_review_comments.length, 0);
+
+  const unknown = wrapAdapter(createDcFixtureTransport({ fail: { review_comments_report: new Set(["11105"]) } }), null);
+  assert.equal((await unknown.fetchPermit(approved)).sections.reviews.status, "partial", "nothing stored: still unconfirmed");
+
+  const refused = createDcFixtureTransport();
+  refused.getReviewCommentsReport = async () => { throw new SafetyViolationError("blocked review_comments_report: deny_pattern", {}); };
+  await assert.rejects(wrapAdapter(refused, stored).fetchPermit(approved), (e) => e.code === "safety_violation", "a guard refusal is never absorbed");
 });
 
 // ---- D-074 / D-075 caps, one-permit scope, service key format -----------------------------------
