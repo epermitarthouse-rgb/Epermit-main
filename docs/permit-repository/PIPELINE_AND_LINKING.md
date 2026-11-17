@@ -138,3 +138,37 @@ Step-8 re-run: (1) run `scripts/permit-repo/pipeline/02-verify-test-project.sql`
 with attempts > 0, so (2) click "Process comments now" on ff193644 (this resets attempts and forces a run);
 (3) re-run `02-verify-test-project.sql`. Expected: same 6 ids, `adopted` and `has_key` true, response and
 approval columns and `response_md5` unchanged, no removals, state `completed`, one `comments:`-keyed run.
+
+## False "Updated on portal" marks on the first repository run (D-118)
+
+Finding (production read-only, lengths and booleans only): on ff193644, 5 of 6 rows were marked. Every row
+matched the right repository comment (ref header = `ref:N` key = repository ref). The rows were created from
+the Review Comments report, whose `full_discussion_text` is the whole thread: the reviewer comment followed by
+each response with responder and date. The repository keeps only the reviewer comment in `body` (responses
+are in `permit_review_responses`). On first adoption (no `portal_content_hash` yet) the merge compared the
+thread with the body, so every row with at least one response (5 rows, 1-5 responses each) looked changed;
+the row without responses did not. Each stored thread starts with its repository comment, and the marked
+`portal_latest_text` is exactly the current repository comment: no portal change happened.
+Category: wrong field compared (thread vs comment), not matching, not a real change.
+
+Fix (code only, `_shared/permitRepositoryComments.ts`): `discussionMatchesComment` treats a stored discussion
+that equals or starts with the portal comment (same loose normalisation, e-mails and `[email]` removed) as
+unchanged, for first adoption and for clearing an earlier mark. After adoption the content hash decides, as
+before. A real edit of the reviewer comment still flags. Tests: 4 new unit cases (3 fail on the old code).
+
+Redeploy: `comment-parser-agent` only (the only function importing the module):
+`supabase functions deploy comment-parser-agent --project-ref eeqxyjrcldivtpikcpvk`.
+Rollback: redeploy the version deployed with PR #24 (back it up first, as in `exports.local/edge-backup-20261117/`).
+
+Clearing the 5 marks, either:
+- **Script** `scripts/permit-repo/repairs/d118-false-portal-change-marks.sql` (needs approval): one transaction,
+  preview (expected marked 5, false_marks 5), refuses unless exactly 5 rows on ff193644 match the false-mark
+  rule, writes one `platform_audit_events` row per cleared row with the previous values, clears only
+  `portal_changed_at` / `portal_latest_text`, after-check (expected still_marked 0, audit_rows 5). Rollback in
+  the header restores the marks from the audit rows. Offline test: `scraper-service/tests/permit-repo-d118-repair.test.js`.
+- **Or** let the redeployed parser clear them on the next run of the project ("Process comments now"): the
+  rows' content hash already equals the repository hash and their thread starts with the comment, so the
+  merge clears the marks (covered by a unit test). The script is the explicit, audited path.
+
+Scope: production has 1 project-permit link; the 5 marked rows are all on ff193644; 0 soft-removed rows.
+Any project linked later whose rows came from a Review Comments report would have hit the same issue.

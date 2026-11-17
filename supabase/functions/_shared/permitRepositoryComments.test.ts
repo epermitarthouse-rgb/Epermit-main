@@ -243,3 +243,67 @@ describe("planRepositoryCommentMerge", () => {
     assert.match(t, /^ref: 4\ncycle: 4\nreviewed_by: DOEE\ntype: Comment\nfilename: \nfull_discussion_text:\nLine one\nLine two\nstatus: Unresolved\nsource_report: Permit B123\ndate_time: /);
   });
 });
+
+// Production finding (ff193644, 2026-11-17): the Review Comments report puts the whole discussion thread
+// (reviewer comment, then each response with responder and date) in full_discussion_text, while the
+// repository keeps only the reviewer comment in `body` (responses live in permit_review_responses).
+// Synthetic text only.
+describe("report-thread rows adopted from the repository (false 'Updated on portal')", () => {
+  const body = "Provide the erosion and sediment control plan sheet.";
+  const thread = [
+    body,
+    "Responded by: Applicant 03/02/2026 9:15 AM",
+    "The sheet was added as C-301 in the resubmission.",
+    "Responded by: Reviewer 03/05/2026 1:40 PM",
+    "Accepted.",
+  ].join("\n");
+
+  it("does not flag a row whose stored thread starts with the unchanged portal comment", () => {
+    const plan = planRepositoryCommentMerge({ projectId: PROJECT, permits: [permit()], comments: [comment(2, body)], existing: [legacyRow(2, thread)], now: NOW });
+    assert.equal(plan.stats.text_change_flagged, 0);
+    assert.equal(plan.stats.text_replaced, 0);
+    const patch = plan.updates[0]?.patch ?? {};
+    assert.equal("portal_latest_text" in patch, false);
+    assert.equal("portal_changed_at" in patch, false);
+    assert.equal(patch.portal_comment_key, "ref:2");
+  });
+
+  it("treats an e-mail in the report thread and a redaction in the repository comment as the same text", () => {
+    const withEmail = `${body} Questions: reviewer@example.invalid\nResponded by: Applicant\nDone.`;
+    const plan = planRepositoryCommentMerge({
+      projectId: PROJECT,
+      permits: [permit()],
+      comments: [comment(2, `${body} Questions: [email]`)],
+      existing: [legacyRow(2, withEmail)],
+      now: NOW,
+    });
+    assert.equal(plan.stats.text_change_flagged, 0);
+  });
+
+  it("still flags a real change to the reviewer comment on a row with a thread", () => {
+    const plan = planRepositoryCommentMerge({
+      projectId: PROJECT,
+      permits: [permit()],
+      comments: [comment(2, "Provide the stormwater management plan sheet instead.")],
+      existing: [legacyRow(2, thread)],
+      now: NOW,
+    });
+    assert.equal(plan.stats.text_change_flagged, 1);
+  });
+
+  it("clears a false mark left by the earlier comparison once the row is adopted", () => {
+    const c = comment(2, body);
+    const marked = legacyRow(2, thread, {
+      portal_permit_id: PERMIT,
+      portal_comment_key: "ref:2",
+      portal_content_hash: repositoryCommentHash(c),
+      portal_status_raw: "Resolved",
+      portal_latest_text: formatRepositoryComment(c, "BCIV2500152"),
+      portal_changed_at: "2026-11-17T07:00:00.000Z",
+    });
+    const plan = planRepositoryCommentMerge({ projectId: PROJECT, permits: [permit()], comments: [c], existing: [marked], now: NOW });
+    const patch = plan.updates[0]?.patch ?? {};
+    assert.equal(patch.portal_latest_text, null);
+    assert.equal(patch.portal_changed_at, null);
+  });
+});
