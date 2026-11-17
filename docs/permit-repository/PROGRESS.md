@@ -224,3 +224,14 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | 7 Edge Functions | Deployed 06:40 | versions 43/63/45/26/26 and permit-comment-pipeline 1; previous code in `exports.local/edge-backup-20261117/` |
 | 8 First pipeline run ff193644 | **Failed** 06:42 | "Conflicting API keys" before intake; 0 runs; rows identical |
 | 9–11 | Not done | stopped per the rule |
+
+### D-117 fix rollout (2026-11-17 06:50–07:05 UTC, approved; stopped at the step-8 re-run check)
+
+| Step | Status | Evidence / rollback |
+|---|---|---|
+| 1 Pre-flight | Done | tracked files clean; permit-sync 261/261; `serviceExecution.test.ts` 35/35; 0 active permit_sync jobs (21, all terminal) |
+| 2 PR #24 → main | Done | branch `fix/service-call-key-kind` off `origin/main` with f4a0b61 + 522935b cherry-picked (tree identical to 522935b); PR #24 as epermitarthouse-rgb, all checks green; merged as `b56c111ded8e`; main CI green. Rollback: revert the merge |
+| 3 Edge Functions | Deployed 06:58–06:59 | from a clean worktree at `b56c111`, `--use-api`, one by one: permit-comment-pipeline 1→2, intake 43→44, parser 63→64, classifier 45→46, context 26→27, router 26→27. Rollback: `exports.local/edge-backup-20261117/` |
+| 4 Verify versions | Done | all six ACTIVE and bumped |
+| 5 Step-8 re-run ff193644 | **Completed with one unexpected difference** 07:00–07:01 | no reset needed (state `failed`, attempts 1, back-off over, not blocked). One service-mode dispatcher call scoped to ff193644 → 202, claimed 1. After: same 6 ids, all `adopted` + `has_key`; `response_md5`, `response_status`, `status`, `approved` unchanged; 0 inserts, 0 removals; state `completed`, attempts 0, up to date; 1 run `completed`, `comments:`-keyed. **Difference:** `portal_changed_at` set on 5 of 6 rows (`portal_latest_text` present); repository text 211–295 chars vs `original_text` 700–1966, not equal after whitespace or alphanumeric normalisation. `original_text` was not replaced. Not retried |
+| Cron, DC schedule, `module.central_permits`, worker secret, notifier | Not done | out of scope |
