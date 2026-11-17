@@ -209,3 +209,18 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | Elapsed counters out of hashes | D-107 | Locally tested | normalize and content-hash tests; production showed 12 permits with counter-only status changes |
 | Suites | — | Locally tested | permit-sync 261/261; frontend 116 files (16 known, 0 unexpected); tsc 194 = baseline; build passes |
 | Scheduling, worker redeploy, repair, notifier | — | **Not done (approval)** | see HANDOFF |
+
+### Production rollout 2 (2026-11-17, approved; stopped at step 8)
+
+| Step | Status | Evidence / rollback |
+|---|---|---|
+| 0 Pre-flight | Done | permit-sync 261/261, build ok, no active sync job |
+| 1 PR #23 → main | Done 06:26 UTC | merge `15993f89d642`; CI green (PR and main). Vercel deployed from main; Railway HTTP scraper build waited for approval; no Supabase auto-deploy. Rollback: revert the merge |
+| 2 Migration 20261117100000 | Production-verified (schema) 06:28 | recorded; 7 functions, 5 columns, anon no EXECUTE. Rollback script in `scripts/permit-repo/` |
+| 3 Worker | Production-verified 06:31 | Railway `c78e20b2`, heartbeat version `15993f89d642`, idle, scope all. Rollback: `deploy-worker.sh 563cb9e…` |
+| 4 HTTP scraper | Deployed 06:34 | Railway `fe292a37` SUCCESS, `/api/health/playwright` 200. Previous live `0f66d36c` |
+| 5 D-102 repair | Production-verified | 8 repaired, captured 140 → 132, 0 text-only |
+| 6 Pipeline secret | Done 06:37 | Edge + worker values match; worker redeploy `0961cbee` same version, agent_trigger true; Vault secrets present |
+| 7 Edge Functions | Deployed 06:40 | versions 43/63/45/26/26 and permit-comment-pipeline 1; previous code in `exports.local/edge-backup-20261117/` |
+| 8 First pipeline run ff193644 | **Failed** 06:42 | "Conflicting API keys" before intake; 0 runs; rows identical |
+| 9–11 | Not done | stopped per the rule |
