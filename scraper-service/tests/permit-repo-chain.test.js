@@ -177,9 +177,10 @@ test("orchestration apply (BEGIN/COMMIT-wrapped, as in production) and its rollb
 });
 
 test("pipeline linking apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
-  const base = await replay({ exclude: [LINKING] });
+  // The default-access migration replaces get_comment_pipeline_overview, so check linking on the chain before it.
+  const base = await replay({ exclude: [LINKING, ACCESS] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [ACCESS] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${LINKING}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");

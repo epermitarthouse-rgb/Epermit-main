@@ -82,10 +82,9 @@ describe("LinkedPermitList", () => {
 });
 
 describe("PermitLinkedProjectList", () => {
-  it("offers navigation and Try again for editors, and counts hidden projects", () => {
+  it("offers navigation and Try again for editors, and never mentions projects the caller cannot see", () => {
     const html = render(createElement(PermitLinkedProjectList, {
       rows: [overview({ processing_state: "retrying" })],
-      hiddenCount: 2,
       isAdmin: false,
       onOpenMatrix: () => {},
       onOpenProject: () => {},
@@ -96,7 +95,7 @@ describe("PermitLinkedProjectList", () => {
     assert.match(html, /Response Matrix/);
     assert.match(html, /Portal Harvest/);
     assert.match(html, /Try again/);
-    assert.match(html, /Also linked to 2 projects you do not have access to/);
+    assert.doesNotMatch(html, /do not have access/, "no count of other organizations' projects (D-120)");
   });
 
   it("hides edit actions for read-only users", () => {

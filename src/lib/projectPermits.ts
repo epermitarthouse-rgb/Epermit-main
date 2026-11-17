@@ -116,7 +116,7 @@ export async function canEditProject(userId: string, projectId: string): Promise
   return !res.error && res.data === true;
 }
 
-/** Other projects already linked to these permits, so the picker can warn before a duplicate project. */
+/** Other projects of the caller's organization (RLS, D-120) already linked to these permits, so the picker can warn before a duplicate project. */
 export async function findExistingPermitLinks(permitIds: string[]): Promise<Map<string, Array<{ project_id: string; project_name: string | null }>>> {
   const out = new Map<string, Array<{ project_id: string; project_name: string | null }>>();
   const ids = [...new Set(permitIds.filter(Boolean))];

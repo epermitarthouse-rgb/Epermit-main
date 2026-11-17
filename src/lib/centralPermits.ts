@@ -142,6 +142,7 @@ export async function loadPermitQueue(params: Pick<PermitSearchParams, 'query' |
     rows.push(...page.rows);
     if (page.rows.length < SEARCH_PAGE_LIMIT || rows.length >= page.total) break;
   }
+  // RLS limits the rows to the caller's own projects (D-120): "Linked" means linked to a project they can open.
   const linkCounts = new Map<string, number>();
   let linkError: string | null = null;
   try {
@@ -480,8 +481,8 @@ export async function revokePermitAccess(grantId: string): Promise<void> {
 /**
  * Project ↔ permit links (P3.5 / R-1). A link grants no data access (D-006): it only lets a project
  * point at its permit record and a permit list the projects it is linked to. Reads go through RLS:
- * a link is visible only when the caller can read the permit, and a project's name only when the
- * caller can read that project.
+ * a link is visible only when the caller can read the permit and the project belongs to the caller's
+ * organization or is shared with them (D-120), so counts and lists never cover other organizations' projects.
  */
 export interface ProjectPermitLink {
   permit_id: string;

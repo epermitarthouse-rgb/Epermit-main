@@ -274,9 +274,63 @@ test("project and comment isolation is unchanged: permit access does not open pr
   assert.equal(await n(U.owner, "projects", `id = '${PROJECT}'`), 1);
   assert.equal(await n(U.owner, "parsed_comments", `project_id = '${PROJECT}'`), 1);
   assert.equal(await n(U.reader, "parsed_comments", `project_id = '${PROJECT}'`), 1, "a read override still reads");
-  // Linked rows are visible with the permit, but the project name stays behind project access.
-  const rows = await asUser(U.isolated, async (tx) => (await tx.query(`SELECT p.project_id, pr.name FROM public.project_permits p LEFT JOIN public.projects pr ON pr.id = p.project_id WHERE p.project_id = $1`, [PROJECT])).rows);
-  assert.deepEqual(rows.map((r) => r.name), [null]);
+  assert.equal(await n(U.isolated, "project_permits", `project_id = '${PROJECT}'`), 0, "nor its permit links");
+});
+
+test("link rows are isolated by organization: read access to a permit does not reveal other organizations' projects", async () => {
+  const T = { a: "30000000-0000-4000-8000-0000000000a1", b: "30000000-0000-4000-8000-0000000000b1" };
+  const O = {
+    aOwner: "30000000-0000-4000-8000-0000000000a2", aMember: "30000000-0000-4000-8000-0000000000a3",
+    bOwner: "30000000-0000-4000-8000-0000000000b2", teamOnly: "30000000-0000-4000-8000-0000000000b3",
+  };
+  const PA = "30000000-0000-4000-8000-0000000000a4";
+  const PB = "30000000-0000-4000-8000-0000000000b4";
+  for (const [label, id] of Object.entries(O)) {
+    await db.query(`INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES ($1, $2, '{}'::jsonb)`, [id, `${label}@test.invalid`]);
+  }
+  await db.query(`INSERT INTO public.profiles (user_id) SELECT id FROM auth.users ON CONFLICT (user_id) DO NOTHING`);
+  await db.query(`INSERT INTO public.tenants (id, name, slug) VALUES ($1, 'Org A', 'org-a'), ($2, 'Org B', 'org-b')`, [T.a, T.b]);
+  await db.query(`INSERT INTO public.tenant_memberships (tenant_id, user_id) VALUES ($1, $2), ($1, $3), ($4, $5)`, [T.a, O.aOwner, O.aMember, T.b, O.bOwner]);
+  await db.query(`INSERT INTO public.projects (id, name, user_id, tenant_id) VALUES ($1, 'A project', $2, $3), ($4, 'B project', $5, $6)`, [PA, O.aOwner, T.a, PB, O.bOwner, T.b]);
+  await db.query(`INSERT INTO public.project_team_members (project_id, user_id, role, added_by) VALUES ($1, $2, 'viewer', $3)`, [PB, O.teamOnly, O.bOwner]);
+  // Linking still works for each organization's own project (default read + project edit access).
+  await link(O.aOwner, PA);
+  await link(O.bOwner, PB);
+
+  const links = (sub) => asUser(sub, async (tx) => (await tx.query(`SELECT project_id FROM public.project_permits WHERE permit_id = $1 ORDER BY project_id`, [PERMIT])).rows.map((r) => r.project_id));
+  const overviewLinks = (sub) => asUser(sub, async (tx) => (await tx.query(`SELECT project_id, project_name FROM public.get_comment_pipeline_overview(NULL, ARRAY[$1::uuid]) ORDER BY project_id`, [PERMIT])).rows);
+  const expectOnly = async (sub, ids, who) => {
+    const mine = (await links(sub)).filter((id) => id === PA || id === PB);
+    assert.deepEqual(mine, ids, `${who}: link rows`);
+    assert.deepEqual((await overviewLinks(sub)).map((r) => r.project_id).filter((id) => id === PA || id === PB), ids, `${who}: comment pipeline read model`);
+  };
+
+  assert.equal(await n(O.aMember, "permits", `id = '${PERMIT}'`), 1, "both organizations can read the permit");
+  assert.equal(await n(O.bOwner, "permits", `id = '${PERMIT}'`), 1);
+  const defaultWrite = await asUser(O.aMember, async (tx) => (await one(tx, `SELECT public.has_project_access($1, $2) AS ok`, [O.aMember, PB])).ok);
+  assert.equal(defaultWrite, true, "precondition: the project model gives default access across organizations, so it cannot be the link filter");
+
+  await expectOnly(O.aMember, [PA], "org A member sees org A links only");
+  await expectOnly(O.aOwner, [PA], "org A owner");
+  await expectOnly(O.bOwner, [PB], "org B owner");
+  await expectOnly(O.teamOnly, [PB], "a project team member sees that project's links");
+  await expectOnly(U.plain, [], "a user in no organization sees neither");
+  await expectOnly(U.admin, [PA, PB], "platform admin sees all");
+  assert.equal((await overviewLinks(U.admin)).find((r) => r.project_id === PB).project_name, "B project");
+
+  await db.query(`INSERT INTO public.user_project_access_overrides (user_id, project_id, access_level) VALUES ($1, $2, 'read'), ($1, $3, 'none')`, [O.aMember, PB, PA]);
+  await expectOnly(O.aMember, [PB], "an explicit share shows that project; a 'none' override hides even an own-organization project");
+  await db.query(`DELETE FROM public.user_project_access_overrides WHERE user_id = $1`, [O.aMember]);
+
+  await hide(O.aMember, true);
+  await expectOnly(O.aMember, [], "a hidden user sees no links of the permit");
+  await hide(O.aMember, false);
+  await expectOnly(O.aMember, [PA], "unhide restores own links");
+
+  // The comment pipeline runs as the project owner over all of the project's links (service role, no RLS).
+  const fp = (project) => asService(async (tx) => (await one(tx, `SELECT public._project_permit_comment_fingerprint($1) AS f`, [project])).f);
+  assert.ok(await fp(PA));
+  assert.ok(await fp(PB));
 });
 
 test("the one-time backfill switches on dc-projectdox sources only, and re-applying the migration keeps an admin's choice", async () => {

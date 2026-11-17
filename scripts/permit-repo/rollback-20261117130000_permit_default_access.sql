@@ -1,7 +1,8 @@
 -- Rollback for supabase/migrations/20261117130000_permit_default_access.sql (production approval required).
 -- Restores the schema exactly as 20261117120000 left it (verified by scraper-service/tests/permit-repo-chain.test.js):
 -- user_can_read_permit from 20261111100000 and get_permit_sync_overview / get_permit_sync_job_progress from
--- 20261113100000 are verbatim copies. Run in one transaction:
+-- 20261113100000, and get_comment_pipeline_overview from 20261117100000 are verbatim copies; the project_permits
+-- policy is restored as 20261111100000 defined it. Run in one transaction:
 --   supabase db query --linked -f scripts/permit-repo/rollback-20261117130000_permit_default_access.sql
 --   supabase migration repair --status reverted 20261117130000
 -- Effect: the default access ends. Only platform admins, 'use' credential grants and 'allow' grants read permits
@@ -146,6 +147,107 @@ BEGIN
 END;
 $$;
 
+-- project_permits policy as 20261111100000 defined it, and get_comment_pipeline_overview verbatim from 20261117100000.
+DROP POLICY IF EXISTS "Readable project permit links" ON public.project_permits;
+CREATE POLICY "Readable project permit links" ON public.project_permits
+FOR SELECT TO authenticated USING (public.can_read_permit(permit_id));
+
+-- One row per (project, permit) link the caller can see. processing_state:
+--   processed | waiting | processing | retrying | needs_attention | no_comments
+-- last_error is returned to platform admins only.
+CREATE OR REPLACE FUNCTION public.get_comment_pipeline_overview(
+  p_project_ids UUID[] DEFAULT NULL,
+  p_permit_ids UUID[] DEFAULT NULL
+)
+RETURNS TABLE (
+  project_id UUID,
+  project_name TEXT,
+  permit_id UUID,
+  permit_number TEXT,
+  jurisdiction TEXT,
+  linked_at TIMESTAMPTZ,
+  processing_state TEXT,
+  comments_in_matrix INTEGER,
+  comments_removed INTEGER,
+  comments_changed INTEGER,
+  portal_comments INTEGER,
+  last_completed_at TIMESTAMPTZ,
+  next_attempt_at TIMESTAMPTZ,
+  can_edit BOOLEAN,
+  last_error TEXT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+#variable_conflict use_column
+DECLARE
+  v_uid UUID := auth.uid();
+  v_admin BOOLEAN;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'authentication required' USING ERRCODE = '42501';
+  END IF;
+  IF p_project_ids IS NULL AND p_permit_ids IS NULL THEN
+    RAISE EXCEPTION 'project or permit ids required' USING ERRCODE = '22023';
+  END IF;
+  IF coalesce(cardinality(p_project_ids), 0) > 200 OR coalesce(cardinality(p_permit_ids), 0) > 200 THEN
+    RAISE EXCEPTION 'at most 200 ids' USING ERRCODE = '22023';
+  END IF;
+  v_admin := public.is_platform_admin(v_uid);
+  RETURN QUERY
+  WITH links AS (
+    SELECT pp.project_id, pp.permit_id, pp.created_at
+    FROM public.project_permits pp
+    WHERE (p_project_ids IS NULL OR pp.project_id = ANY (p_project_ids))
+      AND (p_permit_ids IS NULL OR pp.permit_id = ANY (p_permit_ids))
+      AND public.has_project_access(v_uid, pp.project_id)
+      AND public.user_can_read_permit(v_uid, pp.permit_id)
+  ),
+  fp AS (
+    SELECT DISTINCT l.project_id, public._project_permit_comment_fingerprint(l.project_id) AS current_fp
+    FROM links l
+  )
+  SELECT
+    l.project_id,
+    pr.name::text,
+    l.permit_id,
+    pm.permit_number,
+    pm.jurisdiction,
+    l.created_at,
+    CASE
+      WHEN NOT EXISTS (SELECT 1 FROM public.permit_review_comments c WHERE c.permit_id = l.permit_id AND c.removed_at IS NULL)
+        THEN 'no_comments'
+      WHEN s.status = 'running' AND s.lease_expires_at > now() THEN 'processing'
+      WHEN s.status = 'blocked' THEN 'needs_attention'
+      WHEN s.completed_fingerprint IS NOT NULL AND s.completed_fingerprint = f.current_fp AND NOT coalesce(s.force_requested, false)
+        THEN 'processed'
+      WHEN s.status = 'failed' THEN 'retrying'
+      ELSE 'waiting'
+    END,
+    (SELECT count(*)::int FROM public.parsed_comments pc
+      WHERE pc.project_id = l.project_id AND pc.portal_permit_id = l.permit_id
+        AND pc.ingest_source IN ('raw_ref', 'fallback_llm') AND pc.portal_removed_at IS NULL),
+    (SELECT count(*)::int FROM public.parsed_comments pc
+      WHERE pc.project_id = l.project_id AND pc.portal_permit_id = l.permit_id AND pc.portal_removed_at IS NOT NULL),
+    (SELECT count(*)::int FROM public.parsed_comments pc
+      WHERE pc.project_id = l.project_id AND pc.portal_permit_id = l.permit_id AND pc.portal_latest_text IS NOT NULL),
+    (SELECT count(*)::int FROM public.permit_review_comments c WHERE c.permit_id = l.permit_id AND c.removed_at IS NULL),
+    s.last_completed_at,
+    s.next_attempt_at,
+    (v_admin OR public.has_project_editor_access(v_uid, l.project_id)),
+    CASE WHEN v_admin THEN s.last_error END
+  FROM links l
+  JOIN public.projects pr ON pr.id = l.project_id
+  JOIN public.permits pm ON pm.id = l.permit_id
+  LEFT JOIN fp f ON f.project_id = l.project_id
+  LEFT JOIN public.project_comment_pipeline_state s ON s.project_id = l.project_id
+  ORDER BY pr.name, pm.permit_number;
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public._permit_project_link_visible(uuid, uuid);
 DROP FUNCTION IF EXISTS public.admin_list_permit_access(uuid);
 DROP FUNCTION IF EXISTS public.admin_set_permit_user_hidden(uuid, uuid, boolean, text);
 DROP FUNCTION IF EXISTS public.admin_set_permit_source_default(uuid, boolean);
