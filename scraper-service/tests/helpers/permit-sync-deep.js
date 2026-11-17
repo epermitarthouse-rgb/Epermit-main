@@ -52,6 +52,12 @@ function pgliteDeepRepo(h) {
     )).map((x) => ({ projectId: x.id, ownerUserId: x.user_id, permitNumber: x.permit_number, portalDataHash: x.portal_data_hash, syncedHashes: x.synced || null, captureHash: x.capture || null })),
     projectHash: async (projectId) => ((await q(`SELECT portal_data_hash FROM projects WHERE id = $1`, [projectId]))[0] || {}).portal_data_hash || null,
     reportObjectReferenced: async (p) => (await q(`SELECT 1 FROM permit_report_contents WHERE pdf_storage_path = $1 OR excel_storage_path = $1 LIMIT 1`, [p])).length > 0,
+    storedReviewReport: async (portalRecordId) => (await q(
+      `SELECT c.structured_rows, c.text_content, c.excel_storage_path
+       FROM permits p JOIN permit_reports r ON r.permit_id = p.id AND r.removed_at IS NULL AND r.name ILIKE '%review comments%'
+       JOIN permit_report_contents c ON c.id = r.latest_content_id
+       WHERE p.adapter_key = 'dc-projectdox' AND p.portal_record_id = $1 LIMIT 1`, [String(portalRecordId)],
+    ))[0] || null,
     recordDocument: (a) => h.svc(`SELECT public.record_permit_document_capture_v2($1, $2::jsonb)`, [a.documentId, JSON.stringify({
       status: a.status, access_path: a.accessPath, storage_path: a.storagePath || null, sha256: a.sha256 || null, size_bytes: a.size ?? null,
       content_type: a.contentType || null, error: a.error || null, run_id: a.runId || null, source_endpoint: a.sourceEndpoint || null,

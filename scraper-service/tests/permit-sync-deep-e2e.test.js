@@ -345,6 +345,27 @@ test("reports tab unavailable (D-074, D-080): reports marked failed with back-of
   assert.equal(flaky.calls.scrapes.length, 0);
 });
 
+test("D-102: a report that renders error text without an exported file is recorded failed and retried, never captured", async () => {
+  const s = await setup();
+  const { h } = s;
+  const textOnly = fakeDcDeep(h, { reportEntry: (r) => (r.reportId === "14" ? { pdfStorageRef: undefined, text: "An error has occurred during report processing." } : {}) });
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r1 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep: textOnly, ...s }), workerId: "w1" });
+  assert.equal(r1.outcome, "completed_with_warnings", JSON.stringify(r1.metrics));
+  assert.equal(r1.metrics.deep.reports_failed, 1);
+  assert.equal(r1.metrics.deep.reports_captured, 4);
+  assert.equal(await h.count("permit_reports", "report_key = '14' AND content_status = 'failed' AND content_error = 'report rendered without an exported file'"), 1);
+  assert.equal(await h.count("permit_report_contents", "pdf_storage_path IS NULL AND excel_storage_path IS NULL"), 0, "no version without a file");
+  assert.equal([...s.storage.objects.keys()].filter((k) => k.includes("/reports/")).length, 4, "the unreferenced upload of the failed report is removed");
+
+  await h.db.query(`UPDATE permit_reports SET content_next_attempt_at = now() - interval '1 minute'`);
+  const working = fakeDcDeep(h);
+  await s.enqueue({ only_portal_record_ids: ["11105"] });
+  const r2 = await runOnce({ rpc: s.rpc, openAdapter: opener({ dcDeep: working, ...s }), workerId: "w1" });
+  assert.equal(r2.outcome, "completed", JSON.stringify(r2.metrics));
+  assert.equal(await h.count("permit_reports", "content_status = 'captured'"), 5);
+});
+
 test("files: failed captures retry with back-off and stop at the cap; invalid bodies are never stored; originals are compared to FileSize (D-080, D-084, 3f)", async () => {
   const s = await setup();
   const { h } = s;

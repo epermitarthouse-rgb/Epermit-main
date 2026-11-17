@@ -15,6 +15,7 @@
  */
 
 const policy = require("./policy");
+const normalize = require("../adapters/dc-projectdox/normalize");
 const safety = require("../core/safety");
 const { fileDigest, contentTypeFor } = require("./repo");
 const { PortalChangedError, SessionEndedError, LeaseLostError, ShutdownError } = require("../core/errors");
@@ -367,7 +368,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
         await ctx.heartbeat.progress();
         await ctx.report("exporting_reports");
       } else if (!prev) {
-        await repo.recordReportFailure(ctx.permitId, rep.report_key, entry.error || "no report content");
+        await repo.recordReportFailure(ctx.permitId, rep.report_key, entry.error || (entry.text ? "report rendered without an exported file" : "no report content"));
         ctx.reportsRecorded.set(rep.report_key, "failed");
         ctx.m.reports_failed += 1;
       }
@@ -616,18 +617,37 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     }
   }
 
+  /**
+   * D-103: the JSON pass reads a completed workflow's Review Comments from the one-page HTML report, which
+   * refuses longer reports. The deep pass exports the whole report as Excel, so an unreadable or failed HTML read
+   * falls back to the stored export. Guard, session, rate-limit and login errors are never absorbed.
+   */
+  async function reviewReportFallback(t, projectId, wflowId) {
+    try {
+      return await t.getReviewCommentsReport(projectId, wflowId);
+    } catch (err) {
+      if (!err || !["portal_changed", "transient"].includes(err.code) || typeof repo.storedReviewReport !== "function") throw err;
+      const rows = normalize.reviewRowsFromStoredReport(await repo.storedReviewReport(projectId), wflowId);
+      if (!rows) throw err;
+      return rows;
+    }
+  }
+
   /** Adapter transport wrapper: fills the dashboard index and keeps each permit's report list (viewer metadata). */
   function wrapTransport(t) {
     const w = index.wrap(t);
-    if (typeof w.listReports !== "function") return w;
-    return {
-      ...w,
-      listReports: async (projectId) => {
+    const out = { ...w };
+    if (typeof w.listReports === "function") {
+      out.listReports = async (projectId) => {
         const items = await w.listReports(projectId);
         reportListByRecord.set(String(projectId), Array.isArray(items) ? items : []);
         return items;
-      },
-    };
+      };
+    }
+    if (typeof w.getReviewCommentsReport === "function") {
+      out.getReviewCommentsReport = (projectId, wflowId) => reviewReportFallback(w, projectId, wflowId);
+    }
+    return out;
   }
 
   return { afterPermit, wrapTransport, index };
