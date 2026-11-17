@@ -235,3 +235,17 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | 4 Verify versions | Done | all six ACTIVE and bumped |
 | 5 Step-8 re-run ff193644 | **Completed with one unexpected difference** 07:00–07:01 | no reset needed (state `failed`, attempts 1, back-off over, not blocked). One service-mode dispatcher call scoped to ff193644 → 202, claimed 1. After: same 6 ids, all `adopted` + `has_key`; `response_md5`, `response_status`, `status`, `approved` unchanged; 0 inserts, 0 removals; state `completed`, attempts 0, up to date; 1 run `completed`, `comments:`-keyed. **Difference:** `portal_changed_at` set on 5 of 6 rows (`portal_latest_text` present); repository text 211–295 chars vs `original_text` 700–1966, not equal after whitespace or alphanumeric normalisation. `original_text` was not replaced. Not retried |
 | Cron, DC schedule, `module.central_permits`, worker secret, notifier | Not done | out of scope |
+
+### Nightly schedule, alert email and Permit Queue readiness (2026-11-17, local commits only; no production writes)
+
+| Item | Decision | Level | Evidence |
+|---|---|---|---|
+| Worker version and heartbeat | — | Production-verified (read-only) | one worker, idle, version `15993f89d642`, heartbeat about 17 s old, RSS 68 MB, agent trigger on; `scraper-service/` has no diff between `15993f8` and `origin/main` (`b56c111`), so no redeploy is needed |
+| Nightly DC job behaviour | D-095, D-106 | Locally tested; production config read-only | scheduled jobs go through `_permit_sync_request` (deep unless `worker_mode='json'`; de8592f9 settings have no override); file/report gating, retry and back-off, the manual-vs-automated login lock and `schedule_missed` are covered by existing tests. de8592f9 inactive, no enqueue or notifier cron, no queued or running jobs |
+| Audited enable/disable scripts for the DC schedule | D-108 | Locally tested | `03-enable-dc-schedule.sql`, `98-disable-dc-schedule.sql`; orchestration test (refuses a non-admin, enqueues nothing, 98 keeps the monitor and notifier) |
+| Comment-pipeline alerts | D-109 | Locally tested | migration `20261117120000` + rollback; orchestration test (blocked → critical, failed ×2 → warning, no names or errors, repeat counts once, recovery resolves); chain test applies and rolls back the migration exactly |
+| Alert URL setting and labelled test email | D-109 | Locally tested | `permitSyncAlertEmail.test.ts` 8/8; `send-test-alert-email.sh` refuses without `--i-have-approval`. `APP_BASE_URL` digest differs from both forms of https://www.commun-et.com (checked by digest only); `PERMIT_SYNC_ALERT_EMAILS` not set; notifier not deployed |
+| Permit Queue data | — | Production-verified (read-only counts) | 28 DC permits, all active, all with progress rows; files 2,283 (2,282 stored); reports 140 (132 captured, 8 awaiting recapture after D-102); review comments 391; tasks 14; workflows 29; 1 project link; 1 pipeline state (completed) |
+| `module.central_permits` | — | Production-verified (read-only) | one global switch in `feature_flags`, ON since 2026-11-12 20:20 UTC; no per-org or per-user override. Row access is separate: 0 permit access grants and 0 credential grants on de8592f9, so only platform admins see the 28 permits today |
+| Suites | — | Locally tested | permit-sync 266/266; frontend 117 files (16 known, 0 unexpected); tsc 194 = baseline; build passes; migration checks pass |
+| Schedule, sync cron, migration, notifier deploy, secrets, test email | — | **Not done (approval)** | see HANDOFF |
