@@ -1,6 +1,15 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-17 09:15 UTC (rollout 3 done: PR #26 merged, comment fix live, marks cleared, monitor migration, notifier, scheduler and comment-pipeline crons on). Read "Production rollout 3" first.
+Last updated: 2026-11-17 11:05 UTC (A-8 done: default permit access with project isolation live, PR #28 merged). Read "A-8 rollout" and "Production rollout 3" first.
+
+## A-8 rollout: default access with project isolation (2026-11-17 ~10:45–11:05 UTC, approved), COMPLETED
+- Pre-flight on `origin/main` `3f942f1`: permit-sync 279/279, frontend 118 files (16 known, 0 unexpected), tsc 194 = baseline, build passes, local gitleaks clean. PR #28 (as epermitarthouse-rgb) green on all checks.
+- Pre-check (read-only): 1 DC source, 28 permits, 0 grants, 1 project link, `visible_to_all` absent, `20261117130000` not recorded, 0 active jobs, crons ticking with 0 failures, ff193644 6 comments / 0 marks.
+- Migration `20261117130000_permit_default_access.sql` applied in one transaction, recorded with `migration repair --status applied`. Checks: `visible_to_all` exists (default false, the dc-projectdox source true, 0 sources false); `effect` column exists; 3 admin RPCs guarded by `_admin_require_platform_admin`, EXECUTE authenticated yes / anon no; `_permit_source_readable` not executable by anon or authenticated; `project_permits` policy and `get_comment_pipeline_overview` use `_permit_project_link_visible`; `user_can_read_permit` replaced; 0 grants. All 7 crons active, 0 failures in 15 min. ff193644 still 6 comments / 0 marks.
+- PR #28 merged after the migration as `245809d9f3f5` (merge commit). CI on main green; Vercel production deployment for the merge commit succeeded (the Railway "PermitPilot / production" deployment entry stays `in_progress`, as for earlier merges).
+- RLS post-check (one DO block per non-admin active user with role `authenticated` and JWT claims, aborted by an exception, so nothing persisted; counts only): 4 of 4 non-admin active users read 28 of 28 permits and see the source in the overview, 0 have `can_refresh`, 0 link rows for projects outside their own organization or shares (1 link row in total). anon has no SELECT privilege on `permits` or `project_permits`.
+- Rollback: `supabase db query --linked -f scripts/permit-repo/rollback-20261117130000_permit_default_access.sql`, then `supabase migration repair --status reverted 20261117130000`; frontend: revert the merge `245809d`. Revert the frontend first: the old frontend works on the new schema, but the new access panel needs the admin RPCs.
+- Admins hide permits per user in Management Admin → Permit Sync → Permit access. Separate open item: `projects` RLS is still readable across non-demo tenants (see D-120).
 
 ## Production rollout 3 (2026-11-17 08:45–09:15 UTC, approved steps 1–7), COMPLETED
 - PR #26 (replaces #25, which failed the secret scan on a false positive: a credential row id assigned to `v_credential`; renamed `v_source_id`, history rewritten on a new branch) merged as `d869e612`; PR and main CI green.
@@ -526,7 +535,7 @@ Order (2026-11-11): A-1 → A-3 → A-5 → A-4 → A-6. A-2 is only needed if t
 | A-5 (frontend) | Deploy the frontend with the D-052/D-053 pages and export | Not requested. The worker part of A-5 is done |
 | A-6 | Turn on `module.central_permits` in production | Last |
 | A-7 | Policy decision: DOB notification / ToS review for automated read access | Not requested |
-| A-8 | Default access with project isolation (D-120): apply `20261117130000_permit_default_access.sql`, then deploy the frontend (Permit Sync access panel; linked-projects panel without the hidden-project count) | Built and tested locally on branch `feat/permit-default-access`. Not applied, not deployed. Migration first. Link rows and the comment-pipeline read model show only the caller's own organization's or shared projects; platform admins see all |
+| A-8 | Default access with project isolation (D-120): apply `20261117130000_permit_default_access.sql`, then deploy the frontend (Permit Sync access panel; linked-projects panel without the hidden-project count) | **Done 2026-11-17**: migration applied and recorded, PR #28 merged as `245809d`, Vercel production deployed, RLS post-check passed (see "A-8 rollout"). Link rows and the comment-pipeline read model show only the caller's own organization's or shared projects; platform admins see all |
 
 ## Open questions and findings
 - Fixed 2026-11-11 (D-039): deleting the source credential after a job failed on the append-only events trigger. Now a cascade-only delete is allowed, after the parent row is gone.

@@ -246,7 +246,7 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | Comment-pipeline alerts | D-109 | Locally tested | migration `20261117120000` + rollback; orchestration test (blocked → critical, failed ×2 → warning, no names or errors, repeat counts once, recovery resolves); chain test applies and rolls back the migration exactly |
 | Alert URL setting and labelled test email | D-109 | Locally tested | `permitSyncAlertEmail.test.ts` 8/8; `send-test-alert-email.sh` refuses without `--i-have-approval`. `APP_BASE_URL` digest differs from both forms of https://www.commun-et.com (checked by digest only); `PERMIT_SYNC_ALERT_EMAILS` not set; notifier not deployed |
 | Permit Queue data | — | Production-verified (read-only counts) | 28 DC permits, all active, all with progress rows; files 2,283 (2,282 stored); reports 140 (132 captured, 8 awaiting recapture after D-102); review comments 391; tasks 14; workflows 29; 1 project link; 1 pipeline state (completed) |
-| `module.central_permits` | — | Production-verified (read-only) | one global switch in `feature_flags`, ON since 2026-11-12 20:20 UTC; no per-org or per-user override. Row access is separate: 0 permit access grants and 0 credential grants on de8592f9, so only platform admins see the 28 permits today |
+| `module.central_permits` | — | Production-verified (read-only) | one global switch in `feature_flags`, ON since 2026-11-12 20:20 UTC; no per-org or per-user override. Row access is separate: since A-8 (D-120) every active user reads the 28 permits by default; admins hide per user |
 | Suites | — | Locally tested | permit-sync 266/266; frontend 117 files (16 known, 0 unexpected); tsc 194 = baseline; build passes; migration checks pass |
 | Schedule, sync cron, migration, notifier deploy, secrets, test email | — | **Not done (approval)** | see HANDOFF |
 
@@ -261,3 +261,14 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | 5 Notifier | Deployed v1, secrets set, test sent, cron on | test: HTTP 200 `test_sent: true`, 1 recipient; 09:07 tick sent the open warning. Rollback: unschedule + unset secrets |
 | 6 Scheduler cron | Installed | 09:10 tick: 0 jobs, no source scheduled, no missed alert; DC schedule left for the owner to enable. Rollback: unschedule `permit-sync-enqueue` |
 | 7 Comment-pipeline cron | Installed | 09:11 tick: HTTP 200, claimed 0; test project unchanged. Rollback: `99-disable-pipeline-cron.sql` |
+
+### A-8 default access with project isolation (D-120, 2026-11-17 ~10:45–11:05 UTC, approved)
+
+| Step | Status | Evidence / rollback |
+|---|---|---|
+| 1 Pre-flight | Done | rebased on `3f942f1`; permit-sync 279/279; frontend 118 files (16 known, 0 unexpected); tsc 194 = baseline; build passes; gitleaks clean |
+| 2 PR #28 | Green | all checks green on the PR; not merged before the migration |
+| 3 Pre-check | Done (read-only) | 1 DC source, 28 permits, 0 grants, 1 link, column absent, version not recorded, 0 active jobs, crons ok |
+| 4 Migration `20261117130000` | Production-verified | one transaction + `migration repair --status applied`; `visible_to_all` default false, DC source true; `effect` column; 3 admin RPCs guarded, anon no EXECUTE; link policy and comment-pipeline overview replaced; 7 crons, 0 failures; ff193644 6 comments / 0 marks. Rollback: `scripts/permit-repo/rollback-20261117130000_permit_default_access.sql` + `migration repair --status reverted` |
+| 5 Merge | Done | merge commit `245809d9f3f5`; CI on main green; Vercel production success. Rollback: revert the merge |
+| 6 RLS post-check | Passed | 4/4 non-admin active users read 28/28 permits, 0 with `can_refresh`, 0 foreign link rows; anon has no table privilege |
