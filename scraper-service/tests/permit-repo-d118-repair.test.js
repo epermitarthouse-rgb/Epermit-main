@@ -34,11 +34,18 @@ async function seed(db, { realChanges = 0 } = {}) {
   await db.query(`INSERT INTO public.permits (id, adapter_key, portal_record_id, permit_number) VALUES ($1, 'dc', '11105', 'BCIV2500152')`, [PERMIT]);
   for (let ref = 1; ref <= 6; ref++) {
     // Rows 1-3 carry an e-mail in the stored report text and a redaction in the repository text, as in production.
-    const body = `Provide sheet ${ref} with the erosion control details.${ref <= 3 ? " Questions: [email]" : ""}`;
+    const body = `Provide sheet ${ref} with the erosion control details. Show inlet protection.${ref <= 3 ? " Questions: [email]" : ""}`;
     const storedBody = ref <= 3 ? body.replace("[email]", "reviewer@example.invalid") : body;
-    const thread = ref === 6 ? storedBody : `${storedBody}\nResponded by: Applicant 03/02/2026\nAdded in the resubmission.`;
-    const real = ref <= realChanges;
-    const latest = ref === 6 ? null : persisted(ref, real ? `Provide sheet ${ref} with revised stormwater details.` : body);
+    // Row 6 has no responses; the others have a response behind a header line, then a dashed rule and a second one.
+    const thread = ref === 6
+      ? storedBody
+      : `${storedBody}\nResponse by: Applicant - 3/2/2026 9:15 AM\nAdded in the resubmission.\n----------------------------------------\nResponse by: Reviewer - 3/5/2026 1:40 PM\nAccepted.`;
+    if (ref !== 6) {
+      await db.query(`INSERT INTO public.permit_review_responses (permit_id, portal_response_key, comment_key, seq, body) VALUES ($1, $2, $3, 1, 'Added in the resubmission.')`, [PERMIT, `resp:${ref}:1`, `ref:${ref}`]);
+    }
+    // A real change here is a shortened comment: the stored thread still STARTS WITH the marked text.
+    const latestBody = ref <= realChanges ? `Provide sheet ${ref} with the erosion control details.` : body;
+    const latest = ref === 6 ? null : persisted(ref, latestBody);
     await db.query(
       `INSERT INTO public.parsed_comments (project_id, original_text, status, ingest_source, response_text, comment_number,
          portal_permit_id, portal_comment_key, portal_latest_text, portal_changed_at)
@@ -75,7 +82,7 @@ test("clears the 5 false marks, audits them, leaves everything else, and rolls b
   assert.equal(restored.latest, 5);
 });
 
-test("refuses when a mark is a real change (count differs from the reviewed 5) and changes nothing", async () => {
+test("refuses when a mark is a real change, including a shortened comment the old thread still starts with, and changes nothing", async () => {
   const { db } = await replay();
   await seed(db, { realChanges: 1 });
   await assert.rejects(db.exec(SCRIPT), /D-118 repair refused: 4 rows match, expected 5/);
