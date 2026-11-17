@@ -16,6 +16,7 @@ type QueryResult<T> = PromiseLike<{ data: T | null; error: { message: string } |
 
 /** The subset of supabase-js used here; tests pass a fake. */
 // deno-lint-ignore no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ServiceClient = { from: (table: string) => any; rpc: (fn: string, args: Record<string, unknown>) => QueryResult<unknown> };
 
 export const PARSED_COMMENT_MERGE_COLUMNS =
