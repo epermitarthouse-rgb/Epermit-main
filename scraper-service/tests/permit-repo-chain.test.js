@@ -16,9 +16,10 @@ const { replay, MIGRATIONS_DIR } = require("./helpers/replay-migrations");
 const fx = require("./helpers/permit-repo-fixtures");
 
 const NEW_MIGRATION = "20261111100000_central_permit_repository.sql";
-const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql"];
+const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql"];
 const ORCH = "20261113100000_permit_sync_orchestration.sql";
 const LINKING = "20261117100000_permit_pipeline_linking.sql";
+const MONITOR = "20261117120000_permit_sync_monitor_comment_pipeline.sql";
 const NEW_TABLE = /^(permits$|permit_(?!filings)|project_permits$|project_comment_pipeline_state$)/;
 const NEW_FUNC = new RegExp([
   "^_?permit_", "^user_can_read_permit$", "^can_read_permit$", "^apply_permit_", "^record_permit_document_(download|capture|capture_v2)$", "^record_permit_report_(content|failure)$", "^record_permit_deep_pass$",
@@ -152,9 +153,10 @@ test("deep capture apply (BEGIN/COMMIT-wrapped, as in production) and its rollba
 });
 
 test("orchestration apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
-  const base = await replay({ exclude: [ORCH] });
+  // The later monitor migration replaces a function this one creates, so check orchestration on the chain before it.
+  const base = await replay({ exclude: [ORCH, MONITOR] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [MONITOR] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${ORCH}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -181,6 +183,20 @@ test("pipeline linking apply (BEGIN/COMMIT-wrapped, as in production) and its ro
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
 
   const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261117100000_permit_pipeline_linking.sql`, "utf8");
+  await base.db.exec(rollback);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
+});
+
+test("monitor comment-pipeline apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
+  const base = await replay({ exclude: [MONITOR] });
+  const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+
+  await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${MONITOR}`, "utf8")}\nCOMMIT;`);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
+  assert.notDeepEqual(expected, before, "the migration changes the monitor");
+
+  const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261117120000_permit_sync_monitor_comment_pipeline.sql`, "utf8");
   await base.db.exec(rollback);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
 });

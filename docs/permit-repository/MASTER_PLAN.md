@@ -310,6 +310,8 @@ Backward compatibility: nothing existing reads these tables; manual scraping kee
 
 - Flags: `PERMIT_SYNC_WORKER_ENABLED` (worker env, default false), `PERMIT_SYNC_DOWNLOADS_ENABLED` (default false), per-source `automation_enabled` (default false), frontend flag `central_permits` (default off), cron schedule absent until approved.
 - Monitoring: `permit_sync_jobs` status/heartbeat, `permit_sync_events`, per-run metrics JSON (discovery recall, section coverage, parity), stale-permit view.
+- Alerts (2026-11-17): `permit_sync_monitor` (pg_cron, every 5 min) raises deduplicated alerts for worker offline, stuck or unclaimed jobs, login failures, portal changes, guard violations, exhausted retries, repeated failures, missed schedule slots, no success in 36 h, discovery drops, missing deep content and blocked or repeatedly failing comment processing (D-109). `permit-sync-alert-notifier` emails a scrubbed digest (warnings once, criticals every 6 h, resolutions once) to `PERMIT_SYNC_ALERT_EMAILS`.
+- Nightly DC refresh (2026-11-17): daily 04:00 America/New_York, deep, enabled by `scheduling/03-enable-dc-schedule.sql` + `02-enable-sync-cron.sql`, disabled by `98-disable-dc-schedule.sql` (D-106, D-108).
 - Approvals required (tracked in `HANDOFF.md`): A-1 production migration; A-2 production encryption key / credential re-encryption; A-3 first live automated run; A-4 enable schedule; A-5 deploy worker service; A-6 enable frontend flag in production; A-7 DOB/ToS policy for automated access.
 
 ## 9. Known gaps addressed (from audits)

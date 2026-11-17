@@ -99,4 +99,41 @@ describe("permit repository source", () => {
     assert.equal(again.stats.inserted, 0);
     assert.equal(again.stats.updated, 0, "a second run over unchanged comments writes nothing");
   });
+
+  it("loads each comment's response count and uses it end to end on a report-thread row", async () => {
+    const tables = baseTables();
+    const body = "Provide the plan sheet. Show the inlet protection.";
+    tables.permit_review_comments[0].body = body;
+    tables.permit_review_responses = [
+      { permit_id: P1, comment_key: "ref:1", removed_at: null },
+      { permit_id: P1, comment_key: "ref:1", removed_at: "2026-11-01T00:00:00Z" },
+    ];
+    tables.parsed_comments = [
+      {
+        id: "row-1",
+        project_id: PROJECT,
+        ingest_source: "raw_ref",
+        status: "Approved",
+        comment_number: null,
+        response_text: "Draft",
+        original_text: `ref: 1\nfull_discussion_text:\n${body}\nResponse by: Applicant - 3/2/2026 9:15 AM\nAdded.\nstatus: Resolved`,
+      },
+    ];
+    const { client } = fakeClient(tables, new Set([`${USER}:${P1}`]));
+    const source = await loadRepositorySource(client, PROJECT, USER);
+    assert.equal(source.comments[0].response_count, 1, "removed responses are not counted");
+
+    const first = await refreshFromRepository(client, PROJECT, USER, "2026-11-17T00:00:00Z");
+    assert.equal(first.stats.text_change_flagged, 0);
+    assert.equal(tables.parsed_comments[0].portal_changed_at ?? null, null);
+
+    tables.permit_review_comments[0].body = "Provide the plan sheet.";
+    const second = await refreshFromRepository(client, PROJECT, USER, "2026-11-18T00:00:00Z");
+    assert.equal(second.stats.text_change_flagged, 1, "a shortened comment is a real edit");
+    assert.equal(tables.parsed_comments[0].original_text, `ref: 1\nfull_discussion_text:\n${body}\nResponse by: Applicant - 3/2/2026 9:15 AM\nAdded.\nstatus: Resolved`);
+    assert.ok(tables.parsed_comments[0].portal_latest_text);
+
+    const third = await refreshFromRepository(client, PROJECT, USER, "2026-11-19T00:00:00Z");
+    assert.equal(third.stats.updated, 0, "idempotent");
+  });
 });

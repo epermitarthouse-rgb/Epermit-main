@@ -138,3 +138,75 @@ Step-8 re-run: (1) run `scripts/permit-repo/pipeline/02-verify-test-project.sql`
 with attempts > 0, so (2) click "Process comments now" on ff193644 (this resets attempts and forces a run);
 (3) re-run `02-verify-test-project.sql`. Expected: same 6 ids, `adopted` and `has_key` true, response and
 approval columns and `response_md5` unchanged, no removals, state `completed`, one `comments:`-keyed run.
+
+## False "Updated on portal" marks on the first repository run (D-118)
+
+Finding (production read-only, lengths and booleans only): on ff193644, 5 of 6 rows were marked. Every row
+matched the right repository comment (ref header = `ref:N` key = repository ref). The rows were created from
+the Review Comments report, whose `full_discussion_text` is the whole thread: the reviewer comment followed by
+each response with responder and date. The repository keeps only the reviewer comment in `body` (responses
+are in `permit_review_responses`). On first adoption (no `portal_content_hash` yet) the merge compared the
+thread with the body, so every row with at least one response (5 rows, 1-5 responses each) looked changed;
+the row without responses did not. Each stored thread starts with its repository comment, and the marked
+`portal_latest_text` is exactly the current repository comment: no portal change happened.
+Category: wrong field compared (thread vs comment), not matching, not a real change.
+
+Fix (code only, `_shared/permitRepositoryComments.ts`): first version treated a stored thread that *starts with*
+the portal comment as unchanged. That rule was too loose (a shortened or truncated comment still passes) and is
+replaced by the D-119 rule below.
+
+Redeploy: `comment-parser-agent` only (the only function importing the module):
+`supabase functions deploy comment-parser-agent --project-ref eeqxyjrcldivtpikcpvk`.
+Rollback: redeploy the version deployed with PR #24 (back it up first, as in `exports.local/edge-backup-20261117/`).
+
+Clearing the 5 marks, either:
+- **Script** `scripts/permit-repo/repairs/d118-false-portal-change-marks.sql` (needs approval): one transaction,
+  preview (expected marked 5, false_marks 5), refuses unless exactly 5 rows on ff193644 match the false-mark
+  rule, writes one `platform_audit_events` row per cleared row with the previous values, clears only
+  `portal_changed_at` / `portal_latest_text`, after-check (expected still_marked 0, audit_rows 5). Rollback in
+  the header restores the marks from the audit rows. Offline test: `scraper-service/tests/permit-repo-d118-repair.test.js`.
+- **Or** let the redeployed parser clear them on the next run of the project ("Process comments now"): the
+  rows' content hash already equals the repository hash and their thread starts with the comment, so the
+  merge clears the marks (covered by a unit test). The script is the explicit, audited path.
+
+Scope: production has 1 project-permit link; the 5 marked rows are all on ff193644; 0 soft-removed rows.
+Any project linked later whose rows came from a Review Comments report would have hit the same issue.
+
+### Tightened rule (D-119)
+
+Report format (from production, structure only): the reviewer comment, then for each response a header line
+`<Label>: <who> - <m/d/yyyy h:mm AM>`, the response text, and a dashed rule between responses. The repository
+`body` is the reviewer comment alone; its responses are in `permit_review_responses`.
+
+Rule (`commentPortionOf` / `discussionMatchesComment`): the **comment part** of the stored thread, everything before
+the first response header line, must equal the portal comment after normalisation (case, punctuation, spacing, line
+breaks, e-mail redaction). The header is recognised by shape (label, colon, dash, date-time), never by a name or
+label, and only when the repository holds responses for that comment (`response_count`, loaded from
+`permit_review_responses`); a comment without responses is compared whole. Because it is an equality on the comment
+part, a changed, shortened, truncated, extended, or trailing-sentence-removed comment is a real edit and is flagged.
+Production check (read-only): the comment part equals the repository comment on 6 of 6 rows, 5 of them marked.
+
+After adoption the stored `portal_content_hash` is the fast path. It is `stableHash` over the whitespace-normalised
+reviewer comment and its source metadata (cycle, type, department, file name): never the thread, the drafted
+response or any enriched text. A different hash is a change only when the comment the row shows differs from the
+portal comment; a formatting-only difference in the source changes the hash but does not flag, and the new hash is
+stored. A metadata-only change without a text change is therefore also not flagged.
+
+Also: an assigned row (`assigned_to`) now counts as work, so a genuine edit on it is stored beside the original.
+
+Tests (`permitRepositoryComments.test.ts`, 11 cases for the matrix; `permitRepositorySource.test.ts` end to end):
+unchanged with and without responses; changed; shortened or truncated; appended; formatting only; idempotent
+second run; false mark cleared once; work preserved (response, status, approval, assignment, human edit) with the
+genuine edit stored beside the original; a header-looking line inside a comment without responses.
+Before the fix: the first D-118 rule fails "shortened or truncated", "work preserved" and "header-looking line"; the
+original code fails "responses", "formatting", "false mark cleared" and "work preserved".
+
+Clearing script `scripts/permit-repo/repairs/d118-false-portal-change-marks.sql` now uses the same rule in SQL (same
+header pattern, the response gate from `permit_review_responses`), judges every marked row, previews counts
+(marked, false_marks, real_changes), and refuses unless exactly 5 rows on ff193644 are false marks.
+
+Redeploy: `comment-parser-agent` only. `supabase functions deploy comment-parser-agent --project-ref eeqxyjrcldivtpikcpvk`.
+Back up the deployed version first. Rollback: redeploy that backup.
+
+Known limit: a comment that itself contains a line shaped like a response header, on a comment that also has
+responses, is cut at that line, so an edit after it is not seen. A row without responses is unaffected.

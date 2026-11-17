@@ -400,3 +400,70 @@ test("scheduling scripts: sync cron refuses until a full deep refresh finished; 
   await h.db.exec(script("99-disable-all.sql"));
   assert.deepEqual(await cronJobs(), []);
 });
+
+test("D-109: the monitor reports a blocked or repeatedly failing comment pipeline once, without names or errors, and resolves it", async () => {
+  const { h } = await setup();
+  const P1 = "50000000-0000-4000-8000-0000000000e1";
+  const P2 = "50000000-0000-4000-8000-0000000000e2";
+  const P3 = "50000000-0000-4000-8000-0000000000e3";
+  for (const id of [P1, P2, P3]) await h.db.query(`INSERT INTO public.projects (id, user_id, name) VALUES ($1, $2, 'Owner Street 12 Renovation')`, [id, OWNER]);
+  await h.db.query(`INSERT INTO public.project_comment_pipeline_state (project_id, status, attempts, last_error) VALUES
+    ($1, 'blocked', 5, 'intake failed for jane@example.test'), ($2, 'failed', 2, 'timeout'), ($3, 'failed', 1, 'timeout')`, [P1, P2, P3]);
+  const monitor = () => h.svc(`SELECT permit_sync_monitor()`);
+  const open = async () => (await h.db.query(`SELECT alert_key, severity, title, detail, occurrences FROM permit_sync_alerts WHERE category = 'comment_pipeline' AND resolved_at IS NULL ORDER BY alert_key`)).rows;
+
+  await monitor();
+  let rows = await open();
+  assert.deepEqual(rows.map((r) => [r.alert_key, r.severity]), [[`comment_pipeline_blocked:${P1}`, "critical"], [`comment_pipeline_failed:${P2}`, "warning"]], "one failed attempt is not alerted");
+  assert.equal(rows[0].detail, "Project 50000000: blocked after 5 attempt(s); an editor can use Try again.");
+  assert.ok(rows.every((r) => !/Owner Street|jane|timeout|intake/.test(r.title + r.detail)), "no project name or error text");
+  await monitor();
+  assert.ok((await open()).every((r) => r.occurrences === 2), "repeats update the open alert");
+
+  await h.db.query(`UPDATE public.project_comment_pipeline_state SET status = 'completed', attempts = 0 WHERE project_id = $1`, [P2]);
+  await h.db.query(`UPDATE public.project_comment_pipeline_state SET status = 'blocked', attempts = 5 WHERE project_id = $1`, [P3]);
+  await monitor();
+  rows = await open();
+  assert.deepEqual(rows.map((r) => r.alert_key), [`comment_pipeline_blocked:${P1}`, `comment_pipeline_blocked:${P3}`]);
+  assert.equal(await h.count("permit_sync_alerts", "alert_key = $1 AND resolved_at IS NOT NULL", [`comment_pipeline_failed:${P2}`]), 1, "recovered project resolves");
+});
+
+test("D-108: the DC schedule scripts enable deep 04:00 America/New_York as a platform admin, enqueue nothing, and disable only the enqueue cron", async () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const dir = path.join(__dirname, "..", "..", "scripts", "permit-repo", "scheduling");
+  const script = (name, email = "2@test.invalid") => fs.readFileSync(path.join(dir, name), "utf8")
+    .replaceAll("de8592f9-69fc-4c71-8544-cb22bbbd5813", CRED).replace("<platform-admin-email>", email);
+  const { h, refreshAll, deep } = await setup();
+  const src = async () => (await h.db.query(`SELECT status, automation_enabled, settings, schedule_enabled_at FROM permit_sync_sources WHERE credential_id = $1`, [CRED])).rows[0];
+  const cronJobs = async () => (await h.db.query(`SELECT jobname FROM cron.job WHERE jobname LIKE 'permit-sync-%' ORDER BY 1`)).rows.map((r) => r.jobname);
+
+  await assert.rejects(h.db.exec(script("03-enable-dc-schedule.sql", "<platform-admin-email>")), /existing platform admin/);
+  await h.db.exec("ROLLBACK");
+  await assert.rejects(h.db.exec(script("03-enable-dc-schedule.sql", "1@test.invalid")), /existing platform admin/, "the owner is not a platform admin");
+  await h.db.exec("ROLLBACK");
+  assert.equal((await src()).automation_enabled, false);
+
+  await refreshAll();
+  const c = await deep.claim("w1", 300);
+  await deep.finish(c.id, "w1", "completed_with_warnings", null, null, {}, false, null);
+  const jobsBefore = await h.count("permit_sync_jobs");
+  await h.db.exec(script("03-enable-dc-schedule.sql"));
+  const on = await src();
+  assert.equal(on.status, "active");
+  assert.equal(on.automation_enabled, true);
+  assert.deepEqual(on.settings.schedule, { frequency: "daily", time: "04:00", timezone: "America/New_York" });
+  assert.ok(!on.settings.worker_mode, "scheduled jobs stay deep");
+  assert.equal(await h.count("platform_audit_events", "action = 'permit_sync_source.schedule' AND actor_id = $1", [ADMIN]), 1, "audited as the named admin");
+  await h.db.exec(script("02-enable-sync-cron.sql"));
+  await h.db.exec(script("01-enable-monitor-cron.sql"));
+  assert.equal(await h.svc(`SELECT enqueue_permit_sync_runs()`), 0, "a slot before enabling never runs");
+  assert.equal(await h.count("permit_sync_jobs"), jobsBefore);
+
+  await h.db.exec(script("98-disable-dc-schedule.sql"));
+  await h.db.exec(script("98-disable-dc-schedule.sql"));
+  assert.deepEqual(await cronJobs(), ["permit-sync-alert-notifier", "permit-sync-monitor"], "monitor and notifier stay");
+  const off = await src();
+  assert.equal(off.automation_enabled, false);
+  assert.equal(off.status, "inactive");
+});
