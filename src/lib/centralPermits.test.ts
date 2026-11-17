@@ -6,6 +6,10 @@ import {
   currentRows,
   loadPermitExportBundles,
   grantPermitAccess,
+  listAccessGrants,
+  listPermitAccess,
+  setPermitSourceVisibleToAll,
+  setPermitUserHidden,
   linkProjectToPermit,
   listPermitProjectLinks,
   loadPermitDetail,
@@ -188,6 +192,25 @@ describe('central permits data layer', () => {
     assert.deepEqual(calls[0].args, {
       p_scope_type: 'adapter', p_scope_ref: 'dc-projectdox', p_grantee_user_id: 'u1', p_grantee_tenant_id: null, p_note: null,
     });
+  });
+
+  it('hide / unhide, the source default and the access list call the audited RPCs; deny rows stay out of the grants list', async () => {
+    const { client, calls } = fakeClient({
+      permit_access_grants: [{ id: 'g1', effect: 'allow', revoked_at: null }, { id: 'g2', effect: 'deny', revoked_at: null }, { id: 'g3', revoked_at: null }],
+    }, (fn) => (fn === 'admin_set_permit_user_hidden' ? true : fn === 'admin_list_permit_access' ? [{ user_id: 'u1', state: 'default' }] : null));
+    __centralPermitsTestHooks.setClient(client);
+    assert.deepEqual((await listAccessGrants()).map((g) => g.id), ['g1', 'g3'], 'hidden rows are not shown as grants; rows without effect (before the migration) are');
+    assert.equal(await setPermitUserHidden({ userId: 'u1', credentialId: 'c1', hidden: true, note: ' ' }), true);
+    await setPermitSourceVisibleToAll('c1', false);
+    assert.deepEqual(await listPermitAccess('c1'), [{ user_id: 'u1', state: 'default' }]);
+    assert.deepEqual(calls.filter((c) => c.kind === 'rpc').map((c) => [c.name, c.args]), [
+      ['admin_set_permit_user_hidden', { p_user_id: 'u1', p_credential_id: 'c1', p_hidden: true, p_note: null }],
+      ['admin_set_permit_source_default', { p_credential_id: 'c1', p_visible: false }],
+      ['admin_list_permit_access', { p_credential_id: 'c1' }],
+    ]);
+    const failing = fakeClient({}, () => new Error('Not authorized'));
+    __centralPermitsTestHooks.setClient(failing.client);
+    await assert.rejects(setPermitUserHidden({ userId: 'u1', credentialId: 'c1', hidden: false }), /Not authorized/);
   });
 
   it('admin actions call the audited RPCs', async () => {

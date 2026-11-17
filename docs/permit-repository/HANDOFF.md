@@ -526,6 +526,7 @@ Order (2026-11-11): A-1 → A-3 → A-5 → A-4 → A-6. A-2 is only needed if t
 | A-5 (frontend) | Deploy the frontend with the D-052/D-053 pages and export | Not requested. The worker part of A-5 is done |
 | A-6 | Turn on `module.central_permits` in production | Last |
 | A-7 | Policy decision: DOB notification / ToS review for automated read access | Not requested |
+| A-8 | Default access with project isolation (D-120): apply `20261117130000_permit_default_access.sql`, then deploy the frontend (Permit Sync access panel; linked-projects panel without the hidden-project count) | Built and tested locally on branch `feat/permit-default-access`. Not applied, not deployed. Migration first. Link rows and the comment-pipeline read model show only the caller's own organization's or shared projects; platform admins see all |
 
 ## Open questions and findings
 - Fixed 2026-11-11 (D-039): deleting the source credential after a job failed on the append-only events trigger. Now a cascade-only delete is allowed, after the parent row is gone.

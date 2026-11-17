@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { PermitAccessPanel } from "@/components/admin/PermitAccessPanel";
 import { AlertsPanel, SchedulePanel, WorkerHealthPanel, useSchedulerStatus } from "@/components/admin/PermitSyncOperations";
 import { AlertBanner, Panel, StatusPill, type StatusTone } from "@/components/design/ProductPrimitives";
 import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanner";
@@ -91,7 +92,7 @@ export default function AdminPermitSync() {
   return (
     <AdminPageShell
       title="Permit Sync"
-      description="Portal sources, sync jobs and permit access grants for the central permit repository. Every action is audited."
+      description="Portal sources, sync jobs, default access and permit access grants for the central permit repository. Every action is audited."
       breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Permit Sync" }]}
       actions={
         <Button size="sm" variant="outline" onClick={() => { void qc.invalidateQueries({ queryKey: ["permit-sync"] }); void qc.invalidateQueries({ queryKey: ["central-permits", "sync"] }); }}>
@@ -148,6 +149,8 @@ export default function AdminPermitSync() {
             </Table>
           )}
         </Panel>
+
+        <PermitAccessPanel sources={sources.data ?? []} />
 
         <Panel title="Recent jobs" eyebrow="Last 50">
           {jobs.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
@@ -224,7 +227,7 @@ export default function AdminPermitSync() {
         <WorkerHealthPanel status={scheduler.data} loading={scheduler.isLoading} />
         <AlertsPanel />
 
-        <Panel title="Access grants" eyebrow="Who can see which permits">
+        <Panel title="Access grants" eyebrow="Extra access beyond the default">
           <form
             className="mb-4 flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -291,7 +294,7 @@ export default function AdminPermitSync() {
                   </TableRow>
                 ))}
                 {!grants.data?.length ? (
-                  <TableRow><TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">No active grants. Only platform admins can see permits.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">No active grants. Users read permits of sources that are visible to all by default; platform admins read everything.</TableCell></TableRow>
                 ) : null}
               </TableBody>
             </Table>

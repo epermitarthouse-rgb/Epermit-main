@@ -11,7 +11,6 @@ import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 import { useToast } from "@/hooks/use-toast";
 import { FEATURE_FLAG, useFeatureFlag } from "@/hooks/useFeatureFlags";
 import type { PermitListRow } from "@/lib/centralPermits";
-import { listPermitProjectLinks } from "@/lib/centralPermits";
 import {
   canEditProject,
   linkPermitsToProject,
@@ -205,12 +204,6 @@ export function PermitProjectLinksPanel({ permitId }: { permitId: string }) {
     enabled: active,
     refetchInterval: (q) => refetchWhileActive(q.state.data),
   });
-  // All links the caller can see on the permit side, to count projects hidden from them.
-  const linksQuery = useQuery({
-    queryKey: ["central-permits", "permit-links", permitId],
-    queryFn: () => listPermitProjectLinks(permitId),
-    enabled: active,
-  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["project-permits"] });
@@ -237,8 +230,6 @@ export function PermitProjectLinksPanel({ permitId }: { permitId: string }) {
   if (!active) return null;
 
   const rows = overviewQuery.data ?? [];
-  const visible = new Set(rows.map((r) => r.project_id));
-  const hiddenCount = (linksQuery.data ?? []).filter((l) => !visible.has(l.project_id)).length;
 
   return (
     <Panel title="Linked projects" eyebrow="Response Matrix">
@@ -249,7 +240,6 @@ export function PermitProjectLinksPanel({ permitId }: { permitId: string }) {
       ) : (
         <PermitLinkedProjectList
           rows={rows}
-          hiddenCount={hiddenCount}
           isAdmin={isAdmin}
           busy={processMutation.isPending || unlinkMutation.isPending}
           onOpenMatrix={open ? (projectId) => open(projectId, "/response-matrix") : undefined}

@@ -94,7 +94,6 @@ export function LinkedPermitList({
 /** Permit side: the projects a permit is linked to, with processing state and navigation. */
 export function PermitLinkedProjectList({
   rows,
-  hiddenCount,
   isAdmin,
   busy,
   onOpenProject,
@@ -103,8 +102,6 @@ export function PermitLinkedProjectList({
   onUnlink,
 }: {
   rows: PipelineOverviewRow[];
-  /** Links to projects the caller cannot see. */
-  hiddenCount?: number;
   isAdmin: boolean;
   busy?: boolean;
   onOpenProject?: (projectId: string) => void;
@@ -112,7 +109,7 @@ export function PermitLinkedProjectList({
   onProcess?: (projectId: string) => void;
   onUnlink?: (projectId: string) => void;
 }) {
-  if (rows.length === 0 && !hiddenCount) {
+  if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground">No projects are linked to this permit.</p>;
   }
   return (
@@ -165,11 +162,6 @@ export function PermitLinkedProjectList({
           );
         })}
       </ul>
-      {hiddenCount ? (
-        <p className="text-xs text-muted-foreground">
-          Also linked to {hiddenCount} project{hiddenCount === 1 ? "" : "s"} you do not have access to.
-        </p>
-      ) : null}
     </div>
   );
 }
