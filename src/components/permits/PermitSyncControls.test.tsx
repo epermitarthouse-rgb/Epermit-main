@@ -72,6 +72,9 @@ describe("Permit Queue refresh controls", () => {
     assert.match(cell, /Completed/);
     assert.match(cell, /3 of 3 files/);
     assert.match(cell, /Last refreshed/);
+    assert.doesNotMatch(render(createElement(PermitSyncCell, { progress: progress({ phase: "completed", job_status: "completed", message: "no portal changes; nothing new to capture" }) })), /nothing new/);
+    const warned = render(createElement(PermitSyncCell, { progress: progress({ phase: "completed_with_warnings", job_status: "completed_with_warnings", message: "2 files left for the next refresh; 1 report not captured yet" }) }));
+    assert.match(warned, /2 files left for the next refresh; 1 report not captured yet/);
     const busy = render(createElement(RefreshPermitButton, { permitId: "p1", progress: progress() }));
     assert.match(busy, /Capturing reviews/);
     assert.match(busy, /disabled/);

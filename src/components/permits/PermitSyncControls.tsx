@@ -171,6 +171,9 @@ export function PermitSyncCell({ progress }: { progress?: PermitProgress | null 
     <div className="space-y-0.5 text-xs">
       {progress.phase ? <StatusPill tone={phaseTone(progress.phase)}>{phaseLabel(progress.phase)}</StatusPill> : null}
       {counts ? <p className="tabular-nums text-muted-foreground">{counts}</p> : null}
+      {progress.message && (progress.phase === "completed_with_warnings" || progress.phase === "failed") ? (
+        <p className="max-w-[260px] truncate text-muted-foreground" title={progress.message}>{progress.message}</p>
+      ) : null}
       {progress.last_success_at ? <p className="text-muted-foreground">Last refreshed {formatTimestamp(progress.last_success_at)}</p> : null}
     </div>
   );
