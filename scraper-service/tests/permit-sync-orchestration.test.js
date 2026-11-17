@@ -270,6 +270,39 @@ test("schedule: validated, explicit timezone, never fires for a time already pas
   assert.deepEqual(status.cron_jobs, [], "the migration schedules no cron job");
 });
 
+test("D-106: a 5-minute UTC tick runs 04:00 America/New_York exactly once a day across both DST changes", async () => {
+  const { h } = await setup();
+  const sched = JSON.stringify({ frequency: "daily", time: "04:00", timezone: "America/New_York" });
+  const fired = async (fromIso, toIso, lastRun) => {
+    const out = [];
+    let last = lastRun;
+    for (let t = Date.parse(fromIso); t < Date.parse(toIso); t += 5 * 60 * 1000) {
+      const now = new Date(t).toISOString();
+      const slot = (await h.db.query(`SELECT public._permit_sync_due_slot($1::jsonb, $2, $3, $4) AS s`, [sched, last, "2026-01-01T00:00:00Z", now])).rows[0].s;
+      if (slot) {
+        out.push([new Date(slot).toISOString(), now]);
+        last = slot;
+      }
+    }
+    return out;
+  };
+  assert.deepEqual(await fired("2026-03-07T00:00:00Z", "2026-03-10T00:00:00Z", "2026-03-06T09:00:00Z"), [
+    ["2026-03-07T09:00:00.000Z", "2026-03-07T09:00:00.000Z"],
+    ["2026-03-08T08:00:00.000Z", "2026-03-08T08:00:00.000Z"],
+    ["2026-03-09T08:00:00.000Z", "2026-03-09T08:00:00.000Z"],
+  ], "spring forward: 09:00Z (EST) then 08:00Z (EDT)");
+  assert.deepEqual(await fired("2026-10-31T00:00:00Z", "2026-11-03T00:00:00Z", "2026-10-30T08:00:00Z"), [
+    ["2026-10-31T08:00:00.000Z", "2026-10-31T08:00:00.000Z"],
+    ["2026-11-01T09:00:00.000Z", "2026-11-01T09:00:00.000Z"],
+    ["2026-11-02T09:00:00.000Z", "2026-11-02T09:00:00.000Z"],
+  ], "fall back: 08:00Z (EDT) then 09:00Z (EST); the repeated 01:00 hour does not add a run");
+  // A scheduler outage catches up once with the latest missed slot, not once per missed day.
+  const late = (await h.db.query(`SELECT public._permit_sync_due_slot($1::jsonb, $2, $3, $4) AS s`, [sched, "2026-11-01T09:00:00Z", "2026-01-01T00:00:00Z", "2026-11-04T12:00:00Z"])).rows[0].s;
+  assert.equal(new Date(late).toISOString(), "2026-11-04T09:00:00.000Z");
+  const next = (await h.db.query(`SELECT public._permit_sync_next_slot($1::jsonb, $2) AS s`, [sched, "2026-03-08T05:00:00Z"])).rows[0].s;
+  assert.equal(new Date(next).toISOString(), "2026-03-08T08:00:00.000Z");
+});
+
 test("only one source per login may be scheduled", async () => {
   const { admin } = await setup();
   const sched = JSON.stringify({ frequency: "daily", time: "04:00", timezone: "America/New_York" });
