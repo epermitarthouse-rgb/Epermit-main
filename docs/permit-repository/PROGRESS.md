@@ -195,3 +195,17 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | Scheduling | **Off** | No sync cron, automation false, no schedule enabled |
 | CI on `main` | Green except one scraper file | 14516b2: secret scan, tsc/eslint, frontend, analyzer, permit-sync, build pass. `reconcile-territory-provider-names.test.js` reads local territory data and is now listed as environment-dependent |
 | First full DC refresh | Not started | Belongs to the user (Permit Queue → Refresh all). No job was enqueued |
+
+### Nightly DC refresh readiness (2026-11-17, local commits only)
+
+| Item | Decision | Level | Evidence |
+|---|---|---|---|
+| First full DC refresh `3b7e46a5` | — | Production-verified (ran) | 2026-11-12 20:31 → 11-13 16:11 UTC, completed_with_warnings, 28 permits (21 completed, 7 with warnings), 1 attempt |
+| Report capture needs an exported file; repair script for 8 rows | D-102 | Locally tested | deep and e2e tests; repair script run offline (refusal + repair + recapture); production count 8 re-checked read-only |
+| Reviews from the stored Review Comments export | D-103 | Locally tested | mapping test; production read-only: 6307→53, 15026→56, 9321→81 comments, 3168/25920 empty |
+| Outstanding-items message, Permit Queue row | D-104 | Locally tested | worker test, e2e row message, `PermitSyncControls.test.tsx` |
+| Worker version and heap in heartbeat; CI-gated deploy script | D-105 | Locally tested; script dry-run against production (no upload) | fault-injection test; dry-run refuses unpushed HEAD and passes for 7f070f0 |
+| 04:00 America/New_York across DST | D-106 | Locally tested | orchestration test on a 5-minute tick, March and November 2026 |
+| Elapsed counters out of hashes | D-107 | Locally tested | normalize and content-hash tests; production showed 12 permits with counter-only status changes |
+| Suites | — | Locally tested | permit-sync 261/261; frontend 116 files (16 known, 0 unexpected); tsc 194 = baseline; build passes |
+| Scheduling, worker redeploy, repair, notifier | — | **Not done (approval)** | see HANDOFF |
