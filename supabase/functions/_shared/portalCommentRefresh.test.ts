@@ -48,7 +48,7 @@ describe("portal comment refresh keying (6d)", () => {
     }));
     const plan = planPortalCommentRefresh(old, staging);
     assert.equal(plan.updates.length, 6);
-    assert.deepEqual(plan.deletions, []);
+    assert.deepEqual(plan.removals, []);
     assert.deepEqual(plan.promotions, []);
     assert.deepEqual(plan.updates.map((u) => [u.oldId, u.stagingId]), DISCUSSIONS.map((_, i) => [`old-${i + 1}`, `stg-${i + 1}`]));
     assert.equal(plan.updates[1].oldId, "old-2", "an inline REF #4 in the discussion does not override the header ref");
@@ -64,7 +64,7 @@ describe("portal comment refresh keying (6d)", () => {
     assert.equal(portalCommentKey({ comment_number: null, original_text: "  Provide\n setbacks " }), "text:Provide setbacks");
   });
 
-  it("a removed comment is deleted, a new one promoted, and rows without refs still match by text", () => {
+  it("a removed comment is soft-marked, a new one promoted, and rows without refs still match by text", () => {
     const old: PortalCommentRow[] = [
       { id: "o1", original_text: persisted(1, "A") },
       { id: "o2", original_text: persisted(2, "B") },
@@ -78,7 +78,29 @@ describe("portal comment refresh keying (6d)", () => {
     const plan = planPortalCommentRefresh(old, staging);
     assert.deepEqual(plan.updates.map((u) => [u.oldId, u.stagingId]), [["o1", "s1"], ["o3", "s3"]]);
     assert.deepEqual(plan.promotions, ["s9"]);
-    assert.deepEqual(plan.deletions, ["o2"]);
+    assert.deepEqual(plan.removals, ["o2"]);
+  });
+
+  it("human work survives: a person's status, a responded comment's text, and already-removed rows", () => {
+    const old: PortalCommentRow[] = [
+      { id: "o1", original_text: persisted(1, "A"), status: "Ready for Review", response_text: "Our reply" },
+      { id: "o2", original_text: persisted(2, "B"), status: "Pending Review" },
+      { id: "o3", original_text: persisted(3, "C"), status: "Pending Review", portal_removed_at: "2026-11-01T00:00:00Z" },
+    ];
+    const staging: PortalCommentRow[] = [
+      { id: "s1", comment_number: "1", original_text: persisted(1, "A, now with a new requirement", "Resolved"), status: "Approved" },
+      { id: "s2", comment_number: "2", original_text: persisted(2, "B, reworded", "Resolved"), status: "Approved" },
+    ];
+    const plan = planPortalCommentRefresh(old, staging, "2026-11-17T00:00:00Z");
+    const [u1, u2] = plan.updates;
+    assert.ok(!("status" in u1.patch), "the person's status is kept");
+    assert.ok(!("original_text" in u1.patch), "the responded comment's text is kept");
+    assert.equal(u1.patch.portal_latest_text, staging[0].original_text);
+    assert.equal(u1.patch.portal_changed_at, "2026-11-17T00:00:00Z");
+    assert.equal(u1.patch.portal_status_raw, "Resolved");
+    assert.equal(u2.patch.status, "Approved", "a parser-owned status follows the portal");
+    assert.equal(u2.patch.original_text, staging[1].original_text, "an untouched row takes the new text");
+    assert.deepEqual(plan.removals, [], "a row already marked removed is not marked again");
   });
 
   it("two staging rows never claim the same old row", () => {
