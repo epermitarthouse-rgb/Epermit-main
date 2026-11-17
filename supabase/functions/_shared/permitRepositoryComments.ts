@@ -182,6 +182,18 @@ export function existingDiscussion(text: string | null | undefined): string {
   return (m ? m[1] : raw).trim();
 }
 
+/**
+ * Whether a persisted discussion still shows this portal comment. Report-parsed rows hold the whole thread
+ * (the reviewer comment followed by every response), while the repository `body` is the reviewer comment
+ * alone, so a thread that starts with the comment is the same comment.
+ */
+export function discussionMatchesComment(discussion: string | null | undefined, body: string | null | undefined): boolean {
+  const d = looseText(discussion);
+  const b = looseText(body);
+  if (!b) return !d;
+  return d === b || d.startsWith(b);
+}
+
 function statusLineOf(text: string | null | undefined): string | null {
   const m = String(text ?? "").match(/(?:^|\r?\n)status:\s*([^\r\n]*)/i);
   return m ? m[1].trim() : null;
@@ -326,7 +338,7 @@ export function planRepositoryCommentMerge(input: {
 
     const textChanged = row.portal_content_hash
       ? row.portal_content_hash !== hash
-      : looseText(existingDiscussion(row.original_text)) !== looseText(c.body);
+      : !discussionMatchesComment(existingDiscussion(row.original_text), c.body);
     if (textChanged) {
       if (hasHumanWork(row)) {
         set("portal_latest_text", text);
@@ -338,7 +350,7 @@ export function planRepositoryCommentMerge(input: {
         set("portal_changed_at", null);
         plan.stats.text_replaced++;
       }
-    } else if (row.portal_latest_text && looseText(existingDiscussion(row.original_text)) === looseText(c.body)) {
+    } else if (row.portal_latest_text && discussionMatchesComment(existingDiscussion(row.original_text), c.body)) {
       // The portal went back to the text the row already shows: the pending notice no longer applies.
       set("portal_latest_text", null);
       set("portal_changed_at", null);
