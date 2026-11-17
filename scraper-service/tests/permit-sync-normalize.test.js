@@ -61,6 +61,24 @@ test("status JSON → permit fields and unresolved parity source", () => {
   assert.equal(dc.statusUnresolvedTotal(status), 1);
 });
 
+test("D-107: elapsed-time and duration counters do not change the status section hash", () => {
+  const later = JSON.parse(JSON.stringify(status));
+  const tick = (d) => { if (d) { d.Days += 1; d.Hours = 3; d.FormattedText = `${d.Days} days 3 hrs `; } };
+  tick(later.TimeElapsed);
+  for (const s of later.SubWorkflows) {
+    ["ApplicationDuration", "JurisdictionDuration", "TotalDuration"].forEach((k) => tick(s[k]));
+    for (const t of s.UncompletedTasks || []) tick(t.TaskDuration);
+  }
+  const hash = (data) => buildBatch({
+    adapterKey: dc.ADAPTER_KEY, credentialId: null, runId: null, portalRecordId: "11854",
+    sections: { status: { status: "ok", sourceKind: "json", fields: dc.statusFields(data), raw: data } },
+  }).batch.sections.status.hash;
+  assert.equal(hash(later), hash(status));
+  assert.equal(dc.statusFields(status).summary.time_elapsed, undefined);
+  later.SubWorkflows[0].UnresolvedComments = (later.SubWorkflows[0].UnresolvedComments || 0) + 1;
+  assert.notEqual(hash(later), hash(status), "a real change still changes the hash");
+});
+
 test("reviews: comments keyed by REF #, responses threaded, role labels only", () => {
   const { comments, responses } = dc.reviewItems(corrections.rows);
   assert.deepEqual(comments.map((c) => c.key).sort(), ["ref:3", "ref:4", "ref:5"]);

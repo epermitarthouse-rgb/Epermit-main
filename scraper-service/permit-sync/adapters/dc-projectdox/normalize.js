@@ -106,7 +106,11 @@ function discoveryRecord(row) {
   };
 }
 
-/** GetWorkflowInstanceStatusData → permit fields (status section). */
+/**
+ * GetWorkflowInstanceStatusData → permit fields (status section).
+ * TimeElapsed and the *Duration counters are not kept: they grow every hour, so they would change the status
+ * hash on every refresh and start a deep pass and a recorded change without any portal change (D-107).
+ */
 function statusFields(data) {
   const subs = Array.isArray(data.SubWorkflows) ? data.SubWorkflows : [];
   const unresolved = subs.reduce((n, s) => n + (int(s.UnresolvedComments) || 0), 0);
@@ -120,7 +124,6 @@ function statusFields(data) {
     uncompleted_tasks: int(data.UncompleteTaskCount) ?? (subs.length ? tasks : null),
     summary: {
       calendar_type: str(data.CalendarType),
-      time_elapsed: str(data.TimeElapsed && data.TimeElapsed.FormattedText),
       unresolved_by_group: subs.flatMap((s) =>
         (s.UnresolvedByGroup || []).map((g) => ({ group: str(g.GroupName), unresolved: int(g.UnresolvedComments) || 0 })),
       ),
