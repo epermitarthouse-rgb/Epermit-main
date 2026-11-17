@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
   ACTIVE_JOB_STATUSES,
@@ -41,6 +42,19 @@ const JOB_TONE: Record<string, StatusTone> = {
 
 const RETRYABLE_JOB_STATUSES = new Set(["failed", "failed_unrecoverable", "cancelled", "completed_with_warnings"]);
 
+/** Scheduling is the primary section; the rest follow the previous top-to-bottom order. */
+export const PERMIT_SYNC_TABS = [
+  { id: "scheduling", label: "Scheduling" },
+  { id: "sources", label: "Sources" },
+  { id: "visibility", label: "Who sees these permits" },
+  { id: "jobs", label: "Jobs" },
+  { id: "workers", label: "Workers" },
+  { id: "alerts", label: "Alerts" },
+  { id: "access", label: "Access grants" },
+] as const;
+
+export type PermitSyncTab = (typeof PERMIT_SYNC_TABS)[number]["id"];
+
 function errorText(e: unknown) {
   return e instanceof Error ? e.message : String(e);
 }
@@ -61,6 +75,21 @@ function JobEvents({ jobId }: { jobId: string }) {
   );
 }
 
+/** Kept mounted while hidden so unsaved schedule and grant input survive a tab change. */
+function SyncTab({ id, active, children }: { id: PermitSyncTab; active: PermitSyncTab; children: ReactNode }) {
+  return (
+    <TabsContent
+      value={id}
+      forceMount
+      hidden={active !== id}
+      data-permit-sync-tab={id}
+      className="mt-0 data-[state=inactive]:hidden"
+    >
+      {children}
+    </TabsContent>
+  );
+}
+
 export default function AdminPermitSync() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -70,6 +99,7 @@ export default function AdminPermitSync() {
   const overview = useSyncOverview();
   const scheduler = useSchedulerStatus();
   const overviewById = new Map((overview.data ?? []).map((o) => [o.credential_id, o]));
+  const [tab, setTab] = useState<PermitSyncTab>(PERMIT_SYNC_TABS[0].id);
   const [openJob, setOpenJob] = useState<string | null>(null);
   const [grantScope, setGrantScope] = useState<GrantScope>("permit");
   const [grantRef, setGrantRef] = useState("");
@@ -105,201 +135,225 @@ export default function AdminPermitSync() {
         {loadError ? <AlertBanner tone="bad" title="Could not load sync data" detail={errorText(loadError)} /> : null}
         <SyncBatchBanner sources={overview.data ?? []} />
 
-        <Panel title="Sources" eyebrow="Portal accounts">
-          {sources.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Credential</TableHead>
-                  <TableHead>Adapter</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Automation</TableHead>
-                  <TableHead>Last login</TableHead>
-                  <TableHead>Last error</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(sources.data ?? []).map((s: Row) => {
-                  const id = str(s.credential_id);
-                  const st = str(s.status);
-                  return (
-                    <TableRow key={id}>
-                      <TableCell className="font-mono text-xs">{short(id)}</TableCell>
-                      <TableCell>{str(s.adapter_key)}</TableCell>
-                      <TableCell><StatusPill tone={SOURCE_TONE[st] ?? "default"}>{st.replace("_", " ")}</StatusPill></TableCell>
-                      <TableCell>{s.automation_enabled ? "On" : "Off"}</TableCell>
-                      <TableCell className="text-sm">{formatTimestamp(s.last_login_ok_at)}</TableCell>
-                      <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground" title={str(s.last_error)}>{str(s.last_error) || "—"}</TableCell>
-                      <TableCell className="space-x-2 text-right">
-                        {overviewById.get(id) ? <RefreshAllButton sources={[overviewById.get(id)!]} /> : null}
-                        {["paused", "waiting_user", "auth_failed"].includes(st) ? (
-                          <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => resumePermitSyncSource(id))}>
-                            Resume
-                          </Button>
-                        ) : null}
-                      </TableCell>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as PermitSyncTab)} className="space-y-4">
+          <TabsList aria-label="Permit sync sections" className="flex h-auto w-full flex-wrap justify-start gap-1 sm:flex-wrap">
+            {PERMIT_SYNC_TABS.map((item) => (
+              <TabsTrigger key={item.id} value={item.id}>{item.label}</TabsTrigger>
+            ))}
+          </TabsList>
+
+          <SyncTab id="scheduling" active={tab}>
+            <SchedulePanel sources={overview.data ?? []} status={scheduler.data} />
+          </SyncTab>
+
+          <SyncTab id="sources" active={tab}>
+            <Panel title="Sources" eyebrow="Portal accounts">
+              {sources.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Credential</TableHead>
+                      <TableHead>Adapter</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Automation</TableHead>
+                      <TableHead>Last login</TableHead>
+                      <TableHead>Last error</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  );
-                })}
-                {!sources.data?.length ? (
-                  <TableRow><TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">No sources configured.</TableCell></TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          )}
-        </Panel>
+                  </TableHeader>
+                  <TableBody>
+                    {(sources.data ?? []).map((s: Row) => {
+                      const id = str(s.credential_id);
+                      const st = str(s.status);
+                      return (
+                        <TableRow key={id}>
+                          <TableCell className="font-mono text-xs">{short(id)}</TableCell>
+                          <TableCell>{str(s.adapter_key)}</TableCell>
+                          <TableCell><StatusPill tone={SOURCE_TONE[st] ?? "default"}>{st.replace("_", " ")}</StatusPill></TableCell>
+                          <TableCell>{s.automation_enabled ? "On" : "Off"}</TableCell>
+                          <TableCell className="text-sm">{formatTimestamp(s.last_login_ok_at)}</TableCell>
+                          <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground" title={str(s.last_error)}>{str(s.last_error) || "—"}</TableCell>
+                          <TableCell className="space-x-2 text-right">
+                            {overviewById.get(id) ? <RefreshAllButton sources={[overviewById.get(id)!]} /> : null}
+                            {["paused", "waiting_user", "auth_failed"].includes(st) ? (
+                              <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => resumePermitSyncSource(id))}>
+                                Resume
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {!sources.data?.length ? (
+                      <TableRow><TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">No sources configured.</TableCell></TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              )}
+            </Panel>
+          </SyncTab>
 
-        <PermitAccessPanel sources={sources.data ?? []} />
+          <SyncTab id="visibility" active={tab}>
+            <PermitAccessPanel sources={sources.data ?? []} />
+          </SyncTab>
 
-        <Panel title="Recent jobs" eyebrow="Last 50">
-          {jobs.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Job</TableHead>
-                  <TableHead>Credential</TableHead>
-                  <TableHead>Trigger</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Attempt</TableHead>
-                  <TableHead>Permits ok / failed</TableHead>
-                  <TableHead>Changes</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(jobs.data ?? []).flatMap((j: Row) => {
-                  const id = str(j.id);
-                  const st = str(j.status);
-                  const m = (j.metrics ?? {}) as Row;
-                  const rows = [
-                    <TableRow key={id}>
-                      <TableCell className="font-mono text-xs">{short(id)}</TableCell>
-                      <TableCell className="font-mono text-xs">{short(j.credential_id)}</TableCell>
-                      <TableCell>{str(j.trigger)}</TableCell>
-                      <TableCell>
-                        <StatusPill tone={JOB_TONE[st] ?? "default"}>{st.replace(/_/g, " ")}</StatusPill>
-                        {j.error_code ? <p className="mt-1 text-xs text-muted-foreground">{str(j.error_code)}</p> : null}
-                        {Array.isArray(m.deep_warnings) && m.deep_warnings.length ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{(m.deep_warnings as unknown[]).map((w) => str(w).replace(/_/g, " ")).join(", ")}</p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="tabular-nums">{str(j.attempt_count)}/{str(j.max_attempts)}</TableCell>
-                      <TableCell className="tabular-nums">{str(m.permits_ok) || "—"} / {str(m.permits_failed) || "—"}</TableCell>
-                      <TableCell className="tabular-nums">{str(m.changes) || "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{formatTimestamp(j.created_at)}</TableCell>
-                      <TableCell className="space-x-2 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => setOpenJob(openJob === id ? null : id)}>
-                          {openJob === id ? "Hide events" : "Events"}
-                        </Button>
-                        {RETRYABLE_JOB_STATUSES.has(st) ? (
-                          <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => retryPermitSyncJob(id))}>
-                            Retry
+          <SyncTab id="jobs" active={tab}>
+            <Panel title="Recent jobs" eyebrow="Last 50">
+              {jobs.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Job</TableHead>
+                      <TableHead>Credential</TableHead>
+                      <TableHead>Trigger</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Attempt</TableHead>
+                      <TableHead>Permits ok / failed</TableHead>
+                      <TableHead>Changes</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(jobs.data ?? []).flatMap((j: Row) => {
+                      const id = str(j.id);
+                      const st = str(j.status);
+                      const m = (j.metrics ?? {}) as Row;
+                      const rows = [
+                        <TableRow key={id}>
+                          <TableCell className="font-mono text-xs">{short(id)}</TableCell>
+                          <TableCell className="font-mono text-xs">{short(j.credential_id)}</TableCell>
+                          <TableCell>{str(j.trigger)}</TableCell>
+                          <TableCell>
+                            <StatusPill tone={JOB_TONE[st] ?? "default"}>{st.replace(/_/g, " ")}</StatusPill>
+                            {j.error_code ? <p className="mt-1 text-xs text-muted-foreground">{str(j.error_code)}</p> : null}
+                            {Array.isArray(m.deep_warnings) && m.deep_warnings.length ? (
+                              <p className="mt-1 text-xs text-muted-foreground">{(m.deep_warnings as unknown[]).map((w) => str(w).replace(/_/g, " ")).join(", ")}</p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="tabular-nums">{str(j.attempt_count)}/{str(j.max_attempts)}</TableCell>
+                          <TableCell className="tabular-nums">{str(m.permits_ok) || "—"} / {str(m.permits_failed) || "—"}</TableCell>
+                          <TableCell className="tabular-nums">{str(m.changes) || "—"}</TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">{formatTimestamp(j.created_at)}</TableCell>
+                          <TableCell className="space-x-2 text-right">
+                            <Button size="sm" variant="ghost" onClick={() => setOpenJob(openJob === id ? null : id)}>
+                              {openJob === id ? "Hide events" : "Events"}
+                            </Button>
+                            {RETRYABLE_JOB_STATUSES.has(st) ? (
+                              <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => retryPermitSyncJob(id))}>
+                                Retry
+                              </Button>
+                            ) : null}
+                            {ACTIVE_JOB_STATUSES.has(st) || st === "waiting_user" ? (
+                              <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => cancelPermitSyncJob(id))}>
+                                Cancel
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>,
+                      ];
+                      if (openJob === id) {
+                        rows.push(
+                          <TableRow key={`${id}-events`}>
+                            <TableCell colSpan={9}><JobEvents jobId={id} /></TableCell>
+                          </TableRow>,
+                        );
+                      }
+                      return rows;
+                    })}
+                    {!jobs.data?.length ? (
+                      <TableRow><TableCell colSpan={9} className="py-6 text-center text-sm text-muted-foreground">No jobs yet.</TableCell></TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              )}
+            </Panel>
+          </SyncTab>
+
+          <SyncTab id="workers" active={tab}>
+            <WorkerHealthPanel status={scheduler.data} loading={scheduler.isLoading} />
+          </SyncTab>
+
+          <SyncTab id="alerts" active={tab}>
+            <AlertsPanel />
+          </SyncTab>
+
+          <SyncTab id="access" active={tab}>
+            <Panel title="Access grants" eyebrow="Extra access beyond the default">
+              <form
+                className="mb-4 flex flex-wrap items-end gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  action.mutate(async () => {
+                    await grantPermitAccess({
+                      scope: grantScope,
+                      scopeRef: grantRef,
+                      granteeUserId: granteeKind === "user" ? granteeId.trim() : null,
+                      granteeTenantId: granteeKind === "tenant" ? granteeId.trim() : null,
+                      note: grantNote,
+                    });
+                    setGrantRef("");
+                    setGranteeId("");
+                    setGrantNote("");
+                  });
+                }}
+              >
+                <Select value={grantScope} onValueChange={(v) => setGrantScope(v as GrantScope)}>
+                  <SelectTrigger className="w-[170px]" aria-label="Grant scope"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="permit">One permit (id)</SelectItem>
+                    <SelectItem value="adapter">Whole portal (adapter key)</SelectItem>
+                    <SelectItem value="source_credential">One source account (credential id)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input className="w-[260px]" placeholder="Scope reference" value={grantRef} onChange={(e) => setGrantRef(e.target.value)} aria-label="Scope reference" />
+                <Select value={granteeKind} onValueChange={(v) => setGranteeKind(v as "user" | "tenant")}>
+                  <SelectTrigger className="w-[120px]" aria-label="Grantee type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User id</SelectItem>
+                    <SelectItem value="tenant">Tenant id</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input className="w-[280px]" placeholder="Grantee id" value={granteeId} onChange={(e) => setGranteeId(e.target.value)} aria-label="Grantee id" />
+                <Input className="w-[200px]" placeholder="Note (optional)" value={grantNote} onChange={(e) => setGrantNote(e.target.value)} aria-label="Note" />
+                <Button type="submit" size="sm" disabled={action.isPending || !grantRef.trim() || !granteeId.trim()}>Grant</Button>
+              </form>
+              {grants.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Scope</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Grantee</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead>Granted</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(grants.data ?? []).map((g: Row) => (
+                      <TableRow key={str(g.id)}>
+                        <TableCell>{str(g.scope_type).replace("_", " ")}</TableCell>
+                        <TableCell className="font-mono text-xs">{str(g.adapter_key) || short(g.permit_id || g.credential_id)}</TableCell>
+                        <TableCell className="font-mono text-xs">{g.grantee_user_id ? `user ${short(g.grantee_user_id)}` : `tenant ${short(g.grantee_tenant_id)}`}</TableCell>
+                        <TableCell className="text-sm">{str(g.note) || "—"}</TableCell>
+                        <TableCell className="text-sm">{formatTimestamp(g.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => revokePermitAccess(str(g.id)))}>
+                            Revoke
                           </Button>
-                        ) : null}
-                        {ACTIVE_JOB_STATUSES.has(st) || st === "waiting_user" ? (
-                          <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => cancelPermitSyncJob(id))}>
-                            Cancel
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>,
-                  ];
-                  if (openJob === id) {
-                    rows.push(
-                      <TableRow key={`${id}-events`}>
-                        <TableCell colSpan={9}><JobEvents jobId={id} /></TableCell>
-                      </TableRow>,
-                    );
-                  }
-                  return rows;
-                })}
-                {!jobs.data?.length ? (
-                  <TableRow><TableCell colSpan={9} className="py-6 text-center text-sm text-muted-foreground">No jobs yet.</TableCell></TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          )}
-        </Panel>
-
-        <SchedulePanel sources={overview.data ?? []} status={scheduler.data} />
-        <WorkerHealthPanel status={scheduler.data} loading={scheduler.isLoading} />
-        <AlertsPanel />
-
-        <Panel title="Access grants" eyebrow="Extra access beyond the default">
-          <form
-            className="mb-4 flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              action.mutate(async () => {
-                await grantPermitAccess({
-                  scope: grantScope,
-                  scopeRef: grantRef,
-                  granteeUserId: granteeKind === "user" ? granteeId.trim() : null,
-                  granteeTenantId: granteeKind === "tenant" ? granteeId.trim() : null,
-                  note: grantNote,
-                });
-                setGrantRef("");
-                setGranteeId("");
-                setGrantNote("");
-              });
-            }}
-          >
-            <Select value={grantScope} onValueChange={(v) => setGrantScope(v as GrantScope)}>
-              <SelectTrigger className="w-[170px]" aria-label="Grant scope"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="permit">One permit (id)</SelectItem>
-                <SelectItem value="adapter">Whole portal (adapter key)</SelectItem>
-                <SelectItem value="source_credential">One source account (credential id)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input className="w-[260px]" placeholder="Scope reference" value={grantRef} onChange={(e) => setGrantRef(e.target.value)} aria-label="Scope reference" />
-            <Select value={granteeKind} onValueChange={(v) => setGranteeKind(v as "user" | "tenant")}>
-              <SelectTrigger className="w-[120px]" aria-label="Grantee type"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">User id</SelectItem>
-                <SelectItem value="tenant">Tenant id</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input className="w-[280px]" placeholder="Grantee id" value={granteeId} onChange={(e) => setGranteeId(e.target.value)} aria-label="Grantee id" />
-            <Input className="w-[200px]" placeholder="Note (optional)" value={grantNote} onChange={(e) => setGrantNote(e.target.value)} aria-label="Note" />
-            <Button type="submit" size="sm" disabled={action.isPending || !grantRef.trim() || !granteeId.trim()}>Grant</Button>
-          </form>
-          {grants.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Reference</TableHead>
-                  <TableHead>Grantee</TableHead>
-                  <TableHead>Note</TableHead>
-                  <TableHead>Granted</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(grants.data ?? []).map((g: Row) => (
-                  <TableRow key={str(g.id)}>
-                    <TableCell>{str(g.scope_type).replace("_", " ")}</TableCell>
-                    <TableCell className="font-mono text-xs">{str(g.adapter_key) || short(g.permit_id || g.credential_id)}</TableCell>
-                    <TableCell className="font-mono text-xs">{g.grantee_user_id ? `user ${short(g.grantee_user_id)}` : `tenant ${short(g.grantee_tenant_id)}`}</TableCell>
-                    <TableCell className="text-sm">{str(g.note) || "—"}</TableCell>
-                    <TableCell className="text-sm">{formatTimestamp(g.created_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate(() => revokePermitAccess(str(g.id)))}>
-                        Revoke
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!grants.data?.length ? (
-                  <TableRow><TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">No active grants. Users read permits of sources that are visible to all by default; platform admins read everything.</TableCell></TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          )}
-        </Panel>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!grants.data?.length ? (
+                      <TableRow><TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">No active grants. Users read permits of sources that are visible to all by default; platform admins read everything.</TableCell></TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              )}
+            </Panel>
+          </SyncTab>
+        </Tabs>
       </div>
     </AdminPageShell>
   );

@@ -11,6 +11,11 @@ Last updated: 2026-11-17 11:05 UTC (A-8 done: default permit access with project
 - Rollback: `supabase db query --linked -f scripts/permit-repo/rollback-20261117130000_permit_default_access.sql`, then `supabase migration repair --status reverted 20261117130000`; frontend: revert the merge `245809d`. Revert the frontend first: the old frontend works on the new schema, but the new access panel needs the admin RPCs.
 - Admins hide permits per user in Management Admin → Permit Sync → Permit access. Separate open item: `projects` RLS is still readable across non-demo tenants (see D-120).
 
+## Duplicate DC source removed (2026-11-17 10:02:55 UTC)
+- Removed paused source `0610eaa5` (dc-projectdox, automation off). Pre-check: 0 permit links, 0 documents, 0 reports, 0 project links, 2 `failed_unrecoverable` jobs (`portal_changed`), 6 events, no queued or running job on any source. Its credential id differed from `de8592f9` and no other source referenced it, so the credential row was deleted with it. One credential grant cascaded. The password cannot be restored.
+- Audit row `5ed20872-ab8e-44c7-989a-2b72abf6c5a8`, action `permit_sync_source.remove`, 2026-11-17 10:02:55 UTC. Script: `scripts/permit-repo/repairs/d119-remove-duplicate-dc-source.sql` (no admin RPC deletes a source and writes an audit row).
+- `de8592f9` was not updated: still inactive, automation off, 28 permits, schedule daily 04:00 America/New_York, not enabled. `permit-sync-enqueue`, `permit-sync-monitor` and `permit-sync-alert-notifier` still exist, are active, and their latest ticks succeeded. 0 jobs queued or running. The schedule was not enabled.
+
 ## Production rollout 3 (2026-11-17 08:45–09:15 UTC, approved steps 1–7), COMPLETED
 - PR #26 (replaces #25, which failed the secret scan on a false positive: a credential row id assigned to `v_credential`; renamed `v_source_id`, history rewritten on a new branch) merged as `d869e612`; PR and main CI green.
 - `comment-parser-agent` 64 → 65 from `git archive d869e61`. Backup of 64: `exports.local/edge-backup-20261117-v64/`.
