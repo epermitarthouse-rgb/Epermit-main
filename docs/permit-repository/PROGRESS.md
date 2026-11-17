@@ -249,3 +249,15 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | `module.central_permits` | — | Production-verified (read-only) | one global switch in `feature_flags`, ON since 2026-11-12 20:20 UTC; no per-org or per-user override. Row access is separate: 0 permit access grants and 0 credential grants on de8592f9, so only platform admins see the 28 permits today |
 | Suites | — | Locally tested | permit-sync 266/266; frontend 117 files (16 known, 0 unexpected); tsc 194 = baseline; build passes; migration checks pass |
 | Schedule, sync cron, migration, notifier deploy, secrets, test email | — | **Not done (approval)** | see HANDOFF |
+
+### Production rollout 3 (2026-11-17 08:45–09:15 UTC, approved steps 1–7)
+
+| Step | Status | Evidence / rollback |
+|---|---|---|
+| 1 Publish | Done | PR #26 merged as `d869e612` (PR #25 closed: secret-scan false positive fixed by renaming a variable); CI green on PR and main. Pre-flight: permit-sync 266/266, frontend 117 files (16 known, 0 unexpected), tsc 194 = baseline, build passes. Rollback: revert the merge |
+| 2 comment-parser-agent | Deployed 64 → 65 | from `git archive d869e61`; backup `exports.local/edge-backup-20261117-v64/` |
+| 3 D-118 marks | Cleared | preview 5/5/0, 1 project; after 0 of 6 marked, 5 audit rows; ids, statuses, responses, approvals, `response_md5` unchanged; 0 removals. Rollback in script header |
+| 4 Monitor migration `20261117120000` | Applied + recorded | EXECUTE service_role only; fingerprint matches chain test; ticks succeed. Rollback script + `migration repair --status reverted` |
+| 5 Notifier | Deployed v1, secrets set, test sent, cron on | test: HTTP 200 `test_sent: true`, 1 recipient; 09:07 tick sent the open warning. Rollback: unschedule + unset secrets |
+| 6 Scheduler cron | Installed | 09:10 tick: 0 jobs, no source scheduled, no missed alert; DC schedule left for the owner to enable. Rollback: unschedule `permit-sync-enqueue` |
+| 7 Comment-pipeline cron | Installed | 09:11 tick: HTTP 200, claimed 0; test project unchanged. Rollback: `99-disable-pipeline-cron.sql` |
