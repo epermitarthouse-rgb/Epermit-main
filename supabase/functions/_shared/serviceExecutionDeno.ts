@@ -15,6 +15,7 @@ function readServiceEnv(): ServiceExecutionEnv & { supabaseUrl?: string } {
     serviceSecret: Deno.env.get("PERMITPILOT_SERVICE_PIPELINE_SECRET"),
     // Without a URL there is no admin client, so the mode is treated as disabled.
     serviceRoleKey: supabaseUrl ? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") : undefined,
+    callKey: Deno.env.get("SERVICE_ROLE_KEY")?.trim() || undefined,
   };
 }
 
@@ -49,6 +50,7 @@ export function serviceForwardHeadersFromEnv(actingUserId: string): Record<strin
   return serviceForwardHeaders({
     serviceSecret: env.serviceSecret!,
     serviceRoleKey: env.serviceRoleKey!,
+    callKey: env.callKey,
     actingUserId,
   });
 }

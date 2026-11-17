@@ -108,3 +108,33 @@ Order matters. Each step is safe on its own: nothing processes until step 5 or a
 - Code Analyzer V2 is untouched. The repository already keeps permit files and report exports per permit;
   a later analyzer can read them by `permit_id` without going through `parsed_comments`.
 - The Response Matrix main query is unchanged; portal markers are a separate query.
+
+## Redeploy after the "Conflicting API keys" fix (D-117)
+
+Root cause: service-to-service calls mixed key kinds. The dispatcher sent `apikey: SUPABASE_ANON_KEY` with
+`Authorization: Bearer <built-in service key>`, and intake did the same toward the stage agents; the gateway
+rejects an `apikey` and Bearer that are different kinds of key. The worker's calls pass because it sends the
+legacy service JWT as both. The built-in `SUPABASE_SERVICE_ROLE_KEY` differs from that JWT in production
+(held as the `SERVICE_ROLE_KEY` secret, also accepted by `processorAuth`).
+
+Fix (`_shared/serviceExecution.ts`, `serviceExecutionDeno.ts`, dispatcher): every service call carries one key as
+both `apikey` and Bearer, the legacy JWT from env `SERVICE_ROLE_KEY` (built-in as fallback); receivers accept it
+as Bearer in addition to the built-in key, still only with the pipeline secret, project owner and link checks.
+No new secret, no migration, no frontend change. Regression tests in `serviceExecution.test.ts` (5 fail on the old code).
+
+All six functions import the shared module, so all six change; none changes behaviour otherwise:
+
+```
+supabase functions deploy permit-comment-pipeline intake-pipeline-agent comment-parser-agent \
+  discipline-classifier-agent context-reference-engine auto-router-agent --project-ref eeqxyjrcldivtpikcpvk
+```
+
+Deploy `permit-comment-pipeline`, then intake, then the four stage agents (a stage agent still on the old code
+would reject the legacy Bearer with `bearer_mismatch`). Rollback: redeploy the previous code from
+`exports.local/edge-backup-20261117/` (versions 42/62/44/25/25 for the five existing; the dispatcher has no
+earlier version, so roll it back by disabling the secret or leaving the cron off).
+
+Step-8 re-run: (1) run `scripts/permit-repo/pipeline/02-verify-test-project.sql`; the pipeline state is `failed`
+with attempts > 0, so (2) click "Process comments now" on ff193644 (this resets attempts and forces a run);
+(3) re-run `02-verify-test-project.sql`. Expected: same 6 ids, `adopted` and `has_key` true, response and
+approval columns and `response_md5` unchanged, no removals, state `completed`, one `comments:`-keyed run.

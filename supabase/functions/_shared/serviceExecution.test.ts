@@ -454,7 +454,7 @@ test("buildServiceAuditRow drops non-uuid ids", () => {
 
 test("serviceForwardHeaders: same three headers the helper accepts", async () => {
   const fwd = serviceForwardHeaders({ serviceSecret: SECRET, serviceRoleKey: ROLE_KEY, actingUserId: OWNER });
-  assert.deepEqual(Object.keys(fwd).sort(), ["Authorization", ACTING_USER_HEADER, SERVICE_SECRET_HEADER].sort());
+  assert.deepEqual(Object.keys(fwd).sort(), ["Authorization", "apikey", ACTING_USER_HEADER, SERVICE_SECRET_HEADER].sort());
   assert.equal(fwd.Authorization, `Bearer ${ROLE_KEY}`);
 
   const f = fakeAdmin();
@@ -472,4 +472,83 @@ test("serviceUserResponse matches getUser() destructuring", () => {
   const { data: { user }, error } = serviceUserResponse(OWNER);
   assert.equal(user.id, OWNER);
   assert.equal(error, null);
+});
+
+// ---- "Conflicting API keys": every service-to-service call carries one key kind ---------------------------
+
+const LEGACY_KEY = "legacy-service-role-jwt-value"; // SERVICE_ROLE_KEY secret, what the worker holds
+const BUILT_IN_KEY = "built-in-edge-service-key-value"; // SUPABASE_SERVICE_ROLE_KEY, a different kind of key
+const ANON_KEY = "anon-key-value";
+
+/** The Supabase gateway refuses a request whose apikey and Bearer are both API keys but not the same one. */
+function gatewayConflict(h: Record<string, string>): boolean {
+  const bearer = (h.Authorization ?? "").replace(/^Bearer\s+/i, "");
+  return Boolean(h.apikey && bearer && h.apikey !== bearer);
+}
+
+test("regression: the dispatcher's call to intake sends one key as apikey and Bearer", () => {
+  // permit-comment-pipeline: { Content-Type, ...serviceForwardHeaders(...) } (no anon apikey of its own)
+  const dispatcher = {
+    "Content-Type": "application/json",
+    ...serviceForwardHeaders({ serviceSecret: SECRET, serviceRoleKey: BUILT_IN_KEY, callKey: LEGACY_KEY, actingUserId: OWNER }),
+  };
+  assert.equal(gatewayConflict(dispatcher), false);
+  assert.equal(dispatcher.Authorization, `Bearer ${LEGACY_KEY}`);
+  assert.equal(dispatcher.apikey, LEGACY_KEY);
+});
+
+test("regression: intake's call to a stage agent keeps one key kind even though it starts from the anon apikey", () => {
+  // intake-pipeline-agent: { Authorization: <caller>, apikey: anon, ...serviceForwardHeaders(...) } in service mode
+  const intake = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${LEGACY_KEY}`,
+    apikey: ANON_KEY,
+    ...serviceForwardHeaders({ serviceSecret: SECRET, serviceRoleKey: BUILT_IN_KEY, callKey: LEGACY_KEY, actingUserId: OWNER }),
+  };
+  assert.equal(gatewayConflict(intake), false);
+  assert.notEqual(intake.apikey, ANON_KEY);
+});
+
+test("regression: the old shape (anon apikey + service Bearer) is what the gateway rejects", () => {
+  assert.equal(gatewayConflict({ apikey: ANON_KEY, Authorization: `Bearer ${BUILT_IN_KEY}` }), true);
+});
+
+test("without a SERVICE_ROLE_KEY secret the built-in key is used for both headers (unchanged behaviour when they are equal)", () => {
+  const fwd = serviceForwardHeaders({ serviceSecret: SECRET, serviceRoleKey: ROLE_KEY, actingUserId: OWNER });
+  assert.equal(fwd.apikey, ROLE_KEY);
+  assert.equal(fwd.Authorization, `Bearer ${ROLE_KEY}`);
+});
+
+test("a receiver accepts the legacy call key as Bearer when the built-in key differs, and still rejects anything else", async () => {
+  const env = { serviceSecret: SECRET, serviceRoleKey: BUILT_IN_KEY, callKey: LEGACY_KEY };
+  const fwd = serviceForwardHeaders({ serviceSecret: SECRET, serviceRoleKey: BUILT_IN_KEY, callKey: LEGACY_KEY, actingUserId: OWNER });
+  const ok = await authorizeServiceExecution({ headers: headers(fwd), env, admin: fakeAdmin().client, projectId: PROJECT, functionName: "comment-parser-agent" });
+  assert.equal("mode" in ok && ok.mode, "service");
+
+  const bad = await authorizeServiceExecution({
+    headers: headers({ ...fwd, Authorization: "Bearer some-other-key" }),
+    env,
+    admin: fakeAdmin().client,
+    projectId: PROJECT,
+    functionName: "comment-parser-agent",
+  });
+  assert.equal("error" in bad && bad.status, 401);
+
+  // the call key alone is not enough: the pipeline secret is still required
+  const noSecret = await authorizeServiceExecution({
+    headers: headers({ ...fwd, [SERVICE_SECRET_HEADER]: "wrong" }),
+    env,
+    admin: fakeAdmin().client,
+    projectId: PROJECT,
+    functionName: "comment-parser-agent",
+  });
+  assert.equal("error" in noSecret && noSecret.status, 401);
+});
+
+test("regression: the dispatcher source does not put the anon key in apikey on service calls", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../permit-comment-pipeline/index.ts", import.meta.url), "utf8");
+  const call = src.slice(src.indexOf("const callIntake"), src.indexOf("const work = "));
+  assert.match(call, /serviceForwardHeadersFromEnv\(/);
+  assert.doesNotMatch(call, /apikey\s*:/);
 });

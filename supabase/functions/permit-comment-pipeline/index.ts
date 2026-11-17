@@ -93,7 +93,8 @@ Deno.serve(async (req) => {
   const callIntake = async (actingUserId: string, payload: Record<string, unknown>) => {
     const res = await fetch(intakeUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: anonKey, ...serviceForwardHeadersFromEnv(actingUserId) },
+      // apikey and Authorization both come from serviceForwardHeadersFromEnv: one key kind (never the anon key).
+      headers: { "Content-Type": "application/json", ...serviceForwardHeadersFromEnv(actingUserId) },
       body: JSON.stringify(payload),
     });
     const text = await res.text();
