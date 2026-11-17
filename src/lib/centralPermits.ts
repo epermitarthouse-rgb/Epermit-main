@@ -312,9 +312,47 @@ export async function listSyncEvents(jobId: string): Promise<Record<string, unkn
   return (unwrap(res, 'permit_sync_events') as Record<string, unknown>[] | null) ?? [];
 }
 
+/** Active allow grants. Hidden (deny) rows belong to the access list and are filtered out here (D-120). */
 export async function listAccessGrants(): Promise<Record<string, unknown>[]> {
   const res = await client().from('permit_access_grants').select('*').is('revoked_at', null).order('created_at', { ascending: false });
-  return (unwrap(res, 'permit_access_grants') as Record<string, unknown>[] | null) ?? [];
+  const rows = (unwrap(res, 'permit_access_grants') as Record<string, unknown>[] | null) ?? [];
+  return rows.filter((r) => r.effect !== 'deny');
+}
+
+/** Why a user can or cannot read a source's permits (D-120). */
+export type PermitAccessState = 'admin' | 'hidden' | 'inactive' | 'default' | 'grant' | 'none';
+
+export interface PermitAccessUser {
+  user_id: string;
+  full_name: string | null;
+  company_name: string | null;
+  access_status: string;
+  hidden: boolean;
+  hidden_at: string | null;
+  can_read: boolean;
+  state: PermitAccessState;
+}
+
+export async function listPermitAccess(credentialId: string): Promise<PermitAccessUser[]> {
+  return (unwrap(await client().rpc('admin_list_permit_access', { p_credential_id: credentialId }), 'admin_list_permit_access') as PermitAccessUser[] | null) ?? [];
+}
+
+/** Hide a source's permits from one user, or show them again. Audited; returns whether anything changed. */
+export async function setPermitUserHidden(input: { userId: string; credentialId: string; hidden: boolean; note?: string | null }): Promise<boolean> {
+  assertPermitWritesAllowed('admin_set_permit_user_hidden');
+  const res = await client().rpc('admin_set_permit_user_hidden', {
+    p_user_id: input.userId,
+    p_credential_id: input.credentialId,
+    p_hidden: input.hidden,
+    p_note: input.note?.trim() || null,
+  });
+  return unwrap(res, 'admin_set_permit_user_hidden') === true;
+}
+
+/** "Visible to all users by default" switch of a source. Audited. */
+export async function setPermitSourceVisibleToAll(credentialId: string, visible: boolean): Promise<void> {
+  assertPermitWritesAllowed('admin_set_permit_source_default');
+  unwrap(await client().rpc('admin_set_permit_source_default', { p_credential_id: credentialId, p_visible: visible }), 'admin_set_permit_source_default');
 }
 
 export async function requestPermitSync(credentialId: string): Promise<string> {
