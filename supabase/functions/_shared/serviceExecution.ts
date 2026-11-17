@@ -19,6 +19,12 @@ export interface HeaderSource {
 export interface ServiceExecutionEnv {
   serviceSecret?: string | null;
   serviceRoleKey?: string | null;
+  /**
+   * The legacy service_role JWT configured as the `SERVICE_ROLE_KEY` secret (the key the worker holds, D-075).
+   * It is the one key sent on service calls, as both `apikey` and Bearer, and is accepted as the Bearer next
+   * to `serviceRoleKey`. The built-in SUPABASE_SERVICE_ROLE_KEY can be a different kind of key.
+   */
+  callKey?: string | null;
 }
 
 type DbResult<T> = { data: T | null; error: { message?: string } | null };
@@ -177,7 +183,9 @@ export async function authorizeServiceExecution(
     return { error: message, status };
   };
 
-  if (!timingSafeEqual(parsed.bearer, args.env.serviceRoleKey!.trim())) {
+  const bearerOk = timingSafeEqual(parsed.bearer, args.env.serviceRoleKey!.trim())
+    || timingSafeEqual(parsed.bearer, args.env.callKey?.trim());
+  if (!bearerOk) {
     return deny("bearer_mismatch", 401, "Invalid service credentials");
   }
   if (!actingUserId) {
@@ -238,14 +246,21 @@ export async function authorizeServiceExecution(
   return { mode: "service", actingUserId, projectId };
 }
 
-/** Headers intake-pipeline-agent sends to stage agents in service mode. */
+/**
+ * Headers for every service-to-service call (dispatcher -> intake -> stage agents). `apikey` carries the same
+ * key as the Bearer: the gateway rejects a request whose `apikey` and Authorization are different kinds of key
+ * ("Conflicting API keys"), which is what happens when the anon key is left in `apikey`.
+ */
 export function serviceForwardHeaders(input: {
   serviceSecret: string;
   serviceRoleKey: string;
+  callKey?: string | null;
   actingUserId: string;
 }): Record<string, string> {
+  const key = (input.callKey?.trim() || input.serviceRoleKey.trim());
   return {
-    Authorization: `Bearer ${input.serviceRoleKey.trim()}`,
+    Authorization: `Bearer ${key}`,
+    apikey: key,
     [SERVICE_SECRET_HEADER]: input.serviceSecret.trim(),
     [ACTING_USER_HEADER]: input.actingUserId,
   };
