@@ -150,6 +150,22 @@ test("failures back off and block after five attempts; released runs resume at o
   await assert.rejects(asUser(U.reader, (tx) => tx.query(`SELECT public.request_project_comment_processing($1)`, [PROJECT])), /not allowed/);
 });
 
+test("an invocation that keeps getting cut off (lease expires without a finish) ends up needing attention", async () => {
+  await asUser(U.owner, (tx) => tx.query(`SELECT public.request_project_comment_processing($1)`, [PROJECT]));
+  for (let i = 1; i <= 5; i += 1) {
+    const [c] = await claim();
+    assert.equal(c.attempts, i);
+    await db.query(`UPDATE public.project_comment_pipeline_state SET lease_expires_at = now() - interval '1 second' WHERE project_id = $1`, [PROJECT]);
+  }
+  assert.deepEqual(await claim(), []);
+  const s = await state();
+  assert.equal(s.status, "blocked");
+  assert.equal(s.last_error, "processing was interrupted repeatedly");
+  await asUser(U.owner, (tx) => tx.query(`SELECT public.request_project_comment_processing($1)`, [PROJECT]));
+  const [c] = await claim();
+  assert.equal(await finish(c.fingerprint, "completed"), "completed");
+});
+
 test("the overview shows processing state to people with project and permit access; errors to admins only", async () => {
   const rows = await asUser(U.owner, async (tx) => (await tx.query(`SELECT * FROM public.get_comment_pipeline_overview(NULL, $1::uuid[])`, [[PERMIT]])).rows);
   assert.equal(rows.length, 1);

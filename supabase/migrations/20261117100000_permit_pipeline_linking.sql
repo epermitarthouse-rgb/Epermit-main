@@ -238,6 +238,17 @@ BEGIN
         v_state.status := 'due';
       END IF;
     END IF;
+    IF v_state.status = 'running' AND v_state.attempts >= 5 THEN
+      -- The lease expired five times without a finish: the invocation keeps getting cut off.
+      UPDATE public.project_comment_pipeline_state s SET
+        status = 'blocked',
+        lease_owner = NULL,
+        lease_expires_at = NULL,
+        last_error = 'processing was interrupted repeatedly',
+        updated_at = now()
+      WHERE s.project_id = r.pid;
+      CONTINUE;
+    END IF;
     CONTINUE WHEN v_state.status = 'blocked';
     CONTINUE WHEN v_state.next_attempt_at > now();
 

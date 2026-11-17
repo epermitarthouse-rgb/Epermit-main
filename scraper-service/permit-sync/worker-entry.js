@@ -257,13 +257,13 @@ async function main(env = process.env) {
   if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET && keyFormat !== "legacy_service_role_jwt") {
     log("warn", "agent_trigger_off", { reason: `service key format ${keyFormat} is not accepted by the pipeline functions` });
   } else if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET) {
-    const { createPipelineDriver } = require("./deep/pipeline");
-    pipeline = createPipelineDriver({
+    // Linked projects are processed by the permit-comment-pipeline edge function, keyed by comment content (D-113).
+    const { createCommentPipelineDispatcher } = require("./deep/commentDispatch");
+    pipeline = createCommentPipelineDispatcher({
       fetch: globalThis.fetch,
       supabaseUrl: env.SUPABASE_URL,
       serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
       serviceSecret: env.PERMITPILOT_SERVICE_PIPELINE_SECRET,
-      supabase,
     });
   }
   const scope = workerScope(env);
