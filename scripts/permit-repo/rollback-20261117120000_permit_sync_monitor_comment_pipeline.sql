@@ -181,3 +181,6 @@ BEGIN
   RETURN jsonb_build_object('open', v_raised, 'resolved', v_resolved, 'checked_at', v_now);
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.permit_sync_monitor() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.permit_sync_monitor() TO service_role;
