@@ -1,6 +1,14 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-17 (nightly DC refresh prepared locally; nothing pushed, deployed, applied or scheduled). Read "Nightly DC refresh readiness" first.
+Last updated: 2026-11-17 (nightly schedule, alert email and Permit Queue readiness checked; local commits only). Read "Nightly schedule, alert email and Permit Queue readiness" first.
+
+## Nightly schedule, alert email and Permit Queue readiness (2026-11-17, local commits only; read-only production checks)
+- Worker: no redeploy needed. The deployed `15993f89d642` matches `origin/main` for all worker code (`b56c111` changed only Edge Functions). Idle, fresh heartbeat, 68 MB.
+- Nightly DC: scheduled jobs are deep and gated, retry applies, the login lock and `schedule_missed` exist. New audited scripts (D-108): `scheduling/03-enable-dc-schedule.sql` (needs a platform-admin email; epermitarthouse@gmail.com is not one) and `98-disable-dc-schedule.sql` (keeps monitoring). The Management Admin schedule panel does the same without SQL.
+- Alerts (D-109): migration `20261117120000` adds comment-pipeline alerts (blocked = critical, failed twice = warning, no names or errors). The notifier reads the new `PERMIT_SYNC_ALERT_APP_URL` before `APP_BASE_URL`, because the existing `APP_BASE_URL` differs from https://www.commun-et.com and another function uses it. One-email test: `scripts/permit-repo/alerts/send-test-alert-email.sh --i-have-approval` after the deploy and secrets. When the notifier cron starts, its first digest will carry the one open warning (missing deep content for one permit until its next deep refresh); alerts that were never emailed send no resolution notice.
+- Permit Queue: production data is complete for the 28 DC permits (counts in PROGRESS). `module.central_permits` is already ON for everyone (one global switch). Row access is separate: with no permit or credential grants, only platform admins see the permits; other users see an empty Permit Queue until an admin grants access in Management Admin → Permit Sync. Refresh All and per-permit refresh: platform admins and users with a `manage` grant on the source credential. Diagnostics (`/admin/permit-sync`, `last_error`) are admin-only.
+- Comment-pipeline cron (`pipeline/01-enable-pipeline-cron.sql`) stays off until the sibling's D-118/D-119 fix is deployed and the 5 false marks are cleared.
+- Approval request (order, rollbacks): see this session's final report.
 
 ## D-117 fix rollout (2026-11-17 06:50–07:05 UTC, approved), stopped at the step-8 re-run check
 - Done: PR #24 (`fix/service-call-key-kind`, f4a0b61 + 522935b cherry-picked onto `origin/main`) merged as `b56c111ded8e`; PR and main CI green. Six Edge Functions redeployed from a clean worktree at `b56c111` (`--use-api`): permit-comment-pipeline 2, intake 44, parser 64, classifier 46, context 27, router 27 (each +1).
