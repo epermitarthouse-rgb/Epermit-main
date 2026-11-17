@@ -4,6 +4,7 @@ import { Loader2, Search } from "lucide-react";
 import { AlertBanner, PageHeader, Panel } from "@/components/design/ProductPrimitives";
 import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanner";
 import { DcZipExportButton } from "@/components/permits/PermitExportButtons";
+import { PermitCommentsCell, usePermitCommentStates } from "@/components/permits/PermitQueueCommentsCell";
 import { PermitListTable } from "@/components/permits/PermitRepositoryViews";
 import { PermitSyncCell, RefreshAllButton, RefreshPermitButton, SyncBatchBanner, usePermitProgress, useSyncOverview } from "@/components/permits/PermitSyncControls";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ export default function PermitsPage() {
   const syncSources = useMemo(() => overview.data ?? [], [overview.data]);
   const canRefresh = syncSources.some((s) => s.can_refresh);
   const progress = usePermitProgress(view.rows.map((r) => r.id), !!user && syncSources.length > 0);
+  const comments = usePermitCommentStates(view.rows.filter((r) => (linkCounts.get(r.id) ?? 0) > 0).map((r) => r.id), !!user);
 
   return (
     <div className="space-y-6">
@@ -148,6 +150,7 @@ export default function PermitsPage() {
           <PermitListTable
             rows={view.rows}
             linkCounts={result.data?.linkError ? undefined : linkCounts}
+            commentsCell={comments.ready ? (r) => <PermitCommentsCell rows={comments.byPermit.get(r.id)} /> : undefined}
             syncCell={syncSources.length ? (r) => (
               <div className="flex flex-col items-start gap-1.5">
                 <PermitSyncCell progress={progress.data?.get(r.id)} />

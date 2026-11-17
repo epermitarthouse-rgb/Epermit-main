@@ -69,6 +69,8 @@ import { PageHeader, Panel } from "@/components/design/ProductPrimitives";
 import { PlanMarkupWorkspace } from "@/components/plans/PlanMarkupWorkspace";
 import { useApprovalGate } from "@/components/plans/ArchitectApprovalDialog";
 import type { PanelComment } from "@/components/plans/CommentPlanPanel";
+import { PortalCommentMarkerBadge } from "@/components/permits/PermitPipelineViews";
+import { ResponseMatrixPermitStrip, usePortalCommentMarkers } from "@/components/permits/ResponseMatrixPermitStrip";
 
 const RESPONSE_MATRIX_STYLES = `
   @keyframes response-fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -708,6 +710,7 @@ export default function ResponseMatrix() {
   const [planMarkupOpen, setPlanMarkupOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const { hasPendingMarkups, pendingCount, refetch: refetchApproval, qualityCheckBlocked } = useApprovalGate(projectId ?? undefined);
+  const portalMarkers = usePortalCommentMarkers(projectId);
   const { isOwner, isAdmin } = useProjectTeam(projectId);
   const canApproveResponses = isOwner || isAdmin;
   const { drafts: allDrafts } = useResponsePackageDrafts(projectId);
@@ -1431,6 +1434,8 @@ export default function ResponseMatrix() {
         }
       />
 
+      <ResponseMatrixPermitStrip projectId={projectId} />
+
       {/* Metric chips — lifecycle filters; Cross-service is Upcoming placeholder only */}
       <div
         className="flex min-w-0 flex-wrap items-center gap-1.5"
@@ -2046,6 +2051,7 @@ export default function ResponseMatrix() {
                         </TableCell>
                         <TableCell className="align-top py-3">
                           <CommentPreviewCell row={row} onExpand={() => toggleExpandRow(row.id)} />
+                          <PortalCommentMarkerBadge marker={portalMarkers.get(row.id)} />
                         </TableCell>
                         <TableCell className="align-top py-3">
                           {(() => {
