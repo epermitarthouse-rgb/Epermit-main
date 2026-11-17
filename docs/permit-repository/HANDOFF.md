@@ -1,6 +1,19 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-17 (nightly schedule, alert email and Permit Queue readiness checked; local commits only). Read "Nightly schedule, alert email and Permit Queue readiness" first.
+Last updated: 2026-11-17 09:15 UTC (rollout 3 done: PR #26 merged, comment fix live, marks cleared, monitor migration, notifier, scheduler and comment-pipeline crons on). Read "Production rollout 3" first.
+
+## Production rollout 3 (2026-11-17 08:45–09:15 UTC, approved steps 1–7), COMPLETED
+- PR #26 (replaces #25, which failed the secret scan on a false positive: a credential row id assigned to `v_credential`; renamed `v_source_id`, history rewritten on a new branch) merged as `d869e612`; PR and main CI green.
+- `comment-parser-agent` 64 → 65 from `git archive d869e61`. Backup of 64: `exports.local/edge-backup-20261117-v64/`.
+- D-118 repair on ff193644: preview marked 5 / false 5 / real 0 / 1 project; after still_marked 0 of 6, audit_rows 5. Same 6 ids, statuses, responses, approvals and `response_md5`; 0 removals; state `completed`.
+- Migration `20261117120000` applied in one transaction, recorded with `migration repair --status applied`. Function fingerprint matches the chain test; EXECUTE: service_role yes, anon and authenticated no. Monitor ticks succeed.
+- `permit-sync-alert-notifier` v1 deployed; secrets `PERMIT_SYNC_ALERT_EMAILS`, `PERMIT_SYNC_ALERT_APP_URL` set (`APP_BASE_URL` unchanged). One test email: HTTP 200, `test_sent: true`, 1 recipient, 09:04:19 UTC (the function returns no Resend id). Notifier cron `2-59/5` installed; its 09:07 tick emailed the one open warning (missing deep content) and marked it notified.
+- Scheduler cron `permit-sync-enqueue` (`*/5`) installed with the checks of `02-enable-sync-cron.sql` except "a source must already be enabled" (the owner enables it after the cron, by decision), plus a refusal if any source is already due. 09:10 tick: succeeded, 0 jobs, no source scheduled, no missed alert. DC sources still off (de8592f9 inactive, 0610eaa5 paused).
+- Comment-pipeline cron `permit-comment-pipeline` (`1-59/5`) installed. 09:11 tick: HTTP 200, claimed 0; ff193644 unchanged (1 run, completed, 0/6 marked, same row digest).
+- **Owner action:** enable the DC schedule in Management Admin → Permit Sync → Scheduling (de8592f9 row): Daily, 04:00, America/New_York, Enabled, Save. Any time from now on is safe: a schedule never runs for a slot before it was enabled, so the first run is the next 04:00 ET (09:00 UTC) after the toggle; nothing runs at once and no missed alert is raised. Avoid toggling between 03:55 and 04:00 ET, which would start that night's run within minutes (expected, but not a quiet start).
+- Catch-up finding (local test on the real functions): enabled after the day's slot → no job, no alert. Enabled before a slot that passes while the scheduler cron is missing → one `schedule_missed` warning, then on the first cron tick one scheduled deep job for all 28 permits (the latest missed slot only), and the warning resolves. Not a risk now: the cron is installed and today's slot has passed.
+- Rollback: pipeline cron `pipeline/99-disable-pipeline-cron.sql`; scheduler `SELECT cron.unschedule('permit-sync-enqueue')` (or `98-disable-dc-schedule.sql` after the toggle); notifier `SELECT cron.unschedule('permit-sync-alert-notifier')` + `supabase secrets unset PERMIT_SYNC_ALERT_EMAILS PERMIT_SYNC_ALERT_APP_URL`; monitor `rollback-20261117120000_…sql` + `migration repair --status reverted 20261117120000`; repair rollback in the script header; parser: redeploy the v64 backup; code: revert merge `d869e612`.
+- The local `feat/central-permit-repository` branch still carries the pre-rebase commits; `main` (`d869e612`) is the source of truth.
 
 ## Nightly schedule, alert email and Permit Queue readiness (2026-11-17, local commits only; read-only production checks)
 - Worker: no redeploy needed. The deployed `15993f89d642` matches `origin/main` for all worker code (`b56c111` changed only Edge Functions). Idle, fresh heartbeat, 68 MB.
