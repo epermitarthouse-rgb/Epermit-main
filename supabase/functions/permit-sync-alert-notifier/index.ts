@@ -3,12 +3,14 @@
  * service-role key. Reads open/resolved permit_sync_alerts, emails one digest through Resend and marks the
  * alerts notified. Never reads credentials, sessions or permit content. Not deployed automatically.
  *
- * Env: RESEND_API_KEY, RESEND_FROM_EMAIL, PERMIT_SYNC_ALERT_EMAILS (comma separated), APP_BASE_URL,
+ * Env: RESEND_API_KEY, RESEND_FROM_EMAIL, PERMIT_SYNC_ALERT_EMAILS (comma separated),
+ *      PERMIT_SYNC_ALERT_APP_URL (falls back to APP_BASE_URL),
  *      PERMIT_SYNC_ALERT_INCLUDE_PERMIT_NUMBERS ("true" to show permit numbers; default masked).
+ * Body {"action":"test"} (service role only) sends one labelled delivery test and reads no alerts.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyProcessorRequest } from "../_shared/processorAuth.ts";
-import { buildAlertEmail, parseRecipients, selectAlertsToNotify, type PermitSyncAlert } from "../_shared/permitSyncAlertEmail.ts";
+import { alertAppBaseUrl, buildAlertEmail, buildTestEmail, parseRecipients, selectAlertsToNotify, type PermitSyncAlert } from "../_shared/permitSyncAlertEmail.ts";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -20,10 +22,22 @@ Deno.serve(async (req) => {
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const from = Deno.env.get("RESEND_FROM_EMAIL");
   const recipients = parseRecipients(Deno.env.get("PERMIT_SYNC_ALERT_EMAILS"));
-  const baseUrl = (Deno.env.get("APP_BASE_URL") ?? "").replace(/\/+$/, "");
+  const baseUrl = alertAppBaseUrl({ alertAppUrl: Deno.env.get("PERMIT_SYNC_ALERT_APP_URL"), appBaseUrl: Deno.env.get("APP_BASE_URL") });
   if (!resendKey || !from || !recipients.length || !baseUrl) {
     console.log(JSON.stringify({ event: "alert_notifier_skipped", reason: "not_configured" }));
     return json({ skipped: "not_configured" });
+  }
+  const send = (email: { subject: string; text: string; html: string }) => fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: recipients, subject: email.subject, text: email.text, html: email.html }),
+  });
+
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  if (body.action === "test") {
+    const res = await send(buildTestEmail({ adminUrl: `${baseUrl}/admin/permit-sync`, sentAt: new Date().toISOString() }));
+    console.log(JSON.stringify({ event: "alert_notifier_test", status: res.status, recipients: recipients.length }));
+    return res.ok ? json({ test_sent: true, recipients: recipients.length }) : json({ error: "send_failed", status: res.status }, 502);
   }
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -46,11 +60,7 @@ Deno.serve(async (req) => {
   });
   if (!email) return json({ sent: 0 });
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: recipients, subject: email.subject, text: email.text, html: email.html }),
-  });
+  const res = await send(email);
   if (!res.ok) {
     console.error(JSON.stringify({ event: "alert_notifier_send_failed", status: res.status }));
     return json({ error: "send_failed", status: res.status }, 502);

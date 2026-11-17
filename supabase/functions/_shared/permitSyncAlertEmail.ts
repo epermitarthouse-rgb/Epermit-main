@@ -80,6 +80,21 @@ export function buildAlertEmail(sel: AlertSelection, opts: { adminUrl: string; i
   return { subject, text, html };
 }
 
+/** PERMIT_SYNC_ALERT_APP_URL wins over APP_BASE_URL, which other functions also use for their own links (D-109). */
+export function alertAppBaseUrl(env: { alertAppUrl?: string | null; appBaseUrl?: string | null }): string {
+  return String(env.alertAppUrl || env.appBaseUrl || "").trim().replace(/\/+$/, "");
+}
+
+/** One clearly labelled delivery test; carries no alert, permit or job data and marks nothing notified. */
+export function buildTestEmail(opts: { adminUrl: string; sentAt: string }): { subject: string; text: string; html: string } {
+  const body = `This is a delivery test of PermitPilot permit-sync alert emails, sent at ${opts.sentAt}. No action is needed. Real alerts arrive from the same sender with the subject "PermitPilot sync: …".`;
+  return {
+    subject: "[TEST] PermitPilot sync alerts: delivery test",
+    text: `${body}\n\nDetails: ${opts.adminUrl}`,
+    html: `<p>${escapeHtml(body)}</p><p><a href="${escapeHtml(opts.adminUrl)}">Open Permit Sync in Management Admin</a></p>`,
+  };
+}
+
 export function parseRecipients(raw: string | null | undefined): string[] {
   return [...new Set(String(raw ?? "").split(/[,;\s]+/).map((s) => s.trim().toLowerCase()).filter((s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)))];
 }

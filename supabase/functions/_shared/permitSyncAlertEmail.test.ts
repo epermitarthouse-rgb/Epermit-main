@@ -1,7 +1,7 @@
 // Run: node --import tsx --test supabase/functions/_shared/permitSyncAlertEmail.test.ts
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CRITICAL_REPEAT_MS, buildAlertEmail, parseRecipients, scrubAlertText, selectAlertsToNotify, type PermitSyncAlert } from "./permitSyncAlertEmail.ts";
+import { CRITICAL_REPEAT_MS, alertAppBaseUrl, buildAlertEmail, buildTestEmail, parseRecipients, scrubAlertText, selectAlertsToNotify, type PermitSyncAlert } from "./permitSyncAlertEmail.ts";
 
 const now = new Date("2026-11-13T12:00:00Z");
 const alert = (over: Partial<PermitSyncAlert> = {}): PermitSyncAlert => ({
@@ -60,5 +60,21 @@ describe("alert email content", () => {
   it("parses recipients and drops invalid entries", () => {
     assert.deepEqual(parseRecipients(" Ops@Example.com, bad, ops@example.com;dev@example.org "), ["ops@example.com", "dev@example.org"]);
     assert.deepEqual(parseRecipients(undefined), []);
+  });
+});
+
+describe("D-109: app link and delivery test", () => {
+  it("uses PERMIT_SYNC_ALERT_APP_URL before APP_BASE_URL and drops trailing slashes", () => {
+    assert.equal(alertAppBaseUrl({ alertAppUrl: "https://www.commun-et.com/", appBaseUrl: "https://other.example" }), "https://www.commun-et.com");
+    assert.equal(alertAppBaseUrl({ alertAppUrl: "", appBaseUrl: "https://other.example//" }), "https://other.example");
+    assert.equal(alertAppBaseUrl({}), "");
+  });
+
+  it("labels the test email and carries no alert data", () => {
+    const e = buildTestEmail({ adminUrl: "https://www.commun-et.com/admin/permit-sync", sentAt: "2026-11-17T08:00:00.000Z" });
+    assert.match(e.subject, /^\[TEST\] PermitPilot sync alerts/);
+    assert.match(e.text, /delivery test/);
+    assert.match(e.html, /https:\/\/www\.commun-et\.com\/admin\/permit-sync/);
+    assert.doesNotMatch(e.text, /Permit [A-Z0-9]|job|critical/i);
   });
 });
