@@ -272,3 +272,11 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | 4 Migration `20261117130000` | Production-verified | one transaction + `migration repair --status applied`; `visible_to_all` default false, DC source true; `effect` column; 3 admin RPCs guarded, anon no EXECUTE; link policy and comment-pipeline overview replaced; 7 crons, 0 failures; ff193644 6 comments / 0 marks. Rollback: `scripts/permit-repo/rollback-20261117130000_permit_default_access.sql` + `migration repair --status reverted` |
 | 5 Merge | Done | merge commit `245809d9f3f5`; CI on main green; Vercel production success. Rollback: revert the merge |
 | 6 RLS post-check | Passed | 4/4 non-admin active users read 28/28 permits, 0 with `can_refresh`, 0 foreign link rows; anon has no table privilege |
+
+### Duplicate DC source removed (2026-11-17 10:02:55 UTC)
+
+| Item | Status | Evidence |
+|---|---|---|
+| Source `0610eaa5` and its credential | Removed | Paused, automation off, 0 permits / documents / reports / project links. 2 `failed_unrecoverable` jobs and 6 events deleted with the source. Credential was not shared with `de8592f9` and was deleted (1 grant cascaded). Password cannot be restored. Audit `5ed20872-ab8e-44c7-989a-2b72abf6c5a8` (`permit_sync_source.remove`) at 2026-11-17 10:02:55 UTC. Script `scripts/permit-repo/repairs/d119-remove-duplicate-dc-source.sql` |
+| Source `de8592f9` | Unchanged | 28 permits, inactive, automation off, schedule daily 04:00 America/New_York, not enabled |
+| Queue and crons | Unchanged | 0 queued or running jobs. `permit-sync-enqueue`, `permit-sync-monitor` and `permit-sync-alert-notifier` active; latest ticks succeeded. Schedule not enabled |
