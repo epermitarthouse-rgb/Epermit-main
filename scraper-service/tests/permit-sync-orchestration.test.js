@@ -400,3 +400,43 @@ test("scheduling scripts: sync cron refuses until a full deep refresh finished; 
   await h.db.exec(script("99-disable-all.sql"));
   assert.deepEqual(await cronJobs(), []);
 });
+
+test("D-108: the DC schedule scripts enable deep 04:00 America/New_York as a platform admin, enqueue nothing, and disable only the enqueue cron", async () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const dir = path.join(__dirname, "..", "..", "scripts", "permit-repo", "scheduling");
+  const script = (name, email = "2@test.invalid") => fs.readFileSync(path.join(dir, name), "utf8")
+    .replaceAll("de8592f9-69fc-4c71-8544-cb22bbbd5813", CRED).replace("<platform-admin-email>", email);
+  const { h, refreshAll, deep } = await setup();
+  const src = async () => (await h.db.query(`SELECT status, automation_enabled, settings, schedule_enabled_at FROM permit_sync_sources WHERE credential_id = $1`, [CRED])).rows[0];
+  const cronJobs = async () => (await h.db.query(`SELECT jobname FROM cron.job WHERE jobname LIKE 'permit-sync-%' ORDER BY 1`)).rows.map((r) => r.jobname);
+
+  await assert.rejects(h.db.exec(script("03-enable-dc-schedule.sql", "<platform-admin-email>")), /existing platform admin/);
+  await h.db.exec("ROLLBACK");
+  await assert.rejects(h.db.exec(script("03-enable-dc-schedule.sql", "1@test.invalid")), /existing platform admin/, "the owner is not a platform admin");
+  await h.db.exec("ROLLBACK");
+  assert.equal((await src()).automation_enabled, false);
+
+  await refreshAll();
+  const c = await deep.claim("w1", 300);
+  await deep.finish(c.id, "w1", "completed_with_warnings", null, null, {}, false, null);
+  const jobsBefore = await h.count("permit_sync_jobs");
+  await h.db.exec(script("03-enable-dc-schedule.sql"));
+  const on = await src();
+  assert.equal(on.status, "active");
+  assert.equal(on.automation_enabled, true);
+  assert.deepEqual(on.settings.schedule, { frequency: "daily", time: "04:00", timezone: "America/New_York" });
+  assert.ok(!on.settings.worker_mode, "scheduled jobs stay deep");
+  assert.equal(await h.count("platform_audit_events", "action = 'permit_sync_source.schedule' AND actor_id = $1", [ADMIN]), 1, "audited as the named admin");
+  await h.db.exec(script("02-enable-sync-cron.sql"));
+  await h.db.exec(script("01-enable-monitor-cron.sql"));
+  assert.equal(await h.svc(`SELECT enqueue_permit_sync_runs()`), 0, "a slot before enabling never runs");
+  assert.equal(await h.count("permit_sync_jobs"), jobsBefore);
+
+  await h.db.exec(script("98-disable-dc-schedule.sql"));
+  await h.db.exec(script("98-disable-dc-schedule.sql"));
+  assert.deepEqual(await cronJobs(), ["permit-sync-alert-notifier", "permit-sync-monitor"], "monitor and notifier stay");
+  const off = await src();
+  assert.equal(off.automation_enabled, false);
+  assert.equal(off.status, "inactive");
+});
