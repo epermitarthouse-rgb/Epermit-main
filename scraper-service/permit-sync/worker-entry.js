@@ -308,7 +308,7 @@ function buildOpenAdapter({
       const makeDeepPass = createDeepPass || require("./deep/runner").createDeepPass;
       const { supabaseDeepRepo, supabaseDeepStorage } = require("./deep/repo");
       const deep = makeDeepPass({
-        dcDeep: createMontgomeryDeepDriver({ transport }), transport, tenant: MONTGOMERY,
+        dcDeep: createMontgomeryDeepDriver({ transport, loadWriter: () => (loadDcDeep || require("./deep/app-loader").loadDcDeep)(env) }), transport, tenant: MONTGOMERY,
         repo: supabaseDeepRepo(supabase, { adapterKey: MONTGOMERY_KEY }), storage: supabaseDeepStorage(supabase),
         pipeline, username, credentialId: job.credential_id, log, env,
       });

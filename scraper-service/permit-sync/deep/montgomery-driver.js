@@ -16,8 +16,15 @@
  *            which the JSON pass reads back through the D-103 stored-report fallback.
  *   status, tasks, info   already read by the JSON pass; returned empty (no portal requests).
  *
- * Every request still goes through the transport's deep-mode guard. Linked-project portal_data sync is not
- * available for Montgomery (project linking is not approved): syncPortalDataToSupabase refuses.
+ * Every request still goes through the transport's deep-mode guard.
+ *
+ * Linked-project portal_data (G-8): syncPortalDataToSupabase writes the captured Files and Reports tabs to every
+ * project linked to the permit, whichever project row that is (no project id appears in code). It reuses the DC
+ * writer (register-execution-routes `syncPortalDataToSupabase`, forbidInsert + skipCredentialRepoint + contentHash)
+ * for the write, the content hash and the capture bookkeeping, but hands it a payload built here so a Montgomery
+ * link never wipes what the project already holds: the placeholder status/tasks/info tabs of this driver are not
+ * sent, project text fields are not overwritten, and the captured files and reports are merged into the stored
+ * tabs (fields the pass left empty keep their older value). With no linked project nothing is written.
  */
 
 const fs = require("node:fs");
@@ -30,6 +37,7 @@ const { MONTGOMERY } = require("../adapters/projectdox-tenants");
 const { SafetyViolationError, SessionEndedError, ShutdownError, LeaseLostError } = require("../core/errors");
 
 const REVIEW_COMMENTS = /review comments/i;
+const SUBTYPE = "montgomery-projectdox";
 /** The Review Comments grid header in the rendered viewer text. */
 const COMMENT_GRID = /\bref\s*#/i;
 /** Thrown errors that end the pass instead of failing one file or report. */
@@ -40,18 +48,140 @@ function shortError(err) {
   return String((err && (err.code ? `${err.code}: ${err.message}` : err.message)) || err || "error").replace(/https?:\/\/\S+/gi, "<url>").slice(0, 300);
 }
 
+
+const isPlainObject = (v) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
+const isEmpty = (v, key) =>
+  v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0) || (isPlainObject(v) && Object.keys(v).length === 0) || (key === "commentCount" && v === 0);
+const nameKey = (v) => String(v == null ? "" : v).trim().toLowerCase();
+const clone = (v) => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
+
+/** `fresh` with every empty field taken from `old`; keys in `freshOnly` are never taken from `old`. */
+function fillEmpty(fresh, old, freshOnly = []) {
+  const out = { ...fresh };
+  if (!isPlainObject(old)) return out;
+  for (const [k, v] of Object.entries(old)) {
+    if (freshOnly.includes(k)) continue;
+    if (isEmpty(out[k], k) && !isEmpty(v, k)) out[k] = clone(v);
+  }
+  return out;
+}
+
+const FILE_OUTCOME_KEYS = ["downloadStatus", "downloadError", "downloadGate", "storageRef", "uploadStorageMessage"];
+
+/** One Files-tab entry: this pass's outcome wins when it attempted the file; otherwise the stored entry fills the gaps. */
+function mergeFileEntry(fresh, old) {
+  if (!old) return fresh;
+  const attempted = Boolean(fresh.downloadStatus) && fresh.downloadStatus !== "not_downloaded";
+  if (attempted) return fillEmpty(fresh, old, FILE_OUTCOME_KEYS);
+  const { downloadStatus, ...rest } = fresh;
+  const out = fillEmpty(rest, old, ["downloadGate"]);
+  return { ...out, downloadStatus: out.downloadStatus || downloadStatus };
+}
+
+function mergeFolders(freshFolders, oldFolders) {
+  const fresh = Array.isArray(freshFolders) ? freshFolders : [];
+  const old = Array.isArray(oldFolders) ? oldFolders : [];
+  const oldByName = new Map(old.map((f) => [nameKey(f && f.name), f]));
+  const seen = new Set();
+  const out = [];
+  for (const folder of fresh) {
+    const key = nameKey(folder.name);
+    seen.add(key);
+    const prev = oldByName.get(key);
+    const prevFiles = (prev && Array.isArray(prev.files)) ? prev.files : [];
+    // A folder that could not be listed, or came back empty while the project holds files for it, keeps the stored one.
+    if (prev && (folder.folderError || ((folder.files || []).length === 0 && prevFiles.length > 0))) {
+      out.push(clone(prev));
+      continue;
+    }
+    const byId = new Map(prevFiles.filter((f) => f && f.fileId).map((f) => [String(f.fileId), f]));
+    const byName = new Map(prevFiles.map((f) => [nameKey(f && f.name), f]));
+    const files = (folder.files || []).map((f) => mergeFileEntry(f, byId.get(String(f.fileId)) || byName.get(nameKey(f.name))));
+    out.push({ ...fillEmpty({ ...folder, files }, prev), files });
+  }
+  for (const folder of old) if (!seen.has(nameKey(folder && folder.name))) out.push(clone(folder));
+  return out;
+}
+
+function mergeReports(freshPdfs, oldPdfs) {
+  const fresh = Array.isArray(freshPdfs) ? freshPdfs : [];
+  const old = Array.isArray(oldPdfs) ? oldPdfs : [];
+  if (fresh.length === 0) return old.map(clone);
+  const oldByName = new Map(old.map((r) => [nameKey(r && r.fileName), r]));
+  const seen = new Set();
+  const out = [];
+  for (const report of fresh) {
+    const key = nameKey(report.fileName);
+    seen.add(key);
+    const { skipped, unavailable, ...entry } = report;
+    const merged = fillEmpty(entry, oldByName.get(key), ["error"]);
+    if (skipped) merged.skipped = skipped;
+    if (unavailable) merged.unavailable = unavailable;
+    out.push(merged);
+  }
+  for (const report of old) if (!seen.has(nameKey(report && report.fileName))) out.push(clone(report));
+  return out;
+}
+
+/** A captured tab merged into the stored tab: non-empty fresh values win, the stored tab's other keys stay. */
+function mergeTab(fresh, old, listKey, mergeList) {
+  const out = isPlainObject(old) ? clone(old) : {};
+  for (const [k, v] of Object.entries(fresh)) {
+    if (k === listKey || k === "cancelled" || k === "error" || isEmpty(v, k)) continue;
+    out[k] = v;
+  }
+  out[listKey] = mergeList(fresh[listKey], isPlainObject(old) ? old[listKey] : undefined);
+  return out;
+}
+
+/**
+ * The portal_data the DC writer receives for one linked project. Only keys this pass actually captured are
+ * present; the writer's merge ({...stored, ...payload, tabs: {...storedTabs, ...payloadTabs}}) therefore keeps
+ * everything else (status, tasks, info, review tab, report entries, address metadata, ...).
+ */
+function buildLinkedPayload(data, existing) {
+  const old = (existing && isPlainObject(existing.portal_data)) ? existing.portal_data : {};
+  const oldTabs = isPlainObject(old.tabs) ? old.tabs : {};
+  const payload = { projectNum: data.projectNum, portalType: "projectdox", portalSubtype: old.portalSubtype || SUBTYPE, tabs: {} };
+  if (!old.name && data.name) payload.name = data.name;
+  if (!old.description && data.description) payload.description = data.description;
+  const status = (data.dashboardStatus && String(data.dashboardStatus).trim()) || old.dashboardStatus || (existing && existing.portal_status) || null;
+  if (status) payload.dashboardStatus = status;
+  if (data.permitRepositorySync) payload.permitRepositorySync = data.permitRepositorySync;
+  const tabs = isPlainObject(data.tabs) ? data.tabs : {};
+  if (isPlainObject(tabs.files) && !tabs.files.error) payload.tabs.files = mergeTab(tabs.files, oldTabs.files, "folders", mergeFolders);
+  if (isPlainObject(tabs.reports) && !tabs.reports.error) payload.tabs.reports = mergeTab(tabs.reports, oldTabs.reports, "pdfs", mergeReports);
+  return payload;
+}
+
 /**
  * @param {{
  *   transport: { getJson: Function, listReports: Function, fetchFile: Function, exportReport: Function },
  *   parseReviewExcel?: (excelPath: string) => Promise<object[]>,
  *   tmpRoot?: string,
+ *   loadWriter?: () => { syncPortalDataToSupabase: Function, supabase?: object },  the DC writer export (loaded on first linked sync)
+ *   readProject?: (projectId: string) => Promise<{ portal_data: object|null, portal_status?: string }|null>,
  * }} deps
  */
-function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoot = os.tmpdir() }) {
+function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoot = os.tmpdir(), loadWriter = null, readProject = null }) {
   if (!transport || typeof transport.fetchFile !== "function" || typeof transport.exportReport !== "function") {
     throw new Error("Montgomery deep driver needs a deep-mode transport (fetchFile, exportReport)");
   }
   const parse = parseReviewExcel || require("../../lib/reviewCommentsExcelStructuredRows").extractReviewCommentsStructuredRowsFromExcelFile;
+
+  let writer = null;
+  const getWriter = () => {
+    if (!writer) writer = (loadWriter || (() => require("./app-loader").loadDcDeep()))();
+    if (!writer || typeof writer.syncPortalDataToSupabase !== "function") throw new Error("Montgomery portal_data sync has no writer");
+    return writer;
+  };
+  const readStored = readProject || (async (projectId) => {
+    const client = getWriter().supabase;
+    if (!client) throw new Error("Montgomery portal_data sync cannot read the linked project");
+    const { data, error } = await client.from("projects").select("portal_data, portal_status").eq("id", projectId).maybeSingle();
+    if (error) throw new Error(`linked project read failed: ${String(error.message || error).slice(0, 120)}`);
+    return data || null;
+  });
 
   const cancelled = (s) => Boolean(s._cancelRequested || s.dcDeepSessionLost);
 
@@ -188,10 +318,29 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
       return { deep: true };
     },
 
-    async syncPortalDataToSupabase() {
-      throw new Error("Montgomery linked-project portal_data sync is not available (project linking is not approved)");
+    /**
+     * Writes the captured Files and Reports tabs to the project linked to this permit (the runner calls this once
+     * per linked project). No linked project: nothing is written and nothing fails (the permit-level steps do not
+     * depend on a link). Returns the writer's result: true when every row was written or safely left as it was.
+     */
+    async syncPortalDataToSupabase(session, projects, projectId, userId, targetFolder = null, syncOptions = {}) {
+      if (!projectId) return true;
+      if (!syncOptions || syncOptions.forbidInsert !== true || syncOptions.skipCredentialRepoint !== true) {
+        throw new Error("Montgomery portal_data sync must forbid inserts and credential re-points");
+      }
+      const dc = getWriter();
+      let ok = true;
+      for (const project of projects || []) {
+        const data = session && session.data && session.data[project.id];
+        if (!data) continue;
+        const stored = await readStored(projectId);
+        const payload = buildLinkedPayload(data, stored);
+        const written = await dc.syncPortalDataToSupabase({ ...session, data: { [project.id]: payload } }, [project], projectId, userId, targetFolder, syncOptions);
+        if (!written) ok = false;
+      }
+      return ok;
     },
   };
 }
 
-module.exports = { createMontgomeryDeepDriver };
+module.exports = { createMontgomeryDeepDriver, buildLinkedPayload };
