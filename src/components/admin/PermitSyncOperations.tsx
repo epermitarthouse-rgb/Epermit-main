@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { listSyncAlerts, loadSchedulerStatus, setPermitSyncSchedule, type SchedulerStatus } from "@/lib/centralPermits";
+import { listSyncAlerts, loadSchedulerStatus, setPermitSyncSchedule, type SchedulerStatus, type SyncScheduleInput, type SyncScheduleResult } from "@/lib/centralPermits";
 import { describeSchedule, type SyncSchedule, type SyncSourceOverview } from "@/lib/permitSync";
 
 type Row = Record<string, unknown>;
@@ -54,6 +54,40 @@ export function SchedulerNotice({ status }: { status?: SchedulerStatus }) {
   );
 }
 
+/** Save always stores the switch, so the label says what the save will do to the stored state. */
+export function scheduleSaveLabel(switchOn: boolean, storedOn: boolean): string {
+  if (switchOn) return storedOn ? "Save (stays enabled)" : "Save and enable";
+  return storedOn ? "Save and disable" : "Save (stays disabled)";
+}
+
+export function scheduleSavePayload(
+  credentialId: string,
+  form: { enabled: boolean; schedule: SyncSchedule; maxFiles: string; maxMiB: string; maxAttempts: string },
+): SyncScheduleInput {
+  const deep: Record<string, number> = {};
+  if (form.maxFiles.trim()) deep.max_files = Number(form.maxFiles);
+  if (form.maxMiB.trim()) deep.max_bytes = Math.round(Number(form.maxMiB) * MIB);
+  const s = form.schedule;
+  return {
+    credentialId,
+    enabled: form.enabled,
+    schedule: s.frequency === "weekly" ? { ...s, weekday: s.weekday ?? 1 } : { frequency: s.frequency, time: s.time, timezone: s.timezone },
+    deepDefaults: Object.keys(deep).length ? deep : null,
+    maxAttempts: form.maxAttempts.trim() ? Number(form.maxAttempts) : null,
+  };
+}
+
+/** Built from the state the server stored (D-125), never from the switch. */
+export function scheduleSaveToast(requested: boolean, r: SyncScheduleResult, cronActive: boolean): { title: string; description: string; variant?: "destructive" } {
+  const stored = r.automation_enabled ? `enabled${r.status ? ` (${r.status})` : ""}` : "disabled";
+  const next = r.automation_enabled && r.next_run_at ? ` Next run ${formatTimestamp(r.next_run_at)}${cronActive ? "" : " once the scheduler is installed"}.` : "";
+  if (r.automation_enabled !== requested) {
+    return { variant: "destructive", title: r.automation_enabled ? "Saved, but the schedule is still enabled" : "Saved, but the schedule is not enabled", description: `Stored: ${stored}.${next}` };
+  }
+  if (r.automation_enabled) return { title: "Schedule saved and enabled", description: `Stored: ${stored}.${next}` };
+  return { title: "Schedule saved (disabled)", description: "Stored: disabled. Nothing runs until Enabled is switched on and saved." };
+}
+
 function ScheduleRow({ source, cronActive }: { source: SyncSourceOverview; cronActive: boolean }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -64,20 +98,10 @@ function ScheduleRow({ source, cronActive }: { source: SyncSourceOverview; cronA
   const [maxMiB, setMaxMiB] = useState("");
   const [maxAttempts, setMaxAttempts] = useState("");
   const save = useMutation({
-    mutationFn: () => {
-      const deep: Record<string, number> = {};
-      if (maxFiles.trim()) deep.max_files = Number(maxFiles);
-      if (maxMiB.trim()) deep.max_bytes = Math.round(Number(maxMiB) * MIB);
-      return setPermitSyncSchedule({
-        credentialId: source.credential_id,
-        enabled,
-        schedule: schedule.frequency === "weekly" ? { ...schedule, weekday: schedule.weekday ?? 1 } : { frequency: schedule.frequency, time: schedule.time, timezone: schedule.timezone },
-        deepDefaults: Object.keys(deep).length ? deep : null,
-        maxAttempts: maxAttempts.trim() ? Number(maxAttempts) : null,
-      });
-    },
-    onSuccess: (r) => {
-      toast({ title: r.automation_enabled ? "Schedule saved and enabled" : "Schedule saved (disabled)", description: r.next_run_at ? `Next run ${formatTimestamp(r.next_run_at)}${cronActive ? "" : " once the scheduler is installed"}` : undefined });
+    mutationFn: (input: SyncScheduleInput) => setPermitSyncSchedule(input),
+    onSuccess: (r, input) => {
+      setEnabled(r.automation_enabled);
+      toast(scheduleSaveToast(input.enabled, r, cronActive));
       void qc.invalidateQueries({ queryKey: ["central-permits", "sync"] });
       void qc.invalidateQueries({ queryKey: OPS_QUERY_KEY });
     },
@@ -119,8 +143,17 @@ function ScheduleRow({ source, cronActive }: { source: SyncSourceOverview; cronA
         <Input className="w-[130px]" inputMode="numeric" aria-label="Max files per run" placeholder="Max files" value={maxFiles} onChange={(e) => setMaxFiles(e.target.value)} />
         <Input className="w-[130px]" inputMode="numeric" aria-label="Max MiB per run" placeholder="Max MiB" value={maxMiB} onChange={(e) => setMaxMiB(e.target.value)} />
         <Input className="w-[120px]" inputMode="numeric" aria-label="Max attempts" placeholder="Attempts" value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
-        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>
+        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate(scheduleSavePayload(source.credential_id, { enabled, schedule, maxFiles, maxMiB, maxAttempts }))}>
+          {scheduleSaveLabel(enabled, source.automation_enabled)}
+        </Button>
       </div>
+      {!enabled ? (
+        <AlertBanner
+          tone="warn"
+          title={source.automation_enabled ? "Saving will turn this schedule off" : "This schedule is disabled"}
+          detail={source.automation_enabled ? "Switch Enabled back on to keep automatic refreshes." : "Saving keeps it disabled and nothing runs. Switch Enabled on first to schedule refreshes."}
+        />
+      ) : null}
       <p className="text-xs text-muted-foreground">
         Times are in the timezone shown. Empty limits keep the current values; the worker's own limits are the ceiling.
         A schedule never runs for a slot before it was enabled, and is skipped while a refresh is in progress.

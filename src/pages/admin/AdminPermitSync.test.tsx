@@ -141,7 +141,7 @@ describe("Permit Sync admin tabs", () => {
     assert.match(scheduling, /value="America\/New_York"/);
     assert.match(scheduling, /Max files/);
     assert.match(scheduling, />Enabled</);
-    assert.match(scheduling, />Save</);
+    assert.match(scheduling, />Save \(stays enabled\)</);
 
     const sources = panelBody(html, "sources", "visibility");
     assert.match(sources, /Portal accounts/);
