@@ -280,3 +280,18 @@ Status levels: Implemented / Locally tested / Deployed / Production-verified. Th
 | Source `0610eaa5` and its credential | Removed | Paused, automation off, 0 permits / documents / reports / project links. 2 `failed_unrecoverable` jobs and 6 events deleted with the source. Credential was not shared with `de8592f9` and was deleted (1 grant cascaded). Password cannot be restored. Audit `5ed20872-ab8e-44c7-989a-2b72abf6c5a8` (`permit_sync_source.remove`) at 2026-11-17 10:02:55 UTC. Script `scripts/permit-repo/repairs/d119-remove-duplicate-dc-source.sql` |
 | Source `de8592f9` | Unchanged | 28 permits, inactive, automation off, schedule daily 04:00 America/New_York, not enabled |
 | Queue and crons | Unchanged | 0 queued or running jobs. `permit-sync-enqueue`, `permit-sync-monitor` and `permit-sync-alert-notifier` active; latest ticks succeeded. Schedule not enabled |
+
+### Central comment processing rollout (2026-11-18 07:54–08:36 UTC, approved)
+
+| Item | Status | Evidence |
+|---|---|---|
+| PR #31 schedule read-back | Merged `017dd6cc` | CI green, Vercel production success; its migration `20261118140000` not applied (step 7) |
+| PR #32 central processing | Merged `42cf55cc` | Rebased, migration renamed to `20261118150000`; CI green on `a2cbf75`; Vercel production success |
+| Migration `20261118150000` | Applied, verified | One transaction + `migration repair`; RLS, grants, policy, columns, trigger checked; crons 0 failures |
+| Six functions | Deployed | classifier 48, router 29, context engine 29, intake 46, parser 67, dispatcher 4; backup of previous versions in `exports.local/edge-backup-20261118-central` |
+| Flags and budget | Set | `CENTRAL_PROCESSING_ENABLED=true`, `CENTRAL_AI_BUDGET_SCOPE=dc-backfill`; budget `dc-backfill` $5.00 approved |
+| DC backfill | Done | 391/391 processed, 0 pending/failed/needs attention/skipped; 46 calls; 90,519 in / 30,928 out tokens; $0.5356 (estimate ~$0.75) |
+| Reconciliation | Holds for 16/16 permits | 81, 59 and 53-comment permits fully processed |
+| ff193644 | Unchanged | 6 ids, approvals, response_md5 and row md5 identical; 0 marks; project run made 0 AI calls |
+| Read rules | Hold | 10 users: visible insights = `can_read_permit`; unknown user 0; anon no SELECT |
+| Worker redeploy, `20261118140000`, first-run check | Not started | After tonight's scheduled DC job (steps 6–8) |
