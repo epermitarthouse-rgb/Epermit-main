@@ -12,6 +12,10 @@ regexes = [
   '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlcXh5anJjbGRpdnRwaWtjcHZrIiwicm9sZSI6ImFub24i[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+''',
   # portal_credentials row ids: a UUID primary key, not a credential value.
   '''credential_id\s*=\s*'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'$''',
+  # Same row id looked up by primary key. The column is id, so the assignment above does not match.
+  '''portal_credentials\s+WHERE\s+id\s*=\s*'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'$''',
+  # Same row id in a script constant (double quotes).
+  '''(?i)credential_id\s*=\s*"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"$''',
   # {"sub":"1234567890"}: the jwt.io sample token.
   '''eyJ[A-Za-z0-9_-]*\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.[A-Za-z0-9_-]*''',
 ]
