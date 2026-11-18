@@ -4,7 +4,8 @@
  * DC deep pass (D-055): after the JSON pass applied a permit, runs the existing manual DC scraper
  * (`dcDeep.scrapeAll`) in the same browser session for the tabs the change gate asks for, stores file and
  * report binaries in the private bucket, records them through the capture RPCs, writes portal_data to
- * linked projects only, and starts the agent pipeline when a linked project's portal data changed.
+ * linked projects only, and continues the same downstream entry for every permit: central comment
+ * processing (no project required) and, when a project is linked, the project comment pipeline.
  *
  * Used as the worker session's `afterPermit` hook (core/worker.js). Everything external is injected:
  *   dcDeep    the additive export of registerExecutionRoutes (app-loader.js)
@@ -28,6 +29,56 @@ const REVIEW_COMMENTS_REPORT = /review comments/i;
 
 /** Minimum gap between per-file progress writes during a pass. */
 const PROGRESS_MIN_MS = 3000;
+
+/**
+ * The downstream entry the deep pass calls after review comments are stored (D-113, D-121).
+ * `triggerCentral` runs for every permit, linked or not. `trigger` runs only for a linked project
+ * (parsed_comments). A portal_data hash is required only for the older intake driver, which has no
+ * `triggerCentral`; the comment-pipeline dispatcher does not use it. Never throws.
+ */
+async function continuePermitDownstream({ pipeline, permitId, links = [], event = async () => {}, record = {}, metrics }) {
+  await triggerCentral(pipeline, metrics, permitId, event, record);
+  await triggerPipelines(pipeline, metrics, links, event, record);
+}
+
+/** Asks for the permit-level (central) pass of this permit, linked or not (D-121); never fails the pass. */
+async function triggerCentral(pipeline, m, permitId, event, record) {
+  if (!pipeline || typeof pipeline.triggerCentral !== "function") return;
+  try {
+    const t = await pipeline.triggerCentral({ permitId });
+    if (t.outcome === "complete") m.central_triggers += 1;
+    else if (t.outcome === "failed") {
+      m.central_failed += 1;
+      await event("warn", "central_not_started", String(t.error || "failed").slice(0, 200), { portal_record_id: record.portal_record_id });
+    }
+  } catch (err) {
+    m.central_failed += 1;
+    await event("warn", "central_failed", String((err && err.message) || "error").slice(0, 200), { portal_record_id: record.portal_record_id });
+  }
+}
+
+/** Starts the project comment pipeline for each linked project (parsed_comments). Not called for an unlinked permit. */
+async function triggerPipelines(pipeline, m, links, event, record) {
+  if (!pipeline || typeof pipeline.trigger !== "function") return;
+  const needsHash = typeof pipeline.triggerCentral !== "function";
+  for (const link of links) {
+    const hash = link.currentHash;
+    if (!link.projectId || !link.ownerUserId) continue;
+    if (needsHash && !hash) continue;
+    try {
+      const t = await pipeline.trigger({ projectId: link.projectId, ownerUserId: link.ownerUserId, portalDataHash: hash });
+      if (t.outcome === "complete") m.pipeline_runs += 1;
+      else if (t.outcome === "skipped_duplicate" || t.outcome === "disabled") m.pipeline_skipped += 1;
+      else {
+        m.pipeline_failed += 1;
+        await event("warn", "pipeline_not_complete", t.outcome, { portal_record_id: record.portal_record_id });
+      }
+    } catch (err) {
+      m.pipeline_failed += 1;
+      await event("warn", "pipeline_failed", String((err && err.message) || "error").slice(0, 200), { portal_record_id: record.portal_record_id });
+    }
+  }
+}
 
 /** Stored-content counts for the Permit Queue (D-096): only documents the pass may capture count toward files. */
 function captureCounts(documents = [], reports = [], open = {}) {
@@ -428,43 +479,6 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     }
   }
 
-  /** Asks for the permit-level (central) pass of this permit, linked or not (D-121); never fails the pass. */
-  async function triggerCentral(m, permitId, event, record) {
-    if (!pipeline || typeof pipeline.triggerCentral !== "function") return;
-    try {
-      const t = await pipeline.triggerCentral({ permitId });
-      if (t.outcome === "complete") m.central_triggers += 1;
-      else if (t.outcome === "failed") {
-        m.central_failed += 1;
-        await event("warn", "central_not_started", String(t.error || "failed").slice(0, 200), { portal_record_id: record.portal_record_id });
-      }
-    } catch (err) {
-      m.central_failed += 1;
-      await event("warn", "central_failed", String((err && err.message) || "error").slice(0, 200), { portal_record_id: record.portal_record_id });
-    }
-  }
-
-  /** Starts the agent pipeline for each linked project's current hash unless a run for it exists (6c, D-063). */
-  async function triggerPipelines(m, links, event, record) {
-    if (!pipeline) return;
-    for (const link of links) {
-      const hash = link.currentHash;
-      if (!hash || !link.projectId || !link.ownerUserId) continue;
-      try {
-        const t = await pipeline.trigger({ projectId: link.projectId, ownerUserId: link.ownerUserId, portalDataHash: hash });
-        if (t.outcome === "complete") m.pipeline_runs += 1;
-        else if (t.outcome === "skipped_duplicate" || t.outcome === "disabled") m.pipeline_skipped += 1;
-        else {
-          m.pipeline_failed += 1;
-          await event("warn", "pipeline_not_complete", t.outcome, { portal_record_id: record.portal_record_id });
-        }
-      } catch (err) {
-        m.pipeline_failed += 1;
-        await event("warn", "pipeline_failed", String((err && err.message) || "error").slice(0, 200), { portal_record_id: record.portal_record_id });
-      }
-    }
-  }
-
   function emptyMetrics() {
     return {
       deep_passes: 0, deep_skipped: 0, files_downloaded: 0, files_unchanged: 0, files_failed: 0, files_invalid: 0, files_capped: 0, bytes_downloaded: 0,
@@ -491,6 +505,9 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     const limits = policy.captureLimits(env, job && job.options);
     const permitId = result && result.permit_id;
     if (!permitId) throw new Error("batch result has no permit_id");
+    // Review comments are already in permit_review_comments from the JSON pass. Hand the permit to the
+    // same central entry before file, report, or portal_data work, so a later failure does not skip it.
+    await triggerCentral(pipeline, m, permitId, event, record);
     let hashes = policy.sectionHashes(batch);
     const [previousHashes, links, documents, reports] = await Promise.all([
       repo.deepState(permitId), repo.links(permitId), repo.documents(permitId), repo.reports(permitId),
@@ -514,8 +531,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       if (policy.changedSections(previousHashes, hashes).length) await repo.recordDeepPass(permitId, hashes, job.id);
       m.deep_skipped = 1;
       await reportFinal(await countOpenItems(m, permitId, limits, renderable));
-      await triggerCentral(m, permitId, event, record);
-      await triggerPipelines(m, links.map((l) => ({ ...l, currentHash: l.portalDataHash })), event, record);
+      await triggerPipelines(pipeline, m, links.map((l) => ({ ...l, currentHash: l.portalDataHash })), event, record);
       return m;
     }
 
@@ -646,26 +662,36 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       const after = await countOpenItems(m, permitId, limits, renderable);
       await reportFinal(after);
       const capture = policy.captureHash(after.documents, after.reports);
-      const current = [];
+      // Review comments are already stored (JSON pass, and the Montgomery re-read above). Central processing
+      // runs for every permit. The project comment pipeline runs only for a link. portal_data is written
+      // only when that link is stale and the tabs succeeded.
+      let downstreamLinks = links.map((l) => ({ ...l, currentHash: l.portalDataHash }));
       if (tabErrors.length === 0) {
-        for (const link of links) {
-          const stale = policy.changedSections(link.syncedHashes || null, hashes).length > 0 || link.captureHash !== capture;
-          if (!stale) {
-            current.push({ ...link, currentHash: link.portalDataHash });
-            continue;
+        const current = [];
+        try {
+          for (const link of links) {
+            const stale = policy.changedSections(link.syncedHashes || null, hashes).length > 0 || link.captureHash !== capture;
+            if (!stale) {
+              current.push({ ...link, currentHash: link.portalDataHash });
+              continue;
+            }
+            if (!link.projectId || !link.ownerUserId) throw new Error("project link without project id or owner");
+            s.data[project.id].permitRepositorySync = { permit_id: permitId, section_hashes: hashes, capture_hash: capture };
+            const ok = await quiet(() => dcDeep.syncPortalDataToSupabase(s, [project], link.projectId, link.ownerUserId, null, { forbidInsert: true, skipCredentialRepoint: true, contentHash: true }));
+            if (!ok) throw new Error("portal_data sync to the linked project failed");
+            m.portal_syncs += 1;
+            const hash = await repo.projectHash(link.projectId);
+            if (hash && hash !== link.portalDataHash) m.portal_changed += 1;
+            current.push({ ...link, currentHash: hash });
           }
-          if (!link.projectId || !link.ownerUserId) throw new Error("project link without project id or owner");
-          s.data[project.id].permitRepositorySync = { permit_id: permitId, section_hashes: hashes, capture_hash: capture };
-          const ok = await quiet(() => dcDeep.syncPortalDataToSupabase(s, [project], link.projectId, link.ownerUserId, null, { forbidInsert: true, skipCredentialRepoint: true, contentHash: true }));
-          if (!ok) throw new Error("portal_data sync to the linked project failed");
-          m.portal_syncs += 1;
-          const hash = await repo.projectHash(link.projectId);
-          if (hash && hash !== link.portalDataHash) m.portal_changed += 1;
-          current.push({ ...link, currentHash: hash });
+          downstreamLinks = current;
+        } catch (err) {
+          await triggerPipelines(pipeline, m, downstreamLinks, event, record);
+          throw err;
         }
-        await triggerCentral(m, permitId, event, record);
-        await triggerPipelines(m, current, event, record);
       }
+      await triggerPipelines(pipeline, m, downstreamLinks, event, record);
+      if (m.reviews_reread) await triggerCentral(pipeline, m, permitId, event, record);
       delete s.data[project.id];
       m.deep_passes = 1;
       if (tabErrors.length) throw new Error(`deep tabs failed: ${tabErrors.join(", ")}`);
@@ -715,4 +741,4 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
   return { afterPermit, wrapTransport, index };
 }
 
-module.exports = { createDeepPass, createDashboardIndex, manualProject, withQuietConsole, passTrace, filesTrace, reasonCode, captureCounts };
+module.exports = { createDeepPass, continuePermitDownstream, createDashboardIndex, manualProject, withQuietConsole, passTrace, filesTrace, reasonCode, captureCounts };

@@ -279,6 +279,79 @@ test("change gate: first pass, unchanged permit, file and report triggers, linke
   assert.deepEqual(policy.sectionHashes({ sections: { status: { hash: "x", status: "ok" }, reviews: { hash: null, status: "failed" } } }), { status: "x", reviews: "status:failed" });
 });
 
+test("post-parse handoff: unlinked permits enter central before optional deep work; linked permits keep the project step", async () => {
+  const { createDeepPass } = require("../permit-sync/deep/runner");
+  const record = { portal_record_id: "900001" };
+  const batch = { sections: { reviews: { hash: "reviews-1", status: "ok" } } };
+  const result = { permit_id: "permit-1" };
+  const job = { id: "job-1", options: {} };
+
+  const hashes = policy.sectionHashes(batch);
+  const unlinkedCalls = [];
+  const unlinked = createDeepPass({
+    dcDeep: {},
+    transport: {},
+    repo: {
+      deepState: async () => {
+        unlinkedCalls.push("deep");
+        return hashes;
+      },
+      links: async () => [],
+      documents: async () => [],
+      reports: async () => [],
+    },
+    storage: {},
+    pipeline: {
+      triggerCentral: async ({ permitId }) => {
+        unlinkedCalls.push(`central:${permitId}`);
+        return { outcome: "complete" };
+      },
+      trigger: async () => { throw new Error("unlinked permit must not enter a project step"); },
+    },
+    username: "acct",
+    trace: () => {},
+  });
+  const unlinkedMetrics = await unlinked.afterPermit({ record, batch, result, job });
+  assert.deepEqual(unlinkedCalls.slice(0, 2), ["central:permit-1", "deep"], "stored comments are handed off before optional deep work");
+  assert.equal(unlinkedMetrics.central_triggers, 1);
+  assert.equal(unlinkedMetrics.pipeline_runs, 0);
+
+  const projectCalls = [];
+  const linked = createDeepPass({
+    dcDeep: {},
+    transport: {},
+    repo: {
+      deepState: async () => hashes,
+      links: async () => [{
+        projectId: "project-1",
+        ownerUserId: "owner-1",
+        portalDataHash: "portal-hash-1",
+        syncedHashes: hashes,
+        captureHash: policy.captureHash([], []),
+      }],
+      documents: async () => [],
+      reports: async () => [],
+    },
+    storage: {},
+    pipeline: {
+      triggerCentral: async ({ permitId }) => {
+        projectCalls.push(["central", permitId]);
+        return { outcome: "complete" };
+      },
+      trigger: async ({ projectId }) => {
+        projectCalls.push(["project", projectId]);
+        return { outcome: "complete" };
+      },
+    },
+    username: "acct",
+    trace: () => {},
+  });
+  const metrics = await linked.afterPermit({ record, batch, result, job });
+  assert.deepEqual(projectCalls, [["central", "permit-1"], ["project", "project-1"]]);
+  assert.equal(metrics.central_triggers, 1);
+  assert.equal(metrics.pipeline_runs, 1);
+});
+
 test("private paths follow D-058 and report content is versioned by text and rows", () => {
   const pid = "11111111-1111-4111-8111-111111111111";
   assert.equal(policy.documentPath(pid, "700101", "A 101 (rev).pdf"), `${pid}/files/700101_A_101_rev_.pdf`);
