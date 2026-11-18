@@ -6,7 +6,9 @@
  * Off unless PERMIT_SYNC_WORKER_ENABLED=true AND PERMIT_SYNC_LIVE_PORTAL_APPROVED=A-3. Without both it
  * exits before claiming anything, so a misconfigured deploy cannot fail queued jobs.
  *
- * PERMIT_SYNC_MODE=json (default): JSON pass only; the HTTP app is not loaded.
+ * PERMIT_SYNC_MODE=json (default): JSON pass only; the HTTP app is not loaded. After each permit's review
+ * comments are stored, the same downstream entry as the deep pass runs (central processing for every permit,
+ * project comment pipeline only when a project is linked). It does not write portal_data.
  * PERMIT_SYNC_MODE=deep (D-055): the guard runs in deep mode, login is the manual `performLogin`, and after
  * each permit's JSON pass the manual DC scraper runs in the same browser session (permit-sync/deep). The
  * HTTP app closure is loaded without listening. It never shares a browser with the HTTP service.
@@ -226,16 +228,50 @@ function montgomeryLogin(username, password, loginUrl) {
 }
 
 /**
+ * JSON mode has no deep scrape. After the JSON pass stores review comments, this calls the same
+ * `continuePermitDownstream` the deep pass uses. No portal_data write.
+ * @param {{ pipeline: object|null, repo: { links: Function }|null }} deps
+ */
+function commentDownstreamAfterPermit({ pipeline, repo }) {
+  if (!pipeline || !repo || typeof repo.links !== "function") return undefined;
+  const { continuePermitDownstream } = require("./deep/runner");
+  return async function afterPermit({ result, record, event = async () => {} }) {
+    const m = { central_triggers: 0, central_failed: 0, pipeline_runs: 0, pipeline_skipped: 0, pipeline_failed: 0 };
+    const permitId = result && result.permit_id;
+    if (!permitId) return m;
+    try {
+      const links = await repo.links(permitId);
+      await continuePermitDownstream({
+        pipeline,
+        permitId,
+        links: (links || []).map((l) => ({ ...l, currentHash: l.currentHash || l.portalDataHash || null })),
+        event,
+        record: record || {},
+        metrics: m,
+      });
+    } catch (err) {
+      m.central_failed += 1;
+      await event("warn", "downstream_failed", String((err && err.message) || err).slice(0, 200), {
+        portal_record_id: record && record.portal_record_id,
+      });
+    }
+    return m;
+  };
+}
+
+/**
  * @param {{ supabase: any, env?: NodeJS.ProcessEnv, launchContext: Function, createTransport?: Function,
  *   createMontgomeryTransport?: Function, log?: Function, lock?: Function, loadDcDeep?: Function,
- *   createDeepPass?: Function, pipeline?: object|null }} deps
- *   loadDcDeep / createDeepPass / pipeline are used in deep mode only
+ *   createDeepPass?: Function, pipeline?: object|null, repo?: object|null }} deps
+ *   `repo` is optional and only used by tests; production reads links through the deep repo.
  */
 function buildOpenAdapter({
   supabase, env = process.env, launchContext, createTransport = createDcLiveTransport, createMontgomeryTransport = null, log = () => {},
-  lock = deferWhileManualScrape, loadDcDeep = null, createDeepPass = null, pipeline = null,
+  lock = deferWhileManualScrape, loadDcDeep = null, createDeepPass = null, pipeline = null, repo = null,
 }) {
   const mode = syncMode(env);
+  const commentRepo = repo || (pipeline ? require("./deep/repo").supabaseDeepRepo(supabase) : null);
+  const downstream = commentDownstreamAfterPermit({ pipeline, repo: commentRepo });
   return async function openAdapter(job) {
     const reg = ADAPTERS[job.adapter_key];
     if (!reg) throw new PortalChangedError(`no adapter registered for ${job.adapter_key}`);
@@ -261,7 +297,11 @@ function buildOpenAdapter({
 
     if (mode !== "deep") {
       const transport = await createTransport({ launchContext, username, password, env, log });
-      return { adapter: createDcAdapter({ transport, accountDownload }), close: () => transport.close() };
+      return {
+        adapter: createDcAdapter({ transport, accountDownload }),
+        ...(downstream ? { afterPermit: downstream } : {}),
+        close: () => transport.close(),
+      };
     }
 
     const dcDeep = (loadDcDeep || require("./deep/app-loader").loadDcDeep)(env);
@@ -302,7 +342,13 @@ function buildOpenAdapter({
     const make = createMontgomeryTransport || require("./adapters/montgomery-projectdox/live-transport").createMontgomeryLiveTransport;
     const login = montgomeryLogin(username, password, loginUrl);
     const transport = await make({ launchContext, username, password, env, log, login, mode });
-    if (mode !== "deep") return { adapter: reg.createAdapter({ transport, accountDownload }), close: () => transport.close() };
+    if (mode !== "deep") {
+      return {
+        adapter: reg.createAdapter({ transport, accountDownload }),
+        ...(downstream ? { afterPermit: downstream } : {}),
+        close: () => transport.close(),
+      };
+    }
     try {
       const { createMontgomeryDeepDriver } = require("./deep/montgomery-driver");
       const makeDeepPass = createDeepPass || require("./deep/runner").createDeepPass;
@@ -376,10 +422,10 @@ async function main(env = process.env) {
 
   let pipeline = null;
   const keyFormat = serviceKeyFormat(env.SUPABASE_SERVICE_ROLE_KEY);
-  if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET && keyFormat !== "legacy_service_role_jwt") {
+  if (env.PERMITPILOT_SERVICE_PIPELINE_SECRET && keyFormat !== "legacy_service_role_jwt") {
     log("warn", "agent_trigger_off", { reason: `service key format ${keyFormat} is not accepted by the pipeline functions` });
-  } else if (deep && env.PERMITPILOT_SERVICE_PIPELINE_SECRET) {
-    // Linked projects are processed by the permit-comment-pipeline edge function, keyed by comment content (D-113).
+  } else if (env.PERMITPILOT_SERVICE_PIPELINE_SECRET) {
+    // Same entry for json and deep: permit-comment-pipeline, keyed by comment content (D-113, D-121).
     const { createCommentPipelineDispatcher } = require("./deep/commentDispatch");
     pipeline = createCommentPipelineDispatcher({
       fetch: globalThis.fetch,
