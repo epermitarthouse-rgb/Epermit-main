@@ -146,8 +146,10 @@ serve(async (req) => {
     // human edit (trg_parsed_comments_field_source, D-122). Ownership was checked above.
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const db = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } }) : supabase;
+    type Filterable = { eq(c: string, v: unknown): Filterable; or(f: string): Filterable; is(c: string, v: null): Filterable };
     const eligible = <T>(q: T): T =>
-      (q as any).eq("project_id", projectId).or(NO_CODE_REFERENCE).or(NOT_HUMAN_CODE_REFERENCE).is("central_insight_id", null);
+      (q as unknown as Filterable).eq("project_id", projectId).or(NO_CODE_REFERENCE).or(NOT_HUMAN_CODE_REFERENCE)
+        .is("central_insight_id", null) as unknown as T;
 
     const { count: eligibleCount, error: eligibleErr } = await eligible(
       db.from("parsed_comments").select("id", { count: "exact", head: true }),
