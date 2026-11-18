@@ -39,11 +39,11 @@ async function createDeepDb() {
 }
 
 /** The deep repo interface (permit-sync/deep/repo.js) over PGlite, as service_role. */
-function pgliteDeepRepo(h) {
+function pgliteDeepRepo(h, { adapterKey = "dc-projectdox" } = {}) {
   const q = async (sql, params) => (await h.db.query(sql, params)).rows;
   return {
     documents: (permitId) => q(`SELECT id, portal_file_id, file_name, size_bytes, download_permitted, download_status, storage_path, sha256, capture_attempts, capture_next_attempt_at FROM permit_documents WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
-    reports: (permitId) => q(`SELECT id, report_key, name, content_status, latest_content_id, content_attempts, content_next_attempt_at FROM permit_reports WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
+    reports: (permitId) => q(`SELECT id, report_key, name, content_status, content_error, latest_content_id, content_attempts, content_next_attempt_at FROM permit_reports WHERE permit_id = $1 AND removed_at IS NULL`, [permitId]),
     deepState: async (permitId) => ((await q(`SELECT section_hashes FROM permit_deep_state WHERE permit_id = $1`, [permitId]))[0] || {}).section_hashes || null,
     links: async (permitId) => (await q(
       `SELECT p.id, p.user_id, p.permit_number, p.portal_data_hash, p.portal_data->'permitRepositorySync'->'section_hashes' AS synced,
@@ -56,7 +56,7 @@ function pgliteDeepRepo(h) {
       `SELECT c.structured_rows, c.text_content, c.excel_storage_path
        FROM permits p JOIN permit_reports r ON r.permit_id = p.id AND r.removed_at IS NULL AND r.name ILIKE '%review comments%'
        JOIN permit_report_contents c ON c.id = r.latest_content_id
-       WHERE p.adapter_key = 'dc-projectdox' AND p.portal_record_id = $1 LIMIT 1`, [String(portalRecordId)],
+       WHERE p.adapter_key = $2 AND p.portal_record_id = $1 LIMIT 1`, [String(portalRecordId), adapterKey],
     ))[0] || null,
     recordDocument: (a) => h.svc(`SELECT public.record_permit_document_capture_v2($1, $2::jsonb)`, [a.documentId, JSON.stringify({
       status: a.status, access_path: a.accessPath, storage_path: a.storagePath || null, sha256: a.sha256 || null, size_bytes: a.size ?? null,

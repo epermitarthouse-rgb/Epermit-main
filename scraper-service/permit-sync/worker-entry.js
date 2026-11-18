@@ -29,6 +29,8 @@ const { DeferredError } = require("./core/errors");
 const dcCredentialLock = require("../lib/dc-credential-lock");
 const { createDcLiveTransport, LIVE_APPROVAL_VALUE } = require("./adapters/dc-projectdox/live-transport");
 const { ADAPTER_KEY: DC_KEY } = require("./adapters/dc-projectdox/normalize");
+const { createMontgomeryAdapter, ADAPTER_KEY: MONTGOMERY_KEY } = require("./adapters/montgomery-projectdox/adapter");
+const { MONTGOMERY } = require("./adapters/projectdox-tenants");
 const {
   looksLikeEncryptedEnvelope,
   resolveStoredPortalPassword,
@@ -83,12 +85,21 @@ function startupCheck(env) {
  * D-061 worker side: hand the job back (no attempt spent, D-098) while a manual DC scrape that may use the
  * same login is active, so the account is never logged in twice at once. Runs before any browser is launched.
  */
-async function deferWhileManualScrape({ supabase, username, now = new Date() }) {
-  const credentialIds = await dcCredentialLock.sameLoginCredentialIds(supabase, username);
-  if (await dcCredentialLock.manualDcScrapeActive(supabase, { credentialIds, now })) {
-    throw new DeferredError("a manual DC scrape is using this portal login; deferred");
+async function deferWhileManualScrape({ supabase, username, now = new Date(), portal = "dc" }) {
+  const credentialIds = await dcCredentialLock.sameLoginCredentialIds(supabase, username, portal);
+  if (await dcCredentialLock.manualDcScrapeActive(supabase, { credentialIds, now, portal })) {
+    throw new DeferredError(`a manual ${portal === "dc" ? "DC" : portal} scrape is using this portal login; deferred`);
   }
 }
+
+/**
+ * Registered adapters by permit_sync_sources.adapter_key. Each names its adapter factory, its lock portal (D-061)
+ * and how it logs in; everything else (queue, guard, deep pass, ingest) is shared.
+ */
+const ADAPTERS = Object.freeze({
+  [DC_KEY]: Object.freeze({ portal: "dc", createAdapter: createDcAdapter }),
+  [MONTGOMERY_KEY]: Object.freeze({ portal: "montgomery", createAdapter: createMontgomeryAdapter }),
+});
 
 /**
  * Code version for heartbeats and logs (D-105): Railway's git SHA for repo deploys, else the BUILD_VERSION file
@@ -149,18 +160,87 @@ function startHealthServer({ port, state, log }) {
 }
 
 /**
- * @param {{ supabase: any, env?: NodeJS.ProcessEnv, launchContext: Function, createTransport?: Function, log?: Function,
- *   lock?: Function, loadDcDeep?: Function, createDeepPass?: Function, pipeline?: object|null }} deps
+ * One redacted line for an unhandled error: the error name and code, a message with URLs, header-like text and
+ * tokens removed (one line, at most 200 characters), and the top stack frame as file:line (no directories).
+ * No cookies, URLs or page text can reach the log through it.
+ */
+function describeFatal(err) {
+  const { redactText } = require("./core/redact");
+  const raw = String((err && err.message) || err || "error");
+  const message = redactText(raw)
+    .replace(/https?:\/\/\S+/gi, "<url>")
+    .replace(/\b(cookie|set-cookie|authorization|sessionid|x-?csrf\S*)\b\s*[:=]\s*\S+/gi, "$1=<redacted>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+  const frame = String((err && err.stack) || "").split("\n").map((l) => l.match(/([^\\/()\s]+\.js):(\d+)(?::\d+)?\)?\s*$/)).find(Boolean);
+  return {
+    error_name: String((err && err.name) || typeof err).slice(0, 60),
+    error_code: err && err.code ? String(err.code).slice(0, 60) : null,
+    message,
+    at: frame ? `${frame[1]}:${frame[2]}` : null,
+  };
+}
+
+/**
+ * Process-level backstop (every step, not one promise). An unhandledRejection or uncaughtException is logged as one
+ * redacted JSON line with the claimed job id and does NOT end the process: the claimed job keeps its lease and
+ * heartbeat, and anything the job loop awaits still reaches its own try/catch (this handler only sees errors that no
+ * code is handling). PERMIT_SYNC_EXIT_ON_UNHANDLED=true makes it exit 1 instead. A process that keeps raising
+ * unhandled errors (PERMIT_SYNC_MAX_UNHANDLED, default 100) exits 1 so a broken worker cannot run forever.
+ * @param {{ log: Function, getJobId?: () => string|null, env?: NodeJS.ProcessEnv, proc?: NodeJS.Process, exit?: (code: number) => void }} deps
+ * @returns {{ uninstall: () => void, count: () => number }}
+ */
+function installProcessGuard({ log, getJobId = () => null, env = process.env, proc = process, exit = (code) => process.exit(code) }) {
+  let count = 0;
+  const maxUnhandled = intEnv(env, "PERMIT_SYNC_MAX_UNHANDLED", 100);
+  const exitOnUnhandled = env.PERMIT_SYNC_EXIT_ON_UNHANDLED === "true";
+  const handle = (kind) => (err) => {
+    count += 1;
+    try {
+      log("error", kind, { job: getJobId(), count, ...describeFatal(err) });
+    } catch (_) {
+      // Logging must never throw out of the handler.
+    }
+    if (exitOnUnhandled || count >= maxUnhandled) exit(1);
+  };
+  const onRejection = handle("unhandled_rejection");
+  const onException = handle("uncaught_exception");
+  proc.on("unhandledRejection", onRejection);
+  proc.on("uncaughtException", onException);
+  return {
+    count: () => count,
+    uninstall() {
+      proc.off("unhandledRejection", onRejection);
+      proc.off("uncaughtException", onException);
+    },
+  };
+}
+
+/** Montgomery login: the existing manual portal login (form + anti-forgery token), at the saved login URL when set. */
+function montgomeryLogin(username, password, loginUrl) {
+  const { performMontgomeryPortalLogin } = require("../scrapers/montgomery/portal-login");
+  const { withQuietConsole } = require("./deep/runner");
+  // The manual login logs URLs and cookie names; its output is dropped.
+  return (page, entryUrl) => withQuietConsole(() => performMontgomeryPortalLogin(page, username, password, loginUrl || entryUrl));
+}
+
+/**
+ * @param {{ supabase: any, env?: NodeJS.ProcessEnv, launchContext: Function, createTransport?: Function,
+ *   createMontgomeryTransport?: Function, log?: Function, lock?: Function, loadDcDeep?: Function,
+ *   createDeepPass?: Function, pipeline?: object|null }} deps
  *   loadDcDeep / createDeepPass / pipeline are used in deep mode only
  */
 function buildOpenAdapter({
-  supabase, env = process.env, launchContext, createTransport = createDcLiveTransport, log = () => {},
+  supabase, env = process.env, launchContext, createTransport = createDcLiveTransport, createMontgomeryTransport = null, log = () => {},
   lock = deferWhileManualScrape, loadDcDeep = null, createDeepPass = null, pipeline = null,
 }) {
   const mode = syncMode(env);
   return async function openAdapter(job) {
-    if (job.adapter_key !== DC_KEY) throw new PortalChangedError(`no adapter registered for ${job.adapter_key}`);
-    const cred = await supabase.from("portal_credentials").select("portal_username, portal_password").eq("id", job.credential_id).single();
+    const reg = ADAPTERS[job.adapter_key];
+    if (!reg) throw new PortalChangedError(`no adapter registered for ${job.adapter_key}`);
+    const columns = job.adapter_key === MONTGOMERY_KEY ? "portal_username, portal_password, login_url" : "portal_username, portal_password";
+    const cred = await supabase.from("portal_credentials").select(columns).eq("id", job.credential_id).single();
     if (cred.error || !cred.data) throw new AuthError("credential not found");
     if (!looksLikeEncryptedEnvelope(cred.data.portal_password)) throw new AuthError("credential is not encrypted");
     const src = await supabase.from("permit_sync_sources").select("settings").eq("credential_id", job.credential_id).single();
@@ -172,8 +252,12 @@ function buildOpenAdapter({
       throw new AuthError("credential cannot be decrypted with the configured key");
     }
     const username = cred.data.portal_username;
-    await lock({ supabase, username });
+    await lock({ supabase, username, portal: reg.portal });
     const accountDownload = typeof settings.account_download === "boolean" ? settings.account_download : null;
+
+    if (job.adapter_key === MONTGOMERY_KEY) {
+      return openMontgomery({ job, reg, username, password, loginUrl: montgomeryLoginUrl(cred.data.login_url), accountDownload });
+    }
 
     if (mode !== "deep") {
       const transport = await createTransport({ launchContext, username, password, env, log });
@@ -209,6 +293,41 @@ function buildOpenAdapter({
       throw err;
     }
   };
+
+  /**
+   * Montgomery: the Montgomery transport and login. In deep mode the shared deep runner runs after each permit
+   * with the Montgomery driver (deep/montgomery-driver.js) in place of the manual DC scraper (G-1 option B).
+   */
+  async function openMontgomery({ job, reg, username, password, loginUrl, accountDownload }) {
+    const make = createMontgomeryTransport || require("./adapters/montgomery-projectdox/live-transport").createMontgomeryLiveTransport;
+    const login = montgomeryLogin(username, password, loginUrl);
+    const transport = await make({ launchContext, username, password, env, log, login, mode });
+    if (mode !== "deep") return { adapter: reg.createAdapter({ transport, accountDownload }), close: () => transport.close() };
+    try {
+      const { createMontgomeryDeepDriver } = require("./deep/montgomery-driver");
+      const makeDeepPass = createDeepPass || require("./deep/runner").createDeepPass;
+      const { supabaseDeepRepo, supabaseDeepStorage } = require("./deep/repo");
+      const deep = makeDeepPass({
+        dcDeep: createMontgomeryDeepDriver({ transport }), transport, tenant: MONTGOMERY,
+        repo: supabaseDeepRepo(supabase, { adapterKey: MONTGOMERY_KEY }), storage: supabaseDeepStorage(supabase),
+        pipeline, username, credentialId: job.credential_id, log, env,
+      });
+      return { adapter: reg.createAdapter({ transport: deep.wrapTransport(transport), accountDownload }), afterPermit: deep.afterPermit, close: () => transport.close() };
+    } catch (err) {
+      await transport.close().catch(() => {});
+      throw err;
+    }
+  }
+}
+
+/** A saved Montgomery login URL is used only when it is on the Montgomery portal host; otherwise the default entry. */
+function montgomeryLoginUrl(raw) {
+  try {
+    const u = new URL(String(raw || ""));
+    return u.protocol === "https:" && u.hostname.toLowerCase() === new URL(MONTGOMERY.portalOrigin).hostname ? u.toString() : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 /** Deep mode accepts downloads: the manual file and report exports save through Playwright downloads. */
@@ -235,6 +354,9 @@ async function main(env = process.env) {
   const { createClient } = require("@supabase/supabase-js");
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const workerId = `${os.hostname()}:${process.pid}`;
+  // Installed before the job loop (and before the browser or any adapter exists). `state` is assigned below.
+  let state = null;
+  const guard = installProcessGuard({ log, env, getJobId: () => (state ? state.get().jobId : null) });
   const controller = new AbortController();
   const deep = syncMode(env) === "deep";
   const mode = deep ? "deep" : "json";
@@ -242,7 +364,7 @@ async function main(env = process.env) {
   const idleMs = intEnv(env, "PERMIT_SYNC_IDLE_MS", 60000);
   const pauseMs = intEnv(env, "PERMIT_SYNC_PERMIT_PAUSE_MS", 0);
   const beatMs = intEnv(env, "PERMIT_SYNC_WORKER_HEARTBEAT_MS", 30000);
-  const state = createWorkerState({ staleMs: Math.max(idleMs * 3, 5 * 60 * 1000) });
+  state = createWorkerState({ staleMs: Math.max(idleMs * 3, 5 * 60 * 1000) });
   const onSignal = (sig) => {
     if (controller.signal.aborted) return;
     log("info", "shutdown_requested", { signal: sig, job: state.get().jobId });
@@ -333,6 +455,8 @@ async function main(env = process.env) {
   } finally {
     clearInterval(beatTimer);
     state.tick({ status: "stopped", jobId: null });
+    if (guard.count()) log("warn", "unhandled_errors_seen", { count: guard.count() });
+    guard.uninstall();
     await rpc.workerBeat(workerId, "stopped", null, details).catch(() => {});
     if (health) health.close();
     log("info", "worker_stopped", { worker: workerId });
@@ -347,4 +471,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };
+module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };

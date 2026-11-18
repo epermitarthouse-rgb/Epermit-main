@@ -1389,10 +1389,10 @@ app.post("/api/login", async (req, res) => {
         "Unsupported portal type. Supported: ProjectDox (avolvecloud.com) and Accela (accela.com or Citizen Access URLs)",
     });
   }
+  const lockPortal = portalType === "projectdox" ? dcCredentialLock.portalForUrl(dashboardUrl) : null;
   if (
-    portalType === "projectdox" &&
-    dcCredentialLock.isDcPortalUrl(dashboardUrl) &&
-    (await dcCredentialLock.automatedDcSyncActive(supabase, { username }))
+    lockPortal &&
+    (await dcCredentialLock.automatedDcSyncActive(supabase, { username, portal: lockPortal }))
   ) {
     return res.status(409).json({
       error: "automated_sync_in_progress",
@@ -2352,9 +2352,11 @@ app.post("/api/scrape", async (req, res) => {
     console.log("[api/scrape] reject: Session expired (browser cleared — idle cleanup, cancel, or crash)");
     return res.status(400).json({ error: "Session expired." });
   }
+  const sessionLockPortal =
+    session.dcPlanReview === true ? "dc" : session.portalSubtype === "montgomery-projectdox" ? "montgomery" : null;
   if (
-    session.dcPlanReview === true &&
-    (await dcCredentialLock.automatedDcSyncActive(supabase, { username: session.username }))
+    sessionLockPortal &&
+    (await dcCredentialLock.automatedDcSyncActive(supabase, { username: session.username, portal: sessionLockPortal }))
   ) {
     return res.status(409).json({
       error: "automated_sync_in_progress",
@@ -9933,6 +9935,7 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
     }
 
     const downloadPromise = popup.waitForEvent("download", { timeout: 60000 });
+    downloadPromise.catch(() => {}); // a later popup close must not become an unhandled rejection
     const clicked = await clickSsrsFormatAnchor(popup, format);
     if (!clicked) {
       throw new Error(`Failed to click SSRS export anchor for "${format}"`);
@@ -9959,6 +9962,7 @@ async function extractPDFsFromPage(page, context, uploadOpts = {}) {
     const downloadPromise = popup.waitForEvent("download", {
       timeout: 90000,
     });
+    downloadPromise.catch(() => {}); // a later popup close must not become an unhandled rejection
     await popup.evaluate(() => {
       const fn = /** @type {any} */ (window).$find;
       if (typeof fn !== "function") throw new Error("$find not available");

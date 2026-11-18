@@ -17780,6 +17780,8 @@ async function exportReportFormat(
 ) {
   async function doExport(handle) {
     const downloadPromise = page.waitForEvent("download", { timeout: 60000 });
+    // If the evaluate below throws, nothing awaits this promise; its later rejection must not crash the process.
+    downloadPromise.catch(() => {});
     await handle.frame.evaluate(
       ({ clientId, fmt }) => {
         const fn = /** @type {any} */ (window).$find;

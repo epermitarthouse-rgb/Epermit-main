@@ -350,6 +350,24 @@ function reportViewerUrl(item, origin, portalRecordId) {
   return `${origin}/WebForms/ReportViewer.aspx?${encodeURI(params)}`;
 }
 
+/** Recorded as the report's error when the portal lists it with an empty workflow parameter. */
+const REPORT_NEEDS_WORKFLOW = "report_needs_workflow: the portal lists this report with no workflow instance, so it cannot render yet";
+
+/**
+ * True when GetReportList gives the report a WFlowInstanceID parameter with no value (a permit with no workflow
+ * yet, or a report for another workflow). SSRS cannot render it: the viewer export throws and the GET export
+ * returns an error page (Montgomery live runs 2026-11-18: 139 on 200100; 133-135 on 146267). D-144.
+ */
+function reportNeedsWorkflow(item) {
+  const q = item && item.viewer && item.viewer.paramQuery;
+  return typeof q === "string" && /(^|[?&])WFlowInstanceID=(&|$)/i.test(q);
+}
+
+/** Report keys of a GetReportList listing that cannot render yet (reportNeedsWorkflow). */
+function unrenderableReportKeys(items) {
+  return new Set((Array.isArray(items) ? items : []).filter(reportNeedsWorkflow).map((i) => String(i.key || i.reportId)));
+}
+
 /** Method, host and path of a request, for guard events (no query values). */
 function requestLocation(method, url) {
   try {
@@ -392,4 +410,7 @@ module.exports = {
   normName,
   reportViewerUrl,
   requestLocation,
+  REPORT_NEEDS_WORKFLOW,
+  reportNeedsWorkflow,
+  unrenderableReportKeys,
 };

@@ -5,8 +5,10 @@
  * requests is built here and must pass core/safety.evaluateRequest before it is sent.
  */
 
-const API_ORIGIN = "https://washington-dc-us-projectdoxwebapi.avolvecloud.com";
-const UI_ORIGIN = "https://session.planreview.dob.dc.gov";
+const { DC, tenantFor } = require("../projectdox-tenants");
+
+const API_ORIGIN = DC.apiOrigin;
+const UI_ORIGIN = DC.uiOrigin;
 
 const ROUTES = Object.freeze({
   project_folders: { origin: "api", path: "/Folder/GetProjectFolders", defaults: { folderID: "" } },
@@ -29,6 +31,8 @@ const ROUTES = Object.freeze({
     origin: "api", path: "/Report/GetReportList",
     defaults: { assignedToProjectOnly: true, reportTypes: [1, 10, 11] },
   },
+  // Projects grid data call (Montgomery discovery): every project the account can open, with ProjectID and status.
+  paged_active_projects: { origin: "api", path: "/Project/GetPagedActiveProjects", defaults: { pageIndex: 0, pageSize: 100 } },
   project_corrections: { origin: "ui", path: "/Project/ProjectCorrections", defaults: {} },
   project_info: { origin: "ui", path: "/Project/ProjectInfo", defaults: {} },
   review_comments_report: {
@@ -52,4 +56,11 @@ function buildDcUrl(route, params = {}, { apiOrigin = API_ORIGIN, uiOrigin = UI_
   return u.toString();
 }
 
-module.exports = { API_ORIGIN, UI_ORIGIN, ROUTES, buildDcUrl };
+/** The same routes on a tenant's origins; the Review Comments report takes the tenant's report identity. */
+function buildTenantUrl(tenant, route, params = {}) {
+  const t = tenantFor(tenant);
+  const merged = route === "review_comments_report" ? { ...t.reviewReport, ...params } : params;
+  return buildDcUrl(route, merged, { apiOrigin: t.apiOrigin, uiOrigin: t.uiOrigin });
+}
+
+module.exports = { API_ORIGIN, UI_ORIGIN, ROUTES, buildDcUrl, buildTenantUrl };
