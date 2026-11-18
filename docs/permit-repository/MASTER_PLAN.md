@@ -143,16 +143,16 @@ Design: CENTRAL_PROCESSING_PROPOSAL.md (option A, approved). Pipeline detail: PI
 
 | Step | Scope | State |
 |---|---|---|
-| C1 | 50-comment cap: incremental classifier, per-comment status, router leaves unclassified rows pending (D-130) | Implemented, locally tested |
-| C2 | Migration `20261118150000`: insights, permit state, budgets and ledger, field sources, trigger, read and admin RPCs | Implemented, locally tested (apply + exact rollback) |
-| C3 | Central mode in the classifier and context engine; dispatcher `central_sweep`; worker trigger (D-121, D-131) | Implemented, locally tested |
-| C4 | Reuse on link, field ownership, narrowed human-work rule (D-122) | Implemented, locally tested |
-| C5 | Budget with hard stop; dry run; backfill gated by approval (D-123, D-124) | Implemented; estimate verified read-only; backfill not run |
-| C6 | Permit Queue, permit page, picker and Response Matrix states; admin diagnostics (D-132) | Implemented, locally tested |
+| C1 | 50-comment cap: incremental classifier, per-comment status, router leaves unclassified rows pending (D-130) | Deployed 2026-11-18 |
+| C2 | Migration `20261118150000`: insights, permit state, budgets and ledger, field sources, trigger, read and admin RPCs | Applied and verified 2026-11-18 |
+| C3 | Central mode in the classifier and context engine; dispatcher `central_sweep`; worker trigger (D-121, D-131) | Functions deployed and enabled 2026-11-18; worker trigger waits for the worker redeploy |
+| C4 | Reuse on link, field ownership, narrowed human-work rule (D-122) | Production-verified on ff193644 (0 AI calls, rows unchanged) |
+| C5 | Budget with hard stop; dry run; backfill gated by approval (D-123, D-124) | DC backfill done: 391/391, 46 calls, $0.5356 of $5 |
+| C6 | Permit Queue, permit page, picker and Response Matrix states; admin diagnostics (D-132) | Deployed (Vercel, merge `42cf55c`) |
 | C7 | Real routing to team members | Separate track, not started |
 
-Order of production steps (each needs approval): migration → function deploys → flags and sweep budget → frontend →
-worker → DC backfill with its $5 cap. See HANDOFF.md "Central processing".
+Rollout 2026-11-18 (HANDOFF.md "Central processing rollout"): migration, functions, frontend, flags and the DC backfill are
+done. Remaining: worker redeploy with the central trigger, after the first scheduled DC run.
 
 ## 1. Evidence base (summary)
 
