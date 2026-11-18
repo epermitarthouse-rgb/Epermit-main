@@ -135,6 +135,25 @@ version, rendition). Findings keep their existing citations (`source_document_id
 provenance maps them back to the permit file. Renditions are labelled as portal PDF renditions. New stored files
 (capture hash change, D-085) mark the analysis outdated; they never start an analysis on their own.
 
+### 0.7 Central comment processing (revision 2026-11-18, D-121..D-124, D-130..D-132)
+
+Every readable permit's review comments are classified and given preliminary code context once, at permit level,
+before any project exists; linking a permit reuses that work with zero AI calls and never overwrites human work.
+Design: CENTRAL_PROCESSING_PROPOSAL.md (option A, approved). Pipeline detail: PIPELINE_AND_LINKING.md.
+
+| Step | Scope | State |
+|---|---|---|
+| C1 | 50-comment cap: incremental classifier, per-comment status, router leaves unclassified rows pending (D-130) | Implemented, locally tested |
+| C2 | Migration `20261118100000`: insights, permit state, budgets and ledger, field sources, trigger, read and admin RPCs | Implemented, locally tested (apply + exact rollback) |
+| C3 | Central mode in the classifier and context engine; dispatcher `central_sweep`; worker trigger (D-121, D-131) | Implemented, locally tested |
+| C4 | Reuse on link, field ownership, narrowed human-work rule (D-122) | Implemented, locally tested |
+| C5 | Budget with hard stop; dry run; backfill gated by approval (D-123, D-124) | Implemented; estimate verified read-only; backfill not run |
+| C6 | Permit Queue, permit page, picker and Response Matrix states; admin diagnostics (D-132) | Implemented, locally tested |
+| C7 | Real routing to team members | Separate track, not started |
+
+Order of production steps (each needs approval): migration → function deploys → flags and sweep budget → frontend →
+worker → DC backfill with its $5 cap. See HANDOFF.md "Central processing".
+
 ## 1. Evidence base (summary)
 
 Sources: codebase audits (Phase 1/2 audits, Nov 2026), live DC portal investigation (Nov 4 2026, read-only, logged-in browser), architecture plan (Nov 5 2026).

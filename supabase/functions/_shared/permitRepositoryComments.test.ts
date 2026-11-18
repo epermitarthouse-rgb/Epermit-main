@@ -9,6 +9,7 @@ import {
   planRepositoryCommentMerge,
   repositoryCommentHash,
   statusIsParserOwned,
+  type CentralInsight,
   type ExistingParsedComment,
   type RepositoryComment,
   type RepositoryPermit,
@@ -394,5 +395,134 @@ describe("report threads versus the bare portal comment", () => {
     const body = "Note: see the revised sheet - 3/2/2026 9:15 AM\nProvide the missing detail.";
     assert.equal(plan([portalOf(body, 0)], [legacyRow(2, body)]).stats.text_change_flagged, 0);
     assert.equal(plan([portalOf("Note: see the revised sheet - 3/2/2026 9:15 AM", 0)], [legacyRow(2, body)]).stats.text_change_flagged, 1);
+  });
+});
+
+describe("central results reused on link (D-122)", () => {
+  const insight = (ref: number, over: Partial<CentralInsight> = {}): CentralInsight => ({
+    permit_id: PERMIT,
+    portal_comment_key: `ref:${ref}`,
+    insight_id: `ins-${ref}`,
+    discipline: "Civil",
+    code_reference: "DCMR 21-5",
+    guidance_text: "Typically answered with a revised erosion and sediment control plan.",
+    ...over,
+  });
+  const merge = (comments: RepositoryComment[], existing: ExistingParsedComment[], insights: CentralInsight[]) =>
+    planRepositoryCommentMerge({ projectId: PROJECT, permits: [permit()], comments, existing, now: NOW, insights });
+
+  it("new rows take discipline, code reference and draft from the central result, sourced central", () => {
+    const plan = merge([comment(1, "Provide erosion plan."), comment(2, "Stormwater sheet.")], [], [insight(1)]);
+    const [a, b] = plan.inserts;
+    assert.equal(a.discipline, "Civil");
+    assert.equal(a.discipline_source, "central");
+    assert.equal(a.code_reference, "DCMR 21-5");
+    assert.equal(a.code_reference_source, "central");
+    assert.equal(a.response_text_source, "central");
+    assert.equal(a.central_insight_id, "ins-1");
+    assert.equal(a.processing_status, "pending", "routing still runs per project");
+    assert.equal(b.discipline, null, "no central result: the project agents classify it");
+    assert.equal(b.central_insight_id, undefined);
+    assert.equal(plan.stats.central_applied, 1);
+  });
+
+  it("the six legacy rows (ff193644 shape) keep responses, approvals and statuses; only empty fields are filled", () => {
+    const bodies = ["Provide erosion plan.", "Stormwater sheet.", "Tree permit.", "Grading note.", "Soil report.", "Info for applicant."];
+    const existing = bodies.map((b, i) =>
+      legacyRow(i + 1, b, {
+        discipline: "Environmental",
+        code_reference: i % 2 ? "DCMR 21" : null,
+        assigned_to: "Project Manager",
+        ...(i === 0 ? { response_status: "Approved", approved_at: "2026-11-01T00:00:00Z", response_text: "Approved answer" } : {}),
+      }));
+    const plan = merge(bodies.map((b, i) => comment(i + 1, b)), existing, bodies.map((_, i) => insight(i + 1)));
+    assert.equal(plan.inserts.length, 0);
+    assert.deepEqual(plan.softRemovals, []);
+    for (const u of plan.updates) {
+      for (const k of ["response_text", "response_status", "approved_at", "approved_by", "assigned_to", "discipline", "original_text", "status"]) {
+        assert.ok(!(k in u.patch), `${k} is never written on a legacy row`);
+      }
+      if ("code_reference" in u.patch) assert.equal(u.patch.code_reference_source, "central", "an empty field is filled and labelled");
+    }
+    assert.equal(plan.updates.filter((u) => "code_reference" in u.patch).length, 3);
+  });
+
+  it("refreshes fields still sourced central; flags (never overwrites) a person's value when a newer result differs", () => {
+    const row = (over: Partial<ExistingParsedComment>) => ({
+      ...legacyRow(1, "Provide erosion plan."),
+      portal_permit_id: PERMIT,
+      portal_comment_key: "ref:1",
+      response_text: null,
+      central_insight_id: "ins-old",
+      ...over,
+    });
+    const newer = insight(1, { insight_id: "ins-new", discipline: "Environmental", code_reference: "DCMR 21-6" });
+
+    const central = merge([comment(1, "Provide erosion plan.")], [row({ discipline: "Civil", discipline_source: "central", code_reference: "DCMR 21-5", code_reference_source: "central" })], [newer]);
+    assert.equal(central.updates[0].patch.discipline, "Environmental");
+    assert.equal(central.updates[0].patch.code_reference, "DCMR 21-6");
+    assert.equal(central.updates[0].patch.central_insight_id, "ins-new");
+    assert.equal(central.stats.central_refreshed, 2);
+
+    const human = merge([comment(1, "Provide erosion plan.")], [row({ discipline: "Structural", discipline_source: "human", code_reference: "IBC 1805", code_reference_source: "human" })], [newer]);
+    assert.ok(!("discipline" in human.updates[0].patch));
+    assert.ok(!("code_reference" in human.updates[0].patch));
+    assert.equal(human.updates[0].patch.central_update_at, NOW);
+    assert.equal(human.stats.central_flagged, 1);
+
+    const projectAi = merge([comment(1, "Provide erosion plan.")], [row({ discipline: "Structural", discipline_source: "project_ai", code_reference: "IBC 1805", code_reference_source: "project_ai" })], [newer]);
+    assert.ok(!("discipline" in projectAi.updates[0].patch) && !("central_update_at" in projectAi.updates[0].patch), "project agents own project_ai values");
+  });
+
+  it("a central draft is not refreshed once it was reviewed or approved", () => {
+    const existing = [{
+      ...legacyRow(1, "Provide erosion plan."),
+      portal_permit_id: PERMIT,
+      portal_comment_key: "ref:1",
+      response_text: "Old guidance",
+      response_text_source: "central" as const,
+      response_status: "Ready for Review",
+      central_insight_id: "ins-old",
+    }];
+    const plan = merge([comment(1, "Provide erosion plan.")], existing, [insight(1, { insight_id: "ins-new" })]);
+    assert.ok(!("response_text" in plan.updates[0].patch));
+  });
+
+  it("AI drafts and router labels are not human work: new portal text replaces them and they are re-derived", () => {
+    const existing = [{
+      ...legacyRow(1, "Provide erosion plan."),
+      status: "Approved",
+      portal_permit_id: PERMIT,
+      portal_comment_key: "ref:1",
+      portal_content_hash: "old",
+      response_text: "AI draft",
+      response_text_source: "project_ai" as const,
+      assigned_to: "Civil Engineer",
+      assigned_to_source: "project_ai" as const,
+      discipline: "Civil",
+      discipline_source: "central" as const,
+      central_insight_id: "ins-old",
+    }];
+    const plan = merge([comment(1, "Provide a revised erosion plan with silt fence details.")], existing, []);
+    const p = plan.updates[0].patch;
+    assert.equal(plan.stats.text_replaced, 1);
+    assert.equal(p.response_text, null);
+    assert.equal(p.assigned_to, null);
+    assert.equal(p.discipline, null);
+    assert.equal(p.central_insight_id, null);
+    assert.equal(p.processing_status, "pending");
+
+    const withNew = merge([comment(1, "Provide a revised erosion plan with silt fence details.")], existing, [insight(1, { insight_id: "ins-new", discipline: "Environmental" })]);
+    assert.equal(withNew.updates[0].patch.discipline, "Environmental", "the new text's central result fills it");
+    assert.ok(!("discipline_source" in withNew.updates[0].patch), "stays central (unchanged, so not rewritten)");
+    assert.equal(withNew.updates[0].patch.central_insight_id, "ins-new");
+  });
+
+  it("an unknown-source response still counts as human work: the new text is only flagged and central is not applied", () => {
+    const existing = [{ ...legacyRow(1, "Provide erosion plan."), portal_permit_id: PERMIT, portal_comment_key: "ref:1", portal_content_hash: "old", code_reference: null }];
+    const plan = merge([comment(1, "Completely different comment text.")], existing, [insight(1)]);
+    const p = plan.updates[0].patch;
+    assert.equal(plan.stats.text_change_flagged, 1);
+    assert.ok(!("original_text" in p) && !("code_reference" in p) && !("central_insight_id" in p));
   });
 });

@@ -2,6 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { serviceUserResponse } from "../_shared/serviceExecution.ts";
 import { resolveServiceExecution } from "../_shared/serviceExecutionDeno.ts";
+import { handleCentralStage } from "../_shared/centralAgentDeno.ts";
+import { CLASSIFIER_CHUNK, CLASSIFIER_SYSTEM_PROMPT, parseClassifications, type Classification } from "../_shared/commentPrompts.ts";
+import {
+  CLASSIFIER_ELIGIBLE_OR_FILTERS,
+  runClassifierLoop,
+  type ClassifierRow,
+  type RowUpdate,
+} from "../_shared/commentProcessingStatus.ts";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 
 const corsHeaders = {
@@ -9,74 +17,43 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DISCIPLINE_ENUM = [
-  "Architectural",
-  "Structural",
-  "Mechanical",
-  "Electrical",
-  "Plumbing",
-  "Fire",
-  "Civil",
-  "Energy",
-  "Zoning",
-  "Environmental",
-  "Administrative",
-  "Other",
-] as const;
+/** Default time budget of one incremental call; the caller continues while `has_more` (D-130). */
+const DEFAULT_BUDGET_MS = 50_000;
+/** A chunk is not started with less than this left (one model call). */
+const CHUNK_RESERVE_MS = 20_000;
 
-type Discipline = (typeof DISCIPLINE_ENUM)[number];
+type Row = ClassifierRow & { original_text: string; project_id: string; discipline: string | null };
 
-function isDiscipline(s: string): s is Discipline {
-  return (DISCIPLINE_ENUM as readonly string[]).includes(s);
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
-
-const BATCH_SIZE = 50;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({ code: 500, message: "OpenAI API key not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const peek = await req.clone().json().catch(() => ({}));
+    if (peek && typeof peek === "object" && (peek as Record<string, unknown>).mode === "central") {
+      return await handleCentralStage(req, peek as Record<string, unknown>, "classify", corsHeaders);
     }
+
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) return json({ code: 500, message: "OpenAI API key not configured" }, 500);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !anonKey) {
-      return new Response(
-        JSON.stringify({ code: 500, message: "SUPABASE_URL or SUPABASE_ANON_KEY not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (!supabaseUrl || !anonKey) return json({ code: 500, message: "SUPABASE_URL or SUPABASE_ANON_KEY not configured" }, 500);
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ code: 401, message: "Missing or invalid Authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ code: 401, message: "Missing or invalid Authorization header" }, 401);
     }
     const token = authHeader.replace(/^\s*Bearer\s+/i, "").trim();
-    if (!token) {
-      return new Response(
-        JSON.stringify({ code: 401, message: "Invalid JWT" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    console.log("Authorization header present, validating JWT");
+    if (!token) return json({ code: 401, message: "Invalid JWT" }, 401);
 
     const serviceAuth = await resolveServiceExecution(req, "discipline-classifier-agent", (b) => b.project_id);
-    if ("error" in serviceAuth) {
-      return new Response(
-        JSON.stringify({ code: serviceAuth.status, message: serviceAuth.error }),
-        { status: serviceAuth.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if ("error" in serviceAuth) return json({ code: serviceAuth.status, message: serviceAuth.error }, serviceAuth.status);
 
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
@@ -87,371 +64,196 @@ serve(async (req) => {
       : await supabase.auth.getUser();
     if (userError || !user) {
       console.warn("JWT validation failed:", userError?.message ?? "No user");
-      return new Response(
-        JSON.stringify({ code: 401, message: "Invalid JWT" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ code: 401, message: "Invalid JWT" }, 401);
     }
-    console.log("JWT validated, user.id:", user.id);
 
-    const adminClient = serviceRoleKey
-      ? createClient(supabaseUrl, serviceRoleKey)
-      : supabase;
+    const adminClient = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : supabase;
 
     const body = await req.json().catch(() => ({}));
     const projectId = body.project_id as string | undefined;
     /** When true (Classified Comments / manual refresh), classify every row for `project_id`. */
     const reclassifyAll = body.reclassify_all === true;
-
-    const maxFetch = reclassifyAll ? 500 : 200;
-    const batchLimit = typeof body.batch_limit === "number" && body.batch_limit > 0
-      ? Math.min(body.batch_limit, maxFetch)
-      : (reclassifyAll ? 500 : BATCH_SIZE);
+    /** Optional cap on rows sent in this call; without it an incremental call works until done or out of time. */
+    const rowCap = typeof body.batch_limit === "number" && body.batch_limit > 0
+      ? Math.min(body.batch_limit, 500)
+      : (reclassifyAll ? 500 : Number.POSITIVE_INFINITY);
+    const budgetMs = Math.max(10_000, Math.min(120_000, Number(body.budget_ms) || DEFAULT_BUDGET_MS));
+    const deadline = Date.now() + budgetMs;
 
     let isShadowMode = false;
-
     if (projectId) {
       const { data: project } = await supabase
         .from("projects")
         .select("id, user_id, is_shadow_mode")
         .eq("id", projectId)
         .single();
-      if (!project || project.user_id !== user.id) {
-        return new Response(
-          JSON.stringify({ code: 404, message: "Project not found or access denied" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      if (!project || project.user_id !== user.id) return json({ code: 404, message: "Project not found or access denied" }, 404);
       isShadowMode = project.is_shadow_mode === true;
-      console.log("discipline-classifier: shadow_mode =", isShadowMode, "for project", projectId);
     }
 
     const projectIdsResult = await supabase.from("projects").select("id").eq("user_id", user.id);
     const projectIds = (projectIdsResult.data ?? []).map((p: { id: string }) => p.id);
-    if (projectIds.length === 0) {
-      return new Response(
-        JSON.stringify({ classified_count: 0 }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    if (projectIds.length === 0) return json({ classified_count: 0, remaining: 0, has_more: false });
     const projectFilter = projectId ? [projectId] : projectIds;
 
     if (reclassifyAll && !projectId) {
-      return new Response(
-        JSON.stringify({
-          code: 400,
-          message: "reclassify_all requires project_id",
-          classified_count: 0,
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json({ code: 400, message: "reclassify_all requires project_id", classified_count: 0 }, 400);
     }
 
     let parsedCommentsTotalForProject: number | null = null;
     if (projectId) {
-      const { count: projectCommentCount } = await adminClient
+      const { count } = await adminClient
         .from("parsed_comments")
         .select("*", { count: "exact", head: true })
         .eq("project_id", projectId);
-      parsedCommentsTotalForProject = projectCommentCount ?? null;
-      console.log(
-        "[discipline-classifier] parsed_comments DB count for project",
-        projectId,
-        ":",
-        parsedCommentsTotalForProject ?? "unknown",
-      );
+      parsedCommentsTotalForProject = count ?? null;
     }
 
-    /**
-     * Incremental: (discipline unclassified AND (not Approved OR raw_ref)) via one `or` group so filters AND correctly.
-     * Refresh/reclassify_all: load all rows up to batchLimit (scoped to project_id).
-     */
-    let query = adminClient
-      .from("parsed_comments")
-      .select("id, original_text, project_id, discipline, ingest_source, status")
-      .in("project_id", projectFilter);
-
-    if (!reclassifyAll) {
-      query = query.or(
-        "and(discipline.is.null,ingest_source.eq.raw_ref)," +
-          "and(discipline.is.null,status.neq.Approved)," +
-          "and(discipline.eq.General,ingest_source.eq.raw_ref)," +
-          "and(discipline.eq.General,status.neq.Approved)," +
-          "and(discipline.eq.Unclassified,ingest_source.eq.raw_ref)," +
-          "and(discipline.eq.Unclassified,status.neq.Approved)",
-      );
-    }
-
-    query = query.order("created_at", { ascending: true }).limit(batchLimit);
-
-    console.log(
-      "[discipline-classifier] query mode=" +
-        (reclassifyAll ? "reclassify_all (all rows)" : "incremental (unclassified + status/ref gate)") +
-        " project_scope=" +
-        projectFilter.length +
-        " projects, limit=" +
-        batchLimit +
-        " shadow_mode=" +
-        isShadowMode,
-    );
-
-    const { data: rows, error: fetchError } = await query;
-
-    if (fetchError) {
-      console.error("Fetch parsed_comments error:", fetchError);
-      return new Response(
-        JSON.stringify({ code: 500, message: fetchError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const comments = (rows ?? []) as { id: string; original_text: string; project_id: string; discipline: string | null }[];
-    console.log("[DEBUG] discipline-classifier: filtered query returned rows:", comments.length);
-
-    if (comments.length === 0) {
-      const dbgTotal = parsedCommentsTotalForProject ?? 0;
-      console.log(
-        "[discipline-classifier] no rows matched filters; parsed_comments total in project (if single project):",
-        dbgTotal,
-      );
-      if (projectId && dbgTotal > 0) {
-        const { data: sampleRows } = await adminClient
-          .from("parsed_comments")
-          .select("id, discipline, status, ingest_source")
-          .eq("project_id", projectId)
-          .limit(200);
-        if (sampleRows && sampleRows.length > 0) {
-          const disciplineBreakdown: Record<string, number> = {};
-          const statusBreakdown: Record<string, number> = {};
-          for (const r of sampleRows as { discipline: string | null; status: string | null; ingest_source?: string | null }[]) {
-            const d = r.discipline ?? "null";
-            const s = r.status ?? "null";
-            disciplineBreakdown[d] = (disciplineBreakdown[d] || 0) + 1;
-            statusBreakdown[s] = (statusBreakdown[s] || 0) + 1;
-          }
-          console.log("[discipline-classifier] sample discipline breakdown:", JSON.stringify(disciplineBreakdown));
-          console.log("[discipline-classifier] sample status breakdown:", JSON.stringify(statusBreakdown));
-        }
-      }
-      return new Response(
-        JSON.stringify({
-          classified_count: 0,
-          rows_sent: 0,
-          parsed_comments_total: dbgTotal,
-          reclassify_all: reclassifyAll,
-          debug_total_comments: dbgTotal,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    const COLUMNS = "id, original_text, project_id, discipline, processing_attempts";
+    /** Incremental eligibility (D-130): unclassified, not set by a person, not set aside after repeated failures. */
+    const eligible = () => {
+      let q = adminClient.from("parsed_comments").select(COLUMNS).in("project_id", projectFilter);
+      for (const f of CLASSIFIER_ELIGIBLE_OR_FILTERS) q = q.or(f);
+      return q;
+    };
 
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+    const totals = { classified: 0, failed: 0, needs_attention: 0, rows_sent: 0, shadow_logged: 0, labels: 0, other: 0 };
 
-    const systemPrompt = `Classify each building permit review comment into exactly one discipline and provide a confidence score.
-
-Available disciplines and what they cover:
-
-- Structural: Load-bearing elements, foundations, framing, steel, concrete, structural calculations, wind/seismic design, IBC Chapter 16-23
-
-- Architectural: Building envelope, egress, accessibility (ADA), room layouts, finishes, doors/windows, fire-rated assemblies, IBC Chapters 3-12
-
-- Mechanical: Heating, cooling, ventilation, ductwork, IMC code references (use "Mechanical" for HVAC)
-
-- Electrical: Power distribution, lighting, panels, NEC code references, electrical load calculations
-
-- Plumbing: Water supply, drainage, fixtures, IPC code references
-
-- Fire: Sprinklers, fire alarms, smoke detectors, fire suppression, NFPA references
-
-- Civil: Site work, grading, stormwater, surveyor's plat, erosion control, utilities, site plans
-
-- Zoning: Setbacks, lot coverage, FAR, height limits, use permits, zoning code references, variances
-
-- Environmental: Lead abatement, asbestos, hazardous materials, DOEE permits, EPA requirements, environmental surveys, contamination
-
-- Energy: Energy code compliance, IECC, green building requirements, insulation, energy modeling (use "Energy" for green/energy)
-
-- Administrative: Document formatting, missing submissions, permit fees, application completeness, signatures, stamps, certifications
-
-- Other: ONLY use this if the comment truly doesn't fit any category above. Most comments SHOULD fit into one of the specific disciplines.
-
-IMPORTANT: Prefer specific disciplines over 'Other'. For example:
-- Lead abatement → Environmental (not Other)
-- Asbestos survey → Environmental (not Other)
-- Cost estimate upload → Administrative (not Other)
-- Surveyor's plat → Civil
-- Demo permit → Administrative or Environmental depending on context
-- DOEE permit → Environmental
-
-Return a JSON object with a single key "classifications": an array of objects with:
-- "index" (0-based position in the list)
-- "discipline" (exactly one of: Architectural, Structural, Mechanical, Electrical, Plumbing, Fire, Civil, Energy, Zoning, Environmental, Administrative, Other)
-- "confidence_score" (a numeric value between 0.00 and 1.00 indicating your certainty in the classification. Use 0.95+ for clear-cut cases, 0.70-0.94 for likely matches, and below 0.70 for uncertain/ambiguous comments)
-
-One object per comment in the same order as provided.`;
-
-    const OPENAI_CHUNK = 45;
-    let classifiedCount = 0;
-    let shadowLoggedCount = 0;
-    let classificationLabelsTotal = 0;
-    let otherCount = 0;
-
-    for (let chunkStart = 0; chunkStart < comments.length; chunkStart += OPENAI_CHUNK) {
-      const chunk = comments.slice(chunkStart, chunkStart + OPENAI_CHUNK);
-      const userContent = chunk.map((c, i) => `[${i}] ${c.original_text}`).join("\n\n");
-
-      console.log(
-        `[discipline-classifier] OpenAI chunk offset ${chunkStart}, size ${chunk.length}, total batch ${comments.length}`,
-      );
-
+    const callModel = async (chunk: Row[]) => {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
+          { role: "system", content: CLASSIFIER_SYSTEM_PROMPT },
+          { role: "user", content: chunk.map((c, i) => `[${i}] ${c.original_text}`).join("\n\n") },
         ],
         max_tokens: 8192,
         response_format: { type: "json_object" },
       });
-
-      const content = response.choices?.[0]?.message?.content;
-      if (!content) {
-        return new Response(
-          JSON.stringify({
-            code: 500,
-            message: "No response from model",
-            classified_count: classifiedCount,
-            rows_sent: chunkStart,
-            parsed_comments_total: parsedCommentsTotalForProject,
-            reclassify_all: reclassifyAll,
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+      return parseClassifications(response.choices?.[0]?.message?.content, chunk.length);
+    };
+    const write = async (u: RowUpdate) => {
+      const { error } = await adminClient.from("parsed_comments").update(u.patch).eq("id", u.id);
+      if (error) console.warn("parsed_comments update failed for comment", u.id, error.message);
+      return !error;
+    };
+    const onClassified = async (row: Row, c: Classification) => {
+      totals.labels++;
+      if (c.discipline === "Other") totals.other++;
+      if (isShadowMode) {
+        const { error: shadowErr } = await adminClient.from("shadow_predictions").insert({
+          project_id: row.project_id,
+          comment_id: row.id,
+          agent_name: "Discipline Classifier",
+          prediction_data: { ai_discipline: c.discipline, assigned_discipline: c.discipline },
+          confidence_score: c.confidence,
+          match_status: "match",
+        });
+        if (shadowErr) console.warn("shadow_predictions insert failed for comment", row.id, shadowErr.message);
+        else totals.shadow_logged++;
       }
+      const { error: auditErr } = await adminClient.from("audit_trail").insert({
+        project_id: row.project_id,
+        actor_id: "Discipline Classifier",
+        action_type: "classification",
+        routing_decision: isShadowMode ? "shadow_match" : "live_update",
+        input_hash: row.id,
+      });
+      if (auditErr) console.warn("audit_trail insert failed for comment", row.id, auditErr.message);
+    };
 
-      let data: { classifications?: { index: number; discipline: string; confidence_score?: number }[] };
-      try {
-        data = JSON.parse(content);
-      } catch {
-        return new Response(
-          JSON.stringify({
-            code: 500,
-            message: "Invalid JSON from model",
-            classified_count: classifiedCount,
-            rows_sent: chunkStart,
-            parsed_comments_total: parsedCommentsTotalForProject,
-            reclassify_all: reclassifyAll,
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
+    let fetchError: string | null = null;
+    const loop = async (fetchEligible: (limit: number) => Promise<Row[]>, cap: number) => {
+      const r = await runClassifierLoop({
+        fetchEligible,
+        classify: callModel,
+        write,
+        onClassified,
+        rowCap: cap,
+        chunkSize: CLASSIFIER_CHUNK,
+        deadline,
+        reserveMs: CHUNK_RESERVE_MS,
+      });
+      totals.classified += r.classified;
+      totals.failed += r.failed;
+      totals.needs_attention += r.needs_attention;
+      totals.rows_sent += r.rows_sent;
+      return r;
+    };
 
-      const classifications = Array.isArray(data.classifications) ? data.classifications : [];
-      classificationLabelsTotal += classifications.length;
-
-      for (const c of classifications) {
-        const i = c.index;
-        if (i < 0 || i >= chunk.length) continue;
-
-        const row = chunk[i]!;
-        const discipline = isDiscipline(c.discipline) ? c.discipline : "Other";
-        const confidenceScore = typeof c.confidence_score === "number"
-          ? Math.max(0, Math.min(1, c.confidence_score))
-          : 0.5;
-
-        if (discipline === "Other") otherCount++;
-
-        // STEP 1: ALWAYS update parsed_comments with the classified discipline
-        const { error: updateError } = await adminClient
+    try {
+      if (reclassifyAll) {
+        const { data, error } = await adminClient
           .from("parsed_comments")
-          .update({ discipline })
-          .eq("id", row.id);
-
-        // STEP 2: Increment count on success
-        if (!updateError) {
-          classifiedCount++;
-        } else {
-          console.warn("parsed_comments update failed for comment", row.id, updateError.message);
-        }
-
-        // STEP 3: If shadow mode, ADDITIONALLY log to shadow_predictions
-        if (isShadowMode) {
-          const matchStatus = "match";
-          try {
-            const { error: shadowErr } = await adminClient
-              .from("shadow_predictions")
-              .insert({
-                project_id: row.project_id,
-                comment_id: row.id,
-                agent_name: "Discipline Classifier",
-                prediction_data: {
-                  ai_discipline: discipline,
-                  assigned_discipline: discipline,
-                },
-                confidence_score: confidenceScore,
-                match_status: matchStatus,
-              });
-            if (shadowErr) {
-              console.warn("shadow_predictions insert failed for comment", row.id, shadowErr.message);
-            } else {
-              shadowLoggedCount++;
-            }
-          } catch (err) {
-            console.warn("shadow_predictions insert exception for comment", row.id, err);
+          .select(COLUMNS)
+          .in("project_id", projectFilter)
+          .or("discipline_source.is.null,discipline_source.neq.human")
+          .order("created_at", { ascending: true })
+          .limit(rowCap);
+        if (error) return json({ code: 500, message: error.message }, 500);
+        // One pass over a fixed list (rows stay eligible after classification, so it is not re-queried).
+        const queue = (data ?? []) as Row[];
+        await loop(async (limit) => queue.splice(0, limit), queue.length);
+      } else {
+        const r = await loop(async (limit) => {
+          const { data, error } = await eligible().order("created_at", { ascending: true }).limit(limit);
+          if (error) {
+            fetchError = error.message;
+            return [];
           }
-        }
-
-        // STEP 4: Audit trail — record whether this was live or shadow
-        try {
-          const routingDecision = isShadowMode ? "shadow_logged" : "live_update";
-          const auditPayload: Record<string, unknown> = {
-            project_id: row.project_id,
-            actor_id: "Discipline Classifier",
-            action_type: "classification",
-            routing_decision: routingDecision,
-            input_hash: row.id,
-          };
-          if (isShadowMode) {
-            auditPayload.routing_decision = "shadow_match";
-          }
-          const { error: auditErr } = await adminClient
-            .from("audit_trail")
-            .insert(auditPayload);
-          if (auditErr) {
-            console.warn("audit_trail insert failed for comment", row.id, auditErr.message);
-          }
-        } catch (err) {
-          console.warn("audit_trail insert exception for comment", row.id, err);
+          return (data ?? []) as Row[];
+        }, rowCap);
+        if (fetchError) return json({ code: 500, message: fetchError, classified_count: totals.classified, has_more: true }, 500);
+        if (r.stopped === "write_failed") {
+          return json({ code: 500, message: "Could not save classifications", classified_count: totals.classified, has_more: true }, 500);
         }
       }
+    } catch (e) {
+      // Model or network error: nothing is marked done; the caller retries and resumes from the database.
+      return json({
+        code: 500,
+        message: e instanceof Error ? e.message : "Model call failed",
+        classified_count: totals.classified,
+        failed_count: totals.failed,
+        rows_sent: totals.rows_sent,
+        has_more: true,
+      }, 500);
     }
 
-    if (classificationLabelsTotal > 0 && otherCount / classificationLabelsTotal > 0.5) {
+    let remaining = 0;
+    if (!reclassifyAll) {
+      const { count, error } = await adminClient
+        .from("parsed_comments")
+        .select("id", { count: "exact", head: true })
+        .in("project_id", projectFilter)
+        .or(CLASSIFIER_ELIGIBLE_OR_FILTERS[0])
+        .or(CLASSIFIER_ELIGIBLE_OR_FILTERS[1])
+        .or(CLASSIFIER_ELIGIBLE_OR_FILTERS[2]);
+      remaining = error ? 1 : (count ?? 0);
+    }
+
+    if (totals.labels > 0 && totals.other / totals.labels > 0.5) {
       console.log("[WARN] Over 50% classified as Other — prompt may need tuning");
     }
-
     const mode = isShadowMode ? "shadow" : "live";
     console.log(
-      `discipline-classifier [${mode}]: rows_sent=${comments.length}, DB_total=${parsedCommentsTotalForProject}, classified_updates=${classifiedCount}, shadow_logged=${shadowLoggedCount}, reclassify_all=${reclassifyAll}`,
+      `discipline-classifier [${mode}]: rows_sent=${totals.rows_sent}, classified=${totals.classified}, failed=${totals.failed}, needs_attention=${totals.needs_attention}, remaining=${remaining}, reclassify_all=${reclassifyAll}`,
     );
 
-    return new Response(
-      JSON.stringify({
-        classified_count: classifiedCount,
-        rows_sent: comments.length,
-        parsed_comments_total: parsedCommentsTotalForProject ?? comments.length,
-        reclassify_all: reclassifyAll,
-        shadow_logged_count: shadowLoggedCount,
-        mode,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return json({
+      classified_count: totals.classified,
+      failed_count: totals.failed,
+      needs_attention_count: totals.needs_attention,
+      rows_sent: totals.rows_sent,
+      remaining,
+      has_more: remaining > 0,
+      parsed_comments_total: parsedCommentsTotalForProject ?? totals.rows_sent,
+      reclassify_all: reclassifyAll,
+      shadow_logged_count: totals.shadow_logged,
+      mode,
+    });
   } catch (error) {
     console.error("Error in discipline-classifier-agent:", error);
-    return new Response(
-      JSON.stringify({ code: 500, message: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ code: 500, message: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });

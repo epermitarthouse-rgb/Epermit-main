@@ -1,7 +1,9 @@
 # Central comment processing: architecture investigation and proposal
 
-Status 2026-11-18: investigation only. No code, migration, deploy or production write. Verified against `main` at
-`8a09947` (= `origin/main`). Production figures are read-only counts and column names.
+**Status 2026-11-18: option A approved and implemented** on branch `feat/central-comment-processing` (D-121..D-124,
+D-130..D-132), tested locally, **not applied, deployed or run**. What was built, and where it differs from the sketch
+below, is in "Implemented" at the end of this document. The investigation below is unchanged (verified against `main`
+at `8a09947`; production figures are read-only counts and column names).
 
 Goal: every readable permit in Permit Queue already has its review comments extracted, normalized, classified by
 discipline and given preliminary code/reference context, with provenance and limitations, before any project exists.
@@ -370,3 +372,26 @@ Open risks: prompt and model drift between central and project modes (mitigated 
 string); multi-jurisdiction code references (jurisdiction in `input_hash` and in the prompt; limitations say
 "inferred"); cross-tenant project readability under default+override (pre-existing, D-120 note); OpenAI outages
 (back-off; project mode remains the fallback).
+
+## Implemented (2026-11-18, branch `feat/central-comment-processing`)
+
+One migration, `20261118100000_central_comment_processing.sql` (rollback
+`scripts/permit-repo/rollback-20261118100000_central_comment_processing.sql`, exact-rollback test in
+`permit-repo-chain.test.js`). The existing agents, dispatcher and state-machine pattern are reused; there is no second
+pipeline and no new agent.
+
+| Plan item | Built |
+|---|---|
+| Insights table, history, provenance, limitations | `permit_comment_insights` keyed by (comment, input hash, processing version); `is_current`, `superseded_at`; `code_basis` decided from the text (`codeBasis`), limitations per row (D-121) |
+| Permit state, claim/finish | `permit_comment_processing_state`, `permit_central_claim` / `permit_central_finish` / `permit_central_work` / `permit_central_record`; "completed" with pending or failed comments is recorded as failed (D-121) |
+| Central mode | `mode: "central"` in `discipline-classifier-agent` (classify) and `context-reference-engine` (enrich) via `_shared/centralAgentDeno.ts`; prompts in `_shared/commentPrompts.ts` shared with project mode; one version string `CENTRAL_PROCESSING_VERSION` |
+| Dispatcher | `permit-comment-pipeline` actions `central_sweep` (before projects in the cron sweep), `central_dry_run`, `central_backfill` (D-124, D-131) |
+| Cost control | Per-call reservation against an approved cap (`permit_ai_budgets`, `permit_ai_cost_ledger`), replacing the "per-sweep and daily caps" idea (D-123) |
+| Reuse on link | Parser merge fills from central results, field sources, `central_update_at`; project fingerprint covers central ids (D-122) |
+| 50-row cap | Incremental classifier with time budget and per-row status; router no longer finalises unclassified rows (D-130) |
+| Worker | `commentDispatch.triggerCentral` after each permit pass, linked or not (D-121) |
+| UI | Plain states in Permit Queue, permit page and permit picker; Response Matrix "Preliminary AI" / "Newer AI analysis"; admin-only diagnostics with budgets and retry (D-132) |
+
+Not built: real routing to team members (separate track, unchanged); an "accept newer analysis" action (the marker is
+shown; a person updates the field). Verified backfill estimate: 391 active comments, 16 permits, 376 inputs to send,
+47 calls, about $0.75 per pass, worst-case reservation $2.56 under the $5 cap (D-124).

@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { AlertBanner } from "@/components/design/ProductPrimitives";
 import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanner";
+import { PermitCommentAnalysisDiagnostics, PermitCommentAnalysisSummary } from "@/components/permits/PermitCommentAnalysisPanel";
 import { PermitJsonExportButton } from "@/components/permits/PermitExportButtons";
 import { PermitQueueDetailView } from "@/components/permits/PermitQueueDetailView";
 import { ReportContentBody } from "@/components/permits/PermitSectionViews";
@@ -152,6 +153,8 @@ export default function PermitDetailPage() {
         isAdmin={isAdmin}
         actions={<PermitJsonExportButton permitId={permitId} />}
         linksPanel={<PermitProjectLinksPanel permitId={permitId} />}
+        analysisSummary={<PermitCommentAnalysisSummary permitId={permitId} />}
+        analysisDiagnostics={isAdmin ? <PermitCommentAnalysisDiagnostics permitId={permitId} /> : null}
         onViewDocument={(doc) => void open(str(doc.storage_path), str(doc.id))}
         busyDocumentId={busyKey}
         selectedReportKey={selectedReport ? str(selectedReport.report_key) : null}

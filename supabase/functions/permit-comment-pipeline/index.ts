@@ -10,13 +10,24 @@
  * background (EdgeRuntime.waitUntil), within PERMIT_PIPELINE_BUDGET_MS. Unfinished work is released and resumes
  * on the next sweep. Not deployed automatically.
  *
+ * Central (permit-level) processing, D-121..D-124 (service bearer only):
+ *   "sweep"             runs a central pass first when enabled, then the project pass above.
+ *   "central_sweep"     central pass only (optionally for `permit_ids`; the deep worker sends these after a sync).
+ *   "central_dry_run"   no AI: inventory and pending work of `adapter_key` (permit_central_backfill_inventory).
+ *   "central_backfill"  one-off pass over `adapter_key` against `budget_scope`; refused unless `approved: true` and
+ *                       the budget row is approved and open. Every model call is reserved against the budget first.
+ * The central pass runs only with CENTRAL_PROCESSING_ENABLED=true and the sweep budget scope CENTRAL_AI_BUDGET_SCOPE.
+ *
  * Env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, PERMITPILOT_SERVICE_PIPELINE_SECRET,
- *      PERMIT_PIPELINE_BUDGET_MS (default 140000; keep below the plan's edge wall-clock limit).
+ *      PERMIT_PIPELINE_BUDGET_MS (default 140000; keep below the plan's edge wall-clock limit),
+ *      CENTRAL_PROCESSING_ENABLED, CENTRAL_AI_BUDGET_SCOPE.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { verifyProcessorRequest } from "../_shared/processorAuth.ts";
-import { serviceForwardHeadersFromEnv } from "../_shared/serviceExecutionDeno.ts";
+import { centralForwardHeadersFromEnv, serviceForwardHeadersFromEnv } from "../_shared/serviceExecutionDeno.ts";
 import { driveClaimedProject, type ClaimedProject } from "../_shared/permitCommentPipeline.ts";
+import { driveCentralPermit, type CentralClaim, type CentralStage } from "../_shared/centralCommentProcessing.ts";
+import { CENTRAL_PROCESSING_VERSION } from "../_shared/commentPrompts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +39,100 @@ const json = (body: unknown, status = 200) =>
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SWEEP_LIMIT = 2;
+const CENTRAL_SWEEP_LIMIT = 2;
+const BACKFILL_LIMIT = 4;
+const ADAPTER_KEY = /^[a-z0-9][a-z0-9-]{1,40}$/;
+const BUDGET_SCOPE = /^[a-z0-9][a-z0-9._-]{2,63}$/;
+const CENTRAL_ACTIONS = new Set(["central_sweep", "central_dry_run", "central_backfill"]);
+
+type Admin = {
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>;
+};
+
+/** Claims and drives permits through the central stages until `deadline`; one finish call per claim. */
+async function runCentralPass(input: {
+  admin: Admin;
+  supabaseUrl: string;
+  budgetScope: string;
+  deadline: number;
+  limit: number;
+  permitIds: string[] | null;
+  adapterKey: string | null;
+}): Promise<{ claimed: number; results: Array<Record<string, unknown>> }> {
+  const { admin, supabaseUrl, budgetScope, deadline } = input;
+  const workerId = `central-${crypto.randomUUID()}`;
+  const { data: claimed, error } = await admin.rpc("permit_central_claim", {
+    p_worker: workerId,
+    p_version: CENTRAL_PROCESSING_VERSION,
+    p_limit: input.limit,
+    p_lease_seconds: Math.ceil(Math.max(0, deadline - Date.now()) / 1000) + 120,
+    p_permit_ids: input.permitIds,
+    p_adapter_key: input.adapterKey,
+  });
+  if (error) {
+    console.error(JSON.stringify({ event: "permit_central_claim_failed", code: error.code }));
+    return { claimed: 0, results: [] };
+  }
+  const claims = (claimed ?? []) as CentralClaim[];
+  const base = supabaseUrl.replace(/\/$/, "");
+  const invoke = async (stage: CentralStage, payload: Record<string, unknown>) => {
+    const fn = stage === "classify" ? "discipline-classifier-agent" : "context-reference-engine";
+    const res = await fetch(`${base}/functions/v1/${fn}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...centralForwardHeadersFromEnv() },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let data: Record<string, unknown> | null = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+    return { status: res.status, data };
+  };
+  const results: Array<Record<string, unknown>> = [];
+  for (const c of claims) {
+    const r = Date.now() < deadline
+      ? await driveCentralPermit({ claim: c, invoke, version: CENTRAL_PROCESSING_VERSION, budgetScope, deadline })
+      : { outcome: "released" as const, rounds: 0, ai_calls: 0, cost_usd: 0 };
+    const { data: state, error: finishError } = await admin.rpc("permit_central_finish", {
+      p_permit_id: c.permit_id,
+      p_worker: workerId,
+      p_fingerprint: c.fingerprint,
+      p_version: CENTRAL_PROCESSING_VERSION,
+      p_outcome: r.outcome,
+      p_error: "error" in r ? r.error ?? null : null,
+    });
+    const row = {
+      event: "permit_central_permit",
+      permit_id: c.permit_id,
+      outcome: r.outcome,
+      state: finishError ? "finish_failed" : state,
+      rounds: r.rounds,
+      ai_calls: r.ai_calls,
+      cost_usd: Number(r.cost_usd.toFixed(6)),
+    };
+    console.log(JSON.stringify(row));
+    results.push(row);
+    if (r.outcome === "paused") break; // budget refused: the remaining claims are released below
+  }
+  for (const c of claims.slice(results.length)) {
+    await admin.rpc("permit_central_finish", {
+      p_permit_id: c.permit_id,
+      p_worker: workerId,
+      p_fingerprint: c.fingerprint,
+      p_version: CENTRAL_PROCESSING_VERSION,
+      p_outcome: "paused",
+      p_error: "budget",
+    });
+  }
+  return { claimed: claims.length, results };
+}
+
+function centralEnabled(): boolean {
+  return Deno.env.get("CENTRAL_PROCESSING_ENABLED") === "true";
+}
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -47,8 +152,68 @@ Deno.serve(async (req) => {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   let projectIds: string[] | null = null;
+  const budgetMs = Math.max(30_000, Number(Deno.env.get("PERMIT_PIPELINE_BUDGET_MS")) || 140_000);
+  const startedAt = Date.now();
+  const isService = verifyProcessorRequest(req).authorized;
+  const action = typeof body.action === "string" ? body.action : "sweep";
 
-  if (verifyProcessorRequest(req).authorized) {
+  if (CENTRAL_ACTIONS.has(action)) {
+    if (!isService) return json({ error: "Unauthorized" }, 401);
+    const adapterKey = typeof body.adapter_key === "string" && ADAPTER_KEY.test(body.adapter_key) ? body.adapter_key : null;
+
+    if (action === "central_dry_run") {
+      const { data, error } = await admin.rpc("permit_central_backfill_inventory", {
+        p_version: CENTRAL_PROCESSING_VERSION,
+        p_adapter_key: adapterKey,
+      });
+      if (error) return json({ error: "inventory_failed" }, 500);
+      return json({ dry_run: true, processing_version: CENTRAL_PROCESSING_VERSION, inventory: data, ai_calls: 0 });
+    }
+
+    if (!centralEnabled()) return json({ error: "Central processing is disabled" }, 403);
+    let budgetScope: string | null = null;
+    let permitIds: string[] | null = null;
+    let limit = CENTRAL_SWEEP_LIMIT;
+    if (action === "central_backfill") {
+      // Explicit, per-request approval on top of an approved budget row: a cron or worker never sends this.
+      if (body.approved !== true) return json({ error: "central_backfill requires approved: true" }, 403);
+      if (!adapterKey) return json({ error: "adapter_key is required" }, 400);
+      budgetScope = typeof body.budget_scope === "string" && BUDGET_SCOPE.test(body.budget_scope) ? body.budget_scope : null;
+      if (!budgetScope) return json({ error: "budget_scope is required" }, 400);
+      const { data: status, error } = await admin.rpc("permit_ai_budget_status", { p_scope: budgetScope });
+      const st = (status ?? {}) as Record<string, unknown>;
+      if (error || !status) return json({ error: "budget not found" }, 403);
+      if (st.approved !== true || st.closed === true) return json({ error: "budget is not approved or is closed", budget: st }, 403);
+      limit = BACKFILL_LIMIT;
+    } else {
+      budgetScope = Deno.env.get("CENTRAL_AI_BUDGET_SCOPE")?.trim() || null;
+      if (!budgetScope || !BUDGET_SCOPE.test(budgetScope)) return json({ error: "CENTRAL_AI_BUDGET_SCOPE is not set" }, 503);
+      if (Array.isArray(body.permit_ids)) {
+        permitIds = body.permit_ids.filter((id): id is string => typeof id === "string" && UUID.test(id)).slice(0, 50);
+        if (permitIds.length === 0) return json({ claimed: 0 });
+        limit = permitIds.length;
+      }
+    }
+    const centralRun = runCentralPass({
+      admin,
+      supabaseUrl,
+      budgetScope,
+      deadline: startedAt + budgetMs,
+      limit,
+      permitIds,
+      adapterKey: action === "central_backfill" ? adapterKey : null,
+    }).catch((e) => {
+      console.error(JSON.stringify({ event: "permit_central_pass_failed", message: String(e?.message ?? e).slice(0, 200) }));
+      return { claimed: 0, results: [] };
+    });
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(centralRun);
+      return json({ accepted: true, action, processing_version: CENTRAL_PROCESSING_VERSION }, 202);
+    }
+    return json(await centralRun, 200);
+  }
+
+  if (isService) {
     if (Array.isArray(body.project_ids)) {
       projectIds = body.project_ids.filter((id): id is string => typeof id === "string" && UUID.test(id)).slice(0, 50);
       if (projectIds.length === 0) return json({ claimed: 0 });
@@ -73,22 +238,34 @@ Deno.serve(async (req) => {
     projectIds = [projectId];
   }
 
-  const budgetMs = Math.max(30_000, Number(Deno.env.get("PERMIT_PIPELINE_BUDGET_MS")) || 140_000);
   const workerId = `edge-${crypto.randomUUID()}`;
-  const { data: claimed, error: claimError } = await admin.rpc("permit_pipeline_claim", {
-    p_worker: workerId,
-    p_limit: projectIds ? projectIds.length : SWEEP_LIMIT,
-    p_lease_seconds: Math.ceil(budgetMs / 1000) + 120,
-    p_project_ids: projectIds,
-  });
-  if (claimError) {
-    console.error(JSON.stringify({ event: "permit_comment_pipeline_claim_failed", code: claimError.code }));
-    return json({ error: "claim_failed" }, 500);
-  }
-  const claims = (claimed ?? []) as ClaimedProject[];
-  if (claims.length === 0) return json({ claimed: 0 });
+  const claimProjects = async (): Promise<ClaimedProject[] | null> => {
+    const { data: claimed, error: claimError } = await admin.rpc("permit_pipeline_claim", {
+      p_worker: workerId,
+      p_limit: projectIds ? projectIds.length : SWEEP_LIMIT,
+      p_lease_seconds: Math.ceil(Math.max(30_000, startedAt + budgetMs - Date.now()) / 1000) + 120,
+      p_project_ids: projectIds,
+    });
+    if (claimError) {
+      console.error(JSON.stringify({ event: "permit_comment_pipeline_claim_failed", code: claimError.code }));
+      return null;
+    }
+    return (claimed ?? []) as ClaimedProject[];
+  };
 
-  const deadline = Date.now() + budgetMs;
+  // A cron sweep runs a central pass first (permit-level, shared by every project), using up to half of the
+  // budget, and claims projects after it, so a project reuses results made in the same sweep (no double cost).
+  const sweepScope = Deno.env.get("CENTRAL_AI_BUDGET_SCOPE")?.trim() || "";
+  const runCentral = isService && !projectIds && centralEnabled() && BUDGET_SCOPE.test(sweepScope);
+  let claims: ClaimedProject[] = [];
+  if (!runCentral) {
+    const c = await claimProjects();
+    if (!c) return json({ error: "claim_failed" }, 500);
+    if (c.length === 0) return json({ claimed: 0 });
+    claims = c;
+  }
+
+  const deadline = startedAt + budgetMs;
   const intakeUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/intake-pipeline-agent`;
   const callIntake = async (actingUserId: string, payload: Record<string, unknown>) => {
     const res = await fetch(intakeUrl, {
@@ -108,6 +285,19 @@ Deno.serve(async (req) => {
   };
 
   const work = (async () => {
+    if (runCentral) {
+      await runCentralPass({
+        admin,
+        supabaseUrl,
+        budgetScope: sweepScope,
+        deadline: startedAt + Math.floor(budgetMs / 2),
+        limit: CENTRAL_SWEEP_LIMIT,
+        permitIds: null,
+        adapterKey: null,
+      }).catch((e) => console.error(JSON.stringify({ event: "permit_central_pass_failed", message: String(e?.message ?? e).slice(0, 200) })));
+      if (deadline - Date.now() < 30_000) return;
+      claims = (await claimProjects()) ?? [];
+    }
     for (const c of claims) {
       const result = Date.now() < deadline
         ? await driveClaimedProject({ claim: c, callIntake, deadline })
@@ -136,5 +326,6 @@ Deno.serve(async (req) => {
   } else {
     await work;
   }
+  if (runCentral) return json({ accepted: true, central: true }, 202);
   return json({ claimed: claims.length, project_ids: claims.map((c) => c.project_id) }, 202);
 });

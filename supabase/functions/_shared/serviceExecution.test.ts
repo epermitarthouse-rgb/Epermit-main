@@ -3,7 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   ACTING_USER_HEADER,
+  authorizeCentralExecution,
   authorizeServiceExecution,
+  centralForwardHeaders,
   buildServiceAuditRow,
   parseServiceHeaders,
   SERVICE_EXECUTION_ACTION,
@@ -551,4 +553,23 @@ test("regression: the dispatcher source does not put the anon key in apikey on s
   const call = src.slice(src.indexOf("const callIntake"), src.indexOf("const work = "));
   assert.match(call, /serviceForwardHeadersFromEnv\(/);
   assert.doesNotMatch(call, /apikey\s*:/);
+  const central = src.slice(src.indexOf("const invoke = "), src.indexOf("const results: "));
+  assert.match(central, /centralForwardHeadersFromEnv\(/);
+  assert.doesNotMatch(central, /apikey\s*:/);
+});
+
+test("central mode (D-121): needs the secret and the service key, takes no acting user", () => {
+  const ok = authorizeCentralExecution({ headers: serviceHeaders({ [ACTING_USER_HEADER]: undefined }), env: ENV });
+  assert.deepEqual(ok, { ok: true });
+  assert.equal((authorizeCentralExecution({ headers: serviceHeaders(), env: ENV }) as { status: number }).status, 400, "an acting user is refused");
+  assert.equal((authorizeCentralExecution({ headers: serviceHeaders({ [ACTING_USER_HEADER]: undefined, [SERVICE_SECRET_HEADER]: "wrong" }), env: ENV }) as { status: number }).status, 401);
+  assert.equal((authorizeCentralExecution({ headers: serviceHeaders({ [ACTING_USER_HEADER]: undefined, Authorization: "Bearer user-jwt" }), env: ENV }) as { status: number }).status, 401);
+  assert.equal((authorizeCentralExecution({ headers: headers({}), env: ENV }) as { status: number }).status, 401, "no headers: refused, never a user fallback");
+  assert.equal((authorizeCentralExecution({ headers: serviceHeaders({ [ACTING_USER_HEADER]: undefined }), env: { serviceSecret: "", serviceRoleKey: ROLE_KEY } }) as { status: number }).status, 401);
+
+  const h = centralForwardHeaders({ serviceSecret: SECRET, serviceRoleKey: ROLE_KEY });
+  assert.equal(h.Authorization, `Bearer ${ROLE_KEY}`);
+  assert.equal(h.apikey, ROLE_KEY);
+  assert.equal(h[SERVICE_SECRET_HEADER], SECRET);
+  assert.ok(!(ACTING_USER_HEADER in h));
 });

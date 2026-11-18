@@ -408,6 +408,22 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     }
   }
 
+  /** Asks for the permit-level (central) pass of this permit, linked or not (D-121); never fails the pass. */
+  async function triggerCentral(m, permitId, event, record) {
+    if (!pipeline || typeof pipeline.triggerCentral !== "function") return;
+    try {
+      const t = await pipeline.triggerCentral({ permitId });
+      if (t.outcome === "complete") m.central_triggers += 1;
+      else if (t.outcome === "failed") {
+        m.central_failed += 1;
+        await event("warn", "central_not_started", String(t.error || "failed").slice(0, 200), { portal_record_id: record.portal_record_id });
+      }
+    } catch (err) {
+      m.central_failed += 1;
+      await event("warn", "central_failed", String((err && err.message) || "error").slice(0, 200), { portal_record_id: record.portal_record_id });
+    }
+  }
+
   /** Starts the agent pipeline for each linked project's current hash unless a run for it exists (6c, D-063). */
   async function triggerPipelines(m, links, event, record) {
     if (!pipeline) return;
@@ -437,6 +453,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       reports_captured: 0, reports_unchanged: 0, reports_failed: 0, reports_unmatched: 0, reports_guard_denied: 0,
       report_objects_removed: 0, report_objects_cleanup_failed: 0,
       portal_syncs: 0, portal_changed: 0, pipeline_runs: 0, pipeline_skipped: 0, pipeline_failed: 0,
+      central_triggers: 0, central_failed: 0,
     };
   }
 
@@ -468,6 +485,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       if (policy.changedSections(previousHashes, hashes).length) await repo.recordDeepPass(permitId, hashes, job.id);
       m.deep_skipped = 1;
       await reportFinal(await countOpenItems(m, permitId, limits));
+      await triggerCentral(m, permitId, event, record);
       await triggerPipelines(m, links.map((l) => ({ ...l, currentHash: l.portalDataHash })), event, record);
       return m;
     }
@@ -602,6 +620,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
           if (hash && hash !== link.portalDataHash) m.portal_changed += 1;
           current.push({ ...link, currentHash: hash });
         }
+        await triggerCentral(m, permitId, event, record);
         await triggerPipelines(m, current, event, record);
       }
       delete s.data[project.id];

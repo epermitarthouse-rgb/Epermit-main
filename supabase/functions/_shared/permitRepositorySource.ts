@@ -1,11 +1,13 @@
 /**
- * Reads a project's linked-permit comments and applies the merge plan (D-110). Runs with a service-role
+ * Reads a project's linked-permit comments and their current central results (D-121) and applies the merge plan
+ * (D-110, D-122). Runs with a service-role
  * client because service-mode calls have no auth.uid(); access is therefore checked explicitly: only
  * permits the acting user can read (user_can_read_permit) contribute comments (D-006: a link grants nothing).
  */
 
 import {
   planRepositoryCommentMerge,
+  type CentralInsight,
   type ExistingParsedComment,
   type RepositoryComment,
   type RepositoryMergePlan,
@@ -21,12 +23,16 @@ export type ServiceClient = { from: (table: string) => any; rpc: (fn: string, ar
 
 export const PARSED_COMMENT_MERGE_COLUMNS =
   "id, original_text, comment_number, status, ingest_source, response_text, response_status, approved_at, last_edited_by, assigned_to, " +
-  "portal_permit_id, portal_comment_key, portal_content_hash, portal_status_raw, portal_removed_at, portal_latest_text, portal_changed_at";
+  "portal_permit_id, portal_comment_key, portal_content_hash, portal_status_raw, portal_removed_at, portal_latest_text, portal_changed_at, " +
+  "discipline, code_reference, discipline_source, code_reference_source, response_text_source, assigned_to_source, " +
+  "central_insight_id, central_update_at, processing_status";
 
 export type RepositorySource = {
   linkedPermitIds: string[];
   permits: RepositoryPermit[];
   comments: RepositoryComment[];
+  /** Current central results (D-121) of the readable permits; reused instead of project AI calls. */
+  insights: CentralInsight[];
 };
 
 export async function linkedPermitIds(client: ServiceClient, projectId: string): Promise<string[]> {
@@ -43,7 +49,7 @@ export async function loadRepositorySource(client: ServiceClient, projectId: str
     if (error) throw new Error(`Failed to check permit access: ${error.message}`);
     if (data === true) readable.push(permitId);
   }
-  if (readable.length === 0) return { linkedPermitIds: linked, permits: [], comments: [] };
+  if (readable.length === 0) return { linkedPermitIds: linked, permits: [], comments: [], insights: [] };
 
   const { data: permitRows, error: permitErr } = await client.from("permits").select("id, permit_number").in("id", readable);
   if (permitErr) throw new Error(`Failed to read permits: ${permitErr.message}`);
@@ -74,8 +80,12 @@ export async function loadRepositorySource(client: ServiceClient, projectId: str
     responseCounts.set(k, (responseCounts.get(k) ?? 0) + 1);
   }
 
+  const { data: insightRows, error: insightErr } = await client.rpc("permit_central_current_insights", { p_permit_ids: readable });
+  if (insightErr) throw new Error(`Failed to read central comment analysis: ${insightErr.message}`);
+
   return {
     linkedPermitIds: linked,
+    insights: ((insightRows ?? []) as CentralInsight[]),
     permits: ((permitRows ?? []) as Array<{ id: string; permit_number: string | null }>).map((p) => ({
       id: p.id,
       permit_number: p.permit_number,
@@ -109,7 +119,7 @@ export async function refreshFromRepository(
   if (existingErr) throw new Error(`Failed to read existing comments: ${existingErr.message}`);
   const existing = (existingRows ?? []) as ExistingParsedComment[];
 
-  const plan = planRepositoryCommentMerge({ projectId, permits: source.permits, comments: source.comments, existing, now });
+  const plan = planRepositoryCommentMerge({ projectId, permits: source.permits, comments: source.comments, existing, now, insights: source.insights });
 
   for (const u of plan.updates) {
     const { error } = await client.from("parsed_comments").update(u.patch).eq("id", u.id).eq("project_id", projectId);

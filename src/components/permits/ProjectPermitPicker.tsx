@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { PermitListRow } from "@/lib/centralPermits";
-import { findExistingPermitLinks, listPermitJurisdictions, searchLinkablePermits } from "@/lib/projectPermits";
+import { findExistingPermitLinks, listPermitJurisdictions, loadPermitCommentProcessing, searchLinkablePermits } from "@/lib/projectPermits";
 
 const ALL = "__all__";
 
@@ -50,6 +50,12 @@ export function ProjectPermitPicker({
     queryKey: ["project-permits", "existing-links", resultIds],
     queryFn: () => findExistingPermitLinks(resultIds),
     enabled: resultIds.length > 0,
+  });
+  const analysis = useQuery({
+    queryKey: ["permit-comment-processing", [...resultIds].sort()],
+    queryFn: () => loadPermitCommentProcessing(resultIds),
+    enabled: resultIds.length > 0,
+    staleTime: 30_000,
   });
 
   const selectedIds = new Set(selected.map((r) => r.id));
@@ -114,6 +120,7 @@ export function ProjectPermitPicker({
           rows={results.data}
           selectedIds={selectedIds}
           existingLinks={existing.data}
+          analysis={analysis.data}
           excludeProjectId={excludeProjectId}
           onToggle={toggle}
         />

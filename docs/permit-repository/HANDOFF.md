@@ -1,6 +1,18 @@
 # Handoff Notes — read first
 
-Last updated: 2026-11-17 11:05 UTC (A-8 done: default permit access with project isolation live, PR #28 merged). Read "A-8 rollout" and "Production rollout 3" first.
+Last updated: 2026-11-18 (central processing built on a branch, nothing applied; read "Central processing"). Before that: 2026-11-17 11:05 UTC (A-8 done: default permit access with project isolation live, PR #28 merged). Read "A-8 rollout" and "Production rollout 3" first.
+
+## Central processing (2026-11-18, branch `feat/central-comment-processing`; nothing applied, deployed or run)
+- What: permit-level comment analysis (option A of CENTRAL_PROCESSING_PROPOSAL.md) reused on project link, plus the fix for the 50-comment cap. Decisions D-121..D-124 and D-130..D-132 (D-125..D-129 belong to the scheduling branch). Details: PIPELINE_AND_LINKING.md "Central (permit-level) processing".
+- Local results: permit-sync 296/296 (chain test applies the migration and rolls it back exactly; `permit-repo-central-processing.test.js` covers 6/53/59/81/200 comments, budget stop and resume, RLS, reuse on link with zero AI work, ff193644-like rows unchanged); analyzer suite 0 unexpected (3 known); frontend 0 unexpected (16 known); tsc 194 = baseline; build passes; migration checks pass.
+- Read-only production estimate (2026-11-18, aggregates only): 391 active DC comments on 16 permits, 0 empty, 376 inputs to send after de-duplication, 47 calls, 90,554 input tokens, about $0.75 per pass at gpt-4o list price, worst-case reservation $2.56. Re-run: `npx tsx scripts/permit-repo/central/estimate-backfill-cost.ts --supabase-dir ../Epermit-main --tokenizer <js-tiktoken dir>`.
+- Production order, each step needs approval:
+  1. Migration `20261118100000_central_comment_processing.sql` via `supabase db query --linked -f`, then `migration repair --status applied`. Rollback: `scripts/permit-repo/rollback-20261118100000_central_comment_processing.sql` + `migration repair --status reverted`. Additive; existing rows get `processing_status` NULL and sources NULL (treated as human).
+  2. Deploy `discipline-classifier-agent`, `auto-router-agent`, `context-reference-engine`, `intake-pipeline-agent`, `comment-parser-agent`, `permit-comment-pipeline` (all need step 1 first). Flags still off: project mode works as before, without the 50 cap.
+  3. Flags: `CENTRAL_PROCESSING_ENABLED=true` on the classifier, context engine and dispatcher; a sweep budget row and `CENTRAL_AI_BUDGET_SCOPE`. Off: unset the flag (central mode answers 403) or close the budget.
+  4. Frontend (safe before the backend: reads return nothing until step 1).
+  5. Worker deploy (central trigger after each permit pass; 403 is treated as disabled).
+  6. DC backfill: `approve-dc-backfill-budget.sql` ($5, scope `dc-backfill`), `central_dry_run`, then `central_backfill` with `approved: true`. Stop: close the budget.
 
 ## Schedule enable fix (2026-11-18, branch `fix/schedule-enable`, not merged; read-only production checks)
 - **The DC schedule is ON now.** The admin re-saved de8592f9 at 2026-11-18 06:19:31 UTC with Enabled on (audit `permit_sync_source.set` + `.schedule`, `automation_enabled: true`, `max_attempts` 5; stored `active`). First scheduled run: **2026-11-18 09:00 UTC** (04:00 EST). Read-only at 06:59 UTC: enqueue cron `*/5` active, 0 failures; deep worker idle, scope all, `15993f89d642`; 0 active jobs; 1 open warning (`missing_deep_content`).

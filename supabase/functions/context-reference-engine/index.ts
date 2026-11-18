@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { serviceUserResponse } from "../_shared/serviceExecution.ts";
 import { resolveServiceExecution } from "../_shared/serviceExecutionDeno.ts";
+import { handleCentralStage } from "../_shared/centralAgentDeno.ts";
 import OpenAI from "https://esm.sh/openai@4.28.0";
 
 const corsHeaders = {
@@ -26,6 +27,13 @@ const SYSTEM_PROMPT = `You are a building code expert. For each permit review co
 Return ONLY a JSON array with objects matching the input order:
 [{ "code_reference": "...", "suggested_response": "..." }, ...]`;
 
+/**
+ * Project-mode eligibility: no code reference yet, not set by a person, and not filled from a central result
+ * (those rows were analysed once at permit level and are not paid for again on link, D-122).
+ */
+const NO_CODE_REFERENCE = "code_reference.is.null,code_reference.eq.";
+const NOT_HUMAN_CODE_REFERENCE = "code_reference_source.is.null,code_reference_source.neq.human";
+
 type ParsedRow = {
   id: string;
   original_text: string;
@@ -45,6 +53,11 @@ serve(async (req) => {
   let haltedReason: string | undefined;
 
   try {
+    const peek = await req.clone().json().catch(() => ({}));
+    if (peek && typeof peek === "object" && (peek as Record<string, unknown>).mode === "central") {
+      return await handleCentralStage(req, peek as Record<string, unknown>, "enrich", corsHeaders);
+    }
+
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
       return new Response(
@@ -129,11 +142,16 @@ serve(async (req) => {
       );
     }
 
-    const { count: eligibleCount, error: eligibleErr } = await supabase
-      .from("parsed_comments")
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", projectId)
-      .or("code_reference.is.null,code_reference.eq.");
+    // Reads and writes go through the service client: a write under a signed-in user would be recorded as a
+    // human edit (trg_parsed_comments_field_source, D-122). Ownership was checked above.
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const db = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } }) : supabase;
+    const eligible = <T>(q: T): T =>
+      (q as any).eq("project_id", projectId).or(NO_CODE_REFERENCE).or(NOT_HUMAN_CODE_REFERENCE).is("central_insight_id", null);
+
+    const { count: eligibleCount, error: eligibleErr } = await eligible(
+      db.from("parsed_comments").select("id", { count: "exact", head: true }),
+    );
     if (eligibleErr) {
       console.error("context-reference-engine: eligible count error", eligibleErr);
       return new Response(
@@ -156,11 +174,9 @@ serve(async (req) => {
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
     while (rounds < maxRounds) {
-      const { data: rows, error: fetchError } = await supabase
-        .from("parsed_comments")
-        .select("id, original_text, discipline, code_reference, response_text")
-        .eq("project_id", projectId)
-        .or("code_reference.is.null,code_reference.eq.")
+      const { data: rows, error: fetchError } = await eligible(
+        db.from("parsed_comments").select("id, original_text, discipline, code_reference, response_text"),
+      )
         .order("id", { ascending: true })
         .limit(BATCH_SIZE);
 
@@ -249,11 +265,17 @@ serve(async (req) => {
           continue;
         }
 
-        const updates: { code_reference?: string; response_text?: string } = {};
-        if (codeRef) updates.code_reference = codeRef;
-        if (setResponse) updates.response_text = suggested;
+        const updates: Record<string, string> = {};
+        if (codeRef) {
+          updates.code_reference = codeRef;
+          updates.code_reference_source = "project_ai";
+        }
+        if (setResponse) {
+          updates.response_text = suggested;
+          updates.response_text_source = "project_ai";
+        }
 
-        const { error: updateError } = await supabase
+        const { error: updateError } = await db
           .from("parsed_comments")
           .update(updates)
           .eq("id", row.id);
@@ -298,11 +320,9 @@ serve(async (req) => {
       }
     }
 
-    const { count: remainingCount } = await supabase
-      .from("parsed_comments")
-      .select("id", { count: "exact", head: true })
-      .eq("project_id", projectId)
-      .or("code_reference.is.null,code_reference.eq.");
+    const { count: remainingCount } = await eligible(
+      db.from("parsed_comments").select("id", { count: "exact", head: true }),
+    );
     const remaining = remainingCount ?? 0;
     const hasMore = remaining > 0 && !haltedReason;
 

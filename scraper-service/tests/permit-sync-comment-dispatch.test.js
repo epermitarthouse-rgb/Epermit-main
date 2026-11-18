@@ -41,5 +41,30 @@ test("without the service secret the trigger is off and makes no call", async ()
   let called = false;
   const d = createCommentPipelineDispatcher({ fetch: async () => { called = true; }, supabaseUrl: "u", serviceRoleKey: "k", serviceSecret: "" });
   assert.deepEqual(await d.trigger({ projectId: "p" }), { outcome: "disabled", rounds: 0 });
+  assert.deepEqual(await d.triggerCentral({ permitId: "x" }), { outcome: "disabled" });
   assert.equal(called, false);
+});
+
+test("central trigger asks for the permit-level pass of one permit; central off reads as disabled", async () => {
+  const calls = [];
+  const d = createCommentPipelineDispatcher({
+    fetch: async (url, init) => {
+      calls.push({ url, init });
+      return { ok: true, status: 202, text: async () => JSON.stringify({ accepted: true, action: "central_sweep" }) };
+    },
+    supabaseUrl: "https://x.invalid",
+    serviceRoleKey: "svc",
+    serviceSecret: "s",
+  });
+  assert.deepEqual(await d.triggerCentral({ permitId: "perm-1" }), { outcome: "complete" });
+  assert.deepEqual(JSON.parse(calls[0].init.body), { action: "central_sweep", source: "deep_worker", permit_ids: ["perm-1"] });
+  assert.equal(calls[0].init.headers["x-permitpilot-service-secret"], undefined);
+
+  const base = { supabaseUrl: "u", serviceRoleKey: "k", serviceSecret: "s" };
+  for (const status of [403, 503]) {
+    const off = await createCommentPipelineDispatcher({ ...base, fetch: reply(status, { error: "Central processing is disabled" }) }).triggerCentral({ permitId: "p" });
+    assert.equal(off.outcome, "disabled");
+  }
+  const broken = await createCommentPipelineDispatcher({ ...base, fetch: reply(500, { error: "boom" }) }).triggerCentral({ permitId: "p" });
+  assert.equal(broken.outcome, "failed");
 });

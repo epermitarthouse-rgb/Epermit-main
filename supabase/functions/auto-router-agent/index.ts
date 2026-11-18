@@ -2,31 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { serviceUserResponse } from "../_shared/serviceExecution.ts";
 import { resolveServiceExecution } from "../_shared/serviceExecutionDeno.ts";
+import { planRouting, type RouterRow } from "../_shared/commentProcessingStatus.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const DISCIPLINE_ROUTING: Record<string, string> = {
-  Structural: "Structural Engineer",
-  Architectural: "Project Architect",
-  "Mechanical/HVAC": "MEP Engineer",
-  Mechanical: "MEP Engineer",
-  Electrical: "MEP Engineer",
-  Plumbing: "MEP Engineer",
-  "Fire Protection": "Fire Protection Engineer",
-  Fire: "Fire Protection Engineer",
-  Civil: "Civil Engineer",
-  Zoning: "Zoning Specialist",
-  Environmental: "Environmental Consultant",
-  "Green/Energy": "Energy Consultant",
-  Energy: "Energy Consultant",
-  Administrative: "Project Manager",
-  Other: "Project Manager",
-};
-
-const DEFAULT_ASSIGNEE = "Project Manager";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -103,47 +84,50 @@ serve(async (req) => {
       );
     }
 
-    const { data: rows, error: fetchError } = await supabase
-      .from("parsed_comments")
-      .select("id, discipline")
-      .eq("project_id", projectId)
-      .or("assigned_to.is.null,assigned_to.eq.")
-      .limit(500);
+    // Writes go through the service client: a write under a signed-in user would be recorded as a human edit
+    // (trg_parsed_comments_field_source, D-122). Ownership was checked above.
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const writer = serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } }) : supabase;
 
-    if (fetchError) {
-      console.error("auto-router-agent: fetch error", fetchError);
-      return new Response(
-        JSON.stringify({ code: 500, message: fetchError.message, routed_count: 0 }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const comments = (rows ?? []) as { id: string; discipline: string | null }[];
-    if (comments.length === 0) {
-      return new Response(
-        JSON.stringify({ routed_count: 0, routing_summary: {} }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const routing_summary: Record<string, number> = {};
-    let routedCount = 0;
-
-    for (const row of comments) {
-      const discipline = (row.discipline ?? "").trim();
-      const assignee = discipline ? (DISCIPLINE_ROUTING[discipline] ?? DEFAULT_ASSIGNEE) : DEFAULT_ASSIGNEE;
-      routing_summary[assignee] = (routing_summary[assignee] ?? 0) + 1;
-
-      const { error: updateError } = await supabase
+    const PAGE = 1000;
+    const rows: RouterRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error: fetchError } = await writer
         .from("parsed_comments")
-        .update({ assigned_to: assignee })
-        .eq("id", row.id);
+        .select("id, discipline, assigned_to, assigned_to_source, processing_status")
+        .eq("project_id", projectId)
+        .or("assigned_to.is.null,assigned_to.eq.,assigned_to_source.eq.project_ai")
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (fetchError) {
+        console.error("auto-router-agent: fetch error", fetchError);
+        return new Response(
+          JSON.stringify({ code: 500, message: fetchError.message, routed_count: 0 }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      rows.push(...((data ?? []) as RouterRow[]));
+      if (!data || data.length < PAGE) break;
+    }
 
-      if (!updateError) routedCount++;
+    // Only classified rows are routed; unclassified ones stay pending and are reported (D-130).
+    const plan = planRouting(rows);
+    let routedCount = 0;
+    let writeFailures = 0;
+    for (const u of plan.updates) {
+      const { error: updateError } = await writer.from("parsed_comments").update(u.patch).eq("id", u.id);
+      if (updateError) writeFailures++;
+      else if (u.patch.assigned_to) routedCount++;
     }
 
     return new Response(
-      JSON.stringify({ routed_count: routedCount, routing_summary }),
+      JSON.stringify({
+        routed_count: routedCount,
+        routing_summary: plan.summary,
+        unrouted_unclassified: plan.unclassified,
+        needs_attention: plan.needs_attention,
+        write_failures: writeFailures,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

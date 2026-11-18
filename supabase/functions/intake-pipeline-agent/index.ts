@@ -25,7 +25,7 @@ type StageStatus = "pending" | "running" | "completed" | "completed_with_warning
 
 type PipelineStages = {
   comment_parser?: { status: StageStatus; parsed_count?: number; error?: string };
-  discipline_classifier?: { status: StageStatus; classified_count?: number; error?: string };
+  discipline_classifier?: { status: StageStatus; classified_count?: number; remaining?: number; error?: string };
   enrichment?: { status: StageStatus; enriched_count?: number; error?: string };
   auto_routing?: { status: StageStatus; routed_count?: number; error?: string };
 };
@@ -556,7 +556,8 @@ serve(async (req) => {
         const { ok, json } = await invokeJson(
           `${baseUrl}/discipline-classifier-agent`,
           headers,
-          { project_id: projectId },
+          // The classifier pages through every eligible row within this budget and reports has_more (D-130).
+          { project_id: projectId, budget_ms: Math.max(10_000, classifierTimeout - 15_000) },
           classifierTimeout,
         );
         if (!ok) {
@@ -570,7 +571,26 @@ serve(async (req) => {
             error_message: errMsg,
           });
         } else {
-          const classified = (json.classified_count as number) ?? 0;
+          const classified = ((json.classified_count as number) ?? 0) + (stages.discipline_classifier?.classified_count ?? 0);
+          if (json.has_more === true) {
+            // More unclassified rows than fit in one call: stay on this stage and continue (never finalise early).
+            const remaining = Number(json.remaining ?? 0);
+            stages.discipline_classifier = { status: "pending", classified_count: classified, remaining };
+            await persistRun({ current_stage: "discipline_classifier", stages });
+            return new Response(
+              JSON.stringify({
+                project_id: projectId,
+                pipeline_run_id: runId,
+                comment_parser: commentParserResult,
+                discipline_classifier: { status: "pending", classified_count: classified, remaining, has_more: true },
+                enrichment: stages.enrichment ?? { status: "pending" },
+                auto_routing: stages.auto_routing ?? { status: "pending" },
+                stages,
+                next_action: "poll_again",
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
           disciplineClassifierResult = { classified_count: classified, status: "completed" };
           stages.discipline_classifier = { status: "completed", classified_count: classified };
         }

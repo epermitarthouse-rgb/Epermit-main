@@ -46,6 +46,10 @@ export interface PermitQueueDetailViewProps {
   actions?: ReactNode;
   /** Linked projects panel (project_permits). */
   linksPanel?: ReactNode;
+  /** Permit-level comment analysis state, in plain language (D-121). */
+  analysisSummary?: ReactNode;
+  /** Admin Diagnostics tab: comment analysis versions, failures and cost. */
+  analysisDiagnostics?: ReactNode;
   onViewDocument?: (doc: Row) => void;
   busyDocumentId?: string | null;
   selectedReportKey?: string | null;
@@ -60,6 +64,8 @@ export function PermitQueueDetailView({
   defaultTab = "tasks",
   actions,
   linksPanel,
+  analysisSummary,
+  analysisDiagnostics,
   onViewDocument,
   busyDocumentId,
   selectedReportKey,
@@ -126,6 +132,7 @@ export function PermitQueueDetailView({
         <StatCard label="Review cycle" value={str(p.review_cycle) || "—"} hint={`Last synced ${formatTimestamp(p.last_synced_at)}`} />
       </div>
 
+      {analysisSummary}
       {linksPanel}
 
       <Tabs defaultValue={defaultTab}>
@@ -175,6 +182,7 @@ export function PermitQueueDetailView({
             <Panel title="Diagnostics" eyebrow="Platform admins only">
               <PermitDiagnosticsView isAdmin={isAdmin} detail={d} />
             </Panel>
+            {analysisDiagnostics}
           </TabsContent>
         ) : null}
       </Tabs>
