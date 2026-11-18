@@ -10,6 +10,10 @@ function fakeClient(tables: Record<string, Row[]>, readable: Set<string>) {
   const writes: Array<{ op: string; table: string; payload: unknown }> = [];
   const client: ServiceClient = {
     rpc: (fn, args) => {
+      if (fn === "permit_central_current_insights") {
+        const ids = args.p_permit_ids as string[];
+        return Promise.resolve({ data: (tables.central_insights ?? []).filter((r) => ids.includes(r.permit_id as string)), error: null });
+      }
       assert.equal(fn, "user_can_read_permit");
       return Promise.resolve({ data: readable.has(`${args.p_user_id}:${args.p_permit_id}`), error: null });
     },

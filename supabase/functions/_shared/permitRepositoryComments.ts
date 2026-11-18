@@ -8,10 +8,15 @@
  *   - status is updated only while it still equals what the portal status mapped to last time;
  *   - comment text is replaced only on rows without a response or human edit; otherwise the new text is
  *     kept beside it (portal_latest_text, portal_changed_at) for a person to accept;
- *   - discipline, assignment, code reference, sheet reference, responses and approvals are never written.
+ *   - assignment, sheet reference, approvals and human-written values are never written;
+ *   - central results (permit_comment_insights, D-121) fill discipline, code reference and a draft response on new
+ *     rows and on empty fields, and refresh fields still sourced from central; a field a person set is never
+ *     overwritten, only flagged (central_update_at) when a newer central result differs (D-122).
  *
  * Pure module: no Deno globals or network imports, so Node tests exercise every rule.
  */
+
+import { isClassified } from "./commentPrompts.ts";
 
 export type RepositoryPermit = {
   id: string;
@@ -56,6 +61,28 @@ export type ExistingParsedComment = {
   portal_removed_at?: string | null;
   portal_latest_text?: string | null;
   portal_changed_at?: string | null;
+  discipline?: string | null;
+  code_reference?: string | null;
+  discipline_source?: FieldSource | null;
+  code_reference_source?: FieldSource | null;
+  response_text_source?: FieldSource | null;
+  assigned_to_source?: FieldSource | null;
+  central_insight_id?: string | null;
+  central_update_at?: string | null;
+  processing_status?: string | null;
+};
+
+/** Who wrote a parsed_comments field. NULL (rows from before D-122) is unknown and treated like a person. */
+export type FieldSource = "central" | "project_ai" | "human";
+
+/** The current central result of a repository comment (permit_central_current_insights). */
+export type CentralInsight = {
+  permit_id: string;
+  portal_comment_key: string;
+  insight_id: string;
+  discipline: string | null;
+  code_reference: string | null;
+  guidance_text: string | null;
 };
 
 export type ParsedCommentPatch = Record<string, string | number | null>;
@@ -75,6 +102,9 @@ export type RepositoryMergePlan = {
     status_kept_human: number;
     restored: number;
     soft_removed: number;
+    central_applied: number;
+    central_refreshed: number;
+    central_flagged: number;
   };
 };
 
@@ -229,15 +259,119 @@ function statusLineOf(text: string | null | undefined): string | null {
   return m ? m[1].trim() : null;
 }
 
-/** A response exists, or a person edited, assigned, reviewed or approved the row. */
+function aiOwned(source: FieldSource | null | undefined): boolean {
+  return source === "central" || source === "project_ai";
+}
+
+/**
+ * A person wrote or reviewed something on the row: a response or assignment not written by AI (an unknown source
+ * counts as a person, D-122), a response status, an approval or a human edit. AI drafts and rule-based routing
+ * labels with a recorded AI source are not work, so portal text updates can replace them.
+ */
 export function hasHumanWork(row: ExistingParsedComment): boolean {
   return Boolean(
-    String(row.response_text ?? "").trim() ||
+    (String(row.response_text ?? "").trim() && !aiOwned(row.response_text_source)) ||
       row.response_status ||
       row.approved_at ||
       row.last_edited_by ||
-      String(row.assigned_to ?? "").trim(),
+      (String(row.assigned_to ?? "").trim() && !aiOwned(row.assigned_to_source)),
   );
+}
+
+type CentralField = { field: "discipline" | "code_reference" | "response_text"; source: "discipline_source" | "code_reference_source" | "response_text_source" };
+const CENTRAL_FIELDS: CentralField[] = [
+  { field: "discipline", source: "discipline_source" },
+  { field: "code_reference", source: "code_reference_source" },
+  { field: "response_text", source: "response_text_source" },
+];
+
+function centralValue(ins: CentralInsight, field: CentralField["field"]): string | null {
+  const v = field === "response_text" ? ins.guidance_text : ins[field];
+  const s = String(v ?? "").trim();
+  return s ? s : null;
+}
+
+function blank(v: unknown, field?: CentralField["field"]): boolean {
+  if (field === "discipline") return !isClassified(v as string | null);
+  return !String(v ?? "").trim();
+}
+
+/** Values a new row takes from its central result: zero AI calls for classification and enrichment. */
+export function centralInsertFields(ins: CentralInsight | undefined): ParsedCommentPatch {
+  if (!ins) return { processing_status: "pending" };
+  const out: ParsedCommentPatch = { central_insight_id: ins.insight_id, processing_status: "pending" };
+  for (const f of CENTRAL_FIELDS) {
+    const v = centralValue(ins, f.field);
+    if (v != null) {
+      out[f.field] = v;
+      out[f.source] = "central";
+    }
+  }
+  return out;
+}
+
+/**
+ * Applies the current central result to an existing row, field by field:
+ *   source central            → refreshed to the new value (a response only while unreviewed and unapproved);
+ *   empty and unknown source  → filled, source central;
+ *   anything else             → kept; when a newer central result differs from a value a person set (or one of
+ *                               unknown origin), central_update_at is set so the Response Matrix can say so.
+ * project_ai values are left alone: the project agents own them.
+ */
+export function planCentralFields(row: ExistingParsedComment, ins: CentralInsight, now: string): { patch: ParsedCommentPatch; applied: number; refreshed: number; flagged: boolean } {
+  const patch: ParsedCommentPatch = {};
+  let applied = 0;
+  let refreshed = 0;
+  let differs = false;
+  const newer = Boolean(row.central_insight_id) && row.central_insight_id !== ins.insight_id;
+  const r = row as Record<string, unknown>;
+  for (const f of CENTRAL_FIELDS) {
+    const next = centralValue(ins, f.field);
+    const current = r[f.field] as string | null | undefined;
+    const source = r[f.source] as FieldSource | null | undefined;
+    const responseLocked = f.field === "response_text" && Boolean(row.response_status || row.approved_at);
+    if (source === "central" && !responseLocked) {
+      if ((current ?? null) !== next) {
+        patch[f.field] = next;
+        refreshed++;
+      }
+      continue;
+    }
+    if (source == null && blank(current, f.field) && next != null && !responseLocked) {
+      patch[f.field] = next;
+      patch[f.source] = "central";
+      applied++;
+      continue;
+    }
+    if (newer && source !== "project_ai" && next != null && looseText(current) !== looseText(next)) differs = true;
+  }
+  if (row.central_insight_id !== ins.insight_id) patch.central_insight_id = ins.insight_id;
+  if (differs) patch.central_update_at = now;
+  else if (row.central_update_at && newer) patch.central_update_at = null;
+  return { patch, applied, refreshed, flagged: differs };
+}
+
+/**
+ * After a portal text replacement, AI values derived from the old text (central or project_ai) are cleared so they
+ * are re-derived: from the new text's central result when there is one, otherwise by the project agents.
+ * Values a person set (or of unknown origin) stay.
+ */
+function clearAiFields(row: ExistingParsedComment, set: (k: string, v: string | number | null) => void) {
+  const r = row as Record<string, unknown>;
+  for (const [field, source] of [
+    ["discipline", "discipline_source"],
+    ["code_reference", "code_reference_source"],
+    ["response_text", "response_text_source"],
+    ["assigned_to", "assigned_to_source"],
+  ] as const) {
+    if (aiOwned(r[source] as FieldSource | null | undefined)) {
+      set(field, null);
+      set(source, null);
+    }
+  }
+  set("central_insight_id", null);
+  set("processing_status", "pending");
+  set("processing_attempts", 0);
 }
 
 /**
@@ -260,9 +394,12 @@ export function planRepositoryCommentMerge(input: {
   comments: RepositoryComment[];
   existing: ExistingParsedComment[];
   now: string;
+  /** Current central results of these permits; absent or empty = project agents do the work as before. */
+  insights?: CentralInsight[];
 }): RepositoryMergePlan {
   const { projectId, permits, now } = input;
   const permitById = new Map(permits.map((p) => [p.id, p]));
+  const insightByKey = new Map((input.insights ?? []).map((i) => [identityKey(i.permit_id, i.portal_comment_key), i]));
   const comments = input.comments
     .filter((c) => permitById.has(c.permit_id) && c.portal_comment_key)
     .slice()
@@ -312,6 +449,9 @@ export function planRepositoryCommentMerge(input: {
       status_kept_human: 0,
       restored: 0,
       soft_removed: 0,
+      central_applied: 0,
+      central_refreshed: 0,
+      central_flagged: 0,
     },
   };
 
@@ -332,6 +472,7 @@ export function planRepositoryCommentMerge(input: {
     const hash = repositoryCommentHash(c);
     const text = formatRepositoryComment(c, permit.permit_number);
     const portalStatus = normalizePortalStatus(c.status);
+    const insight = insightByKey.get(identityKey(c.permit_id, c.portal_comment_key));
 
     if (!row) {
       plan.inserts.push({
@@ -348,8 +489,10 @@ export function planRepositoryCommentMerge(input: {
         portal_content_hash: hash,
         portal_status_raw: c.status ?? null,
         portal_last_seen_at: now,
+        ...centralInsertFields(insight),
       });
       plan.stats.inserted++;
+      if (insight) plan.stats.central_applied++;
       continue;
     }
 
@@ -358,6 +501,7 @@ export function planRepositoryCommentMerge(input: {
     const patch: ParsedCommentPatch = {};
     const set = (k: string, v: string | number | null) => {
       if ((row as Record<string, unknown>)[k] !== v) patch[k] = v;
+      else delete patch[k];
     };
     set("portal_permit_id", c.permit_id);
     set("portal_comment_key", c.portal_comment_key);
@@ -376,8 +520,12 @@ export function planRepositoryCommentMerge(input: {
     const textChanged = row.portal_content_hash
       ? row.portal_content_hash !== hash && !showsPortalComment
       : !showsPortalComment;
+    // A row whose new portal text was only flagged still shows the old text: the central result (of the new text)
+    // does not describe it, so it is not applied until a person accepts the change.
+    let showsCurrentText = true;
     if (textChanged) {
       if (hasHumanWork(row)) {
+        showsCurrentText = false;
         set("portal_latest_text", text);
         set("portal_changed_at", now);
         plan.stats.text_change_flagged++;
@@ -385,6 +533,7 @@ export function planRepositoryCommentMerge(input: {
         set("original_text", text);
         set("portal_latest_text", null);
         set("portal_changed_at", null);
+        clearAiFields(row, set);
         plan.stats.text_replaced++;
       }
     } else if (row.portal_latest_text && showsPortalComment) {
@@ -403,6 +552,15 @@ export function planRepositoryCommentMerge(input: {
       }
     }
     set("portal_status_raw", c.status ?? null);
+    if (insight && showsCurrentText) {
+      // Evaluated on the row as it will be after this patch (a replaced text cleared AI values), against the
+      // central result the row had before, so a person's value that differs from a newer result is flagged.
+      const central = planCentralFields({ ...row, ...patch, central_insight_id: row.central_insight_id } as ExistingParsedComment, insight, now);
+      for (const [k, v] of Object.entries(central.patch)) set(k, v);
+      plan.stats.central_applied += central.applied;
+      plan.stats.central_refreshed += central.refreshed;
+      if (central.flagged) plan.stats.central_flagged++;
+    }
     // Bookkeeping only; written with the other fields so an unchanged row is not touched.
     if (Object.keys(patch).length > 0) {
       patch.portal_last_seen_at = now;

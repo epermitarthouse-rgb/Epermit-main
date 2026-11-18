@@ -178,7 +178,7 @@ export async function createPermitObjectSignedUrl(path: string): Promise<string>
  */
 export function isMissingSchemaError(error: QueryError | null | undefined): boolean {
   if (!error) return false;
-  if (error.code && ['PGRST205', 'PGRST204', '42P01', '42703'].includes(error.code)) return true;
+  if (error.code && ['PGRST205', 'PGRST204', 'PGRST202', '42P01', '42703', '42883'].includes(error.code)) return true;
   return /does not exist|schema cache/i.test(error.message ?? '');
 }
 

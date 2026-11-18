@@ -266,6 +266,40 @@ export function serviceForwardHeaders(input: {
   };
 }
 
+/**
+ * Central (permit-level) mode of the comment agents (D-121): no user and no project, so there is no acting user to
+ * check. Only a caller holding both the service secret and the service key may use it; the work is bounded by the
+ * approved AI budget in the database and reads permit-level data only.
+ */
+export function authorizeCentralExecution(args: {
+  headers: HeaderSource;
+  env: ServiceExecutionEnv;
+}): { ok: true } | { error: string; status: number } {
+  const parsed = parseServiceHeaders(args.headers);
+  if (!isServiceModeEnabled(args.env)) return { error: "Service execution disabled", status: 401 };
+  if (!timingSafeEqual(parsed.secret, args.env.serviceSecret!.trim())) {
+    return { error: "Invalid service credentials", status: 401 };
+  }
+  const bearerOk = timingSafeEqual(parsed.bearer, args.env.serviceRoleKey!.trim())
+    || timingSafeEqual(parsed.bearer, args.env.callKey?.trim());
+  if (!bearerOk) return { error: "Invalid service credentials", status: 401 };
+  if (parsed.actingUser !== null) return { error: "Central mode takes no acting user", status: 400 };
+  return { ok: true };
+}
+
+export function centralForwardHeaders(input: {
+  serviceSecret: string;
+  serviceRoleKey: string;
+  callKey?: string | null;
+}): Record<string, string> {
+  const key = (input.callKey?.trim() || input.serviceRoleKey.trim());
+  return {
+    Authorization: `Bearer ${key}`,
+    apikey: key,
+    [SERVICE_SECRET_HEADER]: input.serviceSecret.trim(),
+  };
+}
+
 /** Same shape as supabase.auth.getUser() so callers keep their destructuring. */
 export function serviceUserResponse(actingUserId: string): {
   data: { user: { id: string } };

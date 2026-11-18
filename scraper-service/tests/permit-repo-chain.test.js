@@ -16,12 +16,13 @@ const { replay, MIGRATIONS_DIR } = require("./helpers/replay-migrations");
 const fx = require("./helpers/permit-repo-fixtures");
 
 const NEW_MIGRATION = "20261111100000_central_permit_repository.sql";
-const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql", "20261117130000_permit_default_access.sql", "20261118140000_permit_sync_schedule_readback.sql"];
+const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql", "20261117130000_permit_default_access.sql", "20261118140000_permit_sync_schedule_readback.sql", "20261118150000_central_comment_processing.sql"];
 const ORCH = "20261113100000_permit_sync_orchestration.sql";
 const LINKING = "20261117100000_permit_pipeline_linking.sql";
 const MONITOR = "20261117120000_permit_sync_monitor_comment_pipeline.sql";
 const ACCESS = "20261117130000_permit_default_access.sql";
 const READBACK = "20261118140000_permit_sync_schedule_readback.sql";
+const CENTRAL = "20261118150000_central_comment_processing.sql";
 const NEW_TABLE = /^(permits$|permit_(?!filings)|project_permits$|project_comment_pipeline_state$)/;
 const NEW_FUNC = new RegExp([
   "^_?permit_", "^user_can_read_permit$", "^can_read_permit$", "^apply_permit_", "^record_permit_document_(download|capture|capture_v2)$", "^record_permit_report_(content|failure)$", "^record_permit_deep_pass$",
@@ -34,11 +35,19 @@ const NEW_FUNC = new RegExp([
   "^_project_permit_comment_fingerprint$", "^invoke_permit_comment_pipeline$", "^link_project_permits$", "^unlink_project_permit$",
   "^request_project_comment_processing$", "^get_comment_pipeline_overview$",
   "^admin_(set_permit_source_default|set_permit_user_hidden|list_permit_access)$",
+  "^_parsed_comment_track_field_source$", "^get_permit_comment_processing$",
+  "^admin_(get_central_processing_diagnostics|list_permit_ai_budgets|retry_permit_comment_processing)$",
 ].join("|"));
-/** Pre-existing objects the linking migration changes on purpose (D-111): the approval trigger body and new parsed_comments columns. */
+/** parsed_comments columns added by the central processing migration (D-122, D-130). */
+const CENTRAL_COLUMNS = /^(processing_status|processing_error|processing_attempts|discipline_source|code_reference_source|response_text_source|assigned_to_source|central_insight_id|central_update_at):/;
+/**
+ * Pre-existing objects the permit migrations change on purpose: the approval trigger body and new parsed_comments
+ * columns (D-111), and the provenance columns plus field-source trigger on parsed_comments (D-122).
+ */
 const INTENDED_CHANGE = (r) =>
   (r.kind === "func" && r.obj === "public.enforce_parsed_comment_response_approval") ||
-  (r.kind === "col" && r.obj === "public.parsed_comments" && r.detail.startsWith("portal_"));
+  (r.kind === "col" && r.obj === "public.parsed_comments" && (r.detail.startsWith("portal_") || CENTRAL_COLUMNS.test(r.detail))) ||
+  (r.kind === "trigger" && r.obj === "parsed_comments" && r.detail.startsWith("trg_parsed_comments_field_source:"));
 
 const FINGERPRINT = `
 SELECT 'col' AS kind, table_schema || '.' || table_name AS obj,
@@ -179,9 +188,9 @@ test("orchestration apply (BEGIN/COMMIT-wrapped, as in production) and its rollb
 
 test("pipeline linking apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
   // The default-access migration replaces get_comment_pipeline_overview, so check linking on the chain before it.
-  const base = await replay({ exclude: [LINKING, ACCESS] });
+  const base = await replay({ exclude: [LINKING, ACCESS, CENTRAL] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await (await replay({ exclude: [ACCESS] })).db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [ACCESS, CENTRAL] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${LINKING}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -192,9 +201,9 @@ test("pipeline linking apply (BEGIN/COMMIT-wrapped, as in production) and its ro
 });
 
 test("monitor comment-pipeline apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
-  const base = await replay({ exclude: [MONITOR] });
+  const base = await replay({ exclude: [MONITOR, CENTRAL] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [CENTRAL] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${MONITOR}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -206,9 +215,9 @@ test("monitor comment-pipeline apply (BEGIN/COMMIT-wrapped, as in production) an
 });
 
 test("default access apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
-  const base = await replay({ exclude: [ACCESS] });
+  const base = await replay({ exclude: [ACCESS, CENTRAL] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [CENTRAL] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${ACCESS}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -247,6 +256,30 @@ test("schedule read-back apply (BEGIN/COMMIT-wrapped, as in production) and its 
 
   await base.db.exec(fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261118140000_permit_sync_schedule_readback.sql`, "utf8"));
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
+});
+
+test("central processing apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
+  const base = await replay({ exclude: [CENTRAL] });
+  const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+
+  await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${CENTRAL}`, "utf8")}\nCOMMIT;`);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
+  assert.notDeepEqual(expected, before, "the migration adds central processing");
+
+  // Rows written while the migration was live (a result, a budget with spend, a provenance value) do not block it.
+  const user = "10000000-0000-4000-8000-0000000000b2";
+  const project = "10000000-0000-4000-8000-0000000000b3";
+  await base.db.query(`INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES ($1, 'b@test.invalid', '{}'::jsonb)`, [user]);
+  await base.db.query(`INSERT INTO public.projects (id, name, user_id) VALUES ($1, 'P', $2)`, [project, user]);
+  await base.db.query(`INSERT INTO public.parsed_comments (project_id, original_text, status, discipline_source, processing_status) VALUES ($1, 'x', 'Pending', 'central', 'processed')`, [project]);
+  await base.db.query(`INSERT INTO public.permit_ai_budgets (scope, cap_usd, approved_at) VALUES ('dc-backfill-test', 5, now())`);
+  await base.db.query(`INSERT INTO public.permit_ai_cost_ledger (scope, stage, model, comment_count, reserved_usd, status, cost_usd) VALUES ('dc-backfill-test', 'classify', 'gpt-4o', 1, 0.01, 'settled', 0.005)`);
+
+  const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261118150000_central_comment_processing.sql`, "utf8");
+  await base.db.exec(rollback);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
+  assert.equal((await base.db.query(`SELECT count(*)::int AS n FROM public.parsed_comments WHERE project_id = $1`, [project])).rows[0].n, 1, "project rows are kept");
 });
 
 test("access rules hold against the real credential, profile and default-privilege definitions", async () => {

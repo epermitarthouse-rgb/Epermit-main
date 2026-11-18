@@ -210,3 +210,39 @@ Back up the deployed version first. Rollback: redeploy that backup.
 
 Known limit: a comment that itself contains a line shaped like a response header, on a comment that also has
 responses, is cut at that line, so an edit after it is not seen. A row without responses is unaffected.
+
+## Central (permit-level) processing and reuse on link (D-121..D-124, D-130..D-132)
+
+Status 2026-11-18: built and tested locally on `feat/central-comment-processing`; not applied, deployed or run.
+Design and plan: CENTRAL_PROCESSING_PROPOSAL.md ("Implemented").
+
+```
+deep worker pass ──► permit-comment-pipeline {action: central_sweep, permit_ids}   (also first step of the cron sweep)
+                         │ permit_central_claim (due when comment input hashes or the processing version changed)
+                         ▼
+   discipline-classifier-agent {mode: central} ─► context-reference-engine {mode: central}
+         │ each call: permit_ai_budget_reserve ─► OpenAI ─► permit_ai_budget_settle
+         ▼
+   permit_comment_insights (current + history) ─► permit_central_finish
+                         │
+   project sweep ─► comment-parser merge copies current insights into parsed_comments
+                    (*_source = central, central_insight_id) ─► classifier / enrichment skip those rows (0 AI calls)
+```
+
+| Piece | Where |
+|---|---|
+| Schema, RPCs, field-source trigger | `supabase/migrations/20261118150000_central_comment_processing.sql` (rollback in `scripts/permit-repo/`) |
+| Shared prompts and versions | `supabase/functions/_shared/commentPrompts.ts` |
+| Central stages (pure) | `_shared/centralCommentProcessing.ts`; Deno entry `_shared/centralAgentDeno.ts` |
+| Cost bounds | `_shared/aiCost.ts` |
+| Project-mode status, classifier loop, routing plan | `_shared/commentProcessingStatus.ts` |
+| Backfill prep (not run) | `scripts/permit-repo/central/estimate-backfill-cost.ts`, `approve-dc-backfill-budget.sql` |
+| UI | `PermitQueueCommentsCell.tsx`, `PermitCommentAnalysisPanel.tsx`, `PermitPipelineViews.tsx` |
+
+Field ownership on `parsed_comments` (D-122): `central` fields refresh when a newer central result arrives (a reviewed
+or approved draft does not); `project_ai` fields stay; `human` fields (set by the trigger on any signed-in edit) and
+NULL (rows from before this change) are never overwritten, only flagged with `central_update_at`.
+
+Environment: `CENTRAL_PROCESSING_ENABLED=true` on `permit-comment-pipeline`, `discipline-classifier-agent` and
+`context-reference-engine`; `CENTRAL_AI_BUDGET_SCOPE` on `permit-comment-pipeline` names the approved budget for
+sweeps. Without them central mode answers 403 and the sweep skips the central pass.

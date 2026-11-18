@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import {
+  authorizeCentralExecution,
   authorizeServiceExecution,
+  centralForwardHeaders,
   isServiceModeEnabled,
   serviceForwardHeaders,
   type ServiceAdminClient,
@@ -42,6 +44,16 @@ export function resolveServiceExecution(
     },
     functionName,
   });
+}
+
+export function resolveCentralExecution(req: Request): { ok: true } | { error: string; status: number } {
+  return authorizeCentralExecution({ headers: req.headers, env: readServiceEnv() });
+}
+
+export function centralForwardHeadersFromEnv(): Record<string, string> {
+  const env = readServiceEnv();
+  if (!isServiceModeEnabled(env)) throw new Error("Service execution disabled");
+  return centralForwardHeaders({ serviceSecret: env.serviceSecret!, serviceRoleKey: env.serviceRoleKey!, callKey: env.callKey });
 }
 
 export function serviceForwardHeadersFromEnv(actingUserId: string): Record<string, string> {

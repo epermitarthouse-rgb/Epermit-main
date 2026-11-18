@@ -258,6 +258,117 @@ export function summarizeProjectState(rows: Pick<PipelineOverviewRow, 'processin
   return order.find((s) => rows.some((r) => r.processing_state === s)) ?? null;
 }
 
+// ---- Permit-level (central) processing, D-121 --------------------------------
+
+export type CentralProcessingState = 'not_processed' | 'processing' | 'ready' | 'needs_attention' | 'no_comments';
+
+export interface PermitCommentProcessing {
+  permit_id: string;
+  processing_state: CentralProcessingState;
+  source_comments: number;
+  processed: number;
+  pending: number;
+  failed: number;
+  needs_attention: number;
+  skipped: number;
+  last_completed_at: string | null;
+}
+
+/** Plain-language Permit Queue states. Versions, hashes, failures and costs are admin-only (diagnostics). */
+export const CENTRAL_PROCESSING_LABELS: Record<CentralProcessingState, { label: string; tone: 'good' | 'warn' | 'bad' | 'default'; detail: string }> = {
+  not_processed: { label: 'Not yet processed', tone: 'default', detail: 'Review comments have not been analysed yet.' },
+  processing: { label: 'Processing', tone: 'default', detail: 'Review comments are being analysed.' },
+  ready: { label: 'Ready for project use', tone: 'good', detail: 'Preliminary AI analysis is ready; linked projects reuse it.' },
+  needs_attention: { label: 'Needs attention', tone: 'bad', detail: 'Some comments could not be analysed. An administrator can retry.' },
+  no_comments: { label: 'No review comments', tone: 'default', detail: 'This permit has no review comments yet.' },
+};
+
+/** Per readable permit. Empty when the migration is not applied yet. */
+export async function loadPermitCommentProcessing(permitIds: string[]): Promise<Map<string, PermitCommentProcessing>> {
+  const out = new Map<string, PermitCommentProcessing>();
+  const ids = [...new Set(permitIds.filter(Boolean))].slice(0, 200);
+  if (ids.length === 0) return out;
+  const res = await client().rpc('get_permit_comment_processing', { p_permit_ids: ids });
+  if (res.error && isMissingSchemaError(res.error)) return out;
+  for (const r of (unwrap(res, 'Loading comment analysis') as PermitCommentProcessing[] | null) ?? []) {
+    out.set(r.permit_id, {
+      ...r,
+      source_comments: Number(r.source_comments ?? 0),
+      processed: Number(r.processed ?? 0),
+      pending: Number(r.pending ?? 0),
+      failed: Number(r.failed ?? 0),
+      needs_attention: Number(r.needs_attention ?? 0),
+      skipped: Number(r.skipped ?? 0),
+    });
+  }
+  return out;
+}
+
+export interface CentralDiagnosticsRow {
+  permit_id: string;
+  permit_number: string | null;
+  status: string | null;
+  processing_version: string | null;
+  completed_fingerprint: string | null;
+  current_fingerprint: string | null;
+  attempts: number | null;
+  next_attempt_at: string | null;
+  last_error: string | null;
+  last_completed_at: string | null;
+  source_comments: number;
+  processed: number;
+  pending: number;
+  failed: number;
+  needs_attention: number;
+  skipped: number;
+  ai_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface AiBudgetStatus {
+  scope: string;
+  cap_usd: number;
+  approved: boolean;
+  closed: boolean;
+  used_usd: number;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+/** Platform admins: per-permit diagnostics and AI budgets. `available: false` before the migration. */
+export async function loadCentralDiagnostics(permitIds?: string[]): Promise<{ available: boolean; rows: CentralDiagnosticsRow[]; budgets: AiBudgetStatus[] }> {
+  const [diag, budgets] = await Promise.all([
+    client().rpc('admin_get_central_processing_diagnostics', { p_permit_ids: permitIds?.length ? permitIds.slice(0, 200) : null }),
+    client().rpc('admin_list_permit_ai_budgets', {}),
+  ]);
+  if (diag.error && isMissingSchemaError(diag.error)) return { available: false, rows: [], budgets: [] };
+  const num = (v: unknown) => Number(v ?? 0);
+  const rows = ((unwrap(diag, 'Loading comment analysis diagnostics') as CentralDiagnosticsRow[] | null) ?? []).map((r) => ({
+    ...r,
+    source_comments: num(r.source_comments),
+    processed: num(r.processed),
+    pending: num(r.pending),
+    failed: num(r.failed),
+    needs_attention: num(r.needs_attention),
+    skipped: num(r.skipped),
+    ai_calls: num(r.ai_calls),
+    input_tokens: num(r.input_tokens),
+    output_tokens: num(r.output_tokens),
+    cost_usd: num(r.cost_usd),
+  }));
+  const list = budgets.error ? [] : ((budgets.data as AiBudgetStatus[] | null) ?? []);
+  return { available: true, rows, budgets: list.map((b) => ({ ...b, cap_usd: num(b.cap_usd), used_usd: num(b.used_usd), calls: num(b.calls), input_tokens: num(b.input_tokens), output_tokens: num(b.output_tokens) })) };
+}
+
+/** Platform admins: analyse a permit again (set-aside comments get fresh attempts). */
+export async function retryCentralProcessing(permitId: string): Promise<void> {
+  assertPermitWritesAllowed('admin_retry_permit_comment_processing');
+  unwrap(await client().rpc('admin_retry_permit_comment_processing', { p_permit_id: permitId }), 'Retrying comment analysis');
+}
+
 // ---- Response Matrix markers ------------------------------------------------
 
 export interface PortalCommentMarker {
@@ -265,25 +376,37 @@ export interface PortalCommentMarker {
   changed_at: string | null;
   latest_text: string | null;
   permit_id: string | null;
+  /** Fields on this row filled from the permit-level preliminary AI analysis (D-122). */
+  preliminary_fields?: Array<'discipline' | 'code_reference' | 'response_text'>;
+  /** A newer preliminary analysis differs from a value a person set; the value was kept. */
+  central_update_at?: string | null;
 }
 
-/** Portal markers per comment id. Empty when the columns do not exist yet (migration not applied). */
+const MARKER_COLUMNS = 'id, portal_permit_id, portal_removed_at, portal_changed_at, portal_latest_text';
+const CENTRAL_MARKER_COLUMNS = 'discipline_source, code_reference_source, response_text_source, central_update_at';
+
+/**
+ * Portal and preliminary-analysis markers per comment id. Without the central columns (migration not applied)
+ * the portal markers still load; without the portal columns the map is empty.
+ */
 export async function loadPortalCommentMarkers(projectId: string): Promise<Map<string, PortalCommentMarker>> {
   const out = new Map<string, PortalCommentMarker>();
   if (!projectId) return out;
-  const res = await client()
-    .from('parsed_comments')
-    .select('id, portal_permit_id, portal_removed_at, portal_changed_at, portal_latest_text')
-    .eq('project_id', projectId)
-    .limit(5000);
+  const query = (columns: string) => client().from('parsed_comments').select(columns).eq('project_id', projectId).limit(5000);
+  let res = await query(`${MARKER_COLUMNS}, ${CENTRAL_MARKER_COLUMNS}`);
+  if (res.error) res = await query(MARKER_COLUMNS);
   if (res.error) return out;
   for (const r of res.data ?? []) {
-    if (!r.portal_removed_at && !r.portal_latest_text) continue;
+    const preliminary = (['discipline', 'code_reference', 'response_text'] as const).filter((f) => r[`${f}_source`] === 'central');
+    const centralUpdate = (r.central_update_at as string | null | undefined) ?? null;
+    if (!r.portal_removed_at && !r.portal_latest_text && preliminary.length === 0 && !centralUpdate) continue;
     out.set(String(r.id), {
       removed_at: (r.portal_removed_at as string | null) ?? null,
       changed_at: (r.portal_changed_at as string | null) ?? null,
       latest_text: (r.portal_latest_text as string | null) ?? null,
       permit_id: (r.portal_permit_id as string | null) ?? null,
+      preliminary_fields: preliminary,
+      central_update_at: centralUpdate,
     });
   }
   return out;

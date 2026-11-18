@@ -5,8 +5,11 @@ import { formatTimestamp } from "@/components/permits/PermitRepositoryViews";
 import type { PermitListRow } from "@/lib/centralPermits";
 import { permitQueuePath } from "@/lib/permitQueue";
 import {
+  CENTRAL_PROCESSING_LABELS,
   PROCESSING_LABELS,
   discussionOf,
+  type CentralProcessingState,
+  type PermitCommentProcessing,
   type LinkedPermit,
   type PipelineOverviewRow,
   type PortalCommentMarker,
@@ -24,6 +27,19 @@ export function ProcessingStatePill({ state }: { state: ProcessingState | null |
     </StatusPill>
   );
 }
+
+/** Permit-level analysis state (D-121), in plain language. */
+export function CentralProcessingPill({ state }: { state: CentralProcessingState | null | undefined }) {
+  if (!state) return null;
+  const s = CENTRAL_PROCESSING_LABELS[state];
+  return (
+    <StatusPill tone={s.tone} title={s.detail} data-central-state={state}>
+      {s.label}
+    </StatusPill>
+  );
+}
+
+const PRELIMINARY_FIELD_LABEL = { discipline: "discipline", code_reference: "code reference", response_text: "draft" } as const;
 
 function commentsLine(row: PipelineOverviewRow | undefined): string | null {
   if (!row || row.processing_state === "no_comments") return null;
@@ -171,12 +187,15 @@ export function PermitChoiceList({
   rows,
   selectedIds,
   existingLinks,
+  analysis,
   excludeProjectId,
   onToggle,
 }: {
   rows: PermitListRow[];
   selectedIds: ReadonlySet<string>;
   existingLinks?: ReadonlyMap<string, Array<{ project_id: string; project_name: string | null }>>;
+  /** Permit-level analysis state: a "Ready for project use" permit brings its preliminary analysis along. */
+  analysis?: ReadonlyMap<string, PermitCommentProcessing>;
   excludeProjectId?: string | null;
   onToggle: (row: PermitListRow) => void;
 }) {
@@ -195,6 +214,11 @@ export function PermitChoiceList({
                   {[r.jurisdiction, r.address, r.status_raw ?? r.status].filter(Boolean).join(" · ")}
                 </span>
               </div>
+              {analysis?.get(r.id) && analysis.get(r.id)!.processing_state !== "no_comments" ? (
+                <div className="mt-1">
+                  <CentralProcessingPill state={analysis.get(r.id)!.processing_state} />
+                </div>
+              ) : null}
               {others.length > 0 ? (
                 <div className="text-xs text-warning" data-testid="permit-already-linked">
                   Already linked to {others.map((o) => o.project_name ?? "another project").join(", ")}
@@ -214,8 +238,22 @@ export function PermitChoiceList({
 /** Response Matrix: a comment that left the portal, or whose portal text changed after it was answered. */
 export function PortalCommentMarkerBadge({ marker }: { marker: PortalCommentMarker | undefined }) {
   if (!marker) return null;
+  const preliminary = marker.preliminary_fields ?? [];
   return (
     <div className="mt-1 space-y-1" data-testid="portal-comment-marker">
+      {preliminary.length ? (
+        <StatusPill
+          tone="default"
+          title={`Preliminary AI analysis of the permit comment (${preliminary.map((f) => PRELIMINARY_FIELD_LABEL[f]).join(", ")}). Not a verified code review; no project documents were read.`}
+        >
+          Preliminary AI
+        </StatusPill>
+      ) : null}
+      {marker.central_update_at ? (
+        <StatusPill tone="info" title={`A newer preliminary analysis (${formatTimestamp(marker.central_update_at)}) differs from a value set by your team. Your value was kept.`}>
+          Newer AI analysis
+        </StatusPill>
+      ) : null}
       {marker.removed_at ? (
         <StatusPill tone="warn" title={`No longer listed on the portal since ${formatTimestamp(marker.removed_at)}. Your response is kept.`}>
           No longer on portal

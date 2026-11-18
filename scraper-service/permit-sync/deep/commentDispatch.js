@@ -10,6 +10,10 @@
  *   'skipped_duplicate' nothing new to process (or already being processed)
  *   'disabled'          no service secret configured: the worker trigger stays off
  *   'failed'            the edge function refused or was unreachable
+ *
+ * `triggerCentral({ permitId })` asks for the permit-level (central) pass of a synced permit, linked or not
+ * (D-121). The edge function processes only comments whose input or processing version changed, within the
+ * approved AI budget; while central processing is off it answers 403/503 and this returns 'disabled'.
  */
 
 /**
@@ -23,18 +27,16 @@ function createCommentPipelineDispatcher({ fetch, supabaseUrl, serviceRoleKey, s
   if (typeof fetch !== "function") throw new Error("fetch is required");
   const url = `${String(supabaseUrl || "").replace(/\/$/, "")}/functions/v1/permit-comment-pipeline`;
 
-  /** @returns {Promise<{ outcome: 'disabled'|'skipped_duplicate'|'complete'|'failed', rounds: number, queued?: boolean, error?: string }>} */
-  async function trigger({ projectId }) {
-    if (!serviceSecret) return { outcome: "disabled", rounds: 0 };
+  async function post(body) {
     let res;
     try {
       res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}`, apikey: serviceRoleKey },
-        body: JSON.stringify({ action: "sweep", source: "deep_worker", project_ids: [projectId] }),
+        body: JSON.stringify(body),
       });
     } catch (err) {
-      return { outcome: "failed", rounds: 1, error: `permit-comment-pipeline unreachable: ${String((err && err.message) || err).slice(0, 120)}` };
+      return { error: `permit-comment-pipeline unreachable: ${String((err && err.message) || err).slice(0, 120)}` };
     }
     const text = await res.text();
     let data = null;
@@ -43,6 +45,14 @@ function createCommentPipelineDispatcher({ fetch, supabaseUrl, serviceRoleKey, s
     } catch (_) {
       data = null;
     }
+    return { res, data };
+  }
+
+  /** @returns {Promise<{ outcome: 'disabled'|'skipped_duplicate'|'complete'|'failed', rounds: number, queued?: boolean, error?: string }>} */
+  async function trigger({ projectId }) {
+    if (!serviceSecret) return { outcome: "disabled", rounds: 0 };
+    const { res, data, error } = await post({ action: "sweep", source: "deep_worker", project_ids: [projectId] });
+    if (error) return { outcome: "failed", rounds: 1, error };
     if (!res.ok) {
       const msg = data && (data.error || data.message) ? String(data.error || data.message) : `HTTP ${res.status}`;
       return { outcome: "failed", rounds: 1, error: `permit-comment-pipeline: ${msg.slice(0, 160)}` };
@@ -51,7 +61,21 @@ function createCommentPipelineDispatcher({ fetch, supabaseUrl, serviceRoleKey, s
     return claimed > 0 ? { outcome: "complete", rounds: 1, queued: true } : { outcome: "skipped_duplicate", rounds: 1 };
   }
 
-  return { trigger };
+  /** @returns {Promise<{ outcome: 'disabled'|'skipped_duplicate'|'complete'|'failed', error?: string }>} */
+  async function triggerCentral({ permitId }) {
+    if (!serviceSecret || !permitId) return { outcome: "disabled" };
+    const { res, data, error } = await post({ action: "central_sweep", source: "deep_worker", permit_ids: [permitId] });
+    if (error) return { outcome: "failed", error };
+    if (res.status === 403 || res.status === 503) return { outcome: "disabled" };
+    if (!res.ok) {
+      const msg = data && (data.error || data.message) ? String(data.error || data.message) : `HTTP ${res.status}`;
+      return { outcome: "failed", error: `permit-comment-pipeline: ${msg.slice(0, 160)}` };
+    }
+    if (data && data.accepted === true) return { outcome: "complete" };
+    return data && Number(data.claimed) > 0 ? { outcome: "complete" } : { outcome: "skipped_duplicate" };
+  }
+
+  return { trigger, triggerCentral };
 }
 
 module.exports = { createCommentPipelineDispatcher };
