@@ -471,6 +471,61 @@ async function reinitScenario() {
   return { error, closed, lost: session.dcDeepSessionLost || null, cancel: session._cancelRequested === true };
 }
 
+/**
+ * Montgomery G-8: the Montgomery driver's linked sync through the REAL DC writer against a stateful fake projects
+ * row that already holds older scraper data (status, info, tasks, files and reports with portal URLs).
+ */
+async function montgomeryScenario() {
+  const PROJECT_ID = "00000000-0000-4000-8000-0000000000c1";
+  const existing = {
+    id: PROJECT_ID, portal_data_hash: "legacy-hash", portal_status: "In Review", address: "1 Old Road", jurisdiction: "Montgomery County MD",
+    portal_data: {
+      name: "SIGN-1000001", projectNum: "SIGN-1000001", description: "Older description", location: "1 Old Road", dashboardStatus: "In Review",
+      portalType: "projectdox", portalSubtype: "montgomery-projectdox", unrelatedKey: { keep: true },
+      tabs: {
+        status: { keyValues: [{ key: "Status", value: "In Review" }], tables: [], links: [{ text: "Reports", href: "x" }] },
+        info: { projectInfo: [{ key: "Applicant", value: "Older applicant" }], keyValues: [], tables: [] },
+        tasks: { keyValues: [{ key: "Task", value: "Older task" }], tables: [], links: [] },
+        files: { folders: [{ name: "Plans", files: [{ fileId: "7001", name: "A-1.pdf", status: "Approved", viewUrl: "https://older.example/view/7001", commentCount: 2, comments: [{ n: 1 }], downloadStatus: "success" }] }] },
+        reports: { tables: [{ headers: ["REPORT NAME"], rows: [{ "REPORT NAME": "Review Comments" }] }], reportEntries: [{ reportName: "Review Comments", pdfUrl: "https://older.example/r.pdf" }], pdfs: [{ fileName: "Review Comments", text: "older text", pages: 2 }, { fileName: "Older only", text: "kept" }] },
+      },
+    },
+  };
+  const pg = await fakePostgrest(existing, { statefulProjects: true });
+  const { out } = load(APP, pg.url);
+  const { createMontgomeryDeepDriver } = require("../../permit-sync/deep/montgomery-driver");
+  const driver = createMontgomeryDeepDriver({ transport: { fetchFile() {}, exportReport() {} }, loadWriter: () => out.dcDeep });
+  const project = { id: "900001", projectNum: "SIGN-1000001" };
+  const placeholder = { keyValues: [], tables: [], links: [], source: "json_pass" };
+  const data = () => ({
+    name: "SIGN-1000001", projectNum: "SIGN-1000001", description: "", location: "", dashboardStatus: "Open", portalType: "projectdox",
+    permitRepositorySync: { permit_id: "p1", section_hashes: { files: "h1" }, capture_hash: "c1" },
+    tabs: {
+      status: placeholder, tasks: placeholder, info: placeholder,
+      files: { keyValues: [], tables: [], links: [], folders: [
+        { name: "Plans", files: [{ name: "A-1.pdf", fileId: "7001", folderName: "Plans", status: "Approved", uploadedDate: "2026-11-01", commentCount: 0, comments: [], viewUrl: "", downloadStatus: "success", storageRef: { bucket: "permit-documents", path: "p1/files/7001.pdf", sha256: "aa" } }] },
+        { name: "Specs", files: [{ name: "S-1.pdf", fileId: "7002", folderName: "Specs", status: "Approved", commentCount: 0, comments: [], viewUrl: "", downloadStatus: "not_downloaded", downloadGate: "not_permitted" }] },
+      ] },
+      reports: { keyValues: [], tables: [], links: [], pdfs: [{ fileName: "Review Comments", text: "new text", pages: 3, pdfStorageRef: { bucket: "permit-documents", path: "p1/reports/r.pdf" } }, { fileName: "Needs workflow", text: "", pages: null, error: "report_needs_workflow", unavailable: true }] },
+    },
+  });
+  const opts = { forbidInsert: true, skipCredentialRepoint: true, contentHash: true };
+  const results = {};
+  const start0 = pg.requests.length;
+  results.unlinked = { ok: await driver.syncPortalDataToSupabase({ data: { 900001: data() } }, [project], null, null, null, opts), requests: pg.requests.slice(start0).length };
+  const start1 = pg.requests.length;
+  results.linked_ok = await driver.syncPortalDataToSupabase({ portalType: "projectdox", data: { 900001: data() } }, [project], PROJECT_ID, "u1", null, opts);
+  results.linked_requests = pg.requests.slice(start1).map((r) => `${r.method} ${r.table}`);
+  results.after = existing.portal_data;
+  results.hash = existing.portal_data_hash;
+  results.portal_status = existing.portal_status;
+  results.address = existing.address;
+  const start2 = pg.requests.length;
+  results.refused = await driver.syncPortalDataToSupabase({ data: { 900001: data() } }, [project], PROJECT_ID, "u1", null, {}).then(() => null, (e) => String(e.message));
+  results.refused_requests = pg.requests.slice(start2).length;
+  return results;
+}
+
 async function main() {
   const [scenario, arg] = process.argv.slice(2);
   if (scenario === "downloadguard") return downloadGuardScenario();
@@ -481,6 +536,7 @@ async function main() {
     return { routes: routeList(app), keys: Object.keys(out) };
   }
   if (scenario === "sync") return syncScenario();
+  if (scenario === "montgomery") return montgomeryScenario();
   if (scenario === "contenthash") return contentHashScenario();
   if (scenario === "pager") return pagerScenario();
   if (scenario === "login409") return login409Scenario();
