@@ -16,7 +16,7 @@
 --    new central results (with zero AI calls). Unchanged while no central result exists.
 --
 -- Additive and idempotent. Nothing runs until the dispatcher is deployed with CENTRAL_PROCESSING_ENABLED and an
--- approved budget exists. Rollback: scripts/permit-repo/rollback-20261118100000_central_comment_processing.sql
+-- approved budget exists. Rollback: scripts/permit-repo/rollback-20261118150000_central_comment_processing.sql
 
 -- ---------------------------------------------------------------------------
 -- 1. Central results

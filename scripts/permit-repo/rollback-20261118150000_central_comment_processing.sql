@@ -1,9 +1,9 @@
--- Rollback for supabase/migrations/20261118100000_central_comment_processing.sql (production approval required).
+-- Rollback for supabase/migrations/20261118150000_central_comment_processing.sql (production approval required).
 -- Restores the schema exactly as 20261117130000_permit_default_access.sql left it (verified by
 -- scraper-service/tests/permit-repo-chain.test.js). _project_permit_comment_fingerprint at the end is a verbatim
 -- copy from 20261117100000_permit_pipeline_linking.sql. Run in one transaction:
---   supabase db query --linked -f scripts/permit-repo/rollback-20261118100000_central_comment_processing.sql
---   supabase migration repair --status reverted 20261118100000
+--   supabase db query --linked -f scripts/permit-repo/rollback-20261118150000_central_comment_processing.sql
+--   supabase migration repair --status reverted 20261118150000
 -- Turn the central sweep off first (unset CENTRAL_PROCESSING_ENABLED on Edge Functions) so nothing writes meanwhile.
 -- Kept: parsed_comments rows and every value in them (discipline, code reference, response, assignment, approvals),
 -- including values copied from central results. Dropped: central results, per-permit state, the AI budget and

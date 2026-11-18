@@ -231,7 +231,7 @@ deep worker pass ──► permit-comment-pipeline {action: central_sweep, permi
 
 | Piece | Where |
 |---|---|
-| Schema, RPCs, field-source trigger | `supabase/migrations/20261118100000_central_comment_processing.sql` (rollback in `scripts/permit-repo/`) |
+| Schema, RPCs, field-source trigger | `supabase/migrations/20261118150000_central_comment_processing.sql` (rollback in `scripts/permit-repo/`) |
 | Shared prompts and versions | `supabase/functions/_shared/commentPrompts.ts` |
 | Central stages (pure) | `_shared/centralCommentProcessing.ts`; Deno entry `_shared/centralAgentDeno.ts` |
 | Cost bounds | `_shared/aiCost.ts` |

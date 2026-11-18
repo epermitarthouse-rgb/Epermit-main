@@ -16,13 +16,13 @@ const { replay, MIGRATIONS_DIR } = require("./helpers/replay-migrations");
 const fx = require("./helpers/permit-repo-fixtures");
 
 const NEW_MIGRATION = "20261111100000_central_permit_repository.sql";
-const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql", "20261117130000_permit_default_access.sql", "20261118140000_permit_sync_schedule_readback.sql", "20261118100000_central_comment_processing.sql"];
+const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql", "20261117130000_permit_default_access.sql", "20261118140000_permit_sync_schedule_readback.sql", "20261118150000_central_comment_processing.sql"];
 const ORCH = "20261113100000_permit_sync_orchestration.sql";
 const LINKING = "20261117100000_permit_pipeline_linking.sql";
 const MONITOR = "20261117120000_permit_sync_monitor_comment_pipeline.sql";
 const ACCESS = "20261117130000_permit_default_access.sql";
 const READBACK = "20261118140000_permit_sync_schedule_readback.sql";
-const CENTRAL = "20261118100000_central_comment_processing.sql";
+const CENTRAL = "20261118150000_central_comment_processing.sql";
 const NEW_TABLE = /^(permits$|permit_(?!filings)|project_permits$|project_comment_pipeline_state$)/;
 const NEW_FUNC = new RegExp([
   "^_?permit_", "^user_can_read_permit$", "^can_read_permit$", "^apply_permit_", "^record_permit_document_(download|capture|capture_v2)$", "^record_permit_report_(content|failure)$", "^record_permit_deep_pass$",
@@ -276,7 +276,7 @@ test("central processing apply (BEGIN/COMMIT-wrapped, as in production) and its 
   await base.db.query(`INSERT INTO public.permit_ai_budgets (scope, cap_usd, approved_at) VALUES ('dc-backfill-test', 5, now())`);
   await base.db.query(`INSERT INTO public.permit_ai_cost_ledger (scope, stage, model, comment_count, reserved_usd, status, cost_usd) VALUES ('dc-backfill-test', 'classify', 'gpt-4o', 1, 0.01, 'settled', 0.005)`);
 
-  const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261118100000_central_comment_processing.sql`, "utf8");
+  const rollback = fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261118150000_central_comment_processing.sql`, "utf8");
   await base.db.exec(rollback);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
   assert.equal((await base.db.query(`SELECT count(*)::int AS n FROM public.parsed_comments WHERE project_id = $1`, [project])).rows[0].n, 1, "project rows are kept");

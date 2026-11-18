@@ -375,8 +375,8 @@ string); multi-jurisdiction code references (jurisdiction in `input_hash` and in
 
 ## Implemented (2026-11-18, branch `feat/central-comment-processing`)
 
-One migration, `20261118100000_central_comment_processing.sql` (rollback
-`scripts/permit-repo/rollback-20261118100000_central_comment_processing.sql`, exact-rollback test in
+One migration, `20261118150000_central_comment_processing.sql` (rollback
+`scripts/permit-repo/rollback-20261118150000_central_comment_processing.sql`, exact-rollback test in
 `permit-repo-chain.test.js`). The existing agents, dispatcher and state-machine pattern are reused; there is no second
 pipeline and no new agent.
 
