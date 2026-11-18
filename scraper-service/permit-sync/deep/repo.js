@@ -22,7 +22,7 @@ function fileDigest(localPath) {
   return { buf, sha256: crypto.createHash("sha256").update(buf).digest("hex"), size: buf.length };
 }
 
-function supabaseDeepRepo(client) {
+function supabaseDeepRepo(client, { adapterKey = "dc-projectdox" } = {}) {
   const rows = async (q, what) => {
     const { data, error } = await q;
     if (error) throw new Error(`${what}: ${error.message}`);
@@ -38,7 +38,7 @@ function supabaseDeepRepo(client) {
       client.from("permit_documents").select("id, portal_file_id, file_name, size_bytes, download_permitted, download_status, storage_path, sha256, capture_attempts, capture_next_attempt_at").eq("permit_id", permitId).is("removed_at", null),
       "permit_documents"),
     reports: (permitId) => rows(
-      client.from("permit_reports").select("id, report_key, name, content_status, latest_content_id, content_attempts, content_next_attempt_at").eq("permit_id", permitId).is("removed_at", null),
+      client.from("permit_reports").select("id, report_key, name, content_status, content_error, latest_content_id, content_attempts, content_next_attempt_at").eq("permit_id", permitId).is("removed_at", null),
       "permit_reports"),
     async deepState(permitId) {
       const r = await rows(client.from("permit_deep_state").select("section_hashes").eq("permit_id", permitId).limit(1), "permit_deep_state");
@@ -61,9 +61,9 @@ function supabaseDeepRepo(client) {
         "permit_report_contents");
       return r.length > 0;
     },
-    /** Latest stored Review Comments export of a DC permit (structured rows, text, Excel path), or null. */
+    /** Latest stored Review Comments export of a permit of this adapter (structured rows, text, Excel path), or null. */
     async storedReviewReport(portalRecordId) {
-      const p = await rows(client.from("permits").select("id").eq("adapter_key", "dc-projectdox").eq("portal_record_id", String(portalRecordId)).limit(1), "permits");
+      const p = await rows(client.from("permits").select("id").eq("adapter_key", adapterKey).eq("portal_record_id", String(portalRecordId)).limit(1), "permits");
       if (!p[0]) return null;
       const rep = await rows(
         client.from("permit_reports").select("latest_content_id").eq("permit_id", p[0].id).ilike("name", "%review comments%").is("removed_at", null).not("latest_content_id", "is", null).limit(1),

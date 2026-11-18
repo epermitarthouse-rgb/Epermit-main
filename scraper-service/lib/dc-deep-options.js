@@ -29,7 +29,7 @@ function fileGateDecision(deep, file) {
   if (!deep || typeof deep.fileGate !== "function") return null;
   if (!file || !file.id) return { download: false, reason: "no_file_id" };
   const d = deep.fileGate(String(file.id), { name: file.name, status: file.status }) || {};
-  return { download: d.download === true, reason: String(d.reason || (d.download ? "gate_download" : "gate_skip")), previous: d.previous || null };
+  return { download: d.download === true, reason: String(d.reason || (d.download ? "gate_download" : "gate_skip")), previous: d.previous || null, accessPath: d.accessPath || null };
 }
 
 /** Files-tab entry for a file the gate did not download (same shape as the manual entries). */

@@ -12,13 +12,19 @@
  *   repo      repo.js (service-role reads + capture RPCs)
  *   storage   repo.js supabaseDeepStorage (private bucket)
  *   pipeline  pipeline.js driver (or null = no agent trigger)
+ *   tenant    ProjectDox tenant (default DC); Montgomery passes montgomery-driver.js as `dcDeep`
  */
 
 const policy = require("./policy");
 const normalize = require("../adapters/dc-projectdox/normalize");
 const safety = require("../core/safety");
+const { DC: TENANT_DC } = require("../adapters/projectdox-tenants");
 const { fileDigest, contentTypeFor } = require("./repo");
-const { PortalChangedError, SessionEndedError, LeaseLostError, ShutdownError } = require("../core/errors");
+const { PortalChangedError, SessionEndedError, LeaseLostError, ShutdownError, safeMessage } = require("../core/errors");
+
+/** Errors that end the job, never absorbed by an optional step. */
+const JOB_ENDING_CODES = new Set(["safety_violation", "session_ended", "rate_limited", "mfa_required", "captcha", "auth_failed"]);
+const REVIEW_COMMENTS_REPORT = /review comments/i;
 
 /** Minimum gap between per-file progress writes during a pass. */
 const PROGRESS_MIN_MS = 3000;
@@ -176,6 +182,13 @@ function createDashboardIndex(transport) {
   };
 }
 
+/** True when the batch's Reviews section is incomplete and this pass recorded the Review Comments report captured. */
+function reviewsNeedReread(batch, reports, ctx) {
+  const reviews = batch && batch.sections && batch.sections.reviews;
+  if (!reviews || !["failed", "partial"].includes(reviews.status)) return false;
+  return (reports || []).some((r) => REVIEW_COMMENTS_REPORT.test(String(r.name || "")) && ctx.reportsRecorded.get(r.report_key) === "captured");
+}
+
 function manualProject(record, row) {
   const permit = String((record.fields && record.fields.permit_number) || (row && row.permit) || "");
   const dash = (row && row.dashboard) || {};
@@ -204,7 +217,10 @@ function manualProject(record, row) {
  * @param {string|null} deps.credentialId
  * @param {Function} [deps.log]
  */
-function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, username, credentialId = null, log = () => {}, quiet = withQuietConsole, env = {}, trace = (o) => console.log(`[permit-sync] ${JSON.stringify(o)}`) }) {
+function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, username, credentialId = null, log = () => {}, quiet = withQuietConsole, env = {}, trace = (o) => console.log(`[permit-sync] ${JSON.stringify(o)}`), tenant = null }) {
+  const t = safety.tenantFor(tenant);
+  const isDc = t.key === TENANT_DC.key;
+  const reportOrigin = isDc ? DC_SESSION_ORIGIN : t.uiOrigin;
   const index = createDashboardIndex(transport);
   /** portal_record_id -> GetReportList items of the JSON pass in this job. */
   const reportListByRecord = new Map();
@@ -219,15 +235,14 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     try {
       dashboardUrl = `${new URL(page.url()).origin}/`;
     } catch (_) {
-      dashboardUrl = "https://planreview.dob.dc.gov/";
+      dashboardUrl = isDc ? "https://planreview.dob.dc.gov/" : dcDeep.DEFAULT_DASHBOARD_URL;
     }
     // The object /api/login builds for a DC ePlan session; no password (re-login is disabled, D-065).
     session = {
       status: "logged_in",
       portalType: "projectdox",
-      portalSubtype: "dc-planreview",
-      dcPlanReview: true,
-      dcSessionOrigin: DC_SESSION_ORIGIN,
+      portalSubtype: isDc ? "dc-planreview" : t.key,
+      ...(isDc ? { dcPlanReview: true, dcSessionOrigin: DC_SESSION_ORIGIN } : {}),
       dashboardUrl,
       webUiBase: dcDeep.deriveWebUiBase(dcDeep.DEFAULT_DASHBOARD_URL),
       browser: null,
@@ -332,8 +347,8 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     const n = policy.normName(reportName);
     const item = ctx.reportItems.find((r) => policy.normName(r.name) === n) || null;
     const rep = policy.matchReport(reports, reportName);
-    const url = policy.reportViewerUrl(item || { reportId: rep && rep.report_key, name: reportName }, DC_SESSION_ORIGIN, ctx.portalRecordId);
-    const v = safety.evaluateRequest({ method: "GET", url, mode: "deep" });
+    const url = policy.reportViewerUrl(item || { reportId: rep && rep.report_key, name: reportName }, reportOrigin, ctx.portalRecordId);
+    const v = safety.evaluateRequest({ method: "GET", url, mode: "deep", tenant: t });
     if (v.allowed) return { open: true };
     const at = policy.requestLocation("GET", url);
     await event("warn", "guard_denied", `${at.method} ${at.host}${at.path}`, { ...at, rule: v.rule, report_key: rep ? rep.report_key : null });
@@ -360,6 +375,11 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
       }
       const prev = ctx.reportsRecorded.get(rep.report_key);
       if (prev === "captured") return;
+      // Not opened; its reason was recorded before the pass (D-144), and it is not a failure of this pass.
+      if (entry.unavailable) {
+        ctx.reportsRecorded.set(rep.report_key, "unavailable");
+        return;
+      }
       if (policy.reportCaptured(entry)) {
         const out = await repo.recordReport(ctx.permitId, rep.report_key, policy.reportContent(entry, { pdf: entry.pdfStorageRef, excel: entry.excelStorageRef }), ctx.runId);
         if (out && out.result === "inserted") ctx.m.reports_captured += 1;
@@ -458,33 +478,42 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
   }
 
   /** Post-pass open items (D-086) for the job outcome. */
-  async function countOpenItems(m, permitId, limits) {
+  async function countOpenItems(m, permitId, limits, renderable = (rs) => rs) {
     const [documents, reports] = await Promise.all([repo.documents(permitId), repo.reports(permitId)]);
-    Object.assign(m, policy.openItems({ documents, reports, limits }));
+    Object.assign(m, policy.openItems({ documents, reports: renderable(reports), limits }));
     return { documents, reports };
   }
 
   /** core/worker afterPermit hook. `heartbeat` (optional) renews the job lease and resolves false when it is lost. */
-  async function afterPermit({ record, batch, result, job, event = async () => {}, heartbeat = null, progress = null, signal = null }) {
+  async function afterPermit({ record, batch, result, job, event = async () => {}, heartbeat = null, progress = null, signal = null, reread = null }) {
     const m = emptyMetrics();
     if (!budget) budget = policy.createDownloadBudget(policy.downloadLimits(env, job && job.options));
     const limits = policy.captureLimits(env, job && job.options);
     const permitId = result && result.permit_id;
     if (!permitId) throw new Error("batch result has no permit_id");
-    const hashes = policy.sectionHashes(batch);
+    let hashes = policy.sectionHashes(batch);
     const [previousHashes, links, documents, reports] = await Promise.all([
       repo.deepState(permitId), repo.links(permitId), repo.documents(permitId), repo.reports(permitId),
     ]);
     const now = Date.now();
-    const plan = policy.planDeepPass({ previousHashes, hashes, links, documents, reports, now, limits, captureHash: policy.captureHash(documents, reports) });
+    // Non-DC: a report the portal lists without a workflow instance cannot render; it neither forces a Reports pass
+    // nor counts as open until its listing changes (D-144). DC planning is unchanged.
+    const unrenderable = isDc ? new Set() : policy.unrenderableReportKeys(reportListByRecord.get(String(record.portal_record_id)));
+    const renderable = (rs) => rs.filter((r) => !unrenderable.has(String(r.report_key)));
+    const plan = policy.planDeepPass({ previousHashes, hashes, links, documents, reports: renderable(reports), now, limits, captureHash: policy.captureHash(documents, reports) });
     const ctxBase = { permitId, runId: job.id, m };
     const send = typeof progress === "function" ? (fields) => Promise.resolve(progress(fields)).catch(() => false) : async () => false;
     const reportFinal = async (after) => send(captureCounts(after.documents, after.reports, m));
     if (plan.deferDocuments.length) await recordDeferrals(ctxBase, plan.deferDocuments, limits);
+    for (const rep of reports) {
+      if (!unrenderable.has(String(rep.report_key)) || rep.content_status === "captured" || rep.content_error === policy.REPORT_NEEDS_WORKFLOW) continue;
+      await repo.recordReportFailure(permitId, rep.report_key, policy.REPORT_NEEDS_WORKFLOW);
+      m.reports_unrenderable_recorded = (m.reports_unrenderable_recorded || 0) + 1;
+    }
     if (!plan.run) {
       if (policy.changedSections(previousHashes, hashes).length) await repo.recordDeepPass(permitId, hashes, job.id);
       m.deep_skipped = 1;
-      await reportFinal(await countOpenItems(m, permitId, limits));
+      await reportFinal(await countOpenItems(m, permitId, limits, renderable));
       await triggerCentral(m, permitId, event, record);
       await triggerPipelines(m, links.map((l) => ({ ...l, currentHash: l.portalDataHash })), event, record);
       return m;
@@ -600,7 +629,21 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
         await event("warn", "reports_unavailable", why, { portal_record_id: record.portal_record_id });
       }
 
-      const after = await countOpenItems(m, permitId, limits);
+      // Non-DC only (DC keeps reading it on the next refresh): the JSON pass could not read the Reviews section and
+      // this pass just captured the Review Comments export it falls back to (D-103), so read the permit once more.
+      if (!isDc && typeof reread === "function" && reviewsNeedReread(batch, reports, ctx)) {
+        try {
+          const again = await reread();
+          if (again && again.batch) hashes = policy.sectionHashes(again.batch);
+          m.reviews_reread = 1;
+        } catch (err) {
+          if (err instanceof LeaseLostError || err instanceof ShutdownError || JOB_ENDING_CODES.has(err && err.code)) throw err;
+          m.reviews_reread_failed = 1;
+          await event("warn", "reviews_reread_failed", safeMessage(err), { portal_record_id: record.portal_record_id });
+        }
+      }
+
+      const after = await countOpenItems(m, permitId, limits, renderable);
       await reportFinal(after);
       const capture = policy.captureHash(after.documents, after.reports);
       const current = [];

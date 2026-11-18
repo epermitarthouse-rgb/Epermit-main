@@ -117,19 +117,21 @@ function routeReadRequest(req, guard) {
   const method = String(req.method || "GET").toUpperCase();
   const u = parse(req.url);
   if (!u) return { action: "abort", violation: true, sessionEnded: false, rule: "url" };
-  if (isDcHost(u.hostname) && isDeadUrl(req.url) && method === "GET") {
+  const tenant = safety.tenantFor(guard.tenant);
+  const onPortal = tenant.hosts.includes(u.hostname.toLowerCase());
+  if (onPortal && isDeadUrl(req.url) && method === "GET") {
     return { action: "abort", violation: false, sessionEnded: true, rule: "session_ended" };
   }
-  if (safety.matchesDenyPattern(req.url, guard.mode, method)) {
+  if (safety.matchesDenyPattern(req.url, guard.mode, method, tenant)) {
     const v = guard.checkRequest(method, req.url);
     return { action: "abort", violation: true, sessionEnded: false, rule: v.rule };
   }
-  if (!isDcHost(u.hostname)) {
+  if (!onPortal) {
     if (method === "GET" && STATIC_RESOURCE_TYPES.has(req.resourceType)) return { action: "continue", violation: false, sessionEnded: false, rule: "asset" };
     return { action: "abort", violation: false, sessionEnded: false, rule: "off_host" };
   }
   if (!safety.ALLOWED_METHODS.includes(method)) {
-    if (safety.modePolicy(guard.mode).openHosts.includes(u.hostname.toLowerCase())) {
+    if (safety.modePolicy(guard.mode, tenant).openHosts.includes(u.hostname.toLowerCase())) {
       return { action: "abort", violation: false, sessionEnded: false, rule: "method_dropped" };
     }
     const v = guard.checkRequest(method, req.url);
@@ -832,6 +834,10 @@ async function createDcLiveTransport(opts) {
 
 module.exports = {
   LIVE_APPROVAL_VALUE,
+  STATIC_RESOURCE_TYPES,
+  isDeadUrl,
+  deadUrlMatch,
+  requestPoint,
   createDcLiveTransport,
   evaluateAuthRequest,
   routeReadRequest,

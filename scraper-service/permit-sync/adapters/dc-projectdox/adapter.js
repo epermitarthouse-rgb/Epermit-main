@@ -36,8 +36,10 @@ function pickActiveWorkflow(records) {
  * @param {object} opts.transport
  * @param {boolean|null} [opts.accountDownload] account-level DownloadFile permission when folders do not
  *   report one (source setting; false for the DC account, D-014)
+ * @param {object} [opts.normalizer] tenant normalizer (ADAPTER_KEY, discoveryRecord, statusFields); the DC one
+ *   by default. Every other section uses the shared ProjectDox normalizers.
  */
-function createDcAdapter({ transport, accountDownload = null }) {
+function createDcAdapter({ transport, accountDownload = null, normalizer = dc }) {
   if (!transport) throw new Error("transport is required");
 
   async function discover() {
@@ -58,7 +60,7 @@ function createDcAdapter({ transport, accountDownload = null }) {
     for (const row of rows) {
       let rec;
       try {
-        rec = dc.discoveryRecord(row);
+        rec = normalizer.discoveryRecord(row);
       } catch (_) {
         skipped.push(row.permit || null);
         continue;
@@ -104,7 +106,7 @@ function createDcAdapter({ transport, accountDownload = null }) {
     if (workflow) {
       try {
         statusData = await transport.getJson("workflow_status", { wflowInstanceID: workflow.WFlowInstanceID });
-        sections.status = { status: "ok", sourceKind: "json", fields: dc.statusFields(statusData), raw: statusData };
+        sections.status = { status: "ok", sourceKind: "json", fields: normalizer.statusFields(statusData), raw: statusData };
       } catch (err) {
         guardOrThrow(err);
         sections.status = failed("json", err);
@@ -234,7 +236,7 @@ function createDcAdapter({ transport, accountDownload = null }) {
     return { sections };
   }
 
-  return { key: dc.ADAPTER_KEY, discover, fetchPermit };
+  return { key: normalizer.ADAPTER_KEY, discover, fetchPermit };
 }
 
 module.exports = { createDcAdapter, pickActiveWorkflow };

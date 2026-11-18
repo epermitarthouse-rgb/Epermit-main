@@ -81,7 +81,20 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Admin | Local read-only inspection + seven-section detail (D-052) | Locally tested | Locally tested | `src/lib/localPermitInspection.ts` (dev + env + loopback; compiled out of production builds, checked in the bundle). `src/lib/permitSections.ts`, `src/components/permits/PermitSectionViews.tsx`, rewritten `PermitDetailPage.tsx`: per-section extraction status, provenance (route, job id, captured time, snapshot id), deep data, files metadata only. Rendered with real production rows for B2508295, TL2600008, B2608367: every comment, response and file row shown, no links. Not clicked through in a browser (needs an admin login). |
 | Admin | Admin export JSON / ZIP (D-053) | Locally tested; verified on production data | Production-verified (read) | `src/lib/permitExport.ts`, `PermitExportButtons.tsx`, `fflate`. `scripts/permit-repo/verify-export.tsx`: totals and all 28 per-permit counts equal production; ZIP 28 files + 28 CSV rows. Sample in `exports.local/dc-export-20261111T043626Z/` (git-ignored). Frontend permit tests **122/122**; `npm run test:permit-sync` **140/140**. |
 | Admin | Reports finding (D-054) | Done | Production-observed | Reports are metadata only (5 per permit). ReportID=14 SSRS was not fetched in run 9 (Reviews came from JSON). |
-| 4 | Second jurisdiction/hardening | Blocked until DC, P2 and P3 are reviewed | — | |
+| 4 | Second jurisdiction/hardening | Montgomery adapter implemented (JSON pass), see "Montgomery County MD" below | Locally tested | Branch `feat/montgomery-adapter` |
+
+## Montgomery County MD (2026-11-18, branch `feat/montgomery-adapter`, D-133 to D-144)
+| Item | Status | Level | Evidence / notes |
+|---|---|---|---|
+| Browser investigation | Done | Production-observed | User's Chrome, background control, no state-changing clicks. MONTGOMERY_CAPABILITY_MAP.md |
+| Supervised read-only capture | Done (approved) | Production-observed | `scripts/permit-repo/montgomery/phase0-capture.js`. 147 requests, 2 refused (blob logo), 0 state-changing. All DC JSON routes return 200 JSON on the Montgomery Web API. 20 projects via `GetPagedActiveProjects`. No MFA. |
+| Earlier figures (11 projects / 244 comments) | Not reproducible | Production-observed (read) | 5 project rows, 4 distinct portal permits, 137 comments (96 unique). MONTGOMERY_GAPS.md §1 |
+| Tenant config + tenant-aware guard | Done | Locally tested | `projectdox-tenants.js`, `core/safety.js`. DC policy asserted unchanged. |
+| Montgomery adapter, normalizer, live transport | Done | Locally tested (transport policies and adapter over synthetic portal) | `adapters/montgomery-projectdox/*`. Live transport not yet run as a worker job. |
+| Worker registry, per-portal login lock | Done | Locally tested | `worker-entry.js` `ADAPTERS`, `lib/dc-credential-lock.js` portals, 2 manual-flow call sites |
+| Tests | 340/340 permit-sync | Locally tested | `permit-sync-montgomery.test.js` (19), `permit-sync-montgomery-deep.test.js` (12), `permit-sync-process-guard.test.js` (8) |
+| Deep capture (file bodies, report exports, comments) | Done for 3 test permits (scoped) | Production-observed (local worker, supervised) | Jobs `80b3eefc`, `59f96b2c`, `9f183e1d`, `a55315ac`, `e9a26324`, `1514acd6`: 25 files stored (sha256, private paths, PDF renditions), reports 132–135 captured where renderable, 133 parsed into 2 and 41 rows, 41 comments + 50 responses written for 195963 in the same job. D-141 to D-144. |
+| Source, first run, schedule, budget, linking | Not started | — | Each needs approval. MONTGOMERY_GAPS.md §5–6 |
 
 ## Unified DC deep automation (revision 2026-11-11, MASTER_PLAN §0)
 | Phase | Item | Status | Level | Evidence / notes |

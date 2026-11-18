@@ -30,6 +30,8 @@
  *   SSRS report export, Log Out.
  */
 
+const { DC: TENANT_DC, tenantFor } = require("../adapters/projectdox-tenants");
+
 const DENY_PATTERNS = Object.freeze([
   // Task state transitions
   /AcceptTask/i,
@@ -98,27 +100,18 @@ const DC_READ_ALLOW = Object.freeze([
 ]);
 
 /** Hosts observed for DC (Globals in Project/Index page source). */
-const DC_HOSTS = Object.freeze([
-  "session.planreview.dob.dc.gov",
-  "planreview.dob.dc.gov",
-  "washington-dc-us-projectdoxwebapi.avolvecloud.com",
-  "washington-dc-us-projectdoxwebui.avolvecloud.com",
-  "washington-dc-us-portalwebapi.avolvecloud.com",
-]);
+const DC_HOSTS = TENANT_DC.hosts;
 
 /**
  * The two DC web hosts the worker already loads pages from (D-048). Exact hostnames.
  */
-const DC_PORTAL_HOSTS = Object.freeze([
-  "planreview.dob.dc.gov",
-  "session.planreview.dob.dc.gov",
-]);
+const DC_PORTAL_HOSTS = TENANT_DC.portalHosts;
 
 /**
  * The one ProjectDox API host the worker already calls (D-049). Exact hostname, no suffix match.
  * Not projectdoxwebui and not portalwebapi.
  */
-const DC_API_HOST = "washington-dc-us-projectdoxwebapi.avolvecloud.com";
+const DC_API_HOST = TENANT_DC.apiHost;
 
 /**
  * Hosts where a GET or HEAD is allowed even when the path is not a named route.
@@ -137,27 +130,44 @@ const ALLOWED_METHODS = Object.freeze(["GET", "HEAD"]);
  */
 const DEEP_MODE_LIFTED_DENY = Object.freeze([/viewFile/i, /OpType=Export/i, /rs:Format=/i].map(String));
 /** The file viewer page runs on the ProjectDox web UI host; deep mode reads it like the other open hosts (GET/HEAD only). */
-const DC_WEBUI_HOST = "washington-dc-us-projectdoxwebui.avolvecloud.com";
+const DC_WEBUI_HOST = TENANT_DC.webuiHost;
 
 /**
  * One keepalive the portal page polls during a long deep pass (D-092). Exact host and exact path.
  * Deep mode, GET and HEAD only. It is not an open host: every other path on it stays refused.
  */
-const DC_PORTALWEBAPI_HOST = "washington-dc-us-portalwebapi.avolvecloud.com";
+const DC_PORTALWEBAPI_HOST = TENANT_DC.portalWebApiHost;
 const DC_SESSION_TIMEOUT_PATH = "/User/GetSessionTimeout";
-const MODES = Object.freeze({
-  json: Object.freeze({ deny: DENY_PATTERNS, openHosts: DC_OPEN_READ_HOSTS, allowDownloads: false }),
-  deep: Object.freeze({
-    deny: Object.freeze(DENY_PATTERNS.filter((p) => !DEEP_MODE_LIFTED_DENY.includes(String(p)))),
-    openHosts: Object.freeze([...DC_OPEN_READ_HOSTS, DC_WEBUI_HOST]),
-    allowDownloads: true,
-  }),
-});
+const DEEP_DENY = Object.freeze(DENY_PATTERNS.filter((p) => !DEEP_MODE_LIFTED_DENY.includes(String(p))));
 
-function modePolicy(mode) {
-  const m = MODES[mode || "json"];
+/** Per-mode policy for one tenant: the deny list is shared, the open hosts are the tenant's. */
+function buildModes(tenant) {
+  const open = Object.freeze([...tenant.portalHosts, tenant.apiHost]);
+  return Object.freeze({
+    json: Object.freeze({ deny: DENY_PATTERNS, openHosts: open, allowDownloads: false }),
+    deep: Object.freeze({
+      deny: DEEP_DENY,
+      openHosts: Object.freeze([...new Set([...open, tenant.webuiHost])]),
+      allowDownloads: true,
+    }),
+  });
+}
+
+const MODES = buildModes(TENANT_DC);
+const TENANT_MODES = new Map([[TENANT_DC.key, MODES]]);
+
+function modePolicy(mode, tenant) {
+  const t = tenantFor(tenant);
+  if (!TENANT_MODES.has(t.key)) TENANT_MODES.set(t.key, buildModes(t));
+  const m = TENANT_MODES.get(t.key)[mode || "json"];
   if (!m) throw new Error(`unknown guard mode ${mode}`);
   return m;
+}
+
+/** Named read routes for a tenant: the shared ProjectDox routes plus the tenant's own. */
+function tenantAllowlist(tenant) {
+  const t = tenantFor(tenant);
+  return t.extraRoutes.length ? [...DC_READ_ALLOW, ...t.extraRoutes] : DC_READ_ALLOW;
 }
 
 /**
@@ -221,10 +231,10 @@ const REPORT_IDENTITY_PARAMS = Object.freeze([
 ]);
 
 /** The URL with report-identity values blanked, or the URL unchanged when the exemption does not apply. */
-function screenReportIdentity(url, mode, method) {
+function screenReportIdentity(url, mode, method, tenant) {
   if (mode !== "deep" || !ALLOWED_METHODS.includes(String(method || "GET").toUpperCase())) return url;
   const u = parseUrl(url);
-  if (!u || u.protocol !== "https:" || !DC_PORTAL_HOSTS.includes(u.hostname.toLowerCase())) return url;
+  if (!u || u.protocol !== "https:" || !tenantFor(tenant).reportHosts.includes(u.hostname.toLowerCase())) return url;
   const rule = REPORT_IDENTITY_PARAMS.find((r) => r.path.test(u.pathname));
   if (!rule) return url;
   // Other parameters stay byte-identical so the deny check sees them exactly as sent.
@@ -241,27 +251,29 @@ function screenReportIdentity(url, mode, method) {
 }
 
 /** The deny pattern a URL matches, or null. Checked before the method rule so a denied POST still fails the job. */
-function matchingDenyPattern(url, mode, method) {
-  const raw = screenReportIdentity(String(url || ""), mode, method);
+function matchingDenyPattern(url, mode, method, tenant) {
+  const raw = screenReportIdentity(String(url || ""), mode, method, tenant);
   const decoded = decodeURIComponentSafe(raw);
   const plusDecoded = decodeURIComponentSafe(raw.replace(/\+/g, " "));
-  return modePolicy(mode).deny.find((p) => p.test(raw) || p.test(decoded) || p.test(plusDecoded)) || null;
+  return modePolicy(mode, tenant).deny.find((p) => p.test(raw) || p.test(decoded) || p.test(plusDecoded)) || null;
 }
 
-function matchesDenyPattern(url, mode, method) {
-  return Boolean(matchingDenyPattern(url, mode, method));
+function matchesDenyPattern(url, mode, method, tenant) {
+  return Boolean(matchingDenyPattern(url, mode, method, tenant));
 }
 
+/** `input.tenant` (adapter key or tenant object) selects hosts, open hosts and report hosts; DC when omitted. */
 function evaluateRequest(input) {
   const method = String((input && input.method) || "GET").toUpperCase();
-  const hosts = (input && input.hosts) || DC_HOSTS;
-  const allowlist = (input && input.allowlist) || DC_READ_ALLOW;
-  const policy = modePolicy(input && input.mode);
+  const tenant = tenantFor(input && input.tenant);
+  const hosts = (input && input.hosts) || tenant.hosts;
+  const allowlist = (input && input.allowlist) || tenantAllowlist(tenant);
+  const policy = modePolicy(input && input.mode, tenant);
   const allowDownloads = Boolean(input && input.allowDownloads) || policy.allowDownloads;
   const raw = String((input && input.url) || "");
   const u = parseUrl(raw);
 
-  const denied = matchingDenyPattern(raw, input && input.mode, method);
+  const denied = matchingDenyPattern(raw, input && input.mode, method, tenant);
   if (denied) {
     return deny("deny_pattern", `matches deny pattern ${denied}`);
   }
@@ -277,8 +289,8 @@ function evaluateRequest(input) {
   if (!hosts.includes(u.hostname.toLowerCase())) {
     return deny("host", `host ${u.hostname} not on allowlist`);
   }
-  if ((input && input.mode) === "deep" && u.hostname.toLowerCase() === DC_PORTALWEBAPI_HOST && u.pathname === DC_SESSION_TIMEOUT_PATH) {
-    return { allowed: true, rule: "session_timeout_keepalive", reason: "deep-mode GET or HEAD of /User/GetSessionTimeout on the DC portal API host", body: false };
+  if ((input && input.mode) === "deep" && u.hostname.toLowerCase() === tenant.portalWebApiHost && u.pathname === DC_SESSION_TIMEOUT_PATH) {
+    return { allowed: true, rule: "session_timeout_keepalive", reason: "deep-mode GET or HEAD of /User/GetSessionTimeout on the portal API host", body: false };
   }
 
   const target = u.pathname + u.search;
@@ -291,7 +303,7 @@ function evaluateRequest(input) {
     return { allowed: true, rule: rule.name, reason: "allowlisted read-only GET", body: rule.body };
   }
   if (policy.openHosts.includes(u.hostname.toLowerCase())) {
-    return { allowed: true, rule: "portal_page_read", reason: "GET or HEAD on an open DC read host", body: false };
+    return { allowed: true, rule: "portal_page_read", reason: "GET or HEAD on an open portal read host", body: false };
   }
   return deny("not_allowlisted", `path ${u.pathname} has no read-only allow rule`);
 }
@@ -355,12 +367,14 @@ function evaluateClick(el) {
 function createRunGuard(options) {
   const opts = options || {};
   const mode = opts.mode || "json";
-  modePolicy(mode);
+  const tenant = tenantFor(opts.tenant);
+  modePolicy(mode, tenant);
   const log = [];
   return {
     mode,
+    tenant,
     checkRequest(method, url) {
-      const verdict = evaluateRequest({ method, url, allowDownloads: opts.allowDownloads, hosts: opts.hosts, mode });
+      const verdict = evaluateRequest({ method, url, allowDownloads: opts.allowDownloads, hosts: opts.hosts, mode, tenant });
       log.push({ kind: "request", method, url: redactUrl(url), ...verdict });
       return verdict;
     },
@@ -426,6 +440,8 @@ module.exports = {
   DC_SESSION_TIMEOUT_PATH,
   MODES,
   modePolicy,
+  tenantAllowlist,
+  tenantFor,
   LOGIN_EXTRA_HOSTS,
   evaluateLoginExtraHost,
   isLoginIdpHost,

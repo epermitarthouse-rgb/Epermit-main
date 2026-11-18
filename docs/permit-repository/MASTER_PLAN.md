@@ -2,6 +2,18 @@
 
 Status: **APPROVED DIRECTION (2026-11-05), REVISED 2026-11-11 (unified DC deep automation, §0)** · Owner: PermitPilot engineering · First jurisdiction: Washington DC (DOB ProjectDox 9.5)
 
+## 00. Second jurisdiction: Montgomery County MD (2026-11-18, D-133 to D-144)
+
+Montgomery is a **tenant** of the shared ProjectDox adapter (D-133). It uses the same queue, worker, guard, ingest, deep runner, central processing and schedule, with no Montgomery-specific pipeline. Capability map: MONTGOMERY_CAPABILITY_MAP.md. Audit, gaps and rollout: MONTGOMERY_GAPS.md.
+
+| Stage | Scope | State |
+|---|---|---|
+| M1 | Tenant config, tenant-aware guard, Montgomery normalizer, transport, worker registry, per-portal lock | Implemented, locally tested |
+| M2 | Source (disabled, credential 93857549, hidden by default) and supervised JSON run on 3 permits, then all 20 | Needs approval |
+| M3 | Deep driver (G-1): file bodies (originals where `DownloadFile` is true, viewer rendition otherwise); report Excel/PDF exports; Review Comments Excel into the shared parser | Option B (D-139). Live-verified on 200100, 195963 and 146267 in six supervised scoped jobs (D-141 to D-144). Next: merge, redeploy, one supervised all-20 run. |
+| M4 | Validated project linking (MONTGOMERY_GAPS.md §6), `montgomery-backfill` budget ($5) | Needs approval |
+| M5 | Schedule: daily 01:00 America/New_York (DC stays 04:00) | Only after M2 (and M3 for deep) are verified and approved |
+
 ## 0. Unified DC deep automation (revision 2026-11-11, D-055 to D-067)
 
 This section supersedes the parts of §2, §6 and §9 that say the worker never loads the HTTP app, that DC is metadata only, and that Portal Harvest and the Repository stay separate for DC. Everything else below still holds.

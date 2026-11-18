@@ -1,5 +1,26 @@
 # Handoff Notes — read first
 
+## Montgomery County MD adapter (2026-11-18, branch `feat/montgomery-adapter`, worktree `Epermit-montgomery`)
+- **Status: the deep pipeline works end to end on the three test permits, from the local worktree worker. Not deployed, not merged, not scheduled, automation off, source inactive, no projects linked, no credential change.** Nothing is queued.
+- **Supervised scoped runs (approved iterate loop, 2026-11-18 12:16–14:36 UTC; local headed worker, `PERMIT_SYNC_WORKER_ONCE=true`, agent trigger off, one permit per job, 5 files / 50 MiB, per-file 50 MiB).** All six were claimed by the local worker (no Railway race), finished on their own, and left no active job.
+  | Job | Permit | Outcome | Found, fixed |
+  |---|---|---|---|
+  | `80b3eefc` | 200100 | completed_with_warnings | Reports 132–135 captured, 133 parsed (2 rows) after the D-141 parser fix + repair. All 5 files 401 via `context.request` → D-143. Report 139 not renderable → D-144. |
+  | `59f96b2c` | 200100 | completed_with_warnings | D-143 verified: 5 files stored. |
+  | `9f183e1d` | 195963 | completed_with_warnings | 5 view-only Drawings stored (viewer rendition). 133 captured with 41 rows; same-job re-read (D-142) wrote 41 comments + 50 responses, Reviews ok. 1 file deferred (113 MB > 50 MiB). |
+  | `a55315ac` | 146267 | completed_with_warnings | 5 files stored; 132 captured; 133–135 unrenderable (no workflow) → D-144. |
+  | `e9a26324` | 146267 | completed_with_warnings | D-144 verified: reason recorded, not opened; only warning is files left for the budget. |
+  | `1514acd6` | 200100 | completed_with_warnings | The 5 files refused in `80b3eefc` stored; 139 recorded `report_needs_workflow`. |
+  - Per permit now: **200100** 10/22 files stored (12 left for the budget, 2 of them view-only), reports 132–135 captured, 139 `report_needs_workflow`, 2 comments (HTML report and Excel agree). **195963** 5/199 files stored (1 deferred oversize, the rest left for the budget), reports 132–135 captured, 41 comments. **146267** 10/37 files stored, 132 captured, 133–135 `report_needs_workflow`, no workflow so no reviews. All 25 stored files have sha256, private paths and size match; all came from the PDF rendition (the original RetrieveFile is not usable, D-143). The only remaining warnings are files left for the per-job budget.
+  - The approved D-141 repair (`scripts/permit-repo/repairs/d141-montgomery-200100-review-comments.sql`) marked only 200100 report 133 failed; it was re-exported in `80b3eefc`.
+- **Fixes (D-141 to D-144, all with tests; permit-sync 340/340):** the shared Review Comments parser scanned only to the count of non-empty rows and missed the grid (D-140's "header-only export" diagnosis was wrong); the deep pass re-reads a permit in the same job when it just captured the export its Reviews read needs (non-DC); RetrieveFile runs in the WebUI page; reports listed with an empty WFlowInstanceID are not opened and not counted open (non-DC). The GET `rs:Format` export is back as the fallback behind the viewer export. DC planning and behaviour are unchanged.
+- **Crash backstop (added, tested, not deployed):** `worker-entry.js` `installProcessGuard` logs `unhandledRejection` / `uncaughtException` as one redacted JSON line and keeps the process running (exit only with `PERMIT_SYNC_EXIT_ON_UNHANDLED=true` or after `PERMIT_SYNC_MAX_UNHANDLED`, default 100). No unhandled error was logged in the six runs.
+- Findings (MONTGOMERY_CAPABILITY_MAP.md): the Web API serves every DC JSON route; discovery `GetPagedActiveProjects` returns 20 projects (Home table and old scraper show 10); comments live only in SSRS report 133; download permission is per folder; no MFA.
+- Open: duplicate COMBUILD-1154415 projects (user: decide later, link nothing). Unencrypted credential eaf14fcc. Export page DC-only. Montgomery linked-project sync (G-8). Original-file RetrieveFile (renditions only so far). See MONTGOMERY_GAPS.md §4.
+- **Next, each needing explicit approval:** (1) merge the branch; (2) redeploy the Railway worker with it (`deploy-worker.sh`; the live worker `15993f89d642` refuses non-DC jobs); (3) one unscoped all-20 deep run (Refresh all) under the default budget, supervised; (4) activate the source and the daily 01:00 America/New_York schedule after that run passes; (5) validated project linking. The `montgomery-backfill` AI budget is unchanged.
+- Earlier the same day: job `3942a5ad` (first supervised run) crashed in the shared exporter on an unhandled download wait and was cancelled; fixed by D-140 and the backstop.
+- Local test setup in the worktree: `node_modules` symlinks to Epermit-main (root and scraper-service), not committed. Capture output is in `exports.local/` (git-ignored, contains raw portal payloads).
+
 Last updated: 2026-11-18 08:40 UTC (central processing live, DC backfill done for $0.54; read "Central processing rollout"). Before that: 2026-11-17 11:05 UTC (A-8 done: default permit access with project isolation live, PR #28 merged). Read "A-8 rollout" and "Production rollout 3" first.
 
 ## Central processing rollout (2026-11-18 07:54–08:36 UTC, approved steps 1–5), COMPLETED

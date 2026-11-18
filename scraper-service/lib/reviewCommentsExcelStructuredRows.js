@@ -60,7 +60,10 @@ function classifyMontgomeryReviewCommentsGridHeader(normalizedUpper) {
 function findMontgomeryReviewCommentsExcelHeaderGrid(sheet) {
   const MAX_SCAN_ROWS = 120;
   const MAX_SCAN_COL = 48;
-  for (let ri = 1; ri <= Math.min(MAX_SCAN_ROWS, sheet.actualRowCount || sheet.rowCount || MAX_SCAN_ROWS); ri++) {
+  // actualRowCount counts non-empty rows, not the last row number: SSRS exports leave blank spacer rows above the
+  // grid, so the header row can sit past it (Montgomery 133: header on row 9 of 6 non-empty rows).
+  const lastRow = Math.max(sheet.rowCount || 0, sheet.actualRowCount || 0) || MAX_SCAN_ROWS;
+  for (let ri = 1; ri <= Math.min(MAX_SCAN_ROWS, lastRow); ri++) {
     const row = sheet.getRow(ri);
     /** @type {Record<string, number>} */
     const colMap = {};

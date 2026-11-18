@@ -184,10 +184,11 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
       const incomplete = [];
       try {
         const { sections } = await adapter.fetchPermit(record);
-        const { batch, warnings } = buildBatch({
+        const batchOf = (s) => buildBatch({
           adapterKey: adapter.key, credentialId: job.credential_id, runId: job.id,
-          portalRecordId: id, permitFields: record.fields, sections,
+          portalRecordId: id, permitFields: record.fields, sections: s,
         });
+        const { batch, warnings } = batchOf(sections);
         const res = await rpc.applyBatch(batch);
         metrics.changes += res.changes || 0;
         metrics.snapshots_inserted += res.snapshots_inserted || 0;
@@ -207,7 +208,26 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
           try {
             // 3d: the deep pass renews the lease while it runs; false = the lease is gone (cancel or reclaim).
             const heartbeat = () => rpc.heartbeat(job.id, workerId, leaseTtlSeconds, checkpoint);
-            extra = await session.afterPermit({ record, batch, result: res, job, event, heartbeat, signal, progress: (fields) => progress.permit(id, fields) });
+            // A deep pass that just stored what an incomplete section reads (the Review Comments export, D-103) may
+            // ask for the JSON pass once more in this job instead of the next one.
+            const reread = async () => {
+              const again = batchOf((await adapter.fetchPermit(record)).sections);
+              const r = await rpc.applyBatch(again.batch);
+              metrics.changes += r.changes || 0;
+              metrics.snapshots_inserted += r.snapshots_inserted || 0;
+              metrics.permits_reread = (metrics.permits_reread || 0) + 1;
+              for (const [name, s] of Object.entries(r.sections || {})) {
+                const at = incomplete.indexOf(name);
+                if (at >= 0 && s.status === "ok") {
+                  incomplete.splice(at, 1);
+                  permitWarnings -= 1;
+                  const tally = metrics.sections[name];
+                  if (tally) tally.reread_ok = (tally.reread_ok || 0) + 1;
+                }
+              }
+              return { batch: again.batch, result: r };
+            };
+            extra = await session.afterPermit({ record, batch, result: res, job, event, heartbeat, signal, reread, progress: (fields) => progress.permit(id, fields) });
             const deep = metrics.deep || (metrics.deep = {});
             for (const [k, v] of Object.entries(extra || {})) if (typeof v === "number") deep[k] = (deep[k] || 0) + v;
           } catch (err) {
