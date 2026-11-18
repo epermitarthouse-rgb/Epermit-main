@@ -2,6 +2,13 @@
 
 Last updated: 2026-11-17 11:05 UTC (A-8 done: default permit access with project isolation live, PR #28 merged). Read "A-8 rollout" and "Production rollout 3" first.
 
+## Schedule enable fix (2026-11-18, branch `fix/schedule-enable`, not merged; read-only production checks)
+- **The DC schedule is ON now.** The admin re-saved de8592f9 at 2026-11-18 06:19:31 UTC with Enabled on (audit `permit_sync_source.set` + `.schedule`, `automation_enabled: true`, `max_attempts` 5; stored `active`). First scheduled run: **2026-11-18 09:00 UTC** (04:00 EST). Read-only at 06:59 UTC: enqueue cron `*/5` active, 0 failures; deep worker idle, scope all, `15993f89d642`; 0 active jobs; 1 open warning (`missing_deep_content`).
+- Cause of the 2026-11-17 "not enabled" (D-125): that 09:50 save sent `p_enabled=false`; nothing downgraded it. Production `pg_proc` has one overload each, p_enabled without default, bodies equal to the chain (md5). The toast was chosen from the RPC result, which echoes `p_enabled`, so it read "Schedule saved (disabled)"; "saved and enabled" was the 06:19 save.
+- Fix: migration `20261118140000` (D-126) returns the stored row and raises if it is not stored as requested; Save is labelled by the switch, a warning shows while it is off, the toast shows the stored state and next run (D-127). Tests: `permit-sync-schedule-save.test.js` (both chains, the two production saves), chain apply/rollback, `PermitSyncOperations.test.tsx`.
+- Rollback: `scripts/permit-repo/rollback-20261118140000_permit_sync_schedule_readback.sql` + `migration repair --status reverted 20261118140000`; frontend: revert the merge. Either order works.
+- First run check: `scripts/permit-repo/scheduling/04-verify-first-run.sql` (read-only) after 09:05 UTC and after the job ends. Baseline 06:59 UTC: documents 2282 stored / 1 deferred_oversize, reports 132 captured / 8 failed, both gates 0. Disable if needed: Management Admin switch or `98-disable-dc-schedule.sql`.
+
 ## A-8 rollout: default access with project isolation (2026-11-17 ~10:45–11:05 UTC, approved), COMPLETED
 - Pre-flight on `origin/main` `3f942f1`: permit-sync 279/279, frontend 118 files (16 known, 0 unexpected), tsc 194 = baseline, build passes, local gitleaks clean. PR #28 (as epermitarthouse-rgb) green on all checks.
 - Pre-check (read-only): 1 DC source, 28 permits, 0 grants, 1 project link, `visible_to_all` absent, `20261117130000` not recorded, 0 active jobs, crons ticking with 0 failures, ff193644 6 comments / 0 marks.

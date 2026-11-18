@@ -418,7 +418,15 @@ export interface SyncScheduleInput {
   maxAttempts: number | null;
 }
 
-export async function setPermitSyncSchedule(input: SyncScheduleInput): Promise<{ automation_enabled: boolean; next_run_at: string | null }> {
+/** The source as stored by the save (D-126). status and schedule_enabled_at are absent before 20261118140000. */
+export interface SyncScheduleResult {
+  automation_enabled: boolean;
+  next_run_at: string | null;
+  status?: string;
+  schedule_enabled_at?: string | null;
+}
+
+export async function setPermitSyncSchedule(input: SyncScheduleInput): Promise<SyncScheduleResult> {
   assertPermitWritesAllowed('admin_set_permit_sync_schedule');
   return unwrap(await client().rpc('admin_set_permit_sync_schedule', {
     p_credential_id: input.credentialId,
@@ -426,7 +434,7 @@ export async function setPermitSyncSchedule(input: SyncScheduleInput): Promise<{
     p_schedule: input.schedule,
     p_deep_defaults: input.deepDefaults,
     p_max_attempts: input.maxAttempts,
-  }), 'admin_set_permit_sync_schedule') as { automation_enabled: boolean; next_run_at: string | null };
+  }), 'admin_set_permit_sync_schedule') as SyncScheduleResult;
 }
 
 export interface SchedulerStatus {
