@@ -253,6 +253,35 @@ export function describeSchedule(s: SyncSchedule | null | undefined): string {
   return `${days} at ${s.time} (${s.timezone})`;
 }
 
+function jurisdictionLabelsAlign(credentialLabel: string, filterJurisdiction: string): boolean {
+  if (credentialLabel === filterJurisdiction) return true;
+  const extendsWithBoundary = (longer: string, shorter: string) =>
+    shorter.length > 0 && longer.startsWith(shorter) && /[\s\-–—]/.test(longer.charAt(shorter.length));
+  return extendsWithBoundary(credentialLabel, filterJurisdiction) || extendsWithBoundary(filterJurisdiction, credentialLabel);
+}
+
+/**
+ * The one sync source for a Permit Queue jurisdiction filter value.
+ * Filter values are `all` or `adapter_key::permit jurisdiction` (see queueSourceKey). Overview
+ * jurisdiction is the credential label ("Washington DC - ProjectDox"), which extends the permit
+ * jurisdiction stored on queue rows ("Washington DC"). `all`, empty, and more than one match
+ * return null so a refresh is never sent for every jurisdiction.
+ */
+export function refreshSourceForQueueFilter(
+  sources: SyncSourceOverview[],
+  sourceKey: string | null | undefined,
+): SyncSourceOverview | null {
+  if (!sourceKey || sourceKey === 'all') return null;
+  const sep = sourceKey.indexOf('::');
+  const adapter = sep === -1 ? sourceKey : sourceKey.slice(0, sep);
+  const jurisdiction = sep === -1 ? '' : sourceKey.slice(sep + 2);
+  const sameAdapter = sources.filter((s) => s.adapter_key === adapter);
+  const matches = jurisdiction
+    ? sameAdapter.filter((s) => jurisdictionLabelsAlign(s.jurisdiction, jurisdiction))
+    : sameAdapter;
+  return matches.length === 1 ? matches[0] : null;
+}
+
 /** Wording of the Refresh All confirmation: jurisdiction, the permit count the source sees, and any open refresh it joins. */
 export function refreshAllConfirmation(s: SyncSourceOverview): { title: string; body: string[]; joins: string | null; confirm: string } {
   const open = sourceOpenJob(s);

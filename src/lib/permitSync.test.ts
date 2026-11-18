@@ -10,6 +10,7 @@ import {
   phaseTone,
   refreshAllConfirmation,
   refreshResultMessage,
+  refreshSourceForQueueFilter,
   sourceOpenJob,
   type PermitProgress,
   type SyncJobSummary,
@@ -84,6 +85,27 @@ describe('permitSync labels', () => {
   it('describes schedules with an explicit timezone', () => {
     assert.equal(describeSchedule({ frequency: 'weekly', weekday: 1, time: '02:00', timezone: 'America/New_York' }), 'Every Monday at 02:00 (America/New_York)');
     assert.equal(describeSchedule(null), 'No schedule');
+  });
+});
+
+describe('Refresh all jurisdiction filter', () => {
+  const montgomery = source({
+    credential_id: '93857549-eb37-47cd-ad83-6701f835de66',
+    adapter_key: 'montgomery-projectdox',
+    jurisdiction: 'Montgomery County MD - Avolve',
+  });
+  const dc = source({ credential_id: 'dc-1', adapter_key: 'dc-projectdox', jurisdiction: 'Washington DC - ProjectDox' });
+
+  it('returns the one credential for the selected filter and nothing for all jurisdictions', () => {
+    assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'all'), null);
+    assert.equal(refreshSourceForQueueFilter([montgomery, dc], ''), null);
+    assert.equal(
+      refreshSourceForQueueFilter([montgomery, dc], 'montgomery-projectdox::Montgomery County MD')?.credential_id,
+      '93857549-eb37-47cd-ad83-6701f835de66',
+    );
+    assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'dc-projectdox::Washington DC')?.credential_id, 'dc-1');
+    assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'dc-projectdox::Washington DC - ProjectDox')?.credential_id, 'dc-1');
+    assert.equal(refreshSourceForQueueFilter([dc, source({ credential_id: 'dc-2', jurisdiction: 'Washington DC - ProjectDox' })], 'dc-projectdox::Washington DC'), null);
   });
 });
 

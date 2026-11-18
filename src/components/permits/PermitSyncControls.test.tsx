@@ -36,13 +36,49 @@ const progress = (over: Partial<PermitProgress> = {}): PermitProgress => ({
 
 describe("Permit Queue refresh controls", () => {
   it("Refresh all is offered only for sources the caller can refresh that have permits", () => {
-    assert.match(render(createElement(RefreshAllButton, { sources: [source()] })), /Refresh all/);
+    const one = render(createElement(RefreshAllButton, { sources: [source()] }));
+    assert.match(one, /Refresh all/);
+    assert.match(one, /data-refresh-credential="c1"/);
     assert.equal(render(createElement(RefreshAllButton, { sources: [source({ can_refresh: false })] })), "");
     assert.equal(render(createElement(RefreshAllButton, { sources: [source({ permit_count: 0 })] })), "");
     assert.match(render(createElement(RefreshAllButton, { sources: [source({ status: "inactive" })] })), /Refresh all/, "no schedule is not a block");
     for (const status of ["paused", "auth_failed", "waiting_user", "needs_encryption"]) {
       assert.equal(render(createElement(RefreshAllButton, { sources: [source({ status })] })), "", status);
     }
+  });
+
+  it("one Refresh all follows the jurisdiction filter and does not refresh every source", () => {
+    const montgomery = source({
+      credential_id: "93857549-eb37-47cd-ad83-6701f835de66",
+      adapter_key: "montgomery-projectdox",
+      jurisdiction: "Montgomery County MD - Avolve",
+    });
+    const dc = source({
+      credential_id: "dc-cred",
+      adapter_key: "dc-projectdox",
+      jurisdiction: "Washington DC - ProjectDox",
+    });
+    const both = [montgomery, dc];
+    const all = render(createElement(RefreshAllButton, { sources: both, sourceKey: "all" }));
+    assert.equal(all.match(/Refresh all/g)?.length, 1);
+    assert.match(all, /disabled=""/);
+    assert.match(all, /Select a jurisdiction/);
+    assert.doesNotMatch(all, /data-refresh-credential/);
+    assert.doesNotMatch(all, /·/);
+    const montgomeryHtml = render(createElement(RefreshAllButton, { sources: both, sourceKey: "montgomery-projectdox::Montgomery County MD" }));
+    assert.equal(montgomeryHtml.match(/Refresh all/g)?.length, 1);
+    assert.doesNotMatch(montgomeryHtml, /disabled=""/);
+    assert.match(montgomeryHtml, /data-refresh-credential="93857549-eb37-47cd-ad83-6701f835de66"/);
+    assert.doesNotMatch(montgomeryHtml, /dc-cred/);
+    const dcHtml = render(createElement(RefreshAllButton, { sources: both, sourceKey: "dc-projectdox::Washington DC" }));
+    assert.equal(dcHtml.match(/Refresh all/g)?.length, 1);
+    assert.match(dcHtml, /data-refresh-credential="dc-cred"/);
+    assert.doesNotMatch(dcHtml, /93857549-eb37-47cd-ad83-6701f835de66/);
+    assert.equal(render(createElement(RefreshAllButton, { sources: both, sourceKey: "dc-projectdox::Nowhere" })), "");
+    const unlabeled = render(createElement(RefreshAllButton, { sources: both }));
+    assert.equal(unlabeled.match(/Refresh all/g)?.length, 1);
+    assert.match(unlabeled, /disabled=""/);
+    assert.doesNotMatch(unlabeled, /·/);
   });
 
   it("the batch banner shows recorded counts, the current permit and Cancel for managers only", () => {

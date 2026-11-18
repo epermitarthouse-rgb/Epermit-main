@@ -26,6 +26,7 @@ import {
   phaseTone,
   refreshAllConfirmation,
   refreshResultMessage,
+  refreshSourceForQueueFilter,
   sourceAllowsManualRefresh,
   sourceOpenJob,
   type PermitProgress,
@@ -72,24 +73,34 @@ function useRefreshToast() {
 }
 
 /**
- * Refresh All (per source). The confirmation names the jurisdiction and the number of permits the source sees,
- * and says when a refresh is already open (the request then joins it instead of starting another).
+ * One Refresh all button. On the Permit Queue, `sourceKey` is the jurisdiction filter
+ * (`all`, or `adapter_key::jurisdiction`). "All jurisdictions" leaves the button disabled.
+ * A selected jurisdiction refreshes only that source (`requestSourceRefresh(credential_id)`).
+ * Admin rows omit `sourceKey` and pass the single source for that row.
  */
-export function RefreshAllButton({ sources }: { sources: SyncSourceOverview[] }) {
+export function RefreshAllButton({ sources, sourceKey }: { sources: SyncSourceOverview[]; sourceKey?: string }) {
   const refreshable = sources.filter((s) => s.can_refresh && s.permit_count > 0 && sourceAllowsManualRefresh(s.status));
+  const chosen = sourceKey !== undefined
+    ? refreshSourceForQueueFilter(refreshable, sourceKey)
+    : refreshable.length === 1 ? refreshable[0] : null;
+  const awaitingJurisdiction = !chosen && (sourceKey === "all" || sourceKey === "" || (sourceKey === undefined && refreshable.length > 1));
   const [target, setTarget] = useState<SyncSourceOverview | null>(null);
   const handlers = useRefreshToast();
   const run = useMutation({ mutationFn: (credentialId: string) => requestSourceRefresh(credentialId), ...handlers });
-  if (!refreshable.length) return null;
+  if (!refreshable.length || (!chosen && !awaitingJurisdiction)) return null;
   const confirmation = target ? refreshAllConfirmation(target) : null;
   return (
     <>
-      {refreshable.map((s) => (
-        <Button key={s.credential_id} variant="secondary" disabled={run.isPending} onClick={() => setTarget(s)}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh all{refreshable.length > 1 ? ` · ${s.jurisdiction}` : ""}
-        </Button>
-      ))}
+      <Button
+        variant="secondary"
+        disabled={run.isPending || !chosen}
+        title={chosen ? undefined : "Select a jurisdiction"}
+        data-refresh-credential={chosen?.credential_id}
+        onClick={() => { if (chosen) setTarget(chosen); }}
+      >
+        <RefreshCw className="mr-2 h-4 w-4" />
+        Refresh all
+      </Button>
       <AlertDialog open={!!target} onOpenChange={(o) => { if (!o) setTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

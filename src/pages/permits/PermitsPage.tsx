@@ -77,7 +77,7 @@ export default function PermitsPage() {
         body="Every permit collected from connected portals that you have access to, organised like the portal. Portal data is read-only here; refreshes pull the latest from the portal. No portal login is needed to view."
         action={
           <div className="flex flex-wrap gap-2">
-            <RefreshAllButton sources={syncSources} />
+            <RefreshAllButton sources={syncSources} sourceKey={source} />
             <DcZipExportButton />
           </div>
         }
