@@ -71,7 +71,7 @@ describe("Permit Queue detail", () => {
   it("shows the tabs in portal order, then History; Diagnostics only for admins", () => {
     const user = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false }));
     const order = [...user.matchAll(/data-permit-tab="([a-z]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(order, ["tasks", "files", "status", "info", "reports", "reviews", "history"]);
+    assert.deepEqual(order, ["tasks", "files", "status", "info", "reports", "reviews", "downstream", "history"]);
     assert.doesNotMatch(user, DIAGNOSTICS);
     const admin = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: true, defaultTab: "diagnostics" }));
     assert.deepEqual([...admin.matchAll(/data-permit-tab="([a-z]+)"/g)].map((m) => m[1]).at(-1), "diagnostics");
@@ -127,6 +127,58 @@ describe("Permit Queue detail", () => {
     assert.match(blocked, /Inaccessible \/ blocked/);
   });
 
+  it("Downstream shows the permit record, the portal thread, and a project link", () => {
+    const html = render(createElement(PermitQueueDetailView, {
+      detail: detail(),
+      isAdmin: false,
+      defaultTab: "downstream",
+      downstreamRows: [{
+        id: "c1",
+        refNumber: "1",
+        cycle: "2",
+        department: "Zoning",
+        commentType: "Correction",
+        fileName: "sheet.pdf",
+        reviewedAt: "2026-02-02T15:00:00Z",
+        body: "BODY-LIVE",
+        status: "Unresolved",
+        responses: [
+          { id: "r1", seq: 1, role: "Applicant", body: "REPLY-1", respondedAt: "" },
+          { id: "r2", seq: 2, role: "Reviewer", body: "REPLY-2", respondedAt: "" },
+        ],
+        discipline: "Zoning",
+        codeReference: "IBC 101",
+        guidance: "GUIDE-LIVE",
+      }],
+      downstreamLinks: [{ project_id: "proj-1", project_name: "Alpha Project" }],
+    }));
+    assert.match(html, /Downstream · D2500488/);
+    assert.match(html, /BODY-LIVE/);
+    assert.match(html, /Ref #1/);
+    assert.match(html, /Cycle 2/);
+    assert.match(html, /data-downstream-status="Unresolved"/);
+    assert.ok(html.indexOf("REPLY-1") < html.indexOf("REPLY-2"));
+    assert.match(html, /data-downstream-discipline="Zoning"/);
+    assert.match(html, /IBC 101/);
+    assert.match(html, /GUIDE-LIVE/);
+    assert.match(html, /Linked to /);
+    assert.match(html, /href="\/response-matrix\?projectId=proj-1"/);
+    assert.match(html, /Alpha Project/);
+    assert.doesNotMatch(html, /<(button|select)[^>]*>[^<]*(Assign|Approve|Generate)/i);
+    assert.doesNotMatch(html, /reviewer_name|responder_name/);
+  });
+
+  it("Downstream leaves analysis cells empty when no ready insight is passed", () => {
+    const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false, defaultTab: "downstream" }));
+    assert.match(html, /Downstream · D2500488/);
+    assert.match(html, /Provide setbacks/);
+    assert.match(html, /data-downstream-status="Unresolved"/);
+    assert.match(html, /See sheet A-101/);
+    assert.match(html, /data-downstream-discipline=""/);
+    assert.match(html, /data-downstream-guidance=""/);
+    assert.doesNotMatch(html, /data-testid="permit-downstream-link"/);
+  });
+
   it("renders the linked-projects panel and header actions passed in", () => {
     const html = render(createElement(PermitQueueDetailView, {
       detail: detail(), isAdmin: false,
@@ -138,11 +190,11 @@ describe("Permit Queue detail", () => {
   });
 
   it("has no state-changing portal controls on any tab", () => {
-    for (const tab of ["tasks", "files", "status", "info", "reports", "reviews", "history", "diagnostics"] as const) {
+    for (const tab of ["tasks", "files", "status", "info", "reports", "reviews", "downstream", "history", "diagnostics"] as const) {
       const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: true, defaultTab: tab, onViewDocument: () => undefined, onViewReport: () => undefined }));
       assert.doesNotMatch(html, MUTATION_CONTROL, `mutation control on ${tab}`);
     }
-    const sources = ["PermitSectionViews.tsx", "PermitQueueDetailView.tsx", "../../pages/permits/PermitDetailPage.tsx", "../../pages/permits/PermitsPage.tsx"].map(src).join("\n");
+    const sources = ["PermitSectionViews.tsx", "PermitDownstreamMatrix.tsx", "PermitQueueDetailView.tsx", "../../pages/permits/PermitDetailPage.tsx", "../../pages/permits/PermitsPage.tsx"].map(src).join("\n");
     assert.doesNotMatch(sources, /\b(AcceptTask|ProcessTask|completeTask|uploadFile|saveResponse)\b|\.rpc\(|\.insert\(|\.update\(|\.upsert\(|\.delete\(/);
   });
 

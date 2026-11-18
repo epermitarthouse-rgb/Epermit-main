@@ -6,6 +6,7 @@ import { AlertBanner } from "@/components/design/ProductPrimitives";
 import { LocalInspectionBanner } from "@/components/permits/LocalInspectionBanner";
 import { PermitCommentAnalysisDiagnostics, PermitCommentAnalysisSummary } from "@/components/permits/PermitCommentAnalysisPanel";
 import { PermitJsonExportButton } from "@/components/permits/PermitExportButtons";
+import { usePermitDownstreamMatrix } from "@/components/permits/PermitDownstreamMatrix";
 import { PermitQueueDetailView } from "@/components/permits/PermitQueueDetailView";
 import { ReportContentBody } from "@/components/permits/PermitSectionViews";
 import { PermitSyncPanel, RefreshPermitButton, usePermitProgress, useSyncOverview } from "@/components/permits/PermitSyncControls";
@@ -107,6 +108,15 @@ export default function PermitDetailPage() {
     wasBusy.current = busy;
   }, [busy, permitId, qc]);
 
+  const detail = result.data ?? null;
+  const downstream = usePermitDownstreamMatrix(
+    permitId,
+    detail?.permit.jurisdiction,
+    detail?.comments,
+    detail?.responses,
+    !!user && !!detail,
+  );
+
   const back = (
     <Button asChild variant="ghost" size="sm">
       <Link to={PERMIT_QUEUE_PATH}><ArrowLeft className="mr-2 h-4 w-4" />Permit Queue</Link>
@@ -154,6 +164,9 @@ export default function PermitDetailPage() {
         actions={<PermitJsonExportButton permitId={permitId} />}
         linksPanel={<PermitProjectLinksPanel permitId={permitId} />}
         analysisSummary={<PermitCommentAnalysisSummary permitId={permitId} />}
+        downstreamRows={downstream.rows}
+        downstreamLinks={downstream.links}
+        downstreamInsightsNote={downstream.insightsNote}
         analysisDiagnostics={isAdmin ? <PermitCommentAnalysisDiagnostics permitId={permitId} /> : null}
         onViewDocument={(doc) => void open(str(doc.storage_path), str(doc.id))}
         busyDocumentId={busyKey}

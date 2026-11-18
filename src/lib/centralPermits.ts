@@ -260,6 +260,32 @@ export async function loadPermitDetail(permitId: string): Promise<PermitDetail |
   return detail;
 }
 
+const READY_INSIGHT_COLUMNS = 'comment_id, input_hash, status, is_current, discipline, code_reference, guidance_text';
+
+/**
+ * Current ready central results for one permit. Authenticated SELECT is allowed by RLS
+ * (status = ready and can_read_permit). Empty when the table is not deployed yet.
+ */
+export async function loadPermitReadyInsights(permitId: string): Promise<Row[]> {
+  if (!permitId) return [];
+  const pageSize = READ_PAGE_SIZE;
+  const out: Row[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const res = await client()
+      .from('permit_comment_insights')
+      .select(READY_INSIGHT_COLUMNS)
+      .eq('permit_id', permitId)
+      .eq('status', 'ready')
+      .eq('is_current', true)
+      .order('comment_id', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (isMissingSchemaError(res.error)) return [];
+    const page = (unwrap(res, 'permit_comment_insights') as Row[] | null) ?? [];
+    out.push(...page);
+    if (page.length < pageSize) return out;
+  }
+}
+
 export type Freshness = 'fresh' | 'stale' | 'never';
 
 /** Daily sync target: older than 36 h is stale. */
