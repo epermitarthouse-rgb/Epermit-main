@@ -49,7 +49,7 @@ describe("Permit Queue refresh controls", () => {
 
   it("one Refresh all follows the jurisdiction filter and does not refresh every source", () => {
     const montgomery = source({
-      credential_id: "93857549-eb37-47cd-ad83-6701f835de66",
+      credential_id: "test-credential-montgomery",
       adapter_key: "montgomery-projectdox",
       jurisdiction: "Montgomery County MD - Avolve",
     });
@@ -68,12 +68,12 @@ describe("Permit Queue refresh controls", () => {
     const montgomeryHtml = render(createElement(RefreshAllButton, { sources: both, sourceKey: "montgomery-projectdox::Montgomery County MD" }));
     assert.equal(montgomeryHtml.match(/Refresh all/g)?.length, 1);
     assert.doesNotMatch(montgomeryHtml, /disabled=""/);
-    assert.match(montgomeryHtml, /data-refresh-credential="93857549-eb37-47cd-ad83-6701f835de66"/);
+    assert.match(montgomeryHtml, /data-refresh-credential="test-credential-montgomery"/);
     assert.doesNotMatch(montgomeryHtml, /dc-cred/);
     const dcHtml = render(createElement(RefreshAllButton, { sources: both, sourceKey: "dc-projectdox::Washington DC" }));
     assert.equal(dcHtml.match(/Refresh all/g)?.length, 1);
     assert.match(dcHtml, /data-refresh-credential="dc-cred"/);
-    assert.doesNotMatch(dcHtml, /93857549-eb37-47cd-ad83-6701f835de66/);
+    assert.doesNotMatch(dcHtml, /test-credential-montgomery/);
     assert.equal(render(createElement(RefreshAllButton, { sources: both, sourceKey: "dc-projectdox::Nowhere" })), "");
     const unlabeled = render(createElement(RefreshAllButton, { sources: both }));
     assert.equal(unlabeled.match(/Refresh all/g)?.length, 1);

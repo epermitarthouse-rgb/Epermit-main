@@ -90,7 +90,7 @@ describe('permitSync labels', () => {
 
 describe('Refresh all jurisdiction filter', () => {
   const montgomery = source({
-    credential_id: '93857549-eb37-47cd-ad83-6701f835de66',
+    credential_id: 'test-credential-montgomery',
     adapter_key: 'montgomery-projectdox',
     jurisdiction: 'Montgomery County MD - Avolve',
   });
@@ -101,7 +101,7 @@ describe('Refresh all jurisdiction filter', () => {
     assert.equal(refreshSourceForQueueFilter([montgomery, dc], ''), null);
     assert.equal(
       refreshSourceForQueueFilter([montgomery, dc], 'montgomery-projectdox::Montgomery County MD')?.credential_id,
-      '93857549-eb37-47cd-ad83-6701f835de66',
+      'test-credential-montgomery',
     );
     assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'dc-projectdox::Washington DC')?.credential_id, 'dc-1');
     assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'dc-projectdox::Washington DC - ProjectDox')?.credential_id, 'dc-1');
