@@ -7,6 +7,7 @@ import {
   InfoSectionView,
   PermitDiagnosticsView,
   ReportsSectionView,
+  type ReportsActions,
   ReviewsSectionView,
   StatusSectionView,
   TasksSectionView,
@@ -52,9 +53,8 @@ export interface PermitQueueDetailViewProps {
   analysisDiagnostics?: ReactNode;
   onViewDocument?: (doc: Row) => void;
   busyDocumentId?: string | null;
-  selectedReportKey?: string | null;
-  onViewReport?: (report: Row) => void;
-  reportViewer?: ReactNode;
+  /** Reports tab: stored exports, the open helper and the row-details viewer. Omit for a read-only list. */
+  reportsActions?: ReportsActions;
 }
 
 /** Permit Queue detail (D-064): tabs in the DC portal's order, read-only, diagnostics for admins only. */
@@ -68,9 +68,7 @@ export function PermitQueueDetailView({
   analysisDiagnostics,
   onViewDocument,
   busyDocumentId,
-  selectedReportKey,
-  onViewReport,
-  reportViewer,
+  reportsActions,
 }: PermitQueueDetailViewProps) {
   const p = d.permit;
   const states = sectionStateMap(d.sections);
@@ -166,7 +164,7 @@ export function PermitQueueDetailView({
               ) : null}
               {t === "info" ? <InfoSectionView permit={p} state={state("info")} snapshots={d.snapshots} /> : null}
               {t === "reports" ? (
-                <ReportsSectionView reports={d.reports} state={state("reports")} selectedReportKey={selectedReportKey} onViewReport={onViewReport} viewer={reportViewer} />
+                <ReportsSectionView reports={d.reports} state={state("reports")} actions={reportsActions} />
               ) : null}
               {t === "reviews" ? <ReviewsSectionView comments={d.comments} responses={d.responses} state={state("reviews")} /> : null}
             </Panel>

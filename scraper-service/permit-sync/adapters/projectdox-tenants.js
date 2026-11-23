@@ -60,7 +60,38 @@ const MONTGOMERY = Object.freeze({
   extraRoutes: Object.freeze([{ name: "paged_active_projects", pattern: /\/Project\/GetPagedActiveProjects(\?|$)/i, body: false }]),
 });
 
-const TENANTS = Object.freeze({ [DC.key]: DC, [MONTGOMERY.key]: MONTGOMERY });
+const PGC = Object.freeze({
+  key: "pgc-eplan",
+  jurisdiction: "Prince George's County MD",
+  portalOrigin: "https://eplans.princegeorgescountymd.gov",
+  // Same host as the portal. The Web API and Web UI are path prefixes, not separate hosts
+  // (pgc-eplan-scraper.js PGC_API / PGC_WEBUI). buildTenantUrl applies apiBasePath and uiBasePath.
+  apiOrigin: "https://eplans.princegeorgescountymd.gov",
+  uiOrigin: "https://eplans.princegeorgescountymd.gov",
+  apiBasePath: "/ProjectDoxWebAPI",
+  uiBasePath: "/ProjectDoxWebUI",
+  // The manual scraper opens reports here, not on /WebForms/ReportViewer.aspx (buildPgcReportUrls).
+  reportViewerPath: "/ProjectDox/ReportViewer.aspx",
+  hosts: Object.freeze(["eplans.princegeorgescountymd.gov"]),
+  portalHosts: Object.freeze(["eplans.princegeorgescountymd.gov"]),
+  apiHost: "eplans.princegeorgescountymd.gov",
+  webuiHost: "eplans.princegeorgescountymd.gov",
+  portalWebApiHost: "eplans.princegeorgescountymd.gov",
+  reportHosts: Object.freeze(["eplans.princegeorgescountymd.gov"]),
+  // No ReportID: the manual viewer URL is ReportPath + DataSourceName only.
+  reviewReport: Object.freeze({
+    ReportID: null,
+    ReportPath: "/PDoxProdReportPGC/Plan Review - Review Comments",
+    DataSourceName: "DataSource1",
+  }),
+  projectInfoTemplateId: null,
+  extraRoutes: Object.freeze([
+    { name: "pgc_report_viewer", pattern: /\/ProjectDox\/ReportViewer\.aspx(\?|$)/i, body: false },
+    { name: "pgc_sso_hop", pattern: /\/Portal\/login\/sso(\?|$)/i, body: false },
+  ]),
+});
+
+const TENANTS = Object.freeze({ [DC.key]: DC, [MONTGOMERY.key]: MONTGOMERY, [PGC.key]: PGC });
 
 /** Tenant config by adapter key or tenant object; DC when omitted. Throws for an unknown key. */
 function tenantFor(keyOrTenant) {
@@ -71,4 +102,4 @@ function tenantFor(keyOrTenant) {
   return t;
 }
 
-module.exports = { DC, MONTGOMERY, TENANTS, tenantFor };
+module.exports = { DC, MONTGOMERY, PGC, TENANTS, tenantFor };

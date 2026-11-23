@@ -57,12 +57,12 @@ export default function PermitsPage() {
 
   const allRows = useMemo(() => result.data?.rows ?? [], [result.data]);
   const linkCounts = useMemo(() => result.data?.linkCounts ?? new Map<string, number>(), [result.data]);
-  const sources = useMemo(() => queueSourceOptions(allRows), [allRows]);
+  const overview = useSyncOverview(!!user);
+  const syncSources = useMemo(() => overview.data ?? [], [overview.data]);
+  const sources = useMemo(() => queueSourceOptions(allRows, syncSources), [allRows, syncSources]);
   const filtered = useMemo(() => filterQueueRows(allRows, linkCounts, { source, linked }), [allRows, linkCounts, source, linked]);
   const view = paginate(filtered, page, PERMIT_PAGE_SIZE);
 
-  const overview = useSyncOverview(!!user);
-  const syncSources = useMemo(() => overview.data ?? [], [overview.data]);
   const canRefresh = syncSources.some((s) => s.can_refresh);
   const progress = usePermitProgress(view.rows.map((r) => r.id), !!user && syncSources.length > 0);
   const comments = usePermitCommentStates(view.rows.filter((r) => (linkCounts.get(r.id) ?? 0) > 0).map((r) => r.id), !!user);

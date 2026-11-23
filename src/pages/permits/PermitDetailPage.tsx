@@ -17,10 +17,13 @@ import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 import { useToast } from "@/hooks/use-toast";
 import {
   createPermitObjectSignedUrl,
+  currentRows,
   listReportContentVersions,
   loadPermitDetail,
   loadReportContent,
+  loadReportExportPaths,
 } from "@/lib/centralPermits";
+import { openStoredObject } from "@/lib/permitObjectOpen";
 import { PERMIT_QUEUE_PATH } from "@/lib/permitQueue";
 import { isPermitBusy } from "@/lib/permitSync";
 
@@ -30,25 +33,22 @@ const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
- * Opens a stored object through a short-lived signed URL. The tab is opened before the request so
- * the browser treats it as a user action; it is closed again if no URL is issued.
+ * Opens a stored object (file copy or report export) in a new tab through a short-lived signed URL.
+ * The tab is opened before the request so the browser treats it as a user action; on failure it is
+ * closed again and the user is told in plain language.
  */
 function useOpenPermitObject() {
   const { toast } = useToast();
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const open = async (path: string, key: string = path) => {
-    const tab = window.open("about:blank", "_blank");
-    if (!tab) {
-      toast({ title: "Pop-up blocked", description: "Allow pop-ups for this site to open stored files.", variant: "destructive" });
-      return;
-    }
-    tab.opener = null;
     setBusyKey(key);
     try {
-      tab.location.href = await createPermitObjectSignedUrl(path);
-    } catch (e) {
-      tab.close();
-      toast({ title: "Could not open the stored copy", description: errorText(e), variant: "destructive" });
+      await openStoredObject(path, {
+        openTab: () => window.open("about:blank", "_blank"),
+        signUrl: createPermitObjectSignedUrl,
+        notify: (description, kind) =>
+          toast({ title: kind === "blocked" ? "Pop-up blocked" : "Could not open this file", description, variant: "destructive" }),
+      });
     } finally {
       setBusyKey(null);
     }
@@ -88,7 +88,6 @@ export default function PermitDetailPage() {
   const { user } = useAuth();
   const { isAdmin } = useRequireAdmin();
   const { open, busyKey } = useOpenPermitObject();
-  const [selectedReport, setSelectedReport] = useState<Row | null>(null);
   const result = useQuery({
     queryKey: ["central-permits", "detail", permitId],
     queryFn: () => loadPermitDetail(permitId),
@@ -109,6 +108,13 @@ export default function PermitDetailPage() {
   }, [busy, permitId, qc]);
 
   const detail = result.data ?? null;
+  const reportContentIds = currentRows(detail?.reports ?? []).map((r) => str(r.latest_content_id)).filter(Boolean);
+  const reportExports = useQuery({
+    queryKey: ["central-permits", "report-exports", permitId, reportContentIds.join(",")],
+    queryFn: () => loadReportExportPaths(reportContentIds),
+    enabled: !!user && !!detail && reportContentIds.length > 0,
+    staleTime: 60_000,
+  });
   const downstream = usePermitDownstreamMatrix(
     permitId,
     detail?.permit.jurisdiction,
@@ -179,9 +185,13 @@ export default function PermitDetailPage() {
         analysisDiagnostics={isAdmin ? <PermitCommentAnalysisDiagnostics permitId={permitId} /> : null}
         onViewDocument={(doc) => void open(str(doc.storage_path), str(doc.id))}
         busyDocumentId={busyKey}
-        selectedReportKey={selectedReport ? str(selectedReport.report_key) : null}
-        onViewReport={(r) => setSelectedReport((cur) => (cur && str(cur.report_key) === str(r.report_key) ? null : r))}
-        reportViewer={selectedReport ? <ReportViewer permitId={permitId} report={selectedReport} onOpenFile={(path) => void open(path)} /> : null}
+        reportsActions={{
+          exports: reportContentIds.length ? (reportExports.data ?? null) : {},
+          exportsError: reportExports.error ? errorText(reportExports.error) : null,
+          onOpenFile: (path) => void open(path),
+          busyKey,
+          renderDetails: (report) => <ReportViewer permitId={permitId} report={report} onOpenFile={(path) => void open(path)} />,
+        }}
       />
     </div>
   );

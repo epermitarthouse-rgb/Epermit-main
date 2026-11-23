@@ -106,6 +106,19 @@ describe('Refresh all jurisdiction filter', () => {
     assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'dc-projectdox::Washington DC')?.credential_id, 'dc-1');
     assert.equal(refreshSourceForQueueFilter([montgomery, dc], 'dc-projectdox::Washington DC - ProjectDox')?.credential_id, 'dc-1');
     assert.equal(refreshSourceForQueueFilter([dc, source({ credential_id: 'dc-2', jurisdiction: 'Washington DC - ProjectDox' })], 'dc-projectdox::Washington DC'), null);
+    const pgc = source({
+      credential_id: 'pgc-1',
+      adapter_key: 'pgc-eplan',
+      jurisdiction: "Prince George's County ePlan",
+    });
+    assert.equal(
+      refreshSourceForQueueFilter([montgomery, dc, pgc], "pgc-eplan::Prince George's County MD")?.credential_id,
+      'pgc-1',
+    );
+    assert.equal(
+      refreshSourceForQueueFilter([pgc], "pgc-eplan::Prince George's County ePlan")?.credential_id,
+      'pgc-1',
+    );
   });
 });
 
@@ -117,6 +130,10 @@ describe('Refresh All confirmation', () => {
     assert.equal(c.confirm, 'Refresh 72 permits');
     assert.equal(c.joins, null);
     assert.equal(refreshAllConfirmation(source({ permit_count: 1 })).confirm, 'Refresh 1 permit');
+    const first = refreshAllConfirmation(source({ permit_count: 0, jurisdiction: "Prince George's County ePlan" }));
+    assert.equal(first.title, "Run the first Prince George's County ePlan portal sync?");
+    assert.match(first.body[0], /No permits are stored/);
+    assert.equal(first.confirm, 'Run portal sync');
   });
 
   it('says the request joins an open refresh, preferring the running one', () => {

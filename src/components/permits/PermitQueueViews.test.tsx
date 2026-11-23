@@ -235,7 +235,7 @@ describe("Permit Queue detail", () => {
 
   it("has no state-changing portal controls on any tab", () => {
     for (const tab of ["tasks", "files", "status", "info", "reports", "reviews", "history", "diagnostics"] as const) {
-      const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: true, defaultTab: tab, onViewDocument: () => undefined, onViewReport: () => undefined }));
+      const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: true, defaultTab: tab, onViewDocument: () => undefined, reportsActions: { exports: {}, onOpenFile: () => undefined, renderDetails: () => null } }));
       assert.doesNotMatch(html, MUTATION_CONTROL, `mutation control on ${tab}`);
     }
     const sources = ["PermitSectionViews.tsx", "PermitDownstreamMatrix.tsx", "PermitQueueDetailView.tsx", "../../pages/permits/PermitDetailPage.tsx", "../../pages/permits/PermitsPage.tsx"].map(src).join("\n");
@@ -343,7 +343,7 @@ describe("Permit Queue tabs", () => {
     assert.match(html, /Stored/);
   });
 
-  it("Reports: View only for captured content; pre-migration rows read as not captured", () => {
+  it("Reports: View only where an export is stored; pre-migration rows read as not captured", () => {
     const html = render(createElement(ReportsSectionView, {
       reports: [
         { id: "a", report_key: "14", name: "Review Comments", content_status: "captured", latest_content_id: "c1", content_captured_at: "2026-11-11T00:00:00Z" },
@@ -351,7 +351,7 @@ describe("Permit Queue tabs", () => {
         { id: "c", report_key: "12", name: "Old schema row" },
       ],
       state: ok("reports"),
-      onViewReport: () => undefined,
+      actions: { exports: { c1: { pdf: "p/reports/14/a.pdf", excel: "" } }, onOpenFile: () => undefined, renderDetails: () => null },
     }));
     assert.equal((html.match(/data-report-view/g) ?? []).length, 1);
     assert.match(html, /data-report-state="captured"/);

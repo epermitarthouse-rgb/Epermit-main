@@ -56,11 +56,28 @@ function buildDcUrl(route, params = {}, { apiOrigin = API_ORIGIN, uiOrigin = UI_
   return u.toString();
 }
 
-/** The same routes on a tenant's origins; the Review Comments report takes the tenant's report identity. */
+function prefixPath(pathname, base) {
+  if (!base) return pathname;
+  if (pathname === base || pathname.startsWith(`${base}/`)) return pathname;
+  return `${base}${pathname}`;
+}
+
+/**
+ * The same routes on a tenant's origins; the Review Comments report takes the tenant's report identity.
+ * A tenant that serves the API and Web UI as path prefixes on one host (PGC) sets apiBasePath / uiBasePath.
+ * A leading-slash route path would otherwise drop that prefix (URL resolution). DC and Montgomery set neither.
+ */
 function buildTenantUrl(tenant, route, params = {}) {
   const t = tenantFor(tenant);
   const merged = route === "review_comments_report" ? { ...t.reviewReport, ...params } : params;
-  return buildDcUrl(route, merged, { apiOrigin: t.apiOrigin, uiOrigin: t.uiOrigin });
+  const url = buildDcUrl(route, merged, { apiOrigin: t.apiOrigin, uiOrigin: t.uiOrigin });
+  const def = ROUTES[route];
+  const u = new URL(url);
+  if (route === "review_comments_report" && t.reportViewerPath) u.pathname = t.reportViewerPath;
+  else if (def.origin === "api") u.pathname = prefixPath(u.pathname, t.apiBasePath);
+  else if (def.origin === "ui") u.pathname = prefixPath(u.pathname, t.uiBasePath);
+  else return url;
+  return u.toString();
 }
 
 module.exports = { API_ORIGIN, UI_ORIGIN, ROUTES, buildDcUrl, buildTenantUrl };
