@@ -163,7 +163,7 @@ function buildLinkedPayload(data, existing) {
  *   readProject?: (projectId: string) => Promise<{ portal_data: object|null, portal_status?: string }|null>,
  * }} deps
  */
-function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoot = os.tmpdir(), loadWriter = null, readProject = null }) {
+function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoot = os.tmpdir(), loadWriter = null, readProject = null, tenant = MONTGOMERY }) {
   if (!transport || typeof transport.fetchFile !== "function" || typeof transport.exportReport !== "function") {
     throw new Error("Montgomery deep driver needs a deep-mode transport (fetchFile, exportReport)");
   }
@@ -255,7 +255,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
       const entry = { fileName: item.name, text: "", pages: null };
       const dir = fs.mkdtempSync(path.join(tmp, "report-"));
       try {
-        const out = await transport.exportReport({ url: policy.reportViewerUrl(item, MONTGOMERY.uiOrigin, projectId), dir, formats: ["EXCELOPENXML", "PDF"] });
+        const out = await transport.exportReport({ url: policy.reportViewerUrl(item, tenant.uiOrigin, projectId, tenant.reportViewerPath), dir, formats: ["EXCELOPENXML", "PDF"] });
         entry.text = String(out.text || "");
         entry.pages = Number.isInteger(out.pages) ? out.pages : null;
         if (out.excelPath) {

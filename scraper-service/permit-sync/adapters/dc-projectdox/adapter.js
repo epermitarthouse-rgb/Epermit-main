@@ -145,7 +145,7 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
       for (const f of list) {
         if (f.FolderID === null || f.FolderID === undefined) continue;
         const files = await transport.getJson("folder_files", { folderID: f.FolderID, projectID: projectId, listMode: 3, pageIndex: 0, pageSize: 500 });
-        const items = (files && files.Items) || [];
+        const items = Array.isArray(files) ? files : ((files && (files.Items || files.items)) || []);
         if (Number.isInteger(files && files.TotalRowsCount) && files.TotalRowsCount !== items.length) pagingOk = false;
         filesByKey[dc.folderKey(f)] = items;
       }

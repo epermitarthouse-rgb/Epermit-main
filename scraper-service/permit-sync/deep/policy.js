@@ -341,13 +341,14 @@ function matchReport(reports, reportName) {
  * for ReportPath, so a deny-pattern word in the title is still caught.
  * @param {{ reportId?: string, key?: string, name?: string, viewer?: { reportPath: string, dataSourceName: string, paramQuery: string } }} item
  */
-function reportViewerUrl(item, origin, portalRecordId) {
+function reportViewerUrl(item, origin, portalRecordId, viewerPath = "/WebForms/ReportViewer.aspx") {
   const v = (item && item.viewer) || null;
   const id = String((item && (item.reportId || item.key)) || "");
   const params = v
     ? `ReportID=${id}&ReportPath=${v.reportPath}&DataSourceName=${v.dataSourceName}${v.paramQuery}`
     : `ReportID=${id}&ReportPath=${String((item && item.name) || "")}&ProjectID=${String(portalRecordId || "")}`;
-  return `${origin}/WebForms/ReportViewer.aspx?${encodeURI(params)}`;
+  const path = String(viewerPath || "/WebForms/ReportViewer.aspx");
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}?${encodeURI(params)}`;
 }
 
 /** Recorded as the report's error when the portal lists it with an empty workflow parameter. */

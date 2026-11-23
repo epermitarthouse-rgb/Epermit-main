@@ -10,7 +10,7 @@ const { createMontgomeryDeepDriver } = require("./montgomery-driver");
 const { PGC } = require("../adapters/projectdox-tenants");
 
 function createPgcDeepDriver(opts) {
-  const inner = createMontgomeryDeepDriver(opts);
+  const inner = createMontgomeryDeepDriver({ ...opts, tenant: PGC });
   return {
     ...inner,
     DEFAULT_DASHBOARD_URL: `${PGC.portalOrigin}/Portal/Home/Index`,

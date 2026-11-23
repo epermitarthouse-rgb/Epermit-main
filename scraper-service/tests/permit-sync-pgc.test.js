@@ -19,6 +19,31 @@ const lock = require("../lib/dc-credential-lock");
 
 const HOST = "https://eplans.princegeorgescountymd.gov";
 
+test("PGC report exports open the ePlans viewer, not the Montgomery WebUI host", () => {
+  const { reportViewerUrl } = require("../permit-sync/deep/policy");
+  const url = reportViewerUrl(
+    {
+      reportId: "323",
+      name: "Plan Review - Review Comments",
+      viewer: {
+        reportPath: PGC.reviewReport.ReportPath,
+        dataSourceName: "DataSource1",
+        paramQuery: "&ProjectID=80172&WFlowInstanceID=1&Timezone=",
+      },
+    },
+    PGC.uiOrigin,
+    "80172",
+    PGC.reportViewerPath,
+  );
+  const u = new URL(url);
+  assert.equal(u.hostname, "eplans.princegeorgescountymd.gov");
+  assert.equal(u.pathname, "/ProjectDox/ReportViewer.aspx");
+  assert.equal(u.searchParams.get("ReportPath"), "/PDoxProdReportPGC/Plan Review - Review Comments");
+  const verdict = safety.evaluateRequest({ method: "GET", url, mode: "deep", tenant: PGC });
+  assert.equal(verdict.allowed, true, verdict.reason);
+  assert.equal(verdict.allowed && u.hostname.includes("montgomery"), false);
+});
+
 test("the manual scraper exports the project-open used to reach the Web API", () => {
   const manual = require("../pgc-eplan-scraper");
   assert.equal(typeof manual.openProjectViaDashboardRow, "function");
