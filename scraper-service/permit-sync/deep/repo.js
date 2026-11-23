@@ -22,7 +22,9 @@ function fileDigest(localPath) {
   return { buf, sha256: crypto.createHash("sha256").update(buf).digest("hex"), size: buf.length };
 }
 
-function supabaseDeepRepo(client, { adapterKey = "dc-projectdox" } = {}) {
+/** `adapterKey` is the job's (permit_sync_sources.adapter_key); permit lookups by portal record id are per adapter. */
+function supabaseDeepRepo(client, { adapterKey } = {}) {
+  if (!adapterKey) throw new Error("supabaseDeepRepo needs the job's adapter_key");
   const rows = async (q, what) => {
     const { data, error } = await q;
     if (error) throw new Error(`${what}: ${error.message}`);

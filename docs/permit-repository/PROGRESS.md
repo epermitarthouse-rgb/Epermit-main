@@ -83,6 +83,19 @@ Levels: Implemented · Locally tested · Deployed · Production-verified. "—" 
 | Admin | Reports finding (D-054) | Done | Production-observed | Reports are metadata only (5 per permit). ReportID=14 SSRS was not fetched in run 9 (Reviews came from JSON). |
 | 4 | Second jurisdiction/hardening | Montgomery adapter implemented (JSON pass), see "Montgomery County MD" below | Locally tested | Branch `feat/montgomery-adapter` |
 
+## Montgomery scheduling (2026-11-18, branch `feat/montgomery-scheduling`, D-146 to D-150)
+Backend for an unattended nightly Montgomery run that the owner switches on in Management Admin → Permit Sync → Scheduling. Nothing is enabled, applied or deployed. Runbook, rollback and first-run SQL: HANDOFF.md "Montgomery scheduling".
+| Item | Status | Level | Evidence / notes |
+|---|---|---|---|
+| Production state before (owner's figures; the CLI could not read production in this session) | 20 permits, 1,452 files listed, 1,443 stored, 9 failed with retries due; worker job efae063b and 8 manual jobs logged in on 2026-11-18 | Production-verified (owner) | Re-check with `scripts/permit-repo/scheduling/06-verify-montgomery-first-run.sql` (read-only) before enabling |
+| Worker keyed on the job's adapter; adapter-qualified worker scope with `deferred_worker_scope` release | Done | Locally tested | D-146; `worker-entry.js`, `core/worker.js`, `deep/repo.js`; DC paths unchanged (permit-sync 354/354) |
+| Scheduling tab, save, enqueue at 06:00 America/New_York (DST), no slot before enable | Generic already; proven for Montgomery | Locally tested | `permit-sync-montgomery-scheduling.test.js` (exact UI body, 11:00Z EST / 10:00Z EDT, two hours after DC) |
+| DC + Montgomery overlap on one worker | Separate claims; the second waits; no false `queued_unclaimed` | Locally tested | D-148; migration `20261123100000` (monitor) |
+| Central budget per source (`montgomery`, $3 proposed) | Done; budget row prepared, not created | Locally tested | D-147, D-149; `_shared/centralBudgetScopes.ts` + test; `scheduling/05-montgomery-budget.sql` |
+| Monitoring | Generic: schedule_missed, job_stuck, retry_exhausted, no_recent_success, login_failure; added `central_budget_paused` | Locally tested | Alert text: jurisdiction label, adapter key, counts, short ids |
+| 9 failed files | Retried by the normal plan when due (attempts < max) | Locally tested | D-149 |
+| Merge, migration, worker and function deploy, budget, toggle | Not started | — | Approval list in HANDOFF.md |
+
 ## Montgomery County MD (2026-11-18, branch `feat/montgomery-adapter`, D-133 to D-144)
 | Item | Status | Level | Evidence / notes |
 |---|---|---|---|

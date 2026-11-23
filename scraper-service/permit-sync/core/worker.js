@@ -23,7 +23,7 @@
  */
 
 const { buildBatch, buildDiscovery } = require("./ingest");
-const { classify, safeMessage, LeaseLostError, ShutdownError } = require("./errors");
+const { classify, safeMessage, DeferredError, LeaseLostError, ShutdownError } = require("./errors");
 
 const ABORT_CODES = new Set(["safety_violation", "session_ended", "rate_limited", "mfa_required", "captcha", "auth_failed"]);
 
@@ -82,7 +82,8 @@ function emptySectionTally() {
 
 /**
  * Portal record ids this job may process (D-074): the job's `options.only_portal_record_ids`, narrowed by the
- * worker's own filter (PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS). null = every discovered permit.
+ * worker's own filter (PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS). null = every discovered permit. runJob also accepts
+ * the worker filter as a function of the job (its ids for the job's adapter).
  */
 function jobScope(job, workerScope = null) {
   const fromJob = job && job.options && Array.isArray(job.options.only_portal_record_ids)
@@ -94,7 +95,10 @@ function jobScope(job, workerScope = null) {
 
 async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, now = () => Date.now(), scope: workerScope = null, signal = null, pauseMs = 0, sleep = null }) {
   const started = now();
-  const scope = jobScope(job, workerScope);
+  const forJob = typeof workerScope === "function" ? workerScope(job) : workerScope;
+  // A per-adapter filter with nothing for this job's adapter: the worker may not run it (D-146).
+  const otherAdaptersOnly = typeof workerScope === "function" && Array.isArray(forJob) && forJob.length === 0;
+  const scope = jobScope(job, forJob);
   const checkpoint = { done: [], failed: {}, ...(job.checkpoint || {}) };
   const metrics = {
     attempt: job.attempt_count,
@@ -123,6 +127,7 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
 
   let session = null;
   try {
+    if (otherAdaptersOnly) throw new DeferredError(`this worker is limited to other adapters' permits; ${job.adapter_key} deferred`, "deferred_worker_scope", 600);
     if (scope && scope.length === 0) {
       metrics.duration_ms = now() - started;
       await rpc.finish(job.id, workerId, "failed_unrecoverable", "scope_empty", "the job scope and the worker filter share no permit", metrics, false, null);

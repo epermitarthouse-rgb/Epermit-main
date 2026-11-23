@@ -42,11 +42,28 @@ function syncMode(env) {
   return env.PERMIT_SYNC_MODE || "json";
 }
 
-/** PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS="11105,9187" narrows every claimed job to those DC ProjectIDs (D-074). */
+/**
+ * PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS="11105,9187" narrows DC jobs to those ProjectIDs (D-074). An entry
+ * "<adapter_key>:<ProjectID>" (for example "montgomery-projectdox:200100") narrows that adapter's jobs (D-146).
+ */
 function workerScope(env) {
   const raw = String(env.PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS || "").trim();
   if (!raw) return null;
   return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+const SCOPE_ENTRY = /^(?:([a-z0-9][a-z0-9-]{1,40}):)?([0-9]{1,12})$/;
+
+/**
+ * The worker filter for one adapter: null when the worker is not narrowed, else that adapter's ids
+ * (an empty list when the worker is narrowed to other adapters only).
+ */
+function scopeForAdapter(entries, adapterKey) {
+  if (!entries) return null;
+  return entries.flatMap((e) => {
+    const m = SCOPE_ENTRY.exec(e);
+    return m && (m[1] || DC_KEY) === adapterKey ? [m[2]] : [];
+  });
 }
 
 /**
@@ -75,7 +92,9 @@ function startupCheck(env) {
   if (!env.PORTAL_CREDENTIALS_ENCRYPTION_KEY) return { ok: false, reason: "PORTAL_CREDENTIALS_ENCRYPTION_KEY missing" };
   if (!["json", "deep"].includes(syncMode(env))) return { ok: false, reason: `unknown PERMIT_SYNC_MODE ${env.PERMIT_SYNC_MODE}` };
   const scope = workerScope(env);
-  if (scope && !scope.every((id) => /^[0-9]{1,12}$/.test(id))) return { ok: false, reason: "PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS must be numeric DC ProjectIDs" };
+  if (scope && !scope.every((e) => { const m = SCOPE_ENTRY.exec(e); return m && (!m[1] || ADAPTERS[m[1]]); })) {
+    return { ok: false, reason: "PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS must be numeric DC ProjectIDs or <adapter_key>:<ProjectID>" };
+  }
   for (const k of ["PERMIT_SYNC_DEEP_MAX_FILES", "PERMIT_SYNC_DEEP_MAX_BYTES", "PERMIT_SYNC_LEASE_TTL_SECONDS", "PERMIT_SYNC_IDLE_MS",
     "PERMIT_SYNC_PERMIT_PAUSE_MS", "PERMIT_SYNC_WORKER_HEARTBEAT_MS", "PERMIT_SYNC_HEALTH_PORT"]) {
     if (env[k] !== undefined && env[k] !== "" && !/^[0-9]+$/.test(String(env[k]))) return { ok: false, reason: `${k} must be a non-negative integer` };
@@ -95,12 +114,13 @@ async function deferWhileManualScrape({ supabase, username, now = new Date(), po
 }
 
 /**
- * Registered adapters by permit_sync_sources.adapter_key. Each names its adapter factory, its lock portal (D-061)
- * and how it logs in; everything else (queue, guard, deep pass, ingest) is shared.
+ * Registered adapters by permit_sync_sources.adapter_key (copied onto each job). Each names its adapter factory,
+ * its lock portal (D-061) and, for a tenant other than DC, the tenant whose transport, login and deep driver it
+ * uses; everything else (queue, guard, deep pass, ingest) is shared.
  */
 const ADAPTERS = Object.freeze({
-  [DC_KEY]: Object.freeze({ portal: "dc", createAdapter: createDcAdapter }),
-  [MONTGOMERY_KEY]: Object.freeze({ portal: "montgomery", createAdapter: createMontgomeryAdapter }),
+  [DC_KEY]: Object.freeze({ portal: "dc", createAdapter: createDcAdapter, tenant: null }),
+  [MONTGOMERY_KEY]: Object.freeze({ portal: "montgomery", createAdapter: createMontgomeryAdapter, tenant: MONTGOMERY }),
 });
 
 /**
@@ -262,20 +282,28 @@ function commentDownstreamAfterPermit({ pipeline, repo }) {
 /**
  * @param {{ supabase: any, env?: NodeJS.ProcessEnv, launchContext: Function, createTransport?: Function,
  *   createMontgomeryTransport?: Function, log?: Function, lock?: Function, loadDcDeep?: Function,
- *   createDeepPass?: Function, pipeline?: object|null, repo?: object|null }} deps
+ *   createDeepPass?: Function, pipeline?: object|null, repo?: object|null, scope?: string[]|null }} deps
  *   `repo` is optional and only used by tests; production reads links through the deep repo.
+ *   `scope` is the worker filter (workerScope); a job of an adapter it names nothing for is handed back.
  */
 function buildOpenAdapter({
   supabase, env = process.env, launchContext, createTransport = createDcLiveTransport, createMontgomeryTransport = null, log = () => {},
-  lock = deferWhileManualScrape, loadDcDeep = null, createDeepPass = null, pipeline = null, repo = null,
+  lock = deferWhileManualScrape, loadDcDeep = null, createDeepPass = null, pipeline = null, repo = null, scope = null,
 }) {
   const mode = syncMode(env);
-  const commentRepo = repo || (pipeline ? require("./deep/repo").supabaseDeepRepo(supabase) : null);
-  const downstream = commentDownstreamAfterPermit({ pipeline, repo: commentRepo });
+  const downstreamFor = (adapterKey) => commentDownstreamAfterPermit({
+    pipeline, repo: repo || (pipeline ? require("./deep/repo").supabaseDeepRepo(supabase, { adapterKey }) : null),
+  });
   return async function openAdapter(job) {
     const reg = ADAPTERS[job.adapter_key];
     if (!reg) throw new PortalChangedError(`no adapter registered for ${job.adapter_key}`);
-    const columns = job.adapter_key === MONTGOMERY_KEY ? "portal_username, portal_password, login_url" : "portal_username, portal_password";
+    // Before any credential read or browser: a worker narrowed to other adapters' permits never runs this job.
+    const narrowed = scopeForAdapter(scope, job.adapter_key);
+    if (narrowed && narrowed.length === 0) {
+      throw new DeferredError(`this worker is limited to other adapters' permits; ${job.adapter_key} deferred`, "deferred_worker_scope", 600);
+    }
+    const downstream = downstreamFor(job.adapter_key);
+    const columns = reg.tenant ? "portal_username, portal_password, login_url" : "portal_username, portal_password";
     const cred = await supabase.from("portal_credentials").select(columns).eq("id", job.credential_id).single();
     if (cred.error || !cred.data) throw new AuthError("credential not found");
     if (!looksLikeEncryptedEnvelope(cred.data.portal_password)) throw new AuthError("credential is not encrypted");
@@ -291,8 +319,8 @@ function buildOpenAdapter({
     await lock({ supabase, username, portal: reg.portal });
     const accountDownload = typeof settings.account_download === "boolean" ? settings.account_download : null;
 
-    if (job.adapter_key === MONTGOMERY_KEY) {
-      return openMontgomery({ job, reg, username, password, loginUrl: montgomeryLoginUrl(cred.data.login_url), accountDownload });
+    if (reg.tenant) {
+      return openMontgomery({ job, reg, username, password, loginUrl: montgomeryLoginUrl(cred.data.login_url), accountDownload, downstream });
     }
 
     if (mode !== "deep") {
@@ -320,7 +348,7 @@ function buildOpenAdapter({
       const makeDeepPass = createDeepPass || require("./deep/runner").createDeepPass;
       const { supabaseDeepRepo, supabaseDeepStorage } = require("./deep/repo");
       const deep = makeDeepPass({
-        dcDeep, transport, repo: supabaseDeepRepo(supabase), storage: supabaseDeepStorage(supabase),
+        dcDeep, transport, repo: supabaseDeepRepo(supabase, { adapterKey: job.adapter_key }), storage: supabaseDeepStorage(supabase),
         pipeline, username, credentialId: job.credential_id, log, env,
       });
       return {
@@ -338,7 +366,7 @@ function buildOpenAdapter({
    * Montgomery: the Montgomery transport and login. In deep mode the shared deep runner runs after each permit
    * with the Montgomery driver (deep/montgomery-driver.js) in place of the manual DC scraper (G-1 option B).
    */
-  async function openMontgomery({ job, reg, username, password, loginUrl, accountDownload }) {
+  async function openMontgomery({ job, reg, username, password, loginUrl, accountDownload, downstream }) {
     const make = createMontgomeryTransport || require("./adapters/montgomery-projectdox/live-transport").createMontgomeryLiveTransport;
     const login = montgomeryLogin(username, password, loginUrl);
     const transport = await make({ launchContext, username, password, env, log, login, mode });
@@ -354,8 +382,8 @@ function buildOpenAdapter({
       const makeDeepPass = createDeepPass || require("./deep/runner").createDeepPass;
       const { supabaseDeepRepo, supabaseDeepStorage } = require("./deep/repo");
       const deep = makeDeepPass({
-        dcDeep: createMontgomeryDeepDriver({ transport, loadWriter: () => (loadDcDeep || require("./deep/app-loader").loadDcDeep)(env) }), transport, tenant: MONTGOMERY,
-        repo: supabaseDeepRepo(supabase, { adapterKey: MONTGOMERY_KEY }), storage: supabaseDeepStorage(supabase),
+        dcDeep: createMontgomeryDeepDriver({ transport, loadWriter: () => (loadDcDeep || require("./deep/app-loader").loadDcDeep)(env) }), transport, tenant: reg.tenant,
+        repo: supabaseDeepRepo(supabase, { adapterKey: job.adapter_key }), storage: supabaseDeepStorage(supabase),
         pipeline, username, credentialId: job.credential_id, log, env,
       });
       return { adapter: reg.createAdapter({ transport: deep.wrapTransport(transport), accountDownload }), afterPermit: deep.afterPermit, close: () => transport.close() };
@@ -466,7 +494,7 @@ async function main(env = process.env) {
   try {
     await runLoop({
       rpc,
-      scope,
+      scope: scope ? (job) => scopeForAdapter(scope, job.adapter_key) : null,
       leaseTtlSeconds,
       idleMs,
       pauseMs,
@@ -475,6 +503,7 @@ async function main(env = process.env) {
         env,
         launchContext: () => launchChromiumContext({ acceptDownloads: deep }),
         pipeline,
+        scope,
         log: (e) => log("info", "transport", { code: e && e.code, step: e && e.step, state: e && e.state, at: e && e.at, blocked: e && e.blocked }),
       }),
       workerId,
@@ -517,4 +546,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };
+module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, startupCheck, syncMode, workerScope, scopeForAdapter, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };

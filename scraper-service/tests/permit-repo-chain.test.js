@@ -16,13 +16,14 @@ const { replay, MIGRATIONS_DIR } = require("./helpers/replay-migrations");
 const fx = require("./helpers/permit-repo-fixtures");
 
 const NEW_MIGRATION = "20261111100000_central_permit_repository.sql";
-const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql", "20261117130000_permit_default_access.sql", "20261118140000_permit_sync_schedule_readback.sql", "20261118150000_central_comment_processing.sql"];
+const NEW_MIGRATIONS = [NEW_MIGRATION, "20261111100100_permit_sync_queue.sql", "20261111100200_central_permits_ui.sql", "20261111120000_permit_deep_capture.sql", "20261112100000_permit_capture_retry.sql", "20261113100000_permit_sync_orchestration.sql", "20261117100000_permit_pipeline_linking.sql", "20261117120000_permit_sync_monitor_comment_pipeline.sql", "20261117130000_permit_default_access.sql", "20261118140000_permit_sync_schedule_readback.sql", "20261118150000_central_comment_processing.sql", "20261123100000_permit_sync_montgomery_scheduling.sql"];
 const ORCH = "20261113100000_permit_sync_orchestration.sql";
 const LINKING = "20261117100000_permit_pipeline_linking.sql";
 const MONITOR = "20261117120000_permit_sync_monitor_comment_pipeline.sql";
 const ACCESS = "20261117130000_permit_default_access.sql";
 const READBACK = "20261118140000_permit_sync_schedule_readback.sql";
 const CENTRAL = "20261118150000_central_comment_processing.sql";
+const MONTSCHED = "20261123100000_permit_sync_montgomery_scheduling.sql";
 const NEW_TABLE = /^(permits$|permit_(?!filings)|project_permits$|project_comment_pipeline_state$)/;
 const NEW_FUNC = new RegExp([
   "^_?permit_", "^user_can_read_permit$", "^can_read_permit$", "^apply_permit_", "^record_permit_document_(download|capture|capture_v2)$", "^record_permit_report_(content|failure)$", "^record_permit_deep_pass$",
@@ -166,9 +167,9 @@ test("deep capture apply (BEGIN/COMMIT-wrapped, as in production) and its rollba
 
 test("orchestration apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
   // The later monitor migration replaces a function this one creates, so check orchestration on the chain before it.
-  const base = await replay({ exclude: [ORCH, MONITOR, ACCESS, READBACK] });
+  const base = await replay({ exclude: [ORCH, MONITOR, ACCESS, READBACK, MONTSCHED] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await (await replay({ exclude: [MONITOR, ACCESS, READBACK] })).db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [MONITOR, ACCESS, READBACK, MONTSCHED] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${ORCH}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -201,9 +202,9 @@ test("pipeline linking apply (BEGIN/COMMIT-wrapped, as in production) and its ro
 });
 
 test("monitor comment-pipeline apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
-  const base = await replay({ exclude: [MONITOR, CENTRAL] });
+  const base = await replay({ exclude: [MONITOR, CENTRAL, MONTSCHED] });
   const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
-  const expected = (await (await replay({ exclude: [CENTRAL] })).db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await (await replay({ exclude: [CENTRAL, MONTSCHED] })).db.query(FINGERPRINT)).rows.map(key).sort();
 
   await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${MONITOR}`, "utf8")}\nCOMMIT;`);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
@@ -280,6 +281,23 @@ test("central processing apply (BEGIN/COMMIT-wrapped, as in production) and its 
   await base.db.exec(rollback);
   assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
   assert.equal((await base.db.query(`SELECT count(*)::int AS n FROM public.parsed_comments WHERE project_id = $1`, [project])).rows[0].n, 1, "project rows are kept");
+});
+
+test("Montgomery scheduling apply (BEGIN/COMMIT-wrapped, as in production) and its rollback script restore the schema exactly", async () => {
+  const base = await replay({ exclude: [MONTSCHED] });
+  const before = (await base.db.query(FINGERPRINT)).rows.map(key).sort();
+  const expected = (await full.db.query(FINGERPRINT)).rows.map(key).sort();
+  const acl = async (db) => (await db.query(`SELECT proname, proacl::text AS acl FROM pg_proc WHERE proname IN ('release_permit_sync_job', 'permit_sync_monitor') ORDER BY proname`)).rows;
+  const grants = await acl(base.db);
+  assert.equal(grants.length, 2, "one overload each");
+
+  await base.db.exec(`BEGIN;\n${fs.readFileSync(`${MIGRATIONS_DIR}/${MONTSCHED}`, "utf8")}\nCOMMIT;`);
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), expected, "wrapped apply equals the chain replay");
+  assert.notDeepEqual(expected, before, "the migration changes both functions");
+  assert.deepEqual(await acl(base.db), grants, "grants are kept");
+
+  await base.db.exec(fs.readFileSync(`${MIGRATIONS_DIR}/../../scripts/permit-repo/rollback-20261123100000_permit_sync_montgomery_scheduling.sql`, "utf8"));
+  assert.deepEqual((await base.db.query(FINGERPRINT)).rows.map(key).sort(), before, "rollback restores the pre-migration schema");
 });
 
 test("access rules hold against the real credential, profile and default-privilege definitions", async () => {

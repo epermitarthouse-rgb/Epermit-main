@@ -641,7 +641,8 @@ export async function assertPermitExportAllowed(): Promise<void> {
   if (res.error) throw new Error('Export is limited to platform admins');
 }
 
-export async function listExportPermits(adapterKey = 'dc-projectdox'): Promise<Row[]> {
+/** Permits of one adapter, by name (no default: the DC zip export passes 'dc-projectdox' itself). */
+export async function listExportPermits(adapterKey: string): Promise<Row[]> {
   return fetchAllRows('permits', {
     columns: 'id, permit_number, portal_record_id',
     filter: (q) => q.eq('adapter_key', adapterKey),
