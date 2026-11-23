@@ -82,7 +82,7 @@ test("deep mode: report identity exemption on the Montgomery report host, keepal
 });
 
 test("unknown tenant keys are refused", () => {
-  assert.throws(() => tenantFor("pgc-eplan"), /unknown ProjectDox tenant/);
+  assert.throws(() => tenantFor("not-a-tenant"), /unknown ProjectDox tenant/);
   assert.throws(() => safety.createRunGuard({ tenant: "nope" }), /unknown ProjectDox tenant/);
 });
 
@@ -299,8 +299,8 @@ test("worker: unencrypted credential and unknown adapters are refused before any
     lock: async () => {}, createMontgomeryTransport: async () => { throw new Error("no transport"); },
   });
   await assert.rejects(open({ adapter_key: "montgomery-projectdox", credential_id: "c" }), /not encrypted/);
-  await assert.rejects(open({ adapter_key: "pgc-eplan", credential_id: "c" }), /no adapter registered/);
-  assert.deepEqual(Object.keys(worker.ADAPTERS).sort(), ["dc-projectdox", "montgomery-projectdox"]);
+  await assert.rejects(open({ adapter_key: "not-a-tenant", credential_id: "c" }), /no adapter registered/);
+  assert.deepEqual(Object.keys(worker.ADAPTERS).sort(), ["dc-projectdox", "montgomery-projectdox", "pgc-eplan"]);
 });
 
 test("worker: a saved Montgomery login URL is used only on the Montgomery portal host", () => {

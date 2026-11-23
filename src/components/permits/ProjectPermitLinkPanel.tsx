@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AlertBanner, Panel } from "@/components/design/ProductPrimitives";
+import { PermitDownstreamDisclosure } from "@/components/permits/PermitDownstreamMatrix";
 import { LinkedPermitList, PermitLinkedProjectList } from "@/components/permits/PermitPipelineViews";
 import { ProjectPermitPicker } from "@/components/permits/ProjectPermitPicker";
 import { Button } from "@/components/ui/button";
@@ -190,7 +191,7 @@ export function ProjectPermitLinkPanel({ projectId }: { projectId: string | null
 }
 
 /** Permit Queue detail: the projects this permit feeds, whether its comments reached each Response Matrix. */
-export function PermitProjectLinksPanel({ permitId }: { permitId: string }) {
+export function PermitProjectLinksPanel({ permitId, downstream }: { permitId: string; downstream?: ReactNode }) {
   const { enabled } = useFeatureFlag(FEATURE_FLAG.MODULE_CENTRAL_PERMITS);
   const { isAdmin } = useRequireAdmin();
   const { toast } = useToast();
@@ -248,6 +249,7 @@ export function PermitProjectLinksPanel({ permitId }: { permitId: string }) {
           onUnlink={(projectId) => unlinkMutation.mutate(projectId)}
         />
       )}
+      {downstream ? <PermitDownstreamDisclosure>{downstream}</PermitDownstreamDisclosure> : null}
     </Panel>
   );
 }

@@ -79,7 +79,7 @@ function useRefreshToast() {
  * Admin rows omit `sourceKey` and pass the single source for that row.
  */
 export function RefreshAllButton({ sources, sourceKey }: { sources: SyncSourceOverview[]; sourceKey?: string }) {
-  const refreshable = sources.filter((s) => s.can_refresh && s.permit_count > 0 && sourceAllowsManualRefresh(s.status));
+  const refreshable = sources.filter((s) => s.can_refresh && sourceAllowsManualRefresh(s.status));
   const chosen = sourceKey !== undefined
     ? refreshSourceForQueueFilter(refreshable, sourceKey)
     : refreshable.length === 1 ? refreshable[0] : null;
@@ -99,7 +99,7 @@ export function RefreshAllButton({ sources, sourceKey }: { sources: SyncSourceOv
         onClick={() => { if (chosen) setTarget(chosen); }}
       >
         <RefreshCw className="mr-2 h-4 w-4" />
-        Refresh all
+        {chosen && chosen.permit_count === 0 ? "Run portal sync" : "Refresh all"}
       </Button>
       <AlertDialog open={!!target} onOpenChange={(o) => { if (!o) setTarget(null); }}>
         <AlertDialogContent>

@@ -35,12 +35,14 @@ const progress = (over: Partial<PermitProgress> = {}): PermitProgress => ({
 });
 
 describe("Permit Queue refresh controls", () => {
-  it("Refresh all is offered only for sources the caller can refresh that have permits", () => {
+  it("Refresh all is offered for sources the caller can refresh, including a first run with no permits", () => {
     const one = render(createElement(RefreshAllButton, { sources: [source()] }));
     assert.match(one, /Refresh all/);
     assert.match(one, /data-refresh-credential="c1"/);
     assert.equal(render(createElement(RefreshAllButton, { sources: [source({ can_refresh: false })] })), "");
-    assert.equal(render(createElement(RefreshAllButton, { sources: [source({ permit_count: 0 })] })), "");
+    const first = render(createElement(RefreshAllButton, { sources: [source({ permit_count: 0, jurisdiction: "Prince George's County ePlan", adapter_key: "pgc-eplan" })] }));
+    assert.match(first, /Run portal sync/);
+    assert.match(first, /data-refresh-credential="c1"/);
     assert.match(render(createElement(RefreshAllButton, { sources: [source({ status: "inactive" })] })), /Refresh all/, "no schedule is not a block");
     for (const status of ["paused", "auth_failed", "waiting_user", "needs_encryption"]) {
       assert.equal(render(createElement(RefreshAllButton, { sources: [source({ status })] })), "", status);

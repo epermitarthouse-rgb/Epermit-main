@@ -2,7 +2,7 @@
 
 /**
  * One portal login at a time across the manual scraper and the automated permit-sync worker (D-061), per portal
- * (DC; Montgomery County MD since the Montgomery adapter). Uses existing tables only:
+ * (DC; Montgomery County MD; Prince George's County ePlans). Uses existing tables only:
  *   - automated side: permit_sync_jobs (status 'running' with an unexpired lease)
  *   - manual side:    scrape_jobs (queued/running with a heartbeat in the last FRESH_SCRAPE_MS)
  * "Same login" = any portal_credentials row with that portal's jurisdiction and the same portal_username.
@@ -27,6 +27,12 @@ const PORTALS = Object.freeze({
     subtype: "montgomery-projectdox",
     hosts: Object.freeze(["montgomeryco-md-us.avolvecloud.com", "montgomeryco-md-us-projectdoxwebui.avolvecloud.com"]),
   }),
+  pgc: Object.freeze({
+    credentialJurisdiction: /prince\s*george/i,
+    scrapeJurisdiction: (q) => q.ilike("jurisdiction", "%prince george%"),
+    subtype: "pgc-eplan",
+    hosts: Object.freeze(["eplans.princegeorgescountymd.gov"]),
+  }),
 });
 
 function portalConfig(portal = "dc") {
@@ -39,7 +45,7 @@ function isDcJurisdiction(jurisdiction) {
   return DC_JURISDICTION.test(String(jurisdiction || ""));
 }
 
-/** The lock portal ("dc" | "montgomery") a login URL belongs to, or null. */
+/** The lock portal ("dc" | "montgomery" | "pgc") a login URL belongs to, or null. */
 function portalForUrl(url) {
   try {
     const host = new URL(String(url)).hostname.toLowerCase();

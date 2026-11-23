@@ -7,15 +7,14 @@ import {
   InfoSectionView,
   PermitDiagnosticsView,
   ReportsSectionView,
+  type ReportsActions,
   ReviewsSectionView,
   StatusSectionView,
   TasksSectionView,
   WorkflowsSectionView,
 } from "@/components/permits/PermitSectionViews";
-import { PermitDownstreamMatrixView, type PermitDownstreamLink } from "@/components/permits/PermitDownstreamMatrix";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { currentRows, type PermitDetail } from "@/lib/centralPermits";
-import { mapPermitDownstreamRows, type PermitDownstreamRow } from "@/lib/permitDownstreamMatrix";
 import { classifySectionState, sectionStateMap, type PermitSection } from "@/lib/permitSections";
 import {
   PERMIT_QUEUE_TABS,
@@ -43,24 +42,19 @@ const TAB_SECTIONS: Record<PermitQueueTab, PermitSection[]> = {
 export interface PermitQueueDetailViewProps {
   detail: PermitDetail;
   isAdmin: boolean;
-  defaultTab?: PermitQueueTab | "history" | "diagnostics" | "downstream";
+  defaultTab?: PermitQueueTab | "history" | "diagnostics";
   /** Header actions (admin export). */
   actions?: ReactNode;
-  /** Linked projects panel (project_permits). */
+  /** Linked projects panel (project_permits); the Downstream matrix opens from a button inside it. */
   linksPanel?: ReactNode;
   /** Permit-level comment analysis state, in plain language (D-121). */
   analysisSummary?: ReactNode;
-  /** Ready-insight rows for the downstream grid. Omit to show the permit record without analysis cells. */
-  downstreamRows?: PermitDownstreamRow[];
-  downstreamLinks?: PermitDownstreamLink[];
-  downstreamInsightsNote?: string | null;
   /** Admin Diagnostics tab: comment analysis versions, failures and cost. */
   analysisDiagnostics?: ReactNode;
   onViewDocument?: (doc: Row) => void;
   busyDocumentId?: string | null;
-  selectedReportKey?: string | null;
-  onViewReport?: (report: Row) => void;
-  reportViewer?: ReactNode;
+  /** Reports tab: stored exports, the open helper and the row-details viewer. Omit for a read-only list. */
+  reportsActions?: ReportsActions;
 }
 
 /** Permit Queue detail (D-064): tabs in the DC portal's order, read-only, diagnostics for admins only. */
@@ -71,15 +65,10 @@ export function PermitQueueDetailView({
   actions,
   linksPanel,
   analysisSummary,
-  downstreamRows,
-  downstreamLinks,
-  downstreamInsightsNote,
   analysisDiagnostics,
   onViewDocument,
   busyDocumentId,
-  selectedReportKey,
-  onViewReport,
-  reportViewer,
+  reportsActions,
 }: PermitQueueDetailViewProps) {
   const p = d.permit;
   const states = sectionStateMap(d.sections);
@@ -101,12 +90,6 @@ export function PermitQueueDetailView({
     if (read === "ok" && content) return <StatusPill tone={content.tone} data-permit-content-pill={t}>{content.label}</StatusPill>;
     return <ExtractionStatusPill status={read} />;
   };
-  const matrixRows = downstreamRows ?? mapPermitDownstreamRows({
-    comments: d.comments,
-    responses: d.responses,
-    insights: [],
-    inputHashes: new Map(),
-  });
   const incomplete = PERMIT_QUEUE_TABS.filter((t) =>
     TAB_SECTIONS[t].some((s) => {
       const c = classifySectionState(state(s)).status;
@@ -158,7 +141,6 @@ export function PermitQueueDetailView({
               {counts[t] !== undefined ? ` (${counts[t]})` : ""}
             </TabsTrigger>
           ))}
-          <TabsTrigger value="downstream" data-permit-tab="downstream">Downstream</TabsTrigger>
           <TabsTrigger value="history" data-permit-tab="history">History</TabsTrigger>
           {isAdmin ? <TabsTrigger value="diagnostics" data-permit-tab="diagnostics">Diagnostics</TabsTrigger> : null}
         </TabsList>
@@ -182,22 +164,12 @@ export function PermitQueueDetailView({
               ) : null}
               {t === "info" ? <InfoSectionView permit={p} state={state("info")} snapshots={d.snapshots} /> : null}
               {t === "reports" ? (
-                <ReportsSectionView reports={d.reports} state={state("reports")} selectedReportKey={selectedReportKey} onViewReport={onViewReport} viewer={reportViewer} />
+                <ReportsSectionView reports={d.reports} state={state("reports")} actions={reportsActions} />
               ) : null}
               {t === "reviews" ? <ReviewsSectionView comments={d.comments} responses={d.responses} state={state("reviews")} /> : null}
             </Panel>
           </TabsContent>
         ))}
-        <TabsContent value="downstream">
-          <Panel>
-            <PermitDownstreamMatrixView
-              permitNumber={str(p.permit_number)}
-              rows={matrixRows}
-              links={downstreamLinks ?? []}
-              insightsNote={downstreamInsightsNote}
-            />
-          </Panel>
-        </TabsContent>
         <TabsContent value="history">
           <Panel title="History" eyebrow={`Latest ${d.changes.length} changes (the JSON export has all of them)`}>
             <HistoryView changes={d.changes} />

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { formatTimestamp } from "@/components/permits/PermitRepositoryViews";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { loadPermitReadyInsights } from "@/lib/centralPermits";
 import {
@@ -119,6 +120,48 @@ export function PermitDownstreamMatrixView({
         </div>
       )}
     </div>
+  );
+}
+
+/** Presentational: the "Downstream" button and, when open, the matrix inline under it. */
+export function PermitDownstreamDisclosureView({
+  open,
+  onToggle,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="mt-3 space-y-3 border-t border-border/40 pt-3" data-testid="permit-downstream-disclosure">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        aria-expanded={open}
+        aria-controls="permit-downstream-content"
+        data-testid="permit-downstream-button"
+        onClick={onToggle}
+      >
+        Downstream
+      </Button>
+      {open ? (
+        <div id="permit-downstream-content" data-testid="permit-downstream-content">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Inline expansion inside the Linked projects box (replaces the old Downstream tab). Read-only. */
+export function PermitDownstreamDisclosure({ children, defaultOpen = false }: { children?: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <PermitDownstreamDisclosureView open={open} onToggle={() => setOpen((v) => !v)}>
+      {children}
+    </PermitDownstreamDisclosureView>
   );
 }
 

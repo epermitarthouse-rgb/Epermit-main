@@ -257,7 +257,21 @@ function jurisdictionLabelsAlign(credentialLabel: string, filterJurisdiction: st
   if (credentialLabel === filterJurisdiction) return true;
   const extendsWithBoundary = (longer: string, shorter: string) =>
     shorter.length > 0 && longer.startsWith(shorter) && /[\s\-–—]/.test(longer.charAt(shorter.length));
-  return extendsWithBoundary(credentialLabel, filterJurisdiction) || extendsWithBoundary(filterJurisdiction, credentialLabel);
+  if (extendsWithBoundary(credentialLabel, filterJurisdiction) || extendsWithBoundary(filterJurisdiction, credentialLabel)) return true;
+  // Credential labels and stored permit jurisdictions can add different suffixes
+  // ("Prince George's County ePlan" vs "Prince George's County MD").
+  const stem = sharedJurisdictionStem(credentialLabel, filterJurisdiction);
+  return stem.length >= 16 && credentialLabel.length > stem.length && filterJurisdiction.length > stem.length;
+}
+
+function sharedJurisdictionStem(a: string, b: string): string {
+  let i = 0;
+  const n = Math.min(a.length, b.length);
+  while (i < n && a[i] === b[i]) i += 1;
+  if (i < a.length && i < b.length) {
+    while (i > 0 && !/[\s\-–—]/.test(a[i - 1])) i -= 1;
+  }
+  return a.slice(0, i).trim();
 }
 
 /**
@@ -286,13 +300,19 @@ export function refreshSourceForQueueFilter(
 export function refreshAllConfirmation(s: SyncSourceOverview): { title: string; body: string[]; joins: string | null; confirm: string } {
   const open = sourceOpenJob(s);
   const n = s.permit_count;
+  const first = n === 0;
   return {
-    title: `Refresh every ${s.jurisdiction} permit?`,
-    body: [
-      `${n} permit${n === 1 ? "" : "s"} discovered on this portal will be refreshed from the portal: info, reviews, tasks, files not yet stored and reports. Files already stored are not downloaded again.`,
-      "One portal session is used at a time; a full refresh can take a long time. You can follow progress here and cancel it.",
-    ],
+    title: first ? `Run the first ${s.jurisdiction} portal sync?` : `Refresh every ${s.jurisdiction} permit?`,
+    body: first
+      ? [
+          "No permits are stored for this portal yet. One portal session will read My Projects and store every permit it finds, then capture info, reviews, tasks, files and reports.",
+          "One portal session is used at a time; a full sync can take a long time. You can follow progress here and cancel it.",
+        ]
+      : [
+          `${n} permit${n === 1 ? "" : "s"} discovered on this portal will be refreshed from the portal: info, reviews, tasks, files not yet stored and reports. Files already stored are not downloaded again.`,
+          "One portal session is used at a time; a full refresh can take a long time. You can follow progress here and cancel it.",
+        ],
     joins: open ? `A refresh is already ${open.status === "queued" ? "queued" : "in progress"} (${batchLine(open)}). This request joins it.` : null,
-    confirm: `Refresh ${n} permit${n === 1 ? "" : "s"}`,
+    confirm: first ? "Run portal sync" : `Refresh ${n} permit${n === 1 ? "" : "s"}`,
   };
 }

@@ -153,7 +153,7 @@ describe("permit section views", () => {
     const html = render(createElement(ReportsSectionView, {
       reports: [{ id: "r", report_key: "14", name: "Plan Review - Review Comments", category: "ProjectFlow", portal_report_id: "14" }],
       state: ok("reports"),
-      onViewReport: () => undefined,
+      actions: { exports: {}, onOpenFile: () => undefined, renderDetails: () => null },
     }));
     assert.match(html, /Report contents have not been captured yet/);
     assert.match(html, /Not captured/);
