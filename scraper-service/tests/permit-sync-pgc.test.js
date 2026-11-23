@@ -34,14 +34,65 @@ test("PGC report exports open the ePlans viewer, not the Montgomery WebUI host",
     PGC.uiOrigin,
     "80172",
     PGC.reportViewerPath,
+    { includeReportId: false },
   );
   const u = new URL(url);
   assert.equal(u.hostname, "eplans.princegeorgescountymd.gov");
   assert.equal(u.pathname, "/ProjectDox/ReportViewer.aspx");
+  assert.equal(u.searchParams.get("ReportID"), null);
   assert.equal(u.searchParams.get("ReportPath"), "/PDoxProdReportPGC/Plan Review - Review Comments");
+  assert.equal(u.searchParams.get("ProjectID"), "80172");
   const verdict = safety.evaluateRequest({ method: "GET", url, mode: "deep", tenant: PGC });
   assert.equal(verdict.allowed, true, verdict.reason);
-  assert.equal(verdict.allowed && u.hostname.includes("montgomery"), false);
+  const titled = reportViewerUrl(
+    {
+      reportId: "1",
+      name: "Current Project - All Uploaded Files",
+      viewer: { reportPath: "/PDoxProdReportPGC/Current Project - All Uploaded Files", dataSourceName: "DataSource1", paramQuery: "ProjectID=80172" },
+    },
+    PGC.uiOrigin,
+    "80172",
+    PGC.reportViewerPath,
+    { includeReportId: false },
+  );
+  assert.equal(safety.evaluateRequest({ method: "GET", url: titled, mode: "deep", tenant: PGC }).allowed, true);
+});
+
+test("PGC reads files from child folders and tasks from GetWorkflowTaskList", async () => {
+  const calls = [];
+  const transport = {
+    async getJson(route, params) {
+      calls.push([route, params && params.folderID != null ? String(params.folderID) : null]);
+      if (route === "workflow_instances_list") return { Records: [{ WFlowInstanceID: 9, WFlowInstanceStateName: "Active", DateStarted: "2026-01-01" }], TotalRecordCount: 1 };
+      if (route === "workflow_status") {
+        const err = new Error("portal API answered 404 (workflow_status)");
+        err.code = "portal_changed";
+        throw err;
+      }
+      if (route === "active_task_list") {
+        const err = new Error("portal API answered 404 (active_task_list)");
+        err.code = "portal_changed";
+        throw err;
+      }
+      if (route === "workflow_task_list") return [{ WFlowTaskID: 5, TaskName: "Review", TaskStatus: "Pending" }];
+      if (route === "project_folders") return [{ FolderID: 10, Name: "Architectural", FilesCount: 0 }];
+      if (route === "folder_children") return [{ EntityID: 11, Name: "Plans" }];
+      if (route === "folder_files") return String(params.folderID) === "10" ? [] : [{ FileID: 77, Version: 1, FileName: "A.pdf", FileSize: 10 }];
+      throw new Error(`unexpected ${route}`);
+    },
+    async getCorrectionsRows() { return []; },
+    async getProjectInfo() { return { projectName: "15385-2022-0" }; },
+    async listReports() { return []; },
+  };
+  const { sections } = await createPgcAdapter({ transport }).fetchPermit({ portal_record_id: "80172" });
+  assert.equal(sections.files.status, "ok");
+  assert.equal(sections.files.tables.permit_documents.length, 1);
+  assert.equal(sections.files.tables.permit_documents[0].key, "77");
+  assert.equal(sections.tasks.status, "ok");
+  assert.equal(sections.tasks.tables.permit_tasks.length, 1);
+  assert.ok(calls.some((c) => c[0] === "workflow_task_list"));
+  assert.ok(calls.some((c) => c[0] === "folder_files" && c[1] === "11"));
+  assert.equal(calls.some((c) => c[0] === "folder_files" && c[1] === "10"), true);
 });
 
 test("the manual scraper exports the project-open used to reach the Web API", () => {

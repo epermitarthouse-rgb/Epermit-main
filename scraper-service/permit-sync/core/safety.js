@@ -227,6 +227,7 @@ function parseUrl(url) {
  */
 const REPORT_IDENTITY_PARAMS = Object.freeze([
   { path: /^\/WebForms\/ReportViewer\.aspx$/i, params: Object.freeze(["reportpath", "reportid", "datasourcename"]) },
+  { path: /^\/ProjectDox\/ReportViewer\.aspx$/i, params: Object.freeze(["reportpath", "reportid", "datasourcename"]) },
   { path: /\/Reserved\.ReportViewerWebControl\.axd$/i, params: Object.freeze(["filename"]) },
 ]);
 

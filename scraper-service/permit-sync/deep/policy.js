@@ -341,12 +341,32 @@ function matchReport(reports, reportName) {
  * for ReportPath, so a deny-pattern word in the title is still caught.
  * @param {{ reportId?: string, key?: string, name?: string, viewer?: { reportPath: string, dataSourceName: string, paramQuery: string } }} item
  */
-function reportViewerUrl(item, origin, portalRecordId, viewerPath = "/WebForms/ReportViewer.aspx") {
+function appendQuery(base, extra) {
+  const q = String(extra || "");
+  if (!q) return base;
+  if (q.startsWith("&")) return base + q;
+  if (q.startsWith("?")) return `${base}&${q.slice(1)}`;
+  return `${base}&${q}`;
+}
+
+/**
+ * Prince George's viewer URL is ReportPath + DataSourceName + the portal query, with no ReportID
+ * (buildPgcReportUrls). DC and Montgomery include ReportID. A tenant whose review report has a null
+ * ReportID follows the Prince George's shape.
+ */
+function reportViewerIncludesId(tenant) {
+  const id = tenant && tenant.reviewReport ? tenant.reviewReport.ReportID : undefined;
+  return id !== null && id !== undefined;
+}
+
+function reportViewerUrl(item, origin, portalRecordId, viewerPath = "/WebForms/ReportViewer.aspx", opts = {}) {
   const v = (item && item.viewer) || null;
   const id = String((item && (item.reportId || item.key)) || "");
+  const includeId = opts.includeReportId !== false && (opts.includeReportId === true || id);
+  const idPart = includeId && id ? `ReportID=${id}&` : "";
   const params = v
-    ? `ReportID=${id}&ReportPath=${v.reportPath}&DataSourceName=${v.dataSourceName}${v.paramQuery}`
-    : `ReportID=${id}&ReportPath=${String((item && item.name) || "")}&ProjectID=${String(portalRecordId || "")}`;
+    ? appendQuery(`${idPart}ReportPath=${v.reportPath}&DataSourceName=${v.dataSourceName}`, v.paramQuery)
+    : `${idPart}ReportPath=${String((item && item.name) || "")}&ProjectID=${String(portalRecordId || "")}`;
   const path = String(viewerPath || "/WebForms/ReportViewer.aspx");
   return `${origin}${path.startsWith("/") ? path : `/${path}`}?${encodeURI(params)}`;
 }
@@ -386,6 +406,7 @@ module.exports = {
   safeName,
   documentPath,
   reportPath,
+  reportViewerIncludesId,
   sectionHashes,
   changedSections,
   planDeepPass,

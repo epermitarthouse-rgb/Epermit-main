@@ -88,6 +88,8 @@ const PGC = Object.freeze({
   extraRoutes: Object.freeze([
     { name: "pgc_report_viewer", pattern: /\/ProjectDox\/ReportViewer\.aspx(\?|$)/i, body: false },
     { name: "pgc_sso_hop", pattern: /\/Portal\/login\/sso(\?|$)/i, body: false },
+    { name: "pgc_folder_children", pattern: /\/Folder\/GetFolders(\?|$)/i, body: false },
+    { name: "pgc_workflow_task_list", pattern: /\/WorkflowAggregate\/GetWorkflowTaskList(\?|$)/i, body: false },
   ]),
 });
 

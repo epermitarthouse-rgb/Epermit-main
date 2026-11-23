@@ -255,7 +255,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
       const entry = { fileName: item.name, text: "", pages: null };
       const dir = fs.mkdtempSync(path.join(tmp, "report-"));
       try {
-        const out = await transport.exportReport({ url: policy.reportViewerUrl(item, tenant.uiOrigin, projectId, tenant.reportViewerPath), dir, formats: ["EXCELOPENXML", "PDF"] });
+        const out = await transport.exportReport({ url: policy.reportViewerUrl(item, tenant.uiOrigin, projectId, tenant.reportViewerPath, { includeReportId: policy.reportViewerIncludesId(tenant) }), dir, formats: ["EXCELOPENXML", "PDF"] });
         entry.text = String(out.text || "");
         entry.pages = Number.isInteger(out.pages) ? out.pages : null;
         if (out.excelPath) {

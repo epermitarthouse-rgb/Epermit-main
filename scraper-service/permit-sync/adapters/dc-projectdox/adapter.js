@@ -24,6 +24,23 @@ function isNotImplemented(err) {
   return err && err.code === "not_implemented";
 }
 
+function listItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  for (const key of ["Items", "items", "Folders", "folders", "Data", "data", "Files", "files", "Results", "results", "Rows", "rows", "Tasks", "Records", "Children", "children"]) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+  return [];
+}
+
+function childFolder(node, parentId) {
+  if (!node || typeof node !== "object") return null;
+  const id = node.FolderID ?? node.folderID ?? node.EntityID ?? node.PDEntityID;
+  if (id === null || id === undefined || String(id) === "" || String(id) === String(parentId)) return null;
+  const rawName = node.Name || node.name || node.Text || node.text || String(id);
+  return { ...node, FolderID: id, Name: String(rawName).replace(/<[^>]+>/g, "").trim() || String(id), ParentFolderID: parentId };
+}
+
 function pickActiveWorkflow(records) {
   const list = Array.isArray(records) ? records : [];
   const active = list.filter((r) => /active/i.test(String(r.WFlowInstanceStateName || "")));
@@ -80,6 +97,7 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
   /** Reads every section for one permit. Section failures are captured, never thrown, except guard violations. */
   async function fetchPermit(record) {
     const projectId = record.portal_record_id;
+    const pgc = normalizer.ADAPTER_KEY === "pgc-eplan";
     const sections = {};
     const guardOrThrow = (err) => {
       if (err && (err.code === "safety_violation" || err.code === "session_ended" || err.code === "rate_limited")) throw err;
@@ -118,8 +136,15 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
     }
 
     try {
-      const active = await transport.getJson("active_task_list", { projectID: projectId });
-      const list = Array.isArray(active) ? active : (active && (active.Tasks || active.Items || active.Records)) || [];
+      let active;
+      try {
+        active = await transport.getJson("active_task_list", { projectID: projectId });
+      } catch (err) {
+        guardOrThrow(err);
+        if (!pgc || !/404/.test(String(err && err.message))) throw err;
+        active = await transport.getJson("workflow_task_list", { projectID: projectId });
+      }
+      const list = Array.isArray(active) ? active : ((active && (active.Tasks || active.Items || active.Records)) || []);
       const fromStatus = statusData
         ? (statusData.SubWorkflows || []).flatMap((s) => (s.UncompletedTasks || []).map((t) => ({ ...t, WFlowInstanceID: workflow.WFlowInstanceID })))
         : [];
@@ -139,16 +164,37 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
 
     try {
       const folders = await transport.getJson("project_folders", { projectID: projectId, folderID: "" });
-      const list = Array.isArray(folders) ? folders : (folders && folders.folders) || [];
+      const list = listItems(folders);
       const filesByKey = {};
       let pagingOk = true;
+      const loadFiles = async (folderId) => {
+        const params = { folderID: folderId, listMode: 3, pageIndex: 0, pageSize: 500 };
+        if (!pgc) params.projectID = projectId;
+        const files = await transport.getJson("folder_files", params);
+        const items = listItems(files);
+        if (Number.isInteger(files && files.TotalRowsCount) && files.TotalRowsCount !== items.length) pagingOk = false;
+        return items;
+      };
+      const extra = [];
       for (const f of list) {
         if (f.FolderID === null || f.FolderID === undefined) continue;
-        const files = await transport.getJson("folder_files", { folderID: f.FolderID, projectID: projectId, listMode: 3, pageIndex: 0, pageSize: 500 });
-        const items = Array.isArray(files) ? files : ((files && (files.Items || files.items)) || []);
-        if (Number.isInteger(files && files.TotalRowsCount) && files.TotalRowsCount !== items.length) pagingOk = false;
+        const items = await loadFiles(f.FolderID);
         filesByKey[dc.folderKey(f)] = items;
+        if (!pgc || items.length) continue;
+        const children = await transport.getJson("folder_children", {
+          folderID: f.FolderID,
+          path: `PDEntityID:L${f.FolderID}/@Children`,
+          binding: "textKey:RowTemplate,valueKey:EntityID,primaryKey:PDEntityID,childDataProperty:Children,expandedKey:Expanded,checkedKey:__checked__",
+          depth: 1,
+        });
+        for (const node of listItems(children)) {
+          const child = childFolder(node, f.FolderID);
+          if (!child) continue;
+          extra.push(child);
+          filesByKey[dc.folderKey(child)] = await loadFiles(child.FolderID);
+        }
       }
+      list.push(...extra);
       const { folders: fo, documents } = dc.fileItems(list, filesByKey, { accountDownload });
       sections.files = {
         status: pagingOk ? "ok" : "partial", sourceKind: "json",

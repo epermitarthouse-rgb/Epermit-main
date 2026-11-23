@@ -13,6 +13,10 @@ const UI_ORIGIN = DC.uiOrigin;
 const ROUTES = Object.freeze({
   project_folders: { origin: "api", path: "/Folder/GetProjectFolders", defaults: { folderID: "" } },
   folder_files: { origin: "api", path: "/File/GetFolderFiles", defaults: { listMode: 3, pageIndex: 0, pageSize: 500, pk: "FileID" } },
+  // Child folders under a tree parent (Prince George's files live here, not on the parent row).
+  folder_children: { origin: "api", path: "/Folder/GetFolders", defaults: { depth: 1 } },
+  // Prince George's task list. GetActiveWorkflowTaskList 404s on that host.
+  workflow_task_list: { origin: "api", path: "/WorkflowAggregate/GetWorkflowTaskList", defaults: { pk: "WFlowTaskID" } },
   active_task_list: {
     origin: "api", path: "/WorkflowAggregate/GetActiveWorkflowTaskList",
     defaults: { wflowActivityID: "", onlyActiveTaskStatus: true, showTasksForAllUsers: false, pk: "WFlowTaskID" },

@@ -398,7 +398,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     const n = policy.normName(reportName);
     const item = ctx.reportItems.find((r) => policy.normName(r.name) === n) || null;
     const rep = policy.matchReport(reports, reportName);
-    const url = policy.reportViewerUrl(item || { reportId: rep && rep.report_key, name: reportName }, reportOrigin, ctx.portalRecordId, t.reportViewerPath);
+    const url = policy.reportViewerUrl(item || { reportId: rep && rep.report_key, name: reportName }, reportOrigin, ctx.portalRecordId, t.reportViewerPath, { includeReportId: policy.reportViewerIncludesId(t) });
     const v = safety.evaluateRequest({ method: "GET", url, mode: "deep", tenant: t });
     if (v.allowed) return { open: true };
     const at = policy.requestLocation("GET", url);
