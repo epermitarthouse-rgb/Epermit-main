@@ -206,6 +206,31 @@ export async function listReportContentVersions(permitId: string, reportKey: str
   return (unwrap(res, 'permit_report_contents') as Row[] | null) ?? [];
 }
 
+export interface ReportExportPaths {
+  pdf: string;
+  excel: string;
+}
+
+/**
+ * Which stored exports (PDF, Excel) each report's latest content row holds, keyed by content id.
+ * Path columns only: text and rows are not read. Empty when the table is missing.
+ */
+export async function loadReportExportPaths(contentIds: string[]): Promise<Record<string, ReportExportPaths>> {
+  const ids = [...new Set(contentIds.filter(Boolean))];
+  const out: Record<string, ReportExportPaths> = {};
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await client()
+      .from('permit_report_contents')
+      .select('id, pdf_storage_path, excel_storage_path')
+      .in('id', ids.slice(i, i + 100));
+    if (isMissingSchemaError(res.error)) return {};
+    for (const r of (unwrap(res, 'permit_report_contents') as Row[] | null) ?? []) {
+      out[String(r.id)] = { pdf: String(r.pdf_storage_path ?? ''), excel: String(r.excel_storage_path ?? '') };
+    }
+  }
+  return out;
+}
+
 export interface PermitDetail {
   permit: Record<string, unknown>;
   sections: Record<string, unknown>[];

@@ -7,6 +7,7 @@ import {
   createPermitObjectSignedUrl,
   isMissingSchemaError,
   listReportContentVersions,
+  loadReportExportPaths,
   loadPermitQueue,
   loadReportContent,
   type CentralPermitsClient,
@@ -253,6 +254,28 @@ describe('reports: content gating', () => {
     assert.deepEqual(versionCall.ops.filter((o) => o[0] === 'eq'), [['eq', ['permit_id', 'p1']], ['eq', ['report_key', '14']]]);
     assert.doesNotMatch(String(versionCall.ops.find((o) => o[0] === 'select')?.[1][0]), /text_content/);
     assert.equal(await loadReportContent(''), null);
+  });
+});
+
+describe('report export paths', () => {
+  it('reads only path columns for the latest content ids, in batches, and tolerates a missing table', async () => {
+    const ids = Array.from({ length: 150 }, (_, i) => `c${i}`);
+    const { client, calls } = fakeClient({
+      tables: { permit_report_contents: ids.map((id, i) => ({ id, pdf_storage_path: i % 2 ? null : `p/${id}.pdf`, excel_storage_path: i === 1 ? `p/${id}.xlsx` : null, text_content: 'big' })) },
+    });
+    __centralPermitsTestHooks.setClient(client);
+    const out = await loadReportExportPaths([...ids, 'c0', '']);
+    assert.equal(Object.keys(out).length, 150);
+    assert.deepEqual(out.c0, { pdf: 'p/c0.pdf', excel: '' });
+    assert.deepEqual(out.c1, { pdf: '', excel: 'p/c1.xlsx' });
+    assert.equal(out.c3.pdf, '');
+    const reads = calls.filter((c) => c.table === 'permit_report_contents');
+    assert.equal(reads.length, 2);
+    assert.doesNotMatch(String(reads[0].ops.find((o) => o[0] === 'select')?.[1][0]), /text_content|structured_rows/);
+    assert.deepEqual(await loadReportExportPaths([]), {});
+    const missing = fakeClient({ errors: { permit_report_contents: { code: 'PGRST205', message: "Could not find the table 'public.permit_report_contents' in the schema cache" } } });
+    __centralPermitsTestHooks.setClient(missing.client);
+    assert.deepEqual(await loadReportExportPaths(['c1']), {});
   });
 });
 
