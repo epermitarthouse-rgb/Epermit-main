@@ -16,7 +16,8 @@
  *   "central_dry_run"   no AI: inventory and pending work of `adapter_key` (permit_central_backfill_inventory).
  *   "central_backfill"  one-off pass over `adapter_key` against `budget_scope`; refused unless `approved: true` and
  *                       the budget row is approved and open. Every model call is reserved against the budget first.
- * The central pass runs only with CENTRAL_PROCESSING_ENABLED=true and the sweep budget scope CENTRAL_AI_BUDGET_SCOPE.
+ * The central pass runs only with CENTRAL_PROCESSING_ENABLED=true. Sweeps draw on CENTRAL_AI_BUDGET_SCOPE, except
+ * for the permits of an adapter whose permit_sync_sources row names settings.central_budget_scope (D-147).
  *
  * Env: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, PERMITPILOT_SERVICE_PIPELINE_SECRET,
  *      PERMIT_PIPELINE_BUDGET_MS (default 140000; keep below the plan's edge wall-clock limit),
@@ -28,6 +29,15 @@ import { centralForwardHeadersFromEnv, serviceForwardHeadersFromEnv } from "../_
 import { driveClaimedProject, type ClaimedProject } from "../_shared/permitCommentPipeline.ts";
 import { driveCentralPermit, type CentralClaim, type CentralStage } from "../_shared/centralCommentProcessing.ts";
 import { CENTRAL_PROCESSING_VERSION } from "../_shared/commentPrompts.ts";
+import {
+  BUDGET_SCOPE,
+  hasSourceScopes,
+  planPermitPasses,
+  planSweepPasses,
+  sourceScopes,
+  type CentralPassPlan,
+  type SourceScopes,
+} from "../_shared/centralBudgetScopes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,7 +52,6 @@ const SWEEP_LIMIT = 2;
 const CENTRAL_SWEEP_LIMIT = 2;
 const BACKFILL_LIMIT = 4;
 const ADAPTER_KEY = /^[a-z0-9][a-z0-9-]{1,40}$/;
-const BUDGET_SCOPE = /^[a-z0-9][a-z0-9._-]{2,63}$/;
 const CENTRAL_ACTIONS = new Set(["central_sweep", "central_dry_run", "central_backfill"]);
 
 type Admin = {
@@ -130,6 +139,51 @@ async function runCentralPass(input: {
   return { claimed: claims.length, results };
 }
 
+type Reader = {
+  from: (table: string) => {
+    select: (cols: string) => PromiseLike<{ data: unknown; error: unknown }> & {
+      in: (col: string, vals: string[]) => PromiseLike<{ data: unknown; error: unknown }>;
+    };
+  };
+};
+
+/** Source budget scopes (D-147). A read error leaves only the fallback scope, which is the pre-D-147 behaviour. */
+async function loadSourceScopes(reader: Reader): Promise<SourceScopes> {
+  const { data, error } = await reader.from("permit_sync_sources").select("adapter_key, settings");
+  if (error) {
+    console.error(JSON.stringify({ event: "permit_central_scopes_failed" }));
+    return sourceScopes([]);
+  }
+  const s = sourceScopes((data ?? []) as Array<{ adapter_key: string | null; settings: Record<string, unknown> | null }>);
+  if (s.conflicts.length) console.error(JSON.stringify({ event: "permit_central_scope_conflict", adapters: s.conflicts }));
+  return s;
+}
+
+/** Runs the planned passes one after another until the shared deadline; results are concatenated. */
+async function runPlannedPasses(
+  plans: CentralPassPlan[],
+  base: { admin: Admin; supabaseUrl: string; deadline: number; limit: number },
+): Promise<{ claimed: number; results: Array<Record<string, unknown>> }> {
+  const out = { claimed: 0, results: [] as Array<Record<string, unknown>> };
+  for (const p of plans) {
+    if (Date.now() >= base.deadline) break;
+    const r = await runCentralPass({
+      admin: base.admin,
+      supabaseUrl: base.supabaseUrl,
+      budgetScope: p.budgetScope,
+      deadline: base.deadline,
+      limit: p.permitIds ? p.permitIds.length : base.limit,
+      permitIds: p.permitIds,
+      adapterKey: p.adapterKey,
+    });
+    out.claimed += r.claimed;
+    out.results.push(...r.results);
+  }
+  return out;
+}
+
+const sweepRotation = () => Math.floor(Date.now() / 300_000);
+
 function centralEnabled(): boolean {
   return Deno.env.get("CENTRAL_PROCESSING_ENABLED") === "true";
 }
@@ -171,37 +225,46 @@ Deno.serve(async (req) => {
     }
 
     if (!centralEnabled()) return json({ error: "Central processing is disabled" }, 403);
-    let budgetScope: string | null = null;
-    let permitIds: string[] | null = null;
+    let plans: CentralPassPlan[];
     let limit = CENTRAL_SWEEP_LIMIT;
     if (action === "central_backfill") {
       // Explicit, per-request approval on top of an approved budget row: a cron or worker never sends this.
       if (body.approved !== true) return json({ error: "central_backfill requires approved: true" }, 403);
       if (!adapterKey) return json({ error: "adapter_key is required" }, 400);
-      budgetScope = typeof body.budget_scope === "string" && BUDGET_SCOPE.test(body.budget_scope) ? body.budget_scope : null;
+      const budgetScope = typeof body.budget_scope === "string" && BUDGET_SCOPE.test(body.budget_scope) ? body.budget_scope : null;
       if (!budgetScope) return json({ error: "budget_scope is required" }, 400);
       const { data: status, error } = await admin.rpc("permit_ai_budget_status", { p_scope: budgetScope });
       const st = (status ?? {}) as Record<string, unknown>;
       if (error || !status) return json({ error: "budget not found" }, 403);
       if (st.approved !== true || st.closed === true) return json({ error: "budget is not approved or is closed", budget: st }, 403);
       limit = BACKFILL_LIMIT;
+      plans = [{ adapterKey, budgetScope, permitIds: null }];
     } else {
-      budgetScope = Deno.env.get("CENTRAL_AI_BUDGET_SCOPE")?.trim() || null;
-      if (!budgetScope || !BUDGET_SCOPE.test(budgetScope)) return json({ error: "CENTRAL_AI_BUDGET_SCOPE is not set" }, 503);
-      if (Array.isArray(body.permit_ids)) {
-        permitIds = body.permit_ids.filter((id): id is string => typeof id === "string" && UUID.test(id)).slice(0, 50);
-        if (permitIds.length === 0) return json({ claimed: 0 });
-        limit = permitIds.length;
+      const fallback = Deno.env.get("CENTRAL_AI_BUDGET_SCOPE")?.trim() || null;
+      const scopes = await loadSourceScopes(admin as unknown as Reader);
+      if ((!fallback || !BUDGET_SCOPE.test(fallback)) && !hasSourceScopes(scopes)) {
+        return json({ error: "CENTRAL_AI_BUDGET_SCOPE is not set" }, 503);
       }
+      if (Array.isArray(body.permit_ids)) {
+        const permitIds = body.permit_ids.filter((id): id is string => typeof id === "string" && UUID.test(id)).slice(0, 50);
+        if (permitIds.length === 0) return json({ claimed: 0 });
+        let permits: Array<{ id: string; adapter_key: string | null }> = [];
+        if (hasSourceScopes(scopes)) {
+          const { data, error } = await admin.from("permits").select("id, adapter_key").in("id", permitIds);
+          if (error) return json({ error: "permit lookup failed" }, 500);
+          permits = (data ?? []) as typeof permits;
+        }
+        plans = planPermitPasses(scopes, fallback, permitIds, permits);
+      } else {
+        plans = planSweepPasses(scopes, fallback, sweepRotation());
+      }
+      if (plans.length === 0) return json({ claimed: 0 });
     }
-    const centralRun = runCentralPass({
+    const centralRun = runPlannedPasses(plans, {
       admin,
       supabaseUrl,
-      budgetScope,
       deadline: startedAt + budgetMs,
       limit,
-      permitIds,
-      adapterKey: action === "central_backfill" ? adapterKey : null,
     }).catch((e) => {
       console.error(JSON.stringify({ event: "permit_central_pass_failed", message: String(e?.message ?? e).slice(0, 200) }));
       return { claimed: 0, results: [] };
@@ -255,8 +318,10 @@ Deno.serve(async (req) => {
 
   // A cron sweep runs a central pass first (permit-level, shared by every project), using up to half of the
   // budget, and claims projects after it, so a project reuses results made in the same sweep (no double cost).
-  const sweepScope = Deno.env.get("CENTRAL_AI_BUDGET_SCOPE")?.trim() || "";
-  const runCentral = isService && !projectIds && centralEnabled() && BUDGET_SCOPE.test(sweepScope);
+  const sweepPlans = isService && !projectIds && centralEnabled()
+    ? planSweepPasses(await loadSourceScopes(admin as unknown as Reader), Deno.env.get("CENTRAL_AI_BUDGET_SCOPE"), sweepRotation())
+    : [];
+  const runCentral = sweepPlans.length > 0;
   let claims: ClaimedProject[] = [];
   if (!runCentral) {
     const c = await claimProjects();
@@ -286,14 +351,11 @@ Deno.serve(async (req) => {
 
   const work = (async () => {
     if (runCentral) {
-      await runCentralPass({
+      await runPlannedPasses(sweepPlans, {
         admin,
         supabaseUrl,
-        budgetScope: sweepScope,
         deadline: startedAt + Math.floor(budgetMs / 2),
         limit: CENTRAL_SWEEP_LIMIT,
-        permitIds: null,
-        adapterKey: null,
       }).catch((e) => console.error(JSON.stringify({ event: "permit_central_pass_failed", message: String(e?.message ?? e).slice(0, 200) })));
       if (deadline - Date.now() < 30_000) return;
       claims = (await claimProjects()) ?? [];

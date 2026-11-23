@@ -1,5 +1,44 @@
 # Handoff Notes — read first
 
+## Montgomery scheduling (2026-11-18, branch `feat/montgomery-scheduling`, D-146 to D-150)
+- **Status: code, migration and scripts ready; nothing merged, applied, deployed or enabled.** The owner switches the schedule on in Management Admin → Permit Sync → Scheduling after steps 1–4 below. Production could not be read in this session (the Supabase CLI login has no access to `eeqxyjrcldivtpikcpvk`, 403), so the owner's figures are used: 20 Montgomery permits, 1,452 files listed, 1,443 stored, 9 failed with retries due (6 portal refusals, 2 bad content, 1 transient); worker job efae063b and 8 manual jobs logged in on 2026-11-18; DC daily at 09:00 UTC (16–98 min); worker on `bb7a6df3` with the agent trigger on; central processing live, Montgomery sharing `dc-backfill` ($4.04 of $5.00 left). Run `scripts/permit-repo/scheduling/06-verify-montgomery-first-run.sql` (read-only) first to confirm the source, encryption and counts.
+- **What changed:**
+  - Worker keyed on the job's adapter. `deep/repo.js` needs the adapter key; the Montgomery branch is chosen by the registry tenant. The worker scope env takes `<adapter_key>:<id>`, and a worker narrowed to other adapters hands the job back (`deferred_worker_scope`, D-146).
+  - The monitor does not raise `queued_unclaimed` while every live worker is busy (up to 4 h), and gains `central_budget_paused` (D-148, D-147).
+  - Central sweeps use a source's `settings.central_budget_scope` (D-147).
+  - `listExportPermits` has no DC default (D-150).
+  - Already generic, now covered by tests: Scheduling tab listing, the save (merges settings), enqueue (DST, no slot before enable, one catch-up), the per-login claim lock, the credential lock, retry of due failed files.
+- **Concurrency:** DC (04:00 America/New_York) and Montgomery (06:00) are separate sources with separate logins, so separate claims. One worker runs one job at a time: if DC is still running at 06:00, the Montgomery job is enqueued and waits for it (no conflict, no alert). Montgomery after DC means it can never delay DC.
+- **Tests (local):** permit-sync 354/354 (new `permit-sync-montgomery-scheduling.test.js` 6, chain test applies and rolls back `20261123100000` exactly); analyzer 0 unexpected (2 known, incl. new `centralBudgetScopes.test.ts`); frontend 0 unexpected (16 known); tsc 194 = baseline; ESLint 154 = baseline; build; migration checks.
+- **Runbook (each step needs approval; in this order):**
+  1. **Merge the PR** after green CI. The frontend deploy (Vercel) is a signature-only change: safe at any time.
+  2. **Migration `20261123100000_permit_sync_montgomery_scheduling.sql`.** It replaces `release_permit_sync_job` (adds a reason) and `permit_sync_monitor()`, with no table change.
+     - When: with no running job, not 08:55 UTC to the end of the DC job.
+     - How: `supabase db query --linked -f supabase/migrations/20261123100000_permit_sync_montgomery_scheduling.sql`, then `supabase migration repair --status applied 20261123100000` (from a scratch dir holding only that file, as for 20261118150000).
+     - Check: `SELECT permit_sync_monitor()` returns, and no new alert appears except possibly `central_budget_paused` for permits already paused for budget.
+     - Rollback: `scripts/permit-repo/rollback-20261123100000_permit_sync_montgomery_scheduling.sql`, then `migration repair --status reverted 20261123100000`. Roll the worker back first if it was deployed.
+  3. **Worker deploy plus `permit-comment-pipeline` deploy.** Needs step 2 first: an older database refuses `deferred_worker_scope`, and the worker would fail that job retryably instead.
+     - When: no job running, and the next DC slot (09:00 UTC in EST) more than 90 minutes away. In practice from the DC job's completion (at worst about 10:40 UTC) until 07:30 UTC.
+     - Worker: `scripts/permit-repo/deploy-worker.sh <merge commit> --i-have-approval`. Check the heartbeat version, `PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS` still unset, and the agent trigger on.
+     - Function: back up the deployed version, then `supabase functions deploy permit-comment-pipeline --project-ref eeqxyjrcldivtpikcpvk --use-api` from a clean `git archive` of the merge commit. Until a source names a budget scope it behaves exactly as now (one more read of `permit_sync_sources` per sweep).
+     - Rollback: `deploy-worker.sh <bb7a6df3>`; redeploy the function backup.
+  4. **Budget:** `supabase db query --linked -f scripts/permit-repo/scheduling/05-montgomery-budget.sql`, after setting `approved_by`. It creates `montgomery` ($3.00, approved) and sets `central_budget_scope = 'montgomery'` on every montgomery-projectdox source.
+     - When: after step 3 (the old function ignores the setting), and not while a central pass is running (between DC permits).
+     - Check: `SELECT permit_ai_budget_status('montgomery')`, and the next sweep's ledger rows for Montgomery permits carry scope `montgomery`.
+     - Rollback: close the budget (`UPDATE permit_ai_budgets SET closed_at = now() WHERE scope = 'montgomery'`, which pauses, with no spend), or remove the key (see the script header).
+  5. **Owner's toggle** in Management Admin → Permit Sync → Scheduling, on the "Montgomery County MD - Avolve" row:
+     - Fields: Frequency **Daily**, Time **06:00**, Timezone **America/New_York**, Max files and Max MiB empty, Attempts empty (default 5) or **5**, Enabled **on**, then **Save and enable**. The toast must say "Schedule saved and enabled" with the next run at 06:00 local (11:00 UTC).
+     - When: after the day's DC job has finished. Enabled before 11:00 UTC, it runs the same day; otherwise the next day (a slot before enabling never runs).
+     - Undo: switch it off and save ("Save and disable"), or run `scheduling/97-disable-montgomery-schedule.sql`. Neither cancels a job already queued or running.
+- **First-run verification (read-only):** `scripts/permit-repo/scheduling/06-verify-montgomery-first-run.sql` before enabling, at 11:05 UTC, while it runs and after it finishes.
+  - Expected: one scheduled Montgomery job, claimed after any DC job finished, ending completed or completed_with_warnings with 20 permits.
+  - `failed_documents.due` should fall from 9, with no file retried before its back-off.
+  - No schedule_missed, queued_unclaimed or job_stuck alert; DC's job that morning unaffected; central spend on `montgomery` only.
+- **Open:**
+  - Unencrypted Montgomery credential eaf14fcc. If it has a source row, it stays `needs_encryption` and is never enqueued.
+  - Duplicate COMBUILD-1154415 projects.
+  - Project links (`montgomery/live-deep/05-link-projects.sql`, not run).
+
 - **Permit Queue View (2026-11-23, branch `fix/view-opens-files`, PR open, not merged):** on every permit, Reports **View** now opens the report's PDF (else its Excel) in a new tab through the signed-URL helper, shown only when an export is stored; the structured rows moved behind a **Details** control that expands under its row; Files View and all failures (blocked pop-up, signed-URL error) share one helper that closes the tab and shows "Could not open this file; try again." Frontend only; not verified against production data.
 
 ## Montgomery County MD adapter (2026-11-18, branch `feat/montgomery-adapter`, worktree `Epermit-montgomery`)
@@ -19,7 +58,7 @@
 - **Crash backstop (added, tested, not deployed):** `worker-entry.js` `installProcessGuard` logs `unhandledRejection` / `uncaughtException` as one redacted JSON line and keeps the process running (exit only with `PERMIT_SYNC_EXIT_ON_UNHANDLED=true` or after `PERMIT_SYNC_MAX_UNHANDLED`, default 100). No unhandled error was logged in the six runs.
 - Findings (MONTGOMERY_CAPABILITY_MAP.md): the Web API serves every DC JSON route; discovery `GetPagedActiveProjects` returns 20 projects (Home table and old scraper show 10); comments live only in SSRS report 133; download permission is per folder; no MFA.
 - Open: duplicate COMBUILD-1154415 projects (user: decide later, link nothing). Unencrypted credential eaf14fcc. Export page DC-only. Montgomery linked-project sync (G-8): coded in `feat/montgomery-portal-data` (D-145), not deployed; links script `montgomery/live-deep/05-link-projects.sql` not run. Original-file RetrieveFile (renditions only so far). See MONTGOMERY_GAPS.md §4.
-- **Next, each needing explicit approval:** (1) merge the branch; (2) redeploy the Railway worker with it (`deploy-worker.sh`; the live worker `15993f89d642` refuses non-DC jobs); (3) one unscoped all-20 deep run (Refresh all) under the default budget, supervised; (4) activate the source and the daily 01:00 America/New_York schedule after that run passes; (5) validated project linking. The `montgomery-backfill` AI budget is unchanged.
+- **Next, each needing explicit approval:** (1) merge the branch; (2) redeploy the Railway worker with it (`deploy-worker.sh`; the live worker `15993f89d642` refuses non-DC jobs); (3) one unscoped all-20 deep run (Refresh all) under the default budget, supervised; (4) activate the source and the daily 01:00 America/New_York schedule after that run passes; (5) validated project linking. The `montgomery-backfill` AI budget is unchanged. Superseded for schedule and budget by "Montgomery scheduling" above (06:00 America/New_York, scope `montgomery`).
 - Earlier the same day: job `3942a5ad` (first supervised run) crashed in the shared exporter on an unhandled download wait and was cancelled; fixed by D-140 and the backstop.
 - Local test setup in the worktree: `node_modules` symlinks to Epermit-main (root and scraper-service), not committed. Capture output is in `exports.local/` (git-ignored, contains raw portal payloads).
 

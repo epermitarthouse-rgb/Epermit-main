@@ -31,7 +31,7 @@ Variables (names only; values live in Railway):
 | `PERMIT_SYNC_LIVE_PORTAL_APPROVED` | `A-3` |
 | `PERMIT_SYNC_MODE` | `deep` |
 | `PERMIT_SYNC_WORKER_ONCE` | **unset** (a set value exits after one job) |
-| `PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS` | **unset** (a set value narrows every job; Management Admin → Sync workers warns) |
+| `PERMIT_SYNC_ONLY_PORTAL_RECORD_IDS` | **unset** (a set value narrows jobs; Management Admin → Sync workers warns). Plain ids are DC ProjectIDs; `<adapter_key>:<ProjectID>` (e.g. `montgomery-projectdox:200100`) narrows that adapter. A job of an adapter the value names nothing for is handed back (`deferred_worker_scope`, D-146), so a narrowed worker never runs a scheduled Montgomery job. |
 | `PERMIT_SYNC_DEEP_MAX_FILES` | e.g. `5000` — ceiling per run; files over the cap stay pending for the next refresh |
 | `PERMIT_SYNC_DEEP_MAX_BYTES` | e.g. `21474836480` (20 GiB) — ceiling per run |
 | `PERMIT_SYNC_DEEP_MAX_FILE_BYTES` | optional per-file ceiling |
