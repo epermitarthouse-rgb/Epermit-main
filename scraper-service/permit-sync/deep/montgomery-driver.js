@@ -185,17 +185,59 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
 
   const cancelled = (s) => Boolean(s._cancelRequested || s.dcDeepSessionLost);
 
+  function fileRows(page) {
+    if (Array.isArray(page)) return page;
+    if (!page || typeof page !== "object") return [];
+    for (const key of ["Items", "items", "Data", "data", "Files", "files", "Results", "results", "Rows", "rows"]) {
+      if (Array.isArray(page[key])) return page[key];
+    }
+    return [];
+  }
+
   async function filesTab(session, projectId, deep, tmp) {
+    const pgc = tenant.key === "pgc-eplan";
     const folders = [];
     const list = await transport.getJson("project_folders", { projectID: projectId, folderID: "" });
-    for (const folder of Array.isArray(list) ? list : []) {
+    const parents = Array.isArray(list) ? list : fileRows(list);
+    const selected = [...parents];
+    if (pgc) {
+      for (const folder of parents) {
+        if (folder.FolderID === null || folder.FolderID === undefined) continue;
+        let peek = [];
+        try {
+          peek = fileRows(await transport.getJson("folder_files", { folderID: folder.FolderID, listMode: 3, pageIndex: 0, pageSize: 500 }));
+        } catch (err) {
+          if (isFatal(err)) throw err;
+        }
+        if (peek.length) continue;
+        try {
+          const children = await transport.getJson("folder_children", {
+            folderID: folder.FolderID,
+            path: `PDEntityID:L${folder.FolderID}/@Children`,
+            binding: "textKey:RowTemplate,valueKey:EntityID,primaryKey:PDEntityID,childDataProperty:Children,expandedKey:Expanded,checkedKey:__checked__",
+            depth: 1,
+          });
+          for (const node of fileRows(children)) {
+            const id = node.FolderID ?? node.folderID ?? node.EntityID ?? node.PDEntityID;
+            if (id == null || String(id) === String(folder.FolderID)) continue;
+            const rawName = node.Name || node.name || node.Text || String(id);
+            selected.push({ ...node, FolderID: id, Name: String(rawName).replace(/<[^>]+>/g, "").trim() || String(id) });
+          }
+        } catch (err) {
+          if (isFatal(err)) throw err;
+        }
+      }
+    }
+    for (const folder of selected) {
       const out = { name: String(folder.Name || ""), folderId: String(folder.FolderID || ""), files: [] };
       const folderViewOnly = !(folder.FolderPermissions && folder.FolderPermissions.DownloadFile === true);
       folders.push(out);
       let items;
       try {
-        const page = await transport.getJson("folder_files", { folderID: folder.FolderID, projectID: projectId, listMode: 3, pageIndex: 0, pageSize: 500 });
-        items = (page && page.Items) || [];
+        const params = { folderID: folder.FolderID, listMode: 3, pageIndex: 0, pageSize: 500 };
+        if (!pgc) params.projectID = projectId;
+        const page = await transport.getJson("folder_files", params);
+        items = fileRows(page);
       } catch (err) {
         if (isFatal(err)) throw err;
         out.folderError = shortError(err);
