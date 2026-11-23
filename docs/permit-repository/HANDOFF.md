@@ -1,5 +1,7 @@
 # Handoff Notes — read first
 
+- **Permit Queue View (2026-11-23, branch `fix/view-opens-files`, PR open, not merged):** on every permit, Reports **View** now opens the report's PDF (else its Excel) in a new tab through the signed-URL helper, shown only when an export is stored; the structured rows moved behind a **Details** control that expands under its row; Files View and all failures (blocked pop-up, signed-URL error) share one helper that closes the tab and shows "Could not open this file; try again." Frontend only; not verified against production data.
+
 ## Montgomery County MD adapter (2026-11-18, branch `feat/montgomery-adapter`, worktree `Epermit-montgomery`)
 - **Status: the deep pipeline works end to end on the three test permits, from the local worktree worker. Not deployed, not merged, not scheduled, automation off, source inactive, no projects linked, no credential change.** Nothing is queued.
 - **Supervised scoped runs (approved iterate loop, 2026-11-18 12:16–14:36 UTC; local headed worker, `PERMIT_SYNC_WORKER_ONCE=true`, agent trigger off, one permit per job, 5 files / 50 MiB, per-file 50 MiB).** All six were claimed by the local worker (no Railway race), finished on their own, and left no active job.

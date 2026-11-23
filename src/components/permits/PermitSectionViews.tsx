@@ -2,7 +2,9 @@ import React from "react";
 import { AlertBanner, StatusPill, type StatusTone } from "@/components/design/ProductPrimitives";
 import { SimpleTable, SourcesView, formatTimestamp } from "@/components/permits/PermitRepositoryViews";
 import { Button } from "@/components/ui/button";
-import { currentRows, sectionLabel, type PermitDetail } from "@/lib/centralPermits";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { currentRows, sectionLabel, type PermitDetail, type ReportExportPaths } from "@/lib/centralPermits";
+import { reportExportTarget } from "@/lib/permitObjectOpen";
 import {
   DC_SECTION_SOURCES,
   EXTRACTION_STATUS_LABEL,
@@ -422,58 +424,154 @@ export function InfoSectionView({ permit, state, snapshots }: { permit: Row; sta
 
 // ---- Reports ----------------------------------------------------------------
 
+/** What the Reports tab needs from the page to open exports and show the structured rows. */
+export interface ReportsActions {
+  /** Stored exports by latest content id; null while they are still being read. */
+  exports: Record<string, ReportExportPaths> | null;
+  /** Set when the stored exports could not be read. */
+  exportsError?: string | null;
+  /** Opens a stored object in a new tab (the page's open helper). */
+  onOpenFile: (path: string) => void;
+  /** Path currently being opened, to disable its button. */
+  busyKey?: string | null;
+  /** The structured-rows viewer for one report; shown directly under its row. */
+  renderDetails: (report: Row) => React.ReactNode;
+}
+
+/**
+ * The per-row controls on the Reports tab. View opens the report's PDF (or its Excel export when
+ * there is no PDF) in a new tab; it is offered only when an export is stored. Details expands the
+ * structured rows under the row. No hooks here: the expanded state lives in ReportsSectionView.
+ */
+export function ReportRowActions({
+  report,
+  actions,
+  expanded,
+  onToggleDetails,
+}: {
+  report: Row;
+  actions: ReportsActions;
+  expanded: boolean;
+  onToggleDetails: () => void;
+}) {
+  const contentId = str(report.latest_content_id);
+  const target = actions.exports && contentId ? reportExportTarget(actions.exports[contentId]) : null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {target ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={actions.busyKey === target.path}
+          onClick={() => actions.onOpenFile(target.path)}
+          title={target.kind === "excel" ? "No PDF is stored; opens the Excel export" : undefined}
+          data-report-view
+          data-report-export={target.kind}
+        >
+          {actions.busyKey === target.path ? "Opening…" : "View"}
+        </Button>
+      ) : !contentId || actions.exports ? (
+        <span className="text-xs text-muted-foreground" data-report-no-file>No file stored</span>
+      ) : actions.exportsError ? (
+        <span className="text-xs text-muted-foreground" data-report-file-unknown>File status unavailable</span>
+      ) : (
+        <span className="text-xs text-muted-foreground" data-report-file-loading>Checking…</span>
+      )}
+      {contentId ? (
+        <Button
+          type="button"
+          size="sm"
+          variant={expanded ? "secondary" : "ghost"}
+          aria-expanded={expanded}
+          onClick={onToggleDetails}
+          data-report-details-toggle
+        >
+          {expanded ? "Hide details" : "Details"}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The expanded structured-rows row; scrolls itself into view when it appears. */
+function ReportDetailsRow({ colSpan, children }: { colSpan: number; children: React.ReactNode }) {
+  const ref = React.useRef<HTMLTableRowElement | null>(null);
+  React.useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, []);
+  return (
+    <TableRow ref={ref} data-report-details-row>
+      <TableCell colSpan={colSpan} className="bg-muted/20 p-3">{children}</TableCell>
+    </TableRow>
+  );
+}
+
+const REPORT_COLUMNS = ["Report", "Category", "Content", "Captured", ""] as const;
+
 export function ReportsSectionView({
   reports,
   state,
-  selectedReportKey,
-  onViewReport,
-  viewer,
+  actions,
+  defaultExpandedKey = null,
 }: {
   reports: Row[];
   state: Row | null;
   snapshots?: Row[];
-  selectedReportKey?: string | null;
-  onViewReport?: (report: Row) => void;
-  viewer?: React.ReactNode;
+  actions?: ReportsActions;
+  defaultExpandedKey?: string | null;
 }) {
+  const [expandedKey, setExpandedKey] = React.useState<string | null>(defaultExpandedKey);
   const visible = currentRows(reports);
   const captured = visible.filter((r) => reportContentState(r) === "captured").length;
+  const anyExport = !!actions?.exports && Object.values(actions.exports).some((e) => reportExportTarget(e));
   return (
     <div className="space-y-4">
       <SectionStatusLine state={state} />
-      {!captured && visible.length ? (
+      {!captured && !anyExport && visible.length ? (
         <AlertBanner
           tone="default"
           title="Report contents have not been captured yet"
           detail="These are the reports the portal offers for this permit. A report opens here only after its content has been captured."
         />
       ) : null}
-      <SimpleTable
-        empty={noDataMessage(state, "reports")}
-        rows={visible}
-        columns={[
-          ["Report", (r) => dash(r.name)],
-          ["Category", (r) => dash(r.category)],
-          ["Content", (r) => {
-            const s = reportContentState(r);
-            return <span data-report-state={s}>{REPORT_CONTENT_LABEL[s]}</span>;
-          }],
-          ["Captured", (r) => formatTimestamp(r.content_captured_at)],
-          ["", (r) =>
-            reportContentState(r) === "captured" && onViewReport ? (
-              <Button
-                type="button"
-                size="sm"
-                variant={selectedReportKey === str(r.report_key) ? "secondary" : "outline"}
-                onClick={() => onViewReport(r)}
-                data-report-view
-              >
-                View
-              </Button>
-            ) : null],
-        ]}
-      />
-      {viewer}
+      {actions?.exportsError ? (
+        <AlertBanner tone="bad" title="Could not check which report files are stored" detail="Reload the page to try again." />
+      ) : null}
+      {!visible.length ? (
+        <Muted>{noDataMessage(state, "reports")}</Muted>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>{REPORT_COLUMNS.map((h, i) => <TableHead key={i}>{h}</TableHead>)}</TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((r, i) => {
+                const key = str(r.report_key) || str(r.id) || String(i);
+                const open = !!actions && expandedKey === key && !!str(r.latest_content_id);
+                const s = reportContentState(r);
+                return (
+                  <React.Fragment key={str(r.id) || i}>
+                    <TableRow data-report-row={key}>
+                      <TableCell className="align-top text-sm">{dash(r.name)}</TableCell>
+                      <TableCell className="align-top text-sm">{dash(r.category)}</TableCell>
+                      <TableCell className="align-top text-sm"><span data-report-state={s}>{REPORT_CONTENT_LABEL[s]}</span></TableCell>
+                      <TableCell className="align-top text-sm">{formatTimestamp(r.content_captured_at)}</TableCell>
+                      <TableCell className="align-top text-sm">
+                        {actions ? (
+                          <ReportRowActions report={r} actions={actions} expanded={open} onToggleDetails={() => setExpandedKey((cur) => (cur === key ? null : key))} />
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                    {open && actions ? <ReportDetailsRow colSpan={REPORT_COLUMNS.length}>{actions.renderDetails(r)}</ReportDetailsRow> : null}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }
