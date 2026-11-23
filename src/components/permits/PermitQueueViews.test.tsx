@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import React, { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
+import { PermitDownstreamDisclosure, PermitDownstreamDisclosureView, PermitDownstreamMatrixView } from "./PermitDownstreamMatrix";
 import { PermitQueueDetailView } from "./PermitQueueDetailView";
 import { PermitQueueGateView } from "./PermitQueueGate";
 import { PermitListTable } from "./PermitRepositoryViews";
@@ -19,6 +20,7 @@ import {
   TasksSectionView,
 } from "./PermitSectionViews";
 import type { PermitDetail, PermitListRow } from "@/lib/centralPermits";
+import { mapPermitDownstreamRows } from "@/lib/permitDownstreamMatrix";
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -71,7 +73,8 @@ describe("Permit Queue detail", () => {
   it("shows the tabs in portal order, then History; Diagnostics only for admins", () => {
     const user = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false }));
     const order = [...user.matchAll(/data-permit-tab="([a-z]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(order, ["tasks", "files", "status", "info", "reports", "reviews", "downstream", "history"]);
+    assert.ok(!user.includes("Downstream"), "no Downstream tab in the tab bar");
+    assert.deepEqual(order, ["tasks", "files", "status", "info", "reports", "reviews", "history"]);
     assert.doesNotMatch(user, DIAGNOSTICS);
     const admin = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: true, defaultTab: "diagnostics" }));
     assert.deepEqual([...admin.matchAll(/data-permit-tab="([a-z]+)"/g)].map((m) => m[1]).at(-1), "diagnostics");
@@ -127,56 +130,97 @@ describe("Permit Queue detail", () => {
     assert.match(blocked, /Inaccessible \/ blocked/);
   });
 
-  it("Downstream shows the permit record, the portal thread, and a project link", () => {
-    const html = render(createElement(PermitQueueDetailView, {
-      detail: detail(),
-      isAdmin: false,
-      defaultTab: "downstream",
-      downstreamRows: [{
-        id: "c1",
-        refNumber: "1",
-        cycle: "2",
-        department: "Zoning",
-        commentType: "Correction",
-        fileName: "sheet.pdf",
-        reviewedAt: "2026-02-02T15:00:00Z",
-        body: "BODY-LIVE",
-        status: "Unresolved",
-        responses: [
-          { id: "r1", seq: 1, role: "Applicant", body: "REPLY-1", respondedAt: "" },
-          { id: "r2", seq: 2, role: "Reviewer", body: "REPLY-2", respondedAt: "" },
-        ],
-        discipline: "Zoning",
-        codeReference: "IBC 101",
-        guidance: "GUIDE-LIVE",
-      }],
-      downstreamLinks: [{ project_id: "proj-1", project_name: "Alpha Project" }],
-    }));
-    assert.match(html, /Downstream · D2500488/);
-    assert.match(html, /BODY-LIVE/);
-    assert.match(html, /Ref #1/);
-    assert.match(html, /Cycle 2/);
-    assert.match(html, /data-downstream-status="Unresolved"/);
-    assert.ok(html.indexOf("REPLY-1") < html.indexOf("REPLY-2"));
-    assert.match(html, /data-downstream-discipline="Zoning"/);
-    assert.match(html, /IBC 101/);
-    assert.match(html, /GUIDE-LIVE/);
-    assert.match(html, /Linked to /);
-    assert.match(html, /href="\/response-matrix\?projectId=proj-1"/);
-    assert.match(html, /Alpha Project/);
-    assert.doesNotMatch(html, /<(button|select)[^>]*>[^<]*(Assign|Approve|Generate)/i);
-    assert.doesNotMatch(html, /reviewer_name|responder_name/);
+  const matrix = () => createElement(PermitDownstreamMatrixView, {
+    permitNumber: "D2500488",
+    rows: [{
+      id: "c1",
+      refNumber: "1",
+      cycle: "2",
+      department: "Zoning",
+      commentType: "Correction",
+      fileName: "sheet.pdf",
+      reviewedAt: "2026-02-02T15:00:00Z",
+      body: "BODY-LIVE",
+      status: "Unresolved",
+      responses: [
+        { id: "r1", seq: 1, role: "Applicant", body: "REPLY-1", respondedAt: "" },
+        { id: "r2", seq: 2, role: "Reviewer", body: "REPLY-2", respondedAt: "" },
+      ],
+      discipline: "Zoning",
+      codeReference: "IBC 101",
+      guidance: "GUIDE-LIVE",
+    }],
+    links: [{ project_id: "proj-1", project_name: "Alpha Project" }],
   });
 
-  it("Downstream leaves analysis cells empty when no ready insight is passed", () => {
-    const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: false, defaultTab: "downstream" }));
-    assert.match(html, /Downstream · D2500488/);
-    assert.match(html, /Provide setbacks/);
-    assert.match(html, /data-downstream-status="Unresolved"/);
-    assert.match(html, /See sheet A-101/);
-    assert.match(html, /data-downstream-discipline=""/);
-    assert.match(html, /data-downstream-guidance=""/);
-    assert.doesNotMatch(html, /data-testid="permit-downstream-link"/);
+  it("Downstream is not a tab, even when the detail view is told to open it; admins keep Diagnostics", () => {
+    for (const isAdmin of [false, true]) {
+      const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin, defaultTab: "downstream" as never }));
+      assert.doesNotMatch(html, /data-permit-tab="downstream"/);
+      assert.doesNotMatch(html, /data-testid="permit-downstream-matrix"/);
+    }
+  });
+
+  it("the Downstream button renders closed in the box, without the matrix", () => {
+    const html = render(createElement(PermitDownstreamDisclosure, null, matrix()));
+    assert.match(html, /data-testid="permit-downstream-button"[^>]*>Downstream</);
+    assert.match(html, /aria-expanded="false"/);
+    assert.doesNotMatch(html, /data-testid="permit-downstream-matrix"/);
+    assert.doesNotMatch(html, /BODY-LIVE/);
+  });
+
+  it("clicking Downstream toggles the existing matrix inline: same columns, thread order, project link", () => {
+    let toggled = 0;
+    const view = (open: boolean) =>
+      PermitDownstreamDisclosureView({ open, onToggle: () => { toggled += 1; }, children: matrix() }) as ReactElement<{ children: ReactElement[] }>;
+    const button = view(false).props.children[0] as ReactElement<{ onClick: () => void }>;
+    button.props.onClick();
+    assert.equal(toggled, 1);
+    const open = render(createElement(PermitDownstreamDisclosure, { defaultOpen: true }, matrix()));
+    assert.match(open, /aria-expanded="true"/);
+    assert.match(open, /Downstream · D2500488/);
+    for (const col of ["Comment", "Status", "Response", "Discipline", "Code reference", "Preliminary guidance"]) {
+      assert.match(open, new RegExp(`<th[^>]*>${col}</th>`));
+    }
+    assert.match(open, /BODY-LIVE/);
+    assert.match(open, /Ref #1/);
+    assert.match(open, /Cycle 2/);
+    assert.match(open, /data-downstream-status="Unresolved"/);
+    assert.ok(open.indexOf("REPLY-1") < open.indexOf("REPLY-2"));
+    assert.match(open, /data-downstream-discipline="Zoning"/);
+    assert.match(open, /IBC 101/);
+    assert.match(open, /GUIDE-LIVE/);
+    assert.match(open, /href="\/response-matrix\?projectId=proj-1"/);
+    assert.match(open, /Alpha Project/);
+    assert.doesNotMatch(open, /<(select)[^>]*>|<button[^>]*>[^<]*(Assign|Approve|Generate)/i);
+    assert.doesNotMatch(open, /reviewer_name|responder_name/);
+  });
+
+  it("the matrix keeps its empty states: no comments, and no analysis cells without a ready insight", () => {
+    const none = render(createElement(PermitDownstreamMatrixView, { permitNumber: "D1", rows: [], links: [] }));
+    assert.match(none, /No review comments are stored for this permit\./);
+    assert.doesNotMatch(none, /data-testid="permit-downstream-link"/);
+    const shell = render(createElement(PermitDownstreamMatrixView, {
+      permitNumber: "D2500488",
+      rows: mapPermitDownstreamRows({ comments: detail().comments, responses: detail().responses, insights: [], inputHashes: new Map() }),
+      links: [],
+    }));
+    assert.match(shell, /Provide setbacks/);
+    assert.match(shell, /See sheet A-101/);
+    assert.match(shell, /data-downstream-discipline=""/);
+    assert.match(shell, /data-downstream-guidance=""/);
+  });
+
+  it("the button lives in the Linked projects box and is not gated on admin or edit rights (view-only users see it)", () => {
+    const panel = src("ProjectPermitLinkPanel.tsx");
+    const box = panel.slice(panel.indexOf("export function PermitProjectLinksPanel"));
+    assert.match(box, /downstream\?: ReactNode/);
+    assert.match(box, /<Panel title="Linked projects"[\s\S]*<PermitDownstreamDisclosure>\{downstream\}<\/PermitDownstreamDisclosure>[\s\S]*<\/Panel>/);
+    assert.doesNotMatch(box.match(/\{downstream \?[^\n]*/)?.[0] ?? "", /isAdmin|canEdit/);
+    const page = src("../../pages/permits/PermitDetailPage.tsx");
+    assert.match(page, /<PermitProjectLinksPanel[\s\S]*downstream=\{[\s\S]*<PermitDownstreamMatrixView/);
+    const downstream = src("PermitDownstreamMatrix.tsx");
+    assert.doesNotMatch(downstream.slice(downstream.indexOf("export function PermitDownstreamDisclosureView")), /isAdmin|canEdit/);
   });
 
   it("renders the linked-projects panel and header actions passed in", () => {
@@ -190,7 +234,7 @@ describe("Permit Queue detail", () => {
   });
 
   it("has no state-changing portal controls on any tab", () => {
-    for (const tab of ["tasks", "files", "status", "info", "reports", "reviews", "downstream", "history", "diagnostics"] as const) {
+    for (const tab of ["tasks", "files", "status", "info", "reports", "reviews", "history", "diagnostics"] as const) {
       const html = render(createElement(PermitQueueDetailView, { detail: detail(), isAdmin: true, defaultTab: tab, onViewDocument: () => undefined, reportsActions: { exports: {}, onOpenFile: () => undefined, renderDetails: () => null } }));
       assert.doesNotMatch(html, MUTATION_CONTROL, `mutation control on ${tab}`);
     }
