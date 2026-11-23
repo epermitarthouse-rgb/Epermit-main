@@ -20142,6 +20142,7 @@ module.exports = {
   detectPaginationMode,
   goToNextPage,
   collectAllProjects,
+  openProjectViaDashboardRow,
   readProjectRows,
   resolvePgcWebUiBases,
   ensurePgcProjectDoxSessionOpen,

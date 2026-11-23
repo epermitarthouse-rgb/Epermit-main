@@ -19,6 +19,13 @@ const lock = require("../lib/dc-credential-lock");
 
 const HOST = "https://eplans.princegeorgescountymd.gov";
 
+test("the manual scraper exports the project-open used to reach the Web API", () => {
+  const manual = require("../pgc-eplan-scraper");
+  assert.equal(typeof manual.openProjectViaDashboardRow, "function");
+  assert.equal(typeof manual.detectPaginationMode, "function");
+  assert.equal(typeof manual.collectAllProjects, "function");
+});
+
 test("tenant URLs keep the ProjectDoxWebAPI and ProjectDoxWebUI prefixes and the PGC report path", () => {
   assert.equal(
     buildTenantUrl(PGC, "project_folders", { projectID: 125622 }),
