@@ -22,6 +22,7 @@ import {
   DOCUMENT_VIEW_LABEL,
   REPORT_CONTENT_LABEL,
   buildFolderTree,
+  folderStoredCounts,
   documentViewState,
   groupReviews,
   isUnresolved,
@@ -210,6 +211,11 @@ function FileTable({ files, onView, busyId }: { files: FileGroup[]; onView?: (do
   );
 }
 
+function viewOnlyFolderLabel(node: FolderNode): string {
+  const { stored, listed } = folderStoredCounts(node);
+  return `View-only on portal · ${stored} of ${listed} stored`;
+}
+
 function FolderTreeNode({ node, depth, onView, busyId }: { node: FolderNode; depth: number; onView?: (doc: Row) => void; busyId?: string | null }) {
   const f = node.folder;
   return (
@@ -220,7 +226,7 @@ function FolderTreeNode({ node, depth, onView, busyId }: { node: FolderNode; dep
           {node.totalFiles} file{node.totalFiles === 1 ? "" : "s"}
           {f.files_count !== null && f.files_count !== undefined ? ` · portal lists ${str(f.files_count)}` : ""}
         </span>
-        {f.download_permitted === false ? <StatusPill tone="default">Not downloadable on portal</StatusPill> : null}
+        {f.download_permitted === false ? <StatusPill tone="default">{viewOnlyFolderLabel(node)}</StatusPill> : null}
       </summary>
       <div className="space-y-2 px-3 pb-3">
         <FileTable files={node.files} onView={onView} busyId={busyId} />

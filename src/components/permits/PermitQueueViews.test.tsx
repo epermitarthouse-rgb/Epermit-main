@@ -249,6 +249,48 @@ describe("Permit Queue tabs", () => {
     assert.doesNotMatch(html, /p\/files\/1_A-101/);
   });
 
+  it("Files: a view-only folder whose files are all stored says so and never says Not downloadable", () => {
+    const html = render(createElement(FilesSectionView, {
+      folders: [{ id: "f1", portal_folder_id: "11", name: "Drawings", files_count: 3, download_permitted: false }],
+      documents: [
+        { id: "d1", portal_folder_id: "11", file_name: "A-101.pdf", version: 1, download_status: "stored", storage_path: "p/files/1", download_permitted: false },
+        { id: "d2", portal_folder_id: "11", file_name: "A-102.pdf", version: 1, download_status: "stored", storage_path: "p/files/2", download_permitted: false },
+        { id: "d3", portal_folder_id: "11", file_name: "A-102.pdf", version: 2, download_status: "stored", storage_path: "p/files/3", download_permitted: false },
+      ],
+      state: ok("files"),
+      onViewDocument: () => undefined,
+    }));
+    assert.match(html, /View-only on portal · 3 of 3 stored/);
+    assert.doesNotMatch(html, /Not downloadable/);
+    assert.equal((html.match(/data-file-view/g) ?? []).length, 3);
+  });
+
+  it("Files: a view-only folder counts what is stored, and a file with no storage path still says Not downloadable", () => {
+    const html = render(createElement(FilesSectionView, {
+      folders: [{ id: "f1", portal_folder_id: "11", name: "Documents", files_count: 2, download_permitted: false }],
+      documents: [
+        { id: "d1", portal_folder_id: "11", file_name: "A.pdf", version: 1, download_status: "stored", storage_path: "p/files/1", download_permitted: false },
+        { id: "d2", portal_folder_id: "11", file_name: "B.pdf", version: 1, download_status: "not_permitted", storage_path: null, download_permitted: false },
+      ],
+      state: ok("files"),
+      onViewDocument: () => undefined,
+    }));
+    assert.match(html, /View-only on portal · 1 of 2 stored/);
+    assert.match(html, /data-file-state="not_downloadable"/);
+    assert.match(html, /Not downloadable on portal/);
+  });
+
+  it("Files: a downloadable folder gets no view-only badge", () => {
+    const html = render(createElement(FilesSectionView, {
+      folders: [{ id: "f1", portal_folder_id: "12", name: "Approved", files_count: 1, download_permitted: true }],
+      documents: [{ id: "d1", portal_folder_id: "12", file_name: "A.pdf", version: 1, download_status: "stored", storage_path: "p/files/1", download_permitted: true }],
+      state: ok("files"),
+      onViewDocument: () => undefined,
+    }));
+    assert.doesNotMatch(html, /View-only on portal/);
+    assert.doesNotMatch(html, /Not downloadable/);
+  });
+
   it("Files: without a view handler a stored file shows no button", () => {
     const html = render(createElement(FilesSectionView, {
       folders: [], documents: [{ id: "d1", file_name: "A.pdf", download_status: "stored", storage_path: "p/x" }], state: ok("files"),
