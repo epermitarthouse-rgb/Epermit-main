@@ -194,6 +194,19 @@ export function buildFolderTree(folders: Row[], documents: Row[]): { roots: Fold
   return { roots: nodes, unfiled: groupFileVersions(unfiledDocs) };
 }
 
+/**
+ * "N of M stored" for one folder: N is the stored copies among the folder's own file rows (every
+ * version, since the portal lists each version as a file), M is the count the portal lists for the
+ * folder, or the rows we hold when the portal gave none.
+ */
+export function folderStoredCounts(node: FolderNode): { stored: number; listed: number } {
+  const rows = node.files.flatMap((g) => g.versions);
+  const stored = rows.filter((d) => documentViewState(d) === 'viewable').length;
+  const portal = node.folder.files_count;
+  const listed = portal === null || portal === undefined || portal === '' ? rows.length : Number(portal);
+  return { stored, listed: Number.isFinite(listed) ? Math.max(listed, stored) : rows.length };
+}
+
 // ---- Reports: content gating -------------------------------------------------
 
 export type ReportContentState = 'captured' | 'failed' | 'not_captured';
