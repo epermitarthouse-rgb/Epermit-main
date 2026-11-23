@@ -45,11 +45,20 @@ export function queueSourceKey(row: Pick<PermitListRow, 'adapter_key' | 'jurisdi
   return `${row.adapter_key}::${row.jurisdiction ?? ''}`;
 }
 
-export function queueSourceOptions(rows: PermitListRow[]): Array<{ value: string; label: string }> {
+export function queueSourceOptions(
+  rows: PermitListRow[],
+  sources: Array<Pick<PermitListRow, 'adapter_key' | 'jurisdiction'>> = [],
+): Array<{ value: string; label: string }> {
   const seen = new Map<string, string>();
   for (const r of rows) {
     const key = queueSourceKey(r);
     if (!seen.has(key)) seen.set(key, r.jurisdiction ? `${r.jurisdiction} (${r.adapter_key})` : r.adapter_key);
+  }
+  const adaptersWithRows = new Set(rows.map((r) => r.adapter_key));
+  for (const s of sources) {
+    if (!s.adapter_key || adaptersWithRows.has(s.adapter_key)) continue;
+    const key = queueSourceKey(s);
+    if (!seen.has(key)) seen.set(key, s.jurisdiction ? `${s.jurisdiction} (${s.adapter_key})` : s.adapter_key);
   }
   return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
 }

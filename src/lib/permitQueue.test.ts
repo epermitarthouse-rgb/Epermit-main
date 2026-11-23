@@ -115,6 +115,10 @@ describe('permit queue list helpers', () => {
     assert.deepEqual(filterQueueRows(rows, links, { source: dc, linked: 'all' }).map((r) => r.id), ['a', 'c']);
     assert.deepEqual(filterQueueRows(rows, links, { source: 'all', linked: 'linked' }).map((r) => r.id), ['a']);
     assert.deepEqual(filterQueueRows(rows, links, { source: dc, linked: 'unlinked' }).map((r) => r.id), ['c']);
+    const withEmpty = queueSourceOptions(rows, [{ adapter_key: 'pgc-eplan', jurisdiction: "Prince George's County ePlan" }]);
+    assert.ok(withEmpty.some((o) => o.value === "pgc-eplan::Prince George's County ePlan"));
+    const notDuplicated = queueSourceOptions(rows, [{ adapter_key: 'dc-projectdox', jurisdiction: 'Washington DC - ProjectDox' }]);
+    assert.equal(notDuplicated.filter((o) => o.value.startsWith('dc-projectdox::')).length, 1);
   });
 
   it('paginates and clamps the page number', () => {

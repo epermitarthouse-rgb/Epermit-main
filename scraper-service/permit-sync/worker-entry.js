@@ -32,7 +32,8 @@ const dcCredentialLock = require("../lib/dc-credential-lock");
 const { createDcLiveTransport, LIVE_APPROVAL_VALUE } = require("./adapters/dc-projectdox/live-transport");
 const { ADAPTER_KEY: DC_KEY } = require("./adapters/dc-projectdox/normalize");
 const { createMontgomeryAdapter, ADAPTER_KEY: MONTGOMERY_KEY } = require("./adapters/montgomery-projectdox/adapter");
-const { MONTGOMERY } = require("./adapters/projectdox-tenants");
+const { createPgcAdapter, ADAPTER_KEY: PGC_KEY } = require("./adapters/pgc-projectdox/adapter");
+const { MONTGOMERY, PGC } = require("./adapters/projectdox-tenants");
 const {
   looksLikeEncryptedEnvelope,
   resolveStoredPortalPassword,
@@ -101,6 +102,7 @@ async function deferWhileManualScrape({ supabase, username, now = new Date(), po
 const ADAPTERS = Object.freeze({
   [DC_KEY]: Object.freeze({ portal: "dc", createAdapter: createDcAdapter }),
   [MONTGOMERY_KEY]: Object.freeze({ portal: "montgomery", createAdapter: createMontgomeryAdapter }),
+  [PGC_KEY]: Object.freeze({ portal: "pgc", createAdapter: createPgcAdapter }),
 });
 
 /**
@@ -219,6 +221,13 @@ function installProcessGuard({ log, getJobId = () => null, env = process.env, pr
   };
 }
 
+/** PGC login: the existing manual ePlans login, at the saved login URL when it is on the ePlans host. */
+function pgcLogin(username, password, loginUrl) {
+  const { performPgcLogin } = require("../pgc-eplan-scraper");
+  const { withQuietConsole } = require("./deep/runner");
+  return (page, entryUrl) => withQuietConsole(() => performPgcLogin(page, username, password, loginUrl || entryUrl));
+}
+
 /** Montgomery login: the existing manual portal login (form + anti-forgery token), at the saved login URL when set. */
 function montgomeryLogin(username, password, loginUrl) {
   const { performMontgomeryPortalLogin } = require("../scrapers/montgomery/portal-login");
@@ -261,12 +270,12 @@ function commentDownstreamAfterPermit({ pipeline, repo }) {
 
 /**
  * @param {{ supabase: any, env?: NodeJS.ProcessEnv, launchContext: Function, createTransport?: Function,
- *   createMontgomeryTransport?: Function, log?: Function, lock?: Function, loadDcDeep?: Function,
+ *   createMontgomeryTransport?: Function, createPgcTransport?: Function, log?: Function, lock?: Function, loadDcDeep?: Function,
  *   createDeepPass?: Function, pipeline?: object|null, repo?: object|null }} deps
  *   `repo` is optional and only used by tests; production reads links through the deep repo.
  */
 function buildOpenAdapter({
-  supabase, env = process.env, launchContext, createTransport = createDcLiveTransport, createMontgomeryTransport = null, log = () => {},
+  supabase, env = process.env, launchContext, createTransport = createDcLiveTransport, createMontgomeryTransport = null, createPgcTransport = null, log = () => {},
   lock = deferWhileManualScrape, loadDcDeep = null, createDeepPass = null, pipeline = null, repo = null,
 }) {
   const mode = syncMode(env);
@@ -275,7 +284,9 @@ function buildOpenAdapter({
   return async function openAdapter(job) {
     const reg = ADAPTERS[job.adapter_key];
     if (!reg) throw new PortalChangedError(`no adapter registered for ${job.adapter_key}`);
-    const columns = job.adapter_key === MONTGOMERY_KEY ? "portal_username, portal_password, login_url" : "portal_username, portal_password";
+    const columns = job.adapter_key === MONTGOMERY_KEY || job.adapter_key === PGC_KEY
+      ? "portal_username, portal_password, login_url"
+      : "portal_username, portal_password";
     const cred = await supabase.from("portal_credentials").select(columns).eq("id", job.credential_id).single();
     if (cred.error || !cred.data) throw new AuthError("credential not found");
     if (!looksLikeEncryptedEnvelope(cred.data.portal_password)) throw new AuthError("credential is not encrypted");
@@ -293,6 +304,9 @@ function buildOpenAdapter({
 
     if (job.adapter_key === MONTGOMERY_KEY) {
       return openMontgomery({ job, reg, username, password, loginUrl: montgomeryLoginUrl(cred.data.login_url), accountDownload });
+    }
+    if (job.adapter_key === PGC_KEY) {
+      return openPgc({ job, reg, username, password, loginUrl: pgcLoginUrl(cred.data.login_url), accountDownload });
     }
 
     if (mode !== "deep") {
@@ -364,6 +378,36 @@ function buildOpenAdapter({
       throw err;
     }
   }
+
+  /**
+   * PGC: the manual ePlans login and the PGC transport. Deep mode uses the shared runner with the PGC driver.
+   */
+  async function openPgc({ job, reg, username, password, loginUrl, accountDownload }) {
+    const make = createPgcTransport || require("./adapters/pgc-projectdox/live-transport").createPgcLiveTransport;
+    const login = pgcLogin(username, password, loginUrl);
+    const transport = await make({ launchContext, username, password, env, log, login, mode });
+    if (mode !== "deep") {
+      return {
+        adapter: reg.createAdapter({ transport, accountDownload }),
+        ...(downstream ? { afterPermit: downstream } : {}),
+        close: () => transport.close(),
+      };
+    }
+    try {
+      const { createPgcDeepDriver } = require("./deep/pgc-driver");
+      const makeDeepPass = createDeepPass || require("./deep/runner").createDeepPass;
+      const { supabaseDeepRepo, supabaseDeepStorage } = require("./deep/repo");
+      const deep = makeDeepPass({
+        dcDeep: createPgcDeepDriver({ transport }), transport, tenant: PGC,
+        repo: supabaseDeepRepo(supabase, { adapterKey: PGC_KEY }), storage: supabaseDeepStorage(supabase),
+        pipeline, username, credentialId: job.credential_id, log, env,
+      });
+      return { adapter: reg.createAdapter({ transport: deep.wrapTransport(transport), accountDownload }), afterPermit: deep.afterPermit, close: () => transport.close() };
+    } catch (err) {
+      await transport.close().catch(() => {});
+      throw err;
+    }
+  }
 }
 
 /** A saved Montgomery login URL is used only when it is on the Montgomery portal host; otherwise the default entry. */
@@ -371,6 +415,16 @@ function montgomeryLoginUrl(raw) {
   try {
     const u = new URL(String(raw || ""));
     return u.protocol === "https:" && u.hostname.toLowerCase() === new URL(MONTGOMERY.portalOrigin).hostname ? u.toString() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** A saved PGC login URL is used only when it is on the ePlans host; otherwise the default entry. */
+function pgcLoginUrl(raw) {
+  try {
+    const u = new URL(String(raw || ""));
+    return u.protocol === "https:" && u.hostname.toLowerCase() === new URL(PGC.portalOrigin).hostname ? u.toString() : null;
   } catch (_) {
     return null;
   }
@@ -517,4 +571,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };
+module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, pgcLoginUrl, startupCheck, syncMode, workerScope, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };
