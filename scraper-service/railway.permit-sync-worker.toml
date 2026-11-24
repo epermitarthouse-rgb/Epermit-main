@@ -30,10 +30,9 @@ healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 # Shared pool. Each replica runs the same loop: one claimed job, its own Chromium, then the next job.
-# The database still allows only one live session per portal login. Capacity is this number, not a
-# limit in code. This revision deploys at one replica; production is raised to two, then three, after
-# the new worker id is healthy. Do not add a service per jurisdiction.
-numReplicas = 1
+# The database still allows only one live session per portal login. Three is the current capacity, not a
+# limit in code; raise this number to run more jurisdictions at once. Do not add a service per jurisdiction.
+numReplicas = 3
 # No overlap: the old process stops (SIGTERM, releases its job) before the new one claims.
 overlapSeconds = 0
 # Time between SIGTERM and SIGKILL: enough for the scraper to stop at its next check and release the job.
