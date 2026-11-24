@@ -221,7 +221,12 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
             const id = node.FolderID ?? node.folderID ?? node.EntityID ?? node.PDEntityID;
             if (id == null || String(id) === String(folder.FolderID)) continue;
             const rawName = node.Name || node.name || node.Text || String(id);
-            selected.push({ ...node, FolderID: id, Name: String(rawName).replace(/<[^>]+>/g, "").trim() || String(id) });
+            selected.push({
+              ...node,
+              FolderID: id,
+              Name: String(rawName).replace(/<[^>]+>/g, "").trim() || String(id),
+              ParentName: String(folder.Name || "").replace(/<[^>]+>/g, "").trim(),
+            });
           }
         } catch (err) {
           if (isFatal(err)) throw err;
@@ -229,7 +234,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
       }
     }
     for (const folder of selected) {
-      const out = { name: String(folder.Name || ""), folderId: String(folder.FolderID || ""), files: [] };
+      const out = { name: String(folder.Name || ""), folderId: String(folder.FolderID || ""), parentFolder: String(folder.ParentName || ""), files: [] };
       const folderViewOnly = !(folder.FolderPermissions && folder.FolderPermissions.DownloadFile === true);
       folders.push(out);
       let items;
@@ -261,6 +266,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
             projectId,
             folderId: out.folderId,
             folderName: out.name,
+            parentFolder: out.parentFolder,
             fileName: file.name,
           });
           fs.writeFileSync(localPath, body.buf);

@@ -401,6 +401,7 @@ async function createPgcLiveTransport(opts) {
           projectId: String(locate.projectId),
           folderId: String(locate.folderId),
           folderName: locate.folderName || "",
+          parentFolder: locate.parentFolder || "",
           fileId: String(fileId),
           name: locate.fileName || "",
         }));
@@ -433,7 +434,7 @@ async function createPgcLiveTransport(opts) {
     }
   }
 
-  async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024, projectId = "", folderId = "", folderName = "", fileName = "" } = {}) {
+  async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024, projectId = "", folderId = "", folderName = "", parentFolder = "", fileName = "" } = {}) {
     requireDeep("file body");
     assertHealthy();
     await ensureApiSession();
@@ -448,7 +449,7 @@ async function createPgcLiveTransport(opts) {
     } catch (err) {
       if (fatalFileError(err)) throw err;
       if (!/404/.test(String(err && err.message))) throw err;
-      return fetchFromViewer(fileId, maxBytes, { projectId, folderId, folderName, fileName });
+      return fetchFromViewer(fileId, maxBytes, { projectId, folderId, folderName, parentFolder, fileName });
     }
   }
 

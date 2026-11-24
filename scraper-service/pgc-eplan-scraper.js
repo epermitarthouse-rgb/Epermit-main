@@ -10631,6 +10631,7 @@ async function openPgcFileViewerFromFilesTab(page, fileMeta = {}) {
   const folderMeta = {
     folderID: folderId,
     folderName: String(fileMeta.folderName || ""),
+    parentFolder: String(fileMeta.parentFolder || ""),
     knownFileNames: fileMeta.name ? [String(fileMeta.name)] : [],
   };
   const tab = await openPgcFilesTab(page, projectId);
