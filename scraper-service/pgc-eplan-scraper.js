@@ -10569,12 +10569,42 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta, opts = {}) {
       fileIdFromUrl,
     });
 
+    let viewFileCall = "";
+    if (!viewerPage || !viewerUrl) {
+      const wantId = String(fileMeta.fileId || "");
+      viewFileCall = await page.evaluate((id) => {
+        if (typeof window.viewFile !== "function") return "missing";
+        window.viewFile(Number(id));
+        return "called";
+      }, wantId).catch(() => "missing");
+      const deadline = Date.now() + 15000;
+      while ((!viewerPage || !viewerUrl) && Date.now() < deadline) {
+        for (const p of ctx.pages()) {
+          let u = "";
+          try { u = p.url(); } catch (_) { continue; }
+          if (/ActiveXViewer\.aspx/i.test(u)) { viewerPage = p; viewerUrl = u; break; }
+          for (const f of p.frames()) {
+            const fu = f.url() || "";
+            if (/ActiveXViewer\.aspx/i.test(fu)) { viewerPage = p; viewerUrl = fu; break; }
+          }
+          if (viewerPage && viewerUrl) break;
+        }
+        if (!viewerPage || !viewerUrl) await page.waitForTimeout(400).catch(() => {});
+      }
+    }
+
     if (!viewerPage || !viewerUrl) {
       /** @type {string} */
       let viewerErr = "unknown_viewer_open_failure";
       try {
         if (page.isClosed()) viewerErr = "viewer_page_closed";
-        else viewerErr = "viewer_tab_missing";
+        else {
+          let path = "";
+          try {
+            path = new URL(page.url()).pathname.split("/").map((s) => (s.length > 24 ? "*" : s)).join("/").slice(0, 40);
+          } catch (_) {}
+          viewerErr = `viewer_tab_missing ${viewFileCall} ${path}`.trim().slice(0, 80);
+        }
       } catch (_) {
         viewerErr = "viewer_context_closed";
       }
