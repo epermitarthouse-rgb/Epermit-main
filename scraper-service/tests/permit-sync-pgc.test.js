@@ -108,6 +108,22 @@ test("the manual scraper exports the project-open used to reach the Web API", ()
   );
 });
 
+test("viewer publish builds an export context when the caller did not pass one", async () => {
+  const manual = require("../pgc-eplan-scraper");
+  const page = {
+    frames: () => [],
+    url: () => `${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=77`,
+    evaluate: async () => {
+      throw new Error("fake_viewer");
+    },
+    context: () => ({ pages: () => [] }),
+  };
+  await assert.rejects(
+    () => manual.capturePgcBravaPublishResult(page, { fileId: "77" }, [], { pages: () => [] }, { allowTrigger: true }),
+    (err) => err instanceof TypeError && /getByRole/.test(err.message),
+  );
+});
+
 test("PGC file bytes open the ePlans viewer, and task assignment stays refused", () => {
   const g = safety.createRunGuard({ mode: "deep", tenant: PGC });
   const viewer = `${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=77`;

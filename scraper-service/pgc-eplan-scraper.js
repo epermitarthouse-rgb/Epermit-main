@@ -13168,7 +13168,7 @@ async function capturePgcBravaPublishResult(
   opts = {},
 ) {
   const allowTrigger = opts.allowTrigger !== false;
-  const exportCtx = opts.exportCtx || null;
+  let exportCtx = opts.exportCtx || null;
   const exportState = exportCtx?.exportState || null;
 
   const validateFetched = (got, publishUrl) => {
@@ -20177,4 +20177,5 @@ module.exports = {
   buildPgcActiveXViewerFileUrl,
   handlePgcTaskAssignmentModal,
   capturePgcViewerDocument,
+  capturePgcBravaPublishResult,
 };
