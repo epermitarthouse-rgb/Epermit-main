@@ -258,6 +258,10 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
             viewerOnly: folderViewOnly || !gate || gate.accessPath !== "download",
             preferOriginal: deepOptionsLib.prefersOriginal(deep),
             maxBytes: deepOptionsLib.maxFileBytes(deep, policy.DEFAULT_MAX_FILE_BYTES),
+            projectId,
+            folderId: out.folderId,
+            folderName: out.name,
+            fileName: file.name,
           });
           fs.writeFileSync(localPath, body.buf);
           const ref = await deep.storeFile({ localPath, fileId: file.id, fileName: file.name, downloadUrl: body.url });

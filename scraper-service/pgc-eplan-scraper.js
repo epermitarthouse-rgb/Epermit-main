@@ -10616,6 +10616,36 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta, opts = {}) {
 }
 
 /**
+ * Open one file the way the files tab does: Files tab, that folder, the viewFile link, View Only.
+ * Accept, Open and Logout are not clicked.
+ * @param {import('playwright').Page} page
+ * @param {{ projectId?: string, folderId?: string, folderName?: string, fileId?: string, name?: string }} fileMeta
+ */
+async function openPgcFileViewerFromFilesTab(page, fileMeta = {}) {
+  const projectId = String(fileMeta.projectId || "").trim();
+  const folderId = String(fileMeta.folderId || "").trim();
+  const fileId = String(fileMeta.fileId || "").trim();
+  if (!projectId || !folderId || !/^\d+$/.test(fileId)) {
+    return { error: "viewer_file_id", viewerPage: null, viewerUrl: null };
+  }
+  const folderMeta = {
+    folderID: folderId,
+    folderName: String(fileMeta.folderName || ""),
+    knownFileNames: fileMeta.name ? [String(fileMeta.name)] : [],
+  };
+  const tab = await openPgcFilesTab(page, projectId);
+  if (tab && tab.ok === false) return { error: "files_tab_not_open", viewerPage: null, viewerUrl: null };
+  const folder = await openPgcChildFolder(page, folderMeta, projectId);
+  if (!folder || folder.ok === false) {
+    const why = folder && folder.diagnostics && folder.diagnostics.error;
+    return { error: String(why || "folder_not_open").replace(/https?:\/\/\S+/g, "").slice(0, 80), viewerPage: null, viewerUrl: null };
+  }
+  const row = await findPgcFileGridRow(page, folderMeta, { name: fileMeta.name || "", fileId });
+  if (!row.rowFound || !row.rowLocator) return { error: "no_row_found", viewerPage: null, viewerUrl: null };
+  return openPgcViewerForFile(page, row.rowLocator, { name: fileMeta.name || "", fileId });
+}
+
+/**
  * @param {string} url
  * @param {string} contentType
  * @param {number} status
@@ -20178,4 +20208,5 @@ module.exports = {
   handlePgcTaskAssignmentModal,
   capturePgcViewerDocument,
   capturePgcBravaPublishResult,
+  openPgcFileViewerFromFilesTab,
 };

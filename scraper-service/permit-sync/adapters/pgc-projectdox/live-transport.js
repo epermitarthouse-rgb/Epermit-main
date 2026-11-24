@@ -141,7 +141,10 @@ async function createPgcLiveTransport(opts) {
     const d = dcLive.routeReadRequest(r, guard);
     if (d.violation) violation = violation || dcLive.describeViolation(d, r);
     if (d.sessionEnded) markSessionEnded(r.method, r.url, { type: r.resourceType || null, via: "browser" });
-    if (isTenantHost(hostOf(r.url)) && (["document", "xhr", "fetch", "other"].includes(r.resourceType) || d.action !== "continue")) {
+    if (
+      (isTenantHost(hostOf(r.url)) && (["document", "xhr", "fetch", "other"].includes(r.resourceType) || d.action !== "continue"))
+      || (!isTenantHost(hostOf(r.url)) && d.action !== "continue")
+    ) {
       remember(dcLive.requestPoint(r.method, r.url, { type: r.resourceType || null, rule: d.rule, action: d.action }));
     }
     return d.action === "continue" ? route.continue() : route.abort("blockedbyclient");
@@ -362,12 +365,17 @@ async function createPgcLiveTransport(opts) {
    * ActiveXViewer (View Only if a task dialog appears, then the viewer document). That page is a GET.
    * Accept, Open and Logout are not clicked.
    */
-  async function fetchFromViewer(fileId, maxBytes) {
+  async function fetchFromViewer(fileId, maxBytes, locate = {}) {
     const manual = scraper();
     const url = manual.buildPgcActiveXViewerFileUrl(fileId);
     if (!url) throw new PortalChangedError("viewer_file_id");
     const v = guard.checkRequest("GET", url);
     if (!v.allowed) throw new SafetyViolationError(`blocked file viewer: ${v.reason}`, v);
+    const filesUrl = locate.projectId ? manual.buildPgcTabUrl(locate.projectId, "filesTab") : "";
+    if (filesUrl) {
+      const fv = guard.checkRequest("GET", filesUrl);
+      if (!fv.allowed) throw new SafetyViolationError(`blocked files tab: ${fv.reason}`, fv);
+    }
     await throttle();
     const page = await context.newPage();
     const responseRecords = [];
@@ -382,15 +390,33 @@ async function createPgcLiveTransport(opts) {
         });
       } catch (_) {}
     };
-    page.on("response", onResponse);
+    context.on("response", onResponse);
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+      let viewerPage = page;
+      if (filesUrl && locate.folderId) {
+        await page.goto(filesUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+        assertHealthy();
+        if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("files tab reached a dead session page");
+        const opened = await withQuietConsole(() => manual.openPgcFileViewerFromFilesTab(page, {
+          projectId: String(locate.projectId),
+          folderId: String(locate.folderId),
+          folderName: locate.folderName || "",
+          fileId: String(fileId),
+          name: locate.fileName || "",
+        }));
+        if (!opened || opened.error || !opened.viewerPage) {
+          throw new PortalChangedError(String((opened && opened.error) || "viewer_tab_missing").replace(/https?:\/\/\S+/g, "").slice(0, 80));
+        }
+        viewerPage = opened.viewerPage;
+      } else {
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+        assertHealthy();
+        if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("file viewer reached a dead session page");
+        const modal = await withQuietConsole(() => manual.handlePgcTaskAssignmentModal(page, {}));
+        if (modal && modal.error) throw new PortalChangedError(String(modal.error).slice(0, 80));
+      }
       assertHealthy();
-      if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("file viewer reached a dead session page");
-      const modal = await withQuietConsole(() => manual.handlePgcTaskAssignmentModal(page, {}));
-      if (modal && modal.error) throw new PortalChangedError(String(modal.error).slice(0, 80));
-      assertHealthy();
-      const cap = await withQuietConsole(() => manual.capturePgcViewerDocument(page, { fileId: String(fileId) }, { responseRecords }));
+      const cap = await withQuietConsole(() => manual.capturePgcViewerDocument(viewerPage, { fileId: String(fileId), name: locate.fileName || "" }, { responseRecords }));
       assertHealthy();
       const buf = cap && cap.buffer;
       if (!buf || !buf.length || (cap && cap.error)) {
@@ -399,12 +425,15 @@ async function createPgcLiveTransport(opts) {
       if (buf.length > maxBytes) throw new PortalChangedError(`file is ${buf.length} bytes, over the per-file limit`);
       return { buf, url: cap.url || url, contentType: cap.contentType || "" };
     } finally {
-      page.off("response", onResponse);
-      await page.close().catch(() => {});
+      context.off("response", onResponse);
+      for (const p of context.pages()) {
+        if (p === dashboard || p === apiPage) continue;
+        await p.close().catch(() => {});
+      }
     }
   }
 
-  async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024 } = {}) {
+  async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024, projectId = "", folderId = "", folderName = "", fileName = "" } = {}) {
     requireDeep("file body");
     assertHealthy();
     await ensureApiSession();
@@ -419,7 +448,7 @@ async function createPgcLiveTransport(opts) {
     } catch (err) {
       if (fatalFileError(err)) throw err;
       if (!/404/.test(String(err && err.message))) throw err;
-      return fetchFromViewer(fileId, maxBytes);
+      return fetchFromViewer(fileId, maxBytes, { projectId, folderId, folderName, fileName });
     }
   }
 

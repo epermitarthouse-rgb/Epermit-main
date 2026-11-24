@@ -108,6 +108,15 @@ test("the manual scraper exports the project-open used to reach the Web API", ()
   );
 });
 
+test("a PGC file opens from its folder view link", async () => {
+  const manual = require("../pgc-eplan-scraper");
+  const missing = await manual.openPgcFileViewerFromFilesTab({}, {});
+  assert.equal(missing.error, "viewer_file_id");
+  assert.equal(missing.viewerPage, null);
+  const g = safety.createRunGuard({ mode: "deep", tenant: PGC });
+  assert.equal(g.checkRequest("GET", manual.buildPgcTabUrl("80172", "filesTab")).allowed, true);
+});
+
 test("viewer publish builds an export context when the caller did not pass one", async () => {
   const manual = require("../pgc-eplan-scraper");
   const page = {
