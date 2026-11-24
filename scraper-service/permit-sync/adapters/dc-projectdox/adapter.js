@@ -127,7 +127,20 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
         sections.status = { status: "ok", sourceKind: "json", fields: normalizer.statusFields(statusData), raw: statusData };
       } catch (err) {
         guardOrThrow(err);
-        sections.status = failed("json", err);
+        const readStatus = pgc && /404/.test(String(err && err.message)) && typeof transport.readProjectStatus === "function"
+          ? transport.readProjectStatus
+          : null;
+        if (!readStatus) {
+          sections.status = failed("json", err);
+        } else {
+          try {
+            statusData = await readStatus(projectId);
+            sections.status = { status: "ok", sourceKind: "html", fields: normalizer.statusFields(statusData), raw: statusData };
+          } catch (domErr) {
+            guardOrThrow(domErr);
+            sections.status = failed("html", domErr);
+          }
+        }
       }
     } else if (sections.workflows.status === "ok") {
       sections.status = { status: "absent", sourceKind: "json" };
@@ -137,12 +150,20 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
 
     try {
       let active;
+      let taskSource = "json";
       try {
         active = await transport.getJson("active_task_list", { projectID: projectId });
       } catch (err) {
         guardOrThrow(err);
         if (!pgc || !/404/.test(String(err && err.message))) throw err;
-        active = await transport.getJson("workflow_task_list", { projectID: projectId });
+        try {
+          active = await transport.getJson("workflow_task_list", { projectID: projectId });
+        } catch (listErr) {
+          guardOrThrow(listErr);
+          if (!/404/.test(String(listErr && listErr.message)) || typeof transport.readProjectTasks !== "function") throw listErr;
+          active = await transport.readProjectTasks(projectId);
+          taskSource = "html";
+        }
       }
       const list = Array.isArray(active) ? active : ((active && (active.Tasks || active.Items || active.Records)) || []);
       const fromStatus = statusData
@@ -153,7 +174,7 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
       const tasks = dc.taskItems([...byId.values()]);
       const expected = statusData && Number.isInteger(statusData.UncompleteTaskCount) ? statusData.UncompleteTaskCount : null;
       sections.tasks = {
-        status: "ok", sourceKind: "json", tables: { permit_tasks: tasks },
+        status: "ok", sourceKind: taskSource, tables: { permit_tasks: tasks },
         expectedCounts: expected !== null ? { permit_tasks: expected } : undefined,
         confirmedEmpty: tasks.length === 0 && expected === 0, raw: { active, fromStatus },
       };

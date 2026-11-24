@@ -10,8 +10,17 @@
  *              launchEForm(...autoAssignTask=true) and are never clicked.
  *   Project    /ProjectDoxWebUI/Project/Index. Tabs: Tasks, Files, Status, Info, Reports, Discuss, Reviews
  *              (Reviews is #correctionsTab).
- *   Reports    12 rows, including "Plan Review - Review Comments". The viewer is
- *              /ProjectDox/ReportViewer.aspx?ReportPath=/PDoxProdReportPGC/Plan Review - Review Comments.
+ *   Reports    12 rows. Plan Review, Department Review Status, and Workflow Routing Slip render
+ *              immediately. COM_RES, FIRE, All Logged Events, Combined Discussions, and User Activity
+ *              stop on a View Report parameter form (APNO, dates, discussion type, or email). Those
+ *              are stored as parameters_required and are not submitted.
+ *   Status     GetWorkflowInstanceStatusData returns 404. The Status tab HTML is the source.
+ *   Tasks      GetActiveWorkflowTaskList and GetWorkflowTaskList return 404. The Tasks grid is the source.
+ *              Task Accept, Complete, and ProcessTask are not clicked.
+ *   Files      viewFile opens Brava. Publish to PDF, then Export complete, then OK, opens
+ *              GET /BravaServer/publishtoformat/.../pdf on port 8443 (verified on file 2751001).
+ *              The publish call that creates that PDF is not a GET. Deep mode continues only
+ *              POST and OPTIONS to that path. Every other write stays dropped.
  *
  * Auth phase allows the login form and the SSO hop. After that every request goes through the shared
  * read-only guard. No logout is clicked.
@@ -41,6 +50,30 @@ const ENTRY_URL = `${PGC.portalOrigin}/Portal/Login/Index/PGC-Prod`;
 const TRAIL_MAX = 25;
 
 const isTenantHost = (host) => PGC.hosts.includes(String(host || "").toLowerCase());
+
+/**
+ * The Brava publish that creates the PDF. Verified workflow: Publish to PDF, Export complete,
+ * OK, then a GET of /BravaServer/publishtoformat/.../pdf. The create step is not a GET.
+ * POST and its OPTIONS preflight on this path only. A deny-pattern match is never lifted.
+ */
+function isPgcBravaPublishWrite(method, url) {
+  const m = String(method || "").toUpperCase();
+  if (m !== "POST" && m !== "OPTIONS") return false;
+  let u = null;
+  try {
+    u = new URL(String(url));
+  } catch (_) {
+    return false;
+  }
+  if (u.protocol !== "https:" || !isTenantHost(u.hostname)) return false;
+  return /^\/BravaServer\/publishtoformat(\/|$)/i.test(u.pathname);
+}
+
+function liftPgcBravaPublishWrite(decision, method, url, mode) {
+  if (!decision || decision.action === "continue" || decision.rule !== "method_dropped" || mode !== "deep") return decision;
+  if (!isPgcBravaPublishWrite(method, url)) return decision;
+  return { action: "continue", violation: false, sessionEnded: false, rule: "brava_publish" };
+}
 const hostOf = (url) => {
   try {
     return new URL(String(url)).hostname.toLowerCase();
@@ -149,7 +182,7 @@ async function createPgcLiveTransport(opts) {
       }
       return route.continue();
     }
-    const d = dcLive.routeReadRequest(r, guard);
+    const d = liftPgcBravaPublishWrite(dcLive.routeReadRequest(r, guard), r.method, r.url, mode);
     if (d.violation) violation = violation || dcLive.describeViolation(d, r);
     if (d.sessionEnded) markSessionEnded(r.method, r.url, { type: r.resourceType || null, via: "browser" });
     if (d.action !== "continue" && ["document", "xhr", "fetch", "other"].includes(r.resourceType)) {
@@ -411,9 +444,9 @@ async function createPgcLiveTransport(opts) {
 
   function blockedNote() {
     if (!lastAbort) return "";
-    const host = String(lastAbort.host || "").slice(0, 40);
-    const path = String(lastAbort.path || "/").split("?")[0].slice(0, 40);
-    return ` blocked ${host}${path}`.slice(0, 70);
+    const method = String(lastAbort.method || "GET").slice(0, 8);
+    const path = String(lastAbort.path || "/").split("?")[0].slice(0, 48);
+    return ` blocked ${method} ${path}`.slice(0, 70);
   }
 
   /**
@@ -508,6 +541,64 @@ async function createPgcLiveTransport(opts) {
     }
   }
 
+  /** Visible SSRS parameter form. A rendered report does not show a View Report button. */
+  async function reportParameterSnapshot(page) {
+    return page.evaluate(() => {
+      const textOf = (el) => String((el && (el.innerText || el.textContent || el.value)) || "").replace(/\s+/g, " ").trim();
+      const visible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        const box = el.getClientRects();
+        return box.length > 0 && box[0].width > 0 && box[0].height > 0;
+      };
+      const viewReport = [...document.querySelectorAll("button, input, a")].some((el) => visible(el) && /^view report$/i.test(textOf(el)));
+      if (!viewReport) return { viewReport: false, fields: [] };
+      const fields = [];
+      for (const input of document.querySelectorAll("input, select, textarea")) {
+        const type = String(input.type || "").toLowerCase();
+        if (type === "hidden" || type === "button" || type === "submit" || type === "image") continue;
+        if (!visible(input) && !input.disabled) continue;
+        let label = "";
+        if (input.id) {
+          const lab = document.querySelector(`label[for="${window.CSS && CSS.escape ? CSS.escape(input.id) : input.id}"]`);
+          if (lab) label = textOf(lab);
+        }
+        if (!label) {
+          const cell = input.closest("td, th, div");
+          const prev = cell && cell.previousElementSibling;
+          label = prev ? textOf(prev) : "";
+        }
+        let empty = true;
+        if (input.tagName === "SELECT") {
+          const opt = input.options && input.selectedIndex >= 0 ? input.options[input.selectedIndex] : null;
+          const value = String((opt && (opt.value || opt.text)) || "").trim();
+          empty = !value || /select a value/i.test(value);
+        } else {
+          empty = !String(input.value || "").trim();
+        }
+        fields.push({ label: label.slice(0, 60), empty, disabled: Boolean(input.disabled) });
+      }
+      return { viewReport: true, fields };
+    }).catch(() => ({ viewReport: false, fields: [] }));
+  }
+
+  async function readProjectTab(projectId, tabName, read) {
+    assertHealthy();
+    await ensureApiSession();
+    const manual = scraper();
+    const page = await context.newPage();
+    try {
+      const nav = await manual.gotoPgcProjectTab(page, String(projectId), tabName);
+      assertHealthy();
+      if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError(`${tabName} reached a dead session page`);
+      if (!nav.ok) throw new PortalChangedError(((nav.errors || []).join("; ") || `${tabName} not ready`).slice(0, 180));
+      return await read(manual, page);
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
   /** One SSRS export through the viewer control. Null on success, else a short reason. */
   async function viewerExport(page, handle, fmt, dest, manual) {
     const download = page.waitForEvent("download", { timeout: 120000 });
@@ -551,6 +642,11 @@ async function createPgcLiveTransport(opts) {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
       assertHealthy();
       if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("report viewer reached a dead session page");
+      const parameterReason = pgcNorm.reportParameterReason(await reportParameterSnapshot(page));
+      if (parameterReason) {
+        out.error = parameterReason;
+        return out;
+      }
       const handle = await manual.waitForPgcReportViewerHandle(page, 45000);
       assertHealthy();
       if (!handle) {
@@ -628,6 +724,20 @@ async function createPgcLiveTransport(opts) {
       if (parsed.totalPages !== 1) throw new PortalChangedError(`report has ${parsed.totalPages ?? "unknown"} pages`);
       return parsed.rows;
     },
+    async readProjectStatus(projectId) {
+      return readProjectTab(projectId, "projectStatusTab", async (manual, page) => {
+        const raw = pgcNorm.statusPayloadFromTab(await manual.extractStatusTabData(page));
+        if (!raw.ProjectStatus) throw new PortalChangedError("status tab has no Status value");
+        return raw;
+      });
+    },
+    async readProjectTasks(projectId) {
+      return readProjectTab(projectId, "tasksTab", async (manual, page) => {
+        const rows = pgcNorm.taskRecordsFromTab(await manual.extractTasksTabData(page));
+        if (!rows.length) throw new PortalChangedError("tasks tab has no task rows");
+        return rows;
+      });
+    },
     async getProjectInfo(projectId) {
       const html = await fetchPartial("project_info", { ProjectID: projectId });
       const parsed = await apiPage.evaluate(extractProjectInfoFields, html);
@@ -655,4 +765,6 @@ module.exports = {
   createPgcLiveTransport,
   evaluatePgcAuthRequest,
   classifyPgcPage,
+  isPgcBravaPublishWrite,
+  liftPgcBravaPublishWrite,
 };

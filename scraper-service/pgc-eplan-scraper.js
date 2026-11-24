@@ -7070,12 +7070,19 @@ function pgcFindNewBravaPublishPdfUrl(viewerPage, responseRecords, opts = {}) {
     }
   } catch (_) {}
   for (const r of responseRecords || []) {
+    if (!pgcPublishNetworkRecordUsable(r)) continue;
     const ts =
       typeof r.capturedAt === "number" ? Number(r.capturedAt) : Date.now();
     consider(String(r.url || ""), "network", ts);
   }
 
   return best;
+}
+
+/** A failed publish response is not the PDF tab that opens after Export complete → OK. */
+function pgcPublishNetworkRecordUsable(record) {
+  const status = Number(record && record.status);
+  return !(Number.isFinite(status) && status >= 400);
 }
 
 function pgcSha256Buffer(buf) {
@@ -11949,6 +11956,7 @@ function pgcFindBravaPublishPdfUrl(viewerPage, responseRecords) {
     }
   } catch (_) {}
   for (const r of responseRecords || []) {
+    if (!pgcPublishNetworkRecordUsable(r)) continue;
     const u = String(r.url || "");
     if (isPgcBravaPublishToPdfUrl(u)) return u;
   }
@@ -11999,6 +12007,7 @@ function pgcPickBravaPublishPdfFromFallbackChannels(channels, opts = {}) {
   let best = null;
 
   const consider = (rawUrl, source, recordTs, status) => {
+    if (Number.isFinite(Number(status)) && Number(status) >= 400) return;
     if (!rawUrl || !isPgcBravaPublishToPdfUrl(rawUrl)) return;
     const norm = pgcNormalizePublishUrl(rawUrl);
     if (prePublishSnapshot.has(norm)) return;
@@ -12657,6 +12666,7 @@ async function waitForPgcPostPublishSuccess(
       }
     } catch (_) {}
     for (const r of responseRecords || []) {
+      if (!pgcPublishNetworkRecordUsable(r)) continue;
       const u = String(r.url || "");
       if (isPgcBravaPublishToPdfUrl(u)) return { url: u, source: "network" };
     }
@@ -13703,13 +13713,26 @@ async function capturePgcViewerDocument(viewerPage, fileMeta, opts = {}) {
 
   capturePgcViewerDocumentRequests(fileMeta, responseRecords);
 
-  const publishFirst = await capturePgcBravaPublishResult(
+  let publishFirst = await capturePgcBravaPublishResult(
     viewerPage,
     fileMeta,
     responseRecords,
     ctx,
     { allowTrigger: true, exportCtx: opts.exportCtx },
   );
+  const retryPublish = /publishtoformat_pdf_not_seen|http_non_200|no_document_payload_seen/.test(
+    String((publishFirst && (publishFirst.publishFlowError || publishFirst.error)) || ""),
+  );
+  if (retryPublish && !viewerPage.isClosed()) {
+    await viewerPage.waitForTimeout(1500);
+    publishFirst = await capturePgcBravaPublishResult(
+      viewerPage,
+      fileMeta,
+      responseRecords,
+      ctx,
+      { allowTrigger: true, exportCtx: opts.exportCtx },
+    );
+  }
   if (publishFirst && publishFirst.buffer && !publishFirst.error) {
     return {
       buffer: publishFirst.buffer,
@@ -20290,4 +20313,8 @@ module.exports = {
   capturePgcViewerDocument,
   capturePgcBravaPublishResult,
   openPgcFileViewerFromFilesTab,
+  extractStatusTabData,
+  extractTasksTabData,
+  gotoPgcProjectTab,
+  pgcPublishNetworkRecordUsable,
 };

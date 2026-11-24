@@ -95,12 +95,84 @@ test("PGC reads files from child folders and tasks from GetWorkflowTaskList", as
   assert.equal(calls.some((c) => c[0] === "folder_files" && c[1] === "10"), true);
 });
 
+test("PGC status and tasks fall back to the project tabs when both APIs 404", async () => {
+  const calls = [];
+  const transport = {
+    async getJson(route) {
+      calls.push(route);
+      if (route === "workflow_instances_list") return { Records: [{ WFlowInstanceID: 9, WFlowInstanceStateName: "Active" }], TotalRecordCount: 1 };
+      if (route === "workflow_status" || route === "active_task_list" || route === "workflow_task_list") {
+        const err = new Error(`portal API answered 404 (${route})`);
+        err.code = "portal_changed";
+        throw err;
+      }
+      if (route === "project_folders") return [];
+      throw new Error(`unexpected ${route}`);
+    },
+    async readProjectStatus() {
+      calls.push("readProjectStatus");
+      return {
+        ProjectStatus: "Applicant Re-upload",
+        ReviewType: "Building",
+        TotalNumberOfFiles: "10",
+        UncompleteTaskCount: "1",
+        SubWorkflows: [{ UnresolvedComments: 3 }],
+      };
+    },
+    async readProjectTasks() {
+      calls.push("readProjectTasks");
+      return [{ WFlowTaskID: "dom:Applicant Re-upload::Accepted", TaskName: "Applicant Re-upload", TaskStatus: "Accepted", Accepted: true }];
+    },
+    async getCorrectionsRows() { return []; },
+    async getProjectInfo() { return { projectName: "15385-2022-0" }; },
+    async listReports() { return []; },
+  };
+  const { sections } = await createPgcAdapter({ transport }).fetchPermit({ portal_record_id: "80172" });
+  assert.equal(sections.status.status, "ok");
+  assert.equal(sections.status.sourceKind, "html");
+  assert.equal(sections.status.fields.status, "upload");
+  assert.equal(sections.status.fields.status_raw, "Applicant Re-upload");
+  assert.equal(sections.status.fields.unresolved_comments, 3);
+  assert.equal(sections.tasks.status, "ok");
+  assert.equal(sections.tasks.sourceKind, "html");
+  assert.equal(sections.tasks.tables.permit_tasks[0].fields.name, "Applicant Re-upload");
+  assert.ok(calls.includes("readProjectStatus"));
+  assert.ok(calls.includes("readProjectTasks"));
+  assert.equal(calls.includes("workflow_task_list"), true);
+});
+
+test("PGC status tab text and report parameter prompts map without guessing values", () => {
+  const norm = require("../permit-sync/adapters/pgc-projectdox/normalize");
+  const status = norm.statusPayloadFromTab({
+    keyValues: [
+      { key: "Review Type", value: "Building" },
+      { key: "Status", value: "Applicant Re-upload" },
+      { key: "Total Number of Files", value: "10" },
+      { key: "Current Non-Completed Tasks", value: "1" },
+      { key: "Prescreen Review Comments (Unresolved)", value: "3" },
+    ],
+  });
+  assert.equal(norm.statusFields(status).status_raw, "Applicant Re-upload");
+  assert.equal(norm.statusFields(status).total_files, 10);
+  const tasks = norm.taskRecordsFromTab({
+    tasks: [{ taskName: "Applicant Re-upload", assignee: null, state: "Accepted", rawText: "Waiting [Accepted]" }],
+  });
+  assert.equal(tasks[0].Accepted, true);
+  assert.match(tasks[0].WFlowTaskID, /^dom:/);
+  assert.equal(norm.reportParameterReason({ viewReport: true, fields: [{ label: "APNO", empty: true, disabled: false }] }), "parameters_required:APNO");
+  assert.equal(norm.reportParameterReason({ viewReport: true, fields: [{ label: "Type", empty: true, disabled: false }, { label: "End Date", empty: true, disabled: true }] }), "parameters_required:Type,End Date");
+  assert.equal(norm.reportParameterReason({ viewReport: false, fields: [] }), null);
+});
+
 test("the manual scraper exports the project-open used to reach the Web API", () => {
   const manual = require("../pgc-eplan-scraper");
   assert.equal(typeof manual.openProjectViaDashboardRow, "function");
   assert.equal(typeof manual.detectPaginationMode, "function");
   assert.equal(typeof manual.collectAllProjects, "function");
   assert.equal(typeof manual.capturePgcViewerDocument, "function");
+  assert.equal(typeof manual.extractStatusTabData, "function");
+  assert.equal(typeof manual.extractTasksTabData, "function");
+  assert.equal(typeof manual.gotoPgcProjectTab, "function");
   assert.equal(typeof manual.handlePgcTaskAssignmentModal, "function");
   assert.equal(
     manual.buildPgcActiveXViewerFileUrl("4249493"),
@@ -143,6 +215,31 @@ test("viewer publish builds an export context when the caller did not pass one",
     () => manual.capturePgcBravaPublishResult(page, { fileId: "77" }, [], { pages: () => [] }, { allowTrigger: true }),
     (err) => err instanceof TypeError && /getByRole/.test(err.message),
   );
+});
+
+test("PGC deep mode continues only the Brava publish write, and a failed publish response is not the PDF", () => {
+  const liveTransport = require("../permit-sync/adapters/pgc-projectdox/live-transport");
+  const dcLive = require("../permit-sync/adapters/dc-projectdox/live-transport");
+  const pdf = `${HOST}:8443/BravaServer/publishtoformat/doc/export1/pdf`;
+  const dropped = { action: "abort", violation: false, sessionEnded: false, rule: "method_dropped" };
+  const denied = { action: "abort", violation: true, sessionEnded: false, rule: "deny_pattern" };
+  assert.equal(liveTransport.isPgcBravaPublishWrite("POST", pdf), true);
+  assert.equal(liveTransport.isPgcBravaPublishWrite("OPTIONS", pdf), true);
+  assert.equal(liveTransport.isPgcBravaPublishWrite("GET", pdf), false);
+  assert.equal(liveTransport.isPgcBravaPublishWrite("POST", `${HOST}:8443/BravaServer/search/doc`), false);
+  assert.equal(liveTransport.isPgcBravaPublishWrite("POST", `${HOST}/ProjectDoxWebAPI/File/Upload`), false);
+  assert.equal(liveTransport.liftPgcBravaPublishWrite(dropped, "POST", pdf, "deep").rule, "brava_publish");
+  assert.equal(liveTransport.liftPgcBravaPublishWrite(dropped, "OPTIONS", pdf, "deep").action, "continue");
+  assert.equal(liveTransport.liftPgcBravaPublishWrite(dropped, "POST", pdf, "json").rule, "method_dropped");
+  assert.equal(liveTransport.liftPgcBravaPublishWrite(dropped, "POST", `${HOST}/Project/Save`, "deep").rule, "method_dropped");
+  assert.equal(liveTransport.liftPgcBravaPublishWrite(denied, "POST", `${HOST}/File/Upload`, "deep").violation, true);
+  const guard = safety.createRunGuard({ mode: "deep", tenant: PGC });
+  assert.equal(dcLive.routeReadRequest({ method: "POST", url: pdf, resourceType: "xhr" }, guard).rule, "method_dropped");
+  assert.equal(dcLive.routeReadRequest({ method: "POST", url: `${HOST}/ProjectDoxWebAPI/File/Upload`, resourceType: "xhr" }, guard).violation, true);
+  const manual = require("../pgc-eplan-scraper");
+  assert.equal(manual.pgcPublishNetworkRecordUsable({ url: pdf, status: 200 }), true);
+  assert.equal(manual.pgcPublishNetworkRecordUsable({ url: pdf, status: 500 }), false);
+  assert.equal(manual.pgcPublishNetworkRecordUsable({ url: pdf }), true);
 });
 
 test("PGC file bytes open the ePlans viewer, and task assignment stays refused", () => {

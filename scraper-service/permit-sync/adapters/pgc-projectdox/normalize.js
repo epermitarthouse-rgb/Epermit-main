@@ -54,6 +54,75 @@ function statusFields(data) {
   return { ...shared.statusFields(data), status: mapStatus(data && data.ProjectStatus) };
 }
 
+function kvValue(keyValues, ...names) {
+  const wanted = new Set(names.map((n) => n.toLowerCase()));
+  for (const kv of keyValues || []) {
+    const key = String(kv && kv.key || "").replace(/:\s*$/, "").trim().toLowerCase();
+    if (wanted.has(key)) return str(kv.value);
+  }
+  return null;
+}
+
+/**
+ * Status tab key/value rows from extractStatusTabData → the payload statusFields already understands.
+ * Observed on project 80172 (2026-11-24): Status, Review Type, Total Number of Files,
+ * Current Non-Completed Tasks, Prescreen Review Comments (Unresolved).
+ */
+function statusPayloadFromTab(extracted) {
+  const keyValues = extracted && extracted.keyValues;
+  const unresolvedText = kvValue(keyValues, "Prescreen Review Comments (Unresolved)")
+    || str((keyValues || []).find((kv) => /unresolved/i.test(String(kv && kv.key || "")))?.value);
+  const unresolved = unresolvedText == null ? null : Number(String(unresolvedText).replace(/[^\d.-]/g, ""));
+  return {
+    ProjectStatus: kvValue(keyValues, "Status"),
+    ReviewType: kvValue(keyValues, "Review Type"),
+    TotalNumberOfFiles: kvValue(keyValues, "Total Number of Files"),
+    UncompleteTaskCount: kvValue(keyValues, "Current Non-Completed Tasks"),
+    SubWorkflows: Number.isFinite(unresolved) ? [{ UnresolvedComments: unresolved }] : [],
+  };
+}
+
+/**
+ * Tasks-tab rows from extractTasksTabData → objects taskItems can store.
+ * The grid has no WFlowTaskID. The key is the visible row, so a later API read can replace it.
+ */
+function taskRecordsFromTab(extracted) {
+  const rows = Array.isArray(extracted && extracted.tasks) ? extracted.tasks : [];
+  const seen = new Map();
+  return rows.map((row) => {
+    const name = str(row && row.taskName) || "task";
+    const group = str(row && row.assignee) || "";
+    const status = str(row && row.state) || "";
+    const base = `dom:${name}:${group}:${status}`;
+    const n = seen.get(base) || 0;
+    seen.set(base, n + 1);
+    const accepted = /\[?\baccepted\b\]?/i.test(`${status} ${row && row.rawText || ""}`);
+    return {
+      WFlowTaskID: n === 0 ? base : `${base}:${n}`,
+      TaskName: name,
+      GroupName: group || null,
+      TaskStatus: status || null,
+      Accepted: accepted,
+      DueDate: str(row && row.dueDate),
+    };
+  });
+}
+
+/**
+ * A Report Viewer that is still showing View Report has not rendered, so exportReport cannot run.
+ * `fields` are { label, empty, disabled } for the visible parameter inputs.
+ */
+function reportParameterReason(snapshot) {
+  if (!snapshot || snapshot.viewReport !== true) return null;
+  const fields = Array.isArray(snapshot.fields) ? snapshot.fields : [];
+  const names = fields
+    .filter((f) => f && f.empty && f.label)
+    .map((f) => String(f.label).replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const unique = [...new Set(names)].slice(0, 6);
+  return unique.length ? `parameters_required:${unique.join(",")}` : "parameters_required";
+}
+
 /** Dashboard rows from collectAllProjects → listing rows the shared adapter discovers. */
 function rowsFromDashboard(projects) {
   const list = Array.isArray(projects) ? projects : [];
@@ -94,6 +163,9 @@ module.exports = {
   PERMIT_NUMBER,
   mapStatus,
   statusFields,
+  statusPayloadFromTab,
+  taskRecordsFromTab,
+  reportParameterReason,
   rowsFromDashboard,
   discoveryRecord,
 };
