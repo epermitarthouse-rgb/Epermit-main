@@ -129,7 +129,9 @@ async function createPgcLiveTransport(opts) {
 
   await context.route("**/*", async (route) => {
     const req = route.request();
-    const r = { method: req.method(), url: req.url(), resourceType: req.resourceType() };
+    const rawUrl = req.url();
+    if (/^javascript:/i.test(rawUrl) || rawUrl === "about:blank") return route.continue();
+    const r = { method: req.method(), url: rawUrl, resourceType: req.resourceType() };
     if (phase === "auth") {
       const v = evaluatePgcAuthRequest(r);
       if (!v.allowed) {

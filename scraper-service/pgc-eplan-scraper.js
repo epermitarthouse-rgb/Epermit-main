@@ -10582,10 +10582,10 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta, opts = {}) {
         for (const p of ctx.pages()) {
           let u = "";
           try { u = p.url(); } catch (_) { continue; }
-          if (/ActiveXViewer\.aspx/i.test(u)) { viewerPage = p; viewerUrl = u; break; }
+          if (/ActiveXViewer\.aspx|FileViewer\.aspx|\/BravaServer\//i.test(u)) { viewerPage = p; viewerUrl = u; break; }
           for (const f of p.frames()) {
             const fu = f.url() || "";
-            if (/ActiveXViewer\.aspx/i.test(fu)) { viewerPage = p; viewerUrl = fu; break; }
+            if (/ActiveXViewer\.aspx|FileViewer\.aspx|\/BravaServer\//i.test(fu)) { viewerPage = p; viewerUrl = fu; break; }
           }
           if (viewerPage && viewerUrl) break;
         }
@@ -10600,10 +10600,20 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta, opts = {}) {
         if (page.isClosed()) viewerErr = "viewer_page_closed";
         else {
           let path = "";
+          let extra = "";
           try {
             path = new URL(page.url()).pathname.split("/").map((s) => (s.length > 24 ? "*" : s)).join("/").slice(0, 40);
           } catch (_) {}
-          viewerErr = `viewer_tab_missing ${viewFileCall} ${path}`.trim().slice(0, 80);
+          for (const p of newPages) {
+            if (p === page) continue;
+            try {
+              const u = p.url();
+              if (!u || u === "about:blank") continue;
+              extra = new URL(u).pathname.split("/").map((s) => (s.length > 24 ? "*" : s)).join("/").slice(0, 30);
+              break;
+            } catch (_) {}
+          }
+          viewerErr = `viewer_tab_missing ${viewFileCall} ${path} ${extra}`.trim().slice(0, 80);
         }
       } catch (_) {
         viewerErr = "viewer_context_closed";
