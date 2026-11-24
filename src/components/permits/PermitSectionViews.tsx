@@ -22,7 +22,8 @@ import {
 } from "@/lib/permitSections";
 import {
   DOCUMENT_VIEW_LABEL,
-  REPORT_CONTENT_LABEL,
+  reportContentLabel,
+  reportParameterNames,
   buildFolderTree,
   folderStoredCounts,
   documentViewState,
@@ -456,6 +457,7 @@ export function ReportRowActions({
 }) {
   const contentId = str(report.latest_content_id);
   const target = actions.exports && contentId ? reportExportTarget(actions.exports[contentId]) : null;
+  const needsParameters = reportContentState(report) === "failed" && reportParameterNames(report.content_error) !== null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       {target ? (
@@ -471,6 +473,8 @@ export function ReportRowActions({
         >
           {actions.busyKey === target.path ? "Opening…" : "View"}
         </Button>
+      ) : needsParameters ? (
+        <span className="text-xs text-muted-foreground" data-report-parameters>Not imported</span>
       ) : !contentId || actions.exports ? (
         <span className="text-xs text-muted-foreground" data-report-no-file>No file stored</span>
       ) : actions.exportsError ? (
@@ -556,7 +560,7 @@ export function ReportsSectionView({
                     <TableRow data-report-row={key}>
                       <TableCell className="align-top text-sm">{dash(r.name)}</TableCell>
                       <TableCell className="align-top text-sm">{dash(r.category)}</TableCell>
-                      <TableCell className="align-top text-sm"><span data-report-state={s}>{REPORT_CONTENT_LABEL[s]}</span></TableCell>
+                      <TableCell className="align-top text-sm"><span data-report-state={s}>{reportContentLabel(r)}</span></TableCell>
                       <TableCell className="align-top text-sm">{formatTimestamp(r.content_captured_at)}</TableCell>
                       <TableCell className="align-top text-sm">
                         {actions ? (

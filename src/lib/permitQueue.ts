@@ -236,6 +236,32 @@ export const REPORT_CONTENT_LABEL: Record<ReportContentState, string> = {
   not_captured: 'Not captured',
 };
 
+/**
+ * Parameter prompts stored as `parameters_required` or `parameters_required:APNO,Start Date:`.
+ * null when the report failed for another reason. An empty list means the portal asked for
+ * parameters but the field names were not on the page.
+ */
+export function reportParameterNames(error: unknown): string[] | null {
+  const raw = str(error);
+  if (!raw || !raw.startsWith('parameters_required')) return null;
+  if (raw === 'parameters_required') return [];
+  if (!raw.startsWith('parameters_required:')) return null;
+  return [...new Set(
+    raw.slice('parameters_required:'.length)
+      .split(',')
+      .map((name) => name.replace(/:\s*$/, '').trim())
+      .filter(Boolean),
+  )];
+}
+
+/** Content-column wording. A parameter prompt is not a failed import. */
+export function reportContentLabel(report: Row): string {
+  const names = reportContentState(report) === 'failed' ? reportParameterNames(report.content_error) : null;
+  if (!names) return REPORT_CONTENT_LABEL[reportContentState(report)];
+  const list = names.length ? ` (${names.join(', ')})` : '';
+  return `Needs extra parameters${list}. Not imported.`;
+}
+
 /** Structured rows from an Excel export: an array of objects or of arrays. Anything else yields none. */
 export function reportTable(rows: unknown): { columns: string[]; body: string[][] } {
   if (!Array.isArray(rows) || !rows.length) return { columns: [], body: [] };

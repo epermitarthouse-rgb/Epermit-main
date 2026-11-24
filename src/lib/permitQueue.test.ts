@@ -23,7 +23,9 @@ import {
   paginate,
   permitQueuePath,
   queueSourceOptions,
+  reportContentLabel,
   reportContentState,
+  reportParameterNames,
   reportTable,
 } from './permitQueue';
 
@@ -212,6 +214,18 @@ describe('reports: content gating', () => {
     assert.equal(reportContentState({ content_status: 'not_captured' }), 'not_captured');
     // Migration not applied: the columns are missing.
     assert.equal(reportContentState({ report_key: '14', name: 'Plan Review' }), 'not_captured');
+  });
+
+  it('names the parameters a report asked for instead of calling that a failed capture', () => {
+    assert.deepEqual(reportParameterNames('parameters_required:APNO'), ['APNO']);
+    assert.deepEqual(reportParameterNames('parameters_required:Start Date:,End Date:'), ['Start Date', 'End Date']);
+    assert.deepEqual(reportParameterNames('parameters_required'), []);
+    assert.equal(reportParameterNames('viewer postback refused'), null);
+    const prompted = { content_status: 'failed', content_error: 'parameters_required:User Email:,Event Type:' };
+    assert.equal(reportContentLabel(prompted), 'Needs extra parameters (User Email, Event Type). Not imported.');
+    assert.equal(reportContentLabel({ content_status: 'failed', content_error: 'parameters_required' }), 'Needs extra parameters. Not imported.');
+    assert.equal(reportContentLabel({ content_status: 'failed', content_error: 'viewer postback refused' }), 'Capture failed');
+    assert.equal(reportContentLabel({ content_status: 'captured', latest_content_id: 'c1' }), 'Captured');
   });
 
   it('turns structured rows (objects or arrays) into a table', () => {

@@ -348,6 +348,7 @@ describe("Permit Queue tabs", () => {
       reports: [
         { id: "a", report_key: "14", name: "Review Comments", content_status: "captured", latest_content_id: "c1", content_captured_at: "2026-11-11T00:00:00Z" },
         { id: "b", report_key: "4", name: "Project Summary", content_status: "failed", content_error: "viewer postback refused" },
+        { id: "p", report_key: "9", name: "COM_RES Application Form", content_status: "failed", content_error: "parameters_required:APNO" },
         { id: "c", report_key: "12", name: "Old schema row" },
       ],
       state: ok("reports"),
@@ -356,6 +357,8 @@ describe("Permit Queue tabs", () => {
     assert.equal((html.match(/data-report-view/g) ?? []).length, 1);
     assert.match(html, /data-report-state="captured"/);
     assert.match(html, /Capture failed/);
+    assert.match(html, /Needs extra parameters \(APNO\)\. Not imported\./);
+    assert.match(html, /data-report-parameters/);
     assert.match(html, /data-report-state="not_captured"/);
     assert.doesNotMatch(html, /Report contents have not been captured yet/);
     assert.doesNotMatch(html, /viewer postback refused/);
