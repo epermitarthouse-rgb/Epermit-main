@@ -19,7 +19,7 @@ Decisions: D-093 – D-100. Nothing here is applied automatically; each step mar
 Railway → project PermitPilot → service `permit-sync-worker`:
 
 - Root directory `scraper-service`; config file path `scraper-service/railway.permit-sync-worker.toml`.
-- Replicas: 1. The claim lock keeps one portal session per login even if two ran, but one is the intended setup.
+- Replicas: `numReplicas` in `railway.permit-sync-worker.toml`. Each replica claims one job, runs its own browser, and takes the next queued job when it finishes. Different portal logins run together. The claim lock still keeps one live session per portal login. Raise the replica count to add capacity; do not add a service per jurisdiction. Heartbeat ids are `railway:<RAILWAY_REPLICA_ID>:<pid>` (locally `hostname:pid`).
 - Health: `GET /health` on `$PORT` returns 200 while the worker loop is alive and its last tick is recent, 503 otherwise.
 - Shutdown: SIGTERM stops at the next permit boundary, releases the job without spending an attempt (`worker_shutdown`), and exits; `drainingSeconds = 120`.
 

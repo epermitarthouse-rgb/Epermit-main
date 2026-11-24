@@ -12,7 +12,8 @@
 #      and BUILD_VERSION = the commit, which the worker reports in its heartbeat (Management Admin -> Sync workers).
 # Rollback: run it again with the previous commit (each deploy is appended to exports.local/worker-deploys.log),
 # or Railway -> permit-sync-worker -> Deployments -> previous deployment -> Redeploy.
-# Never changes variables, replicas, schedules, migrations or Edge Functions. Prints no secrets.
+# Never changes variables, schedules, migrations or Edge Functions. Replica count follows numReplicas in
+# railway.permit-sync-worker.toml at the deployed commit. Prints no secrets.
 set -euo pipefail
 
 usage() { echo "usage: $0 <commit> (--i-have-approval | --dry-run)" >&2; exit 2; }

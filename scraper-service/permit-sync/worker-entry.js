@@ -145,6 +145,19 @@ function intEnv(env, key, fallback) {
   return Number.isInteger(n) && n > 0 ? n : fallback;
 }
 
+/**
+ * Id of this process for heartbeats, leases and shutdown. Railway sets RAILWAY_REPLICA_ID on each replica,
+ * so replicas that share a hostname still own distinct jobs. Locally that variable is absent and the id
+ * stays hostname:pid. permit_sync_worker_heartbeat accepts at most 200 characters.
+ */
+function workerIdentity(env = process.env, { hostname = os.hostname(), pid = process.pid } = {}) {
+  const proc = Number.isInteger(pid) && pid > 0 ? String(pid) : "0";
+  const replica = String(env.RAILWAY_REPLICA_ID || "").trim().replace(/[^\w.:-]/g, "").slice(0, 120);
+  if (replica) return `railway:${replica}:${proc}`.slice(0, 200);
+  const host = String(hostname || "local").trim().replace(/[^\w.:-]/g, "") || "local";
+  return `${host}:${proc}`.slice(0, 200);
+}
+
 /** One JSON line per event; callers pass codes, ids and counts only (no credentials, URLs or page text). */
 function createLogger(write = (line) => console.log(line)) {
   return (level, event, fields = {}) => write(JSON.stringify({ ts: new Date().toISOString(), level, svc: "permit-sync-worker", event, ...fields }));
@@ -479,7 +492,7 @@ async function main(env = process.env) {
   }
   const { createClient } = require("@supabase/supabase-js");
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-  const workerId = `${os.hostname()}:${process.pid}`;
+  const workerId = workerIdentity(env);
   // Installed before the job loop (and before the browser or any adapter exists). `state` is assigned below.
   let state = null;
   const guard = installProcessGuard({ log, env, getJobId: () => (state ? state.get().jobId : null) });
@@ -519,6 +532,7 @@ async function main(env = process.env) {
   const limits = { ...deepPolicy.downloadLimits(env), ...deepPolicy.captureLimits(env) };
   const details = {
     version: buildVersion(env),
+    replica: env.RAILWAY_REPLICA_ID || null,
     agent_trigger: Boolean(pipeline),
     scope: scope ? scope.length : "all",
     limits: deep ? { max_files: limits.maxFiles, max_bytes: limits.maxBytes, max_file_bytes: limits.maxFileBytes, max_attempts: limits.maxAttempts } : null,
@@ -598,4 +612,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, pgcLoginUrl, startupCheck, syncMode, workerScope, scopeForAdapter, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, buildVersion, main };
+module.exports = { installProcessGuard, describeFatal, ADAPTERS, montgomeryLoginUrl, pgcLoginUrl, startupCheck, syncMode, workerScope, scopeForAdapter, serviceKeyFormat, buildOpenAdapter, deferWhileManualScrape, createLogger, createWorkerState, startHealthServer, intEnv, workerIdentity, buildVersion, main };
