@@ -6631,6 +6631,28 @@ function buildPgcActiveXViewerFileUrl(fileId) {
   return `${PGC_BASE}/ProjectDox/ActiveXViewer.aspx?FileID=${encodeURIComponent(id)}`;
 }
 
+/**
+ * Where a window opened by the files-tab view link has landed.
+ * `viewer` is ready to publish. `shell` is the home page or a blank popup that still needs the viewer URL.
+ * `project` is the files tab itself and must not be navigated away.
+ * @param {string} url
+ * @returns {"blank"|"viewer"|"shell"|"project"|"other"}
+ */
+function classifyPgcViewerLocation(url) {
+  const raw = String(url || "").trim();
+  if (!raw || /^about:blank/i.test(raw)) return "blank";
+  let path = "";
+  try {
+    path = new URL(raw).pathname || "/";
+  } catch (_) {
+    return "blank";
+  }
+  if (/ActiveXViewer\.aspx|FileViewer\.aspx|\/BravaServer\//i.test(path)) return "viewer";
+  if (path === "/" || /\/Portal\/(?:Home|Login)\b/i.test(path)) return "shell";
+  if (/\/Project\/Index/i.test(path)) return "project";
+  return "other";
+}
+
 function extractUrlFromOnclick(onclick) {
   const s = String(onclick || "");
   if (!s) return null;
@@ -10617,6 +10639,23 @@ async function openPgcViewerForFile(page, rowLocator, fileMeta, opts = {}) {
         }
       } catch (_) {
         viewerErr = "viewer_context_closed";
+      }
+      const shell = newPages.find((p) => p !== page);
+      if (shell && viewerErr.startsWith("viewer_tab_missing")) {
+        let shellUrl = "";
+        try { shellUrl = shell.url(); } catch (_) {}
+        return {
+          error: null,
+          shell: true,
+          preClickUrl: preClick,
+          viewerUrl: shellUrl,
+          viewerPage: shell,
+          modalHandled: !!modalRes.modalSeen,
+          clickedSelectorSummary,
+          rowDiag,
+          fileIdFromUrl: null,
+          sameTab: false,
+        };
       }
       for (const p of newPages) {
         if (p !== page) await p.close().catch(() => {});
@@ -20246,6 +20285,7 @@ module.exports = {
   pgcSelectBravaExportCapture,
   isValidPgcPublishedPdf,
   buildPgcActiveXViewerFileUrl,
+  classifyPgcViewerLocation,
   handlePgcTaskAssignmentModal,
   capturePgcViewerDocument,
   capturePgcBravaPublishResult,

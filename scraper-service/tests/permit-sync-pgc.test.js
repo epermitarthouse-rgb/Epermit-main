@@ -108,6 +108,18 @@ test("the manual scraper exports the project-open used to reach the Web API", ()
   );
 });
 
+test("a viewer window on the site home is a shell, and the file viewer is ready to publish", () => {
+  const manual = require("../pgc-eplan-scraper");
+  assert.equal(manual.classifyPgcViewerLocation(""), "blank");
+  assert.equal(manual.classifyPgcViewerLocation("about:blank"), "blank");
+  assert.equal(manual.classifyPgcViewerLocation(`${HOST}/`), "shell");
+  assert.equal(manual.classifyPgcViewerLocation(`${HOST}/Portal/Home/Index`), "shell");
+  assert.equal(manual.classifyPgcViewerLocation(`${HOST}/ProjectDoxWebUI/Project/Index?tab=filesTab&ProjectID=80172`), "project");
+  assert.equal(manual.classifyPgcViewerLocation(`${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=77`), "viewer");
+  assert.equal(manual.classifyPgcViewerLocation(`${HOST}/ProjectDox/FileViewer.aspx?FileID=77`), "viewer");
+  assert.equal(manual.classifyPgcViewerLocation(`${HOST}:8443/BravaServer/publishtoformat/doc/1/pdf`), "viewer");
+});
+
 test("a PGC file opens from its folder view link", async () => {
   const manual = require("../pgc-eplan-scraper");
   const missing = await manual.openPgcFileViewerFromFilesTab({}, {});

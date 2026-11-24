@@ -116,6 +116,7 @@ async function createPgcLiveTransport(opts) {
   let apiPage = null;
   let dashboard = null;
   let discovered = null;
+  let lastAbort = null;
   const trail = [];
 
   const remember = (entry) => {
@@ -130,7 +131,15 @@ async function createPgcLiveTransport(opts) {
   await context.route("**/*", async (route) => {
     const req = route.request();
     const rawUrl = req.url();
-    if (/^javascript:/i.test(rawUrl) || rawUrl === "about:blank") return route.continue();
+    // javascript: viewFile() and blank popups must reach the browser. continue() on those URLs
+    // navigates the new window to the site home and the file viewer never loads.
+    if (/^(javascript:|about:blank|blob:|data:)/i.test(rawUrl)) {
+      try {
+        return await route.fallback();
+      } catch (_) {
+        return route.continue();
+      }
+    }
     const r = { method: req.method(), url: rawUrl, resourceType: req.resourceType() };
     if (phase === "auth") {
       const v = evaluatePgcAuthRequest(r);
@@ -143,6 +152,9 @@ async function createPgcLiveTransport(opts) {
     const d = dcLive.routeReadRequest(r, guard);
     if (d.violation) violation = violation || dcLive.describeViolation(d, r);
     if (d.sessionEnded) markSessionEnded(r.method, r.url, { type: r.resourceType || null, via: "browser" });
+    if (d.action !== "continue" && ["document", "xhr", "fetch", "other"].includes(r.resourceType)) {
+      lastAbort = dcLive.requestPoint(r.method, r.url, { rule: d.rule, action: d.action });
+    }
     if (
       (isTenantHost(hostOf(r.url)) && (["document", "xhr", "fetch", "other"].includes(r.resourceType) || d.action !== "continue"))
       || (!isTenantHost(hostOf(r.url)) && d.action !== "continue")
@@ -362,6 +374,48 @@ async function createPgcLiveTransport(opts) {
     return err instanceof SafetyViolationError || err instanceof SessionEndedError || err instanceof RateLimitedError;
   }
 
+  function viewerKind(page) {
+    const manual = scraper();
+    let kind = "blank";
+    try { kind = manual.classifyPgcViewerLocation(page.url()); } catch (_) {}
+    if (kind === "viewer") return kind;
+    try {
+      for (const frame of page.frames()) {
+        if (manual.classifyPgcViewerLocation(frame.url()) === "viewer") return "viewer";
+      }
+    } catch (_) {}
+    return kind;
+  }
+
+  /**
+   * The files-tab view link often opens a window on the site home page first. Keep that window.
+   * If it does not reach the file viewer on its own, open the canonical viewer URL in it.
+   * The project files tab is left where it is. Accept, Open and Logout are not clicked.
+   */
+  async function settleViewer(candidate, viewerUrl, manual) {
+    const deadline = Date.now() + 12000;
+    let page = candidate;
+    while (page && Date.now() < deadline) {
+      assertHealthy();
+      if (viewerKind(page) === "viewer") return page;
+      await page.waitForTimeout(400).catch(() => {});
+    }
+    const landOn = page && viewerKind(page) !== "project" ? page : await context.newPage();
+    await landOn.goto(viewerUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    assertHealthy();
+    if (dcLive.isDeadUrl(landOn.url())) throw new SessionEndedError("file viewer reached a dead session page");
+    const modal = await withQuietConsole(() => manual.handlePgcTaskAssignmentModal(landOn, {}));
+    if (modal && modal.error) throw new PortalChangedError(String(modal.error).slice(0, 80));
+    return landOn;
+  }
+
+  function blockedNote() {
+    if (!lastAbort) return "";
+    const host = String(lastAbort.host || "").slice(0, 40);
+    const path = String(lastAbort.path || "/").split("?")[0].slice(0, 40);
+    return ` blocked ${host}${path}`.slice(0, 70);
+  }
+
   /**
    * Prince George's File/RetrieveFile answers 404. The manual scraper reads the bytes from
    * ActiveXViewer (View Only if a task dialog appears, then the viewer document). That page is a GET.
@@ -379,6 +433,7 @@ async function createPgcLiveTransport(opts) {
       if (!fv.allowed) throw new SafetyViolationError(`blocked files tab: ${fv.reason}`, fv);
     }
     await throttle();
+    lastAbort = null;
     const page = await context.newPage();
     const responseRecords = [];
     const onResponse = (res) => {
@@ -394,7 +449,7 @@ async function createPgcLiveTransport(opts) {
     };
     context.on("response", onResponse);
     try {
-      let viewerPage = page;
+      let viewerPage = null;
       if (filesUrl && locate.folderId) {
         await page.goto(filesUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
         assertHealthy();
@@ -407,23 +462,21 @@ async function createPgcLiveTransport(opts) {
           fileId: String(fileId),
           name: locate.fileName || "",
         }));
-        if (!opened || opened.error || !opened.viewerPage) {
-          throw new PortalChangedError(String((opened && opened.error) || "viewer_tab_missing").replace(/https?:\/\/\S+/g, "").slice(0, 80));
+        if (opened && opened.error) {
+          throw new PortalChangedError(String(opened.error).replace(/https?:\/\/\S+/g, "").slice(0, 80));
         }
-        viewerPage = opened.viewerPage;
+        const candidate = opened && opened.viewerPage;
+        if (candidate && viewerKind(candidate) === "viewer" && !opened.shell) viewerPage = candidate;
+        else viewerPage = await settleViewer(candidate, url, manual);
       } else {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-        assertHealthy();
-        if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("file viewer reached a dead session page");
-        const modal = await withQuietConsole(() => manual.handlePgcTaskAssignmentModal(page, {}));
-        if (modal && modal.error) throw new PortalChangedError(String(modal.error).slice(0, 80));
+        viewerPage = await settleViewer(null, url, manual);
       }
       assertHealthy();
       const cap = await withQuietConsole(() => manual.capturePgcViewerDocument(viewerPage, { fileId: String(fileId), name: locate.fileName || "" }, { responseRecords }));
       assertHealthy();
       const buf = cap && cap.buffer;
       if (!buf || !buf.length || (cap && cap.error)) {
-        throw new PortalChangedError(String((cap && (cap.publishFlowError || cap.error)) || "viewer_no_file_bytes").replace(/https?:\/\/\S+/g, "").slice(0, 80));
+        throw new PortalChangedError(`${String((cap && (cap.publishFlowError || cap.error)) || "viewer_no_file_bytes").replace(/https?:\/\/\S+/g, "").slice(0, 60)}${blockedNote()}`.slice(0, 80));
       }
       if (buf.length > maxBytes) throw new PortalChangedError(`file is ${buf.length} bytes, over the per-file limit`);
       return { buf, url: cap.url || url, contentType: cap.contentType || "" };
