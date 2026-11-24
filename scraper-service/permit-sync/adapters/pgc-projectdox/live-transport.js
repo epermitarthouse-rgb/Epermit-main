@@ -27,6 +27,7 @@ const {
   SessionEndedError,
   PortalChangedError,
   TransientError,
+  RateLimitedError,
 } = require("../../core/errors");
 const { buildTenantUrl } = require("../dc-projectdox/routes");
 const { extractProjectInfoFields, extractReviewCommentsReport } = require("../dc-projectdox/dom-extract");
@@ -352,16 +353,73 @@ async function createPgcLiveTransport(opts) {
     return { buf: Buffer.from(res.b64, "base64"), url, contentType: res.contentType };
   }
 
+  function fatalFileError(err) {
+    return err instanceof SafetyViolationError || err instanceof SessionEndedError || err instanceof RateLimitedError;
+  }
+
+  /**
+   * Prince George's File/RetrieveFile answers 404. The manual scraper reads the bytes from
+   * ActiveXViewer (View Only if a task dialog appears, then the viewer document). That page is a GET.
+   * Accept, Open and Logout are not clicked.
+   */
+  async function fetchFromViewer(fileId, maxBytes) {
+    const manual = scraper();
+    const url = manual.buildPgcActiveXViewerFileUrl(fileId);
+    if (!url) throw new PortalChangedError("viewer_file_id");
+    const v = guard.checkRequest("GET", url);
+    if (!v.allowed) throw new SafetyViolationError(`blocked file viewer: ${v.reason}`, v);
+    await throttle();
+    const page = await context.newPage();
+    const responseRecords = [];
+    const onResponse = (res) => {
+      try {
+        const headers = res.headers();
+        responseRecords.push({
+          url: res.url(),
+          status: res.status(),
+          contentType: headers["content-type"] || "",
+          contentDisposition: headers["content-disposition"] || "",
+        });
+      } catch (_) {}
+    };
+    page.on("response", onResponse);
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+      assertHealthy();
+      if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("file viewer reached a dead session page");
+      const modal = await withQuietConsole(() => manual.handlePgcTaskAssignmentModal(page, {}));
+      if (modal && modal.error) throw new PortalChangedError(String(modal.error).slice(0, 80));
+      assertHealthy();
+      const cap = await withQuietConsole(() => manual.capturePgcViewerDocument(page, { fileId: String(fileId) }, { responseRecords }));
+      assertHealthy();
+      const buf = cap && cap.buffer;
+      if (!buf || !buf.length || (cap && cap.error)) {
+        throw new PortalChangedError(String((cap && (cap.publishFlowError || cap.error)) || "viewer_no_file_bytes").replace(/https?:\/\/\S+/g, "").slice(0, 80));
+      }
+      if (buf.length > maxBytes) throw new PortalChangedError(`file is ${buf.length} bytes, over the per-file limit`);
+      return { buf, url: cap.url || url, contentType: cap.contentType || "" };
+    } finally {
+      page.off("response", onResponse);
+      await page.close().catch(() => {});
+    }
+  }
+
   async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024 } = {}) {
-    requireDeep("RetrieveFile");
+    requireDeep("file body");
     assertHealthy();
     await ensureApiSession();
-    if (viewerOnly || !preferOriginal) return retrieve(fileId, true, maxBytes);
     try {
-      return await retrieve(fileId, false, maxBytes);
+      if (viewerOnly || !preferOriginal) return await retrieve(fileId, true, maxBytes);
+      try {
+        return await retrieve(fileId, false, maxBytes);
+      } catch (err) {
+        if (fatalFileError(err)) throw err;
+        return await retrieve(fileId, true, maxBytes);
+      }
     } catch (err) {
-      if (err instanceof SafetyViolationError || err instanceof SessionEndedError) throw err;
-      return retrieve(fileId, true, maxBytes);
+      if (fatalFileError(err)) throw err;
+      if (!/404/.test(String(err && err.message))) throw err;
+      return fetchFromViewer(fileId, maxBytes);
     }
   }
 

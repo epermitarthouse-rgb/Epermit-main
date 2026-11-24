@@ -20174,4 +20174,7 @@ module.exports = {
   pgcFallbackSourceToLogSource,
   pgcSelectBravaExportCapture,
   isValidPgcPublishedPdf,
+  buildPgcActiveXViewerFileUrl,
+  handlePgcTaskAssignmentModal,
+  capturePgcViewerDocument,
 };

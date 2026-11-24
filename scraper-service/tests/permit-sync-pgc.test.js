@@ -100,6 +100,30 @@ test("the manual scraper exports the project-open used to reach the Web API", ()
   assert.equal(typeof manual.openProjectViaDashboardRow, "function");
   assert.equal(typeof manual.detectPaginationMode, "function");
   assert.equal(typeof manual.collectAllProjects, "function");
+  assert.equal(typeof manual.capturePgcViewerDocument, "function");
+  assert.equal(typeof manual.handlePgcTaskAssignmentModal, "function");
+  assert.equal(
+    manual.buildPgcActiveXViewerFileUrl("4249493"),
+    `${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=4249493`,
+  );
+});
+
+test("PGC file bytes open the ePlans viewer, and task assignment stays refused", () => {
+  const g = safety.createRunGuard({ mode: "deep", tenant: PGC });
+  const viewer = `${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=77`;
+  assert.equal(g.checkRequest("GET", viewer).allowed, true);
+  assert.equal(
+    g.checkRequest("GET", `${HOST}/ProjectDoxWebAPI/File/RetrieveFile?inline=true&fileID=77`).allowed,
+    true,
+  );
+  assert.equal(
+    g.checkRequest("GET", `${HOST}:8443/BravaServer/publishtoformat/doc/1/pdf`).allowed,
+    true,
+  );
+  assert.equal(
+    g.checkRequest("GET", `${HOST}/ProjectDoxWebUI/WorkflowForms/Eform.aspx?wflowTaskID=1&autoAssignTask=true`).rule,
+    "deny_pattern",
+  );
 });
 
 test("tenant URLs keep the ProjectDoxWebAPI and ProjectDoxWebUI prefixes and the PGC report path", () => {
