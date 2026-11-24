@@ -184,6 +184,24 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
   });
 
   const cancelled = (s) => Boolean(s._cancelRequested || s.dcDeepSessionLost);
+  const pgc = tenant.key === "pgc-eplan";
+  /**
+   * A real session end is a dead-session URL the transport recorded. Prince George's also throws
+   * SessionEndedError when a file viewer fails without that URL. That is one file, not a lost login:
+   * ending the job there retries the same permit and leaves the rest of the county waiting.
+   */
+  const sessionEndConfirmed = () => {
+    if (typeof transport.diagnostics !== "function") return true;
+    try {
+      return Boolean(transport.diagnostics().sessionEndedAt);
+    } catch (_) {
+      return true;
+    }
+  };
+  const endsPass = (err) => {
+    if (pgc && err instanceof SessionEndedError && !sessionEndConfirmed()) return false;
+    return isFatal(err);
+  };
 
   function fileRows(page) {
     if (Array.isArray(page)) return page;
@@ -207,7 +225,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
         try {
           peek = fileRows(await transport.getJson("folder_files", { folderID: folder.FolderID, listMode: 3, pageIndex: 0, pageSize: 500 }));
         } catch (err) {
-          if (isFatal(err)) throw err;
+          if (endsPass(err)) throw err;
         }
         if (peek.length) continue;
         try {
@@ -229,7 +247,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
             });
           }
         } catch (err) {
-          if (isFatal(err)) throw err;
+          if (endsPass(err)) throw err;
         }
       }
     }
@@ -244,7 +262,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
         const page = await transport.getJson("folder_files", params);
         items = fileRows(page);
       } catch (err) {
-        if (isFatal(err)) throw err;
+        if (endsPass(err)) throw err;
         out.folderError = shortError(err);
         continue;
       }
@@ -274,7 +292,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
           entry.downloadStatus = ref ? "success" : "failed";
           if (ref) entry.storageRef = ref;
         } catch (err) {
-          if (isFatal(err)) throw err;
+          if (endsPass(err)) throw err;
           entry.downloadStatus = "failed";
           entry.downloadError = shortError(err);
         } finally {
@@ -327,7 +345,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
           entry.error = `review_comments_excel_without_rows${out.error ? ` (${String(out.error).slice(0, 120)})` : ""}`;
         }
       } catch (err) {
-        if (isFatal(err)) throw err;
+        if (endsPass(err)) throw err;
         entry.error = shortError(err);
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
@@ -358,11 +376,16 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
           else data.tabs[t] = { keyValues: [], tables: [], links: [], source: "json_pass" };
         }
       } catch (err) {
-        if (err instanceof SessionEndedError) {
+        if (err instanceof SessionEndedError && (!pgc || sessionEndConfirmed())) {
           session.dcDeepSessionLost = "session_ended";
           return { cancelled: true };
         }
-        throw err;
+        if (err instanceof SessionEndedError) {
+          const pending = tabs.find((name) => !data.tabs[name]);
+          if (pending) data.tabs[pending] = { keyValues: [], tables: [], links: [], error: "portal_request_failed" };
+        } else {
+          throw err;
+        }
       } finally {
         fs.rmSync(tmp, { recursive: true, force: true });
       }

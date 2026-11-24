@@ -63,6 +63,8 @@ const STATUS_TAB_LABELS = Object.freeze([
   "time with jurisdiction",
   "time with applicant",
   "days calculated as business days",
+  "calendar type",
+  "time elapsed",
   "project status",
   "review type",
   "status",
@@ -168,6 +170,22 @@ function statusPairMap(extracted) {
   return map;
 }
 
+function durationValue(text) {
+  const value = str(text);
+  return value ? { FormattedText: value } : null;
+}
+
+/** "Waiting ApplicantReUpload: 1019 days 20 hrs [Accepted]" is the status page's current step. */
+function waitingStep(text) {
+  const match = /waiting\s+([^:]+):\s*([^[\]]+)(?:\s*\[([^\]]+)\])?/i.exec(String(text || ""));
+  if (!match) return null;
+  return {
+    name: str(match[1]),
+    duration: str(match[2]),
+    state: str(match[3]),
+  };
+}
+
 function statusPick(map, ...names) {
   for (const name of names) {
     const value = map.get(String(name).toLowerCase());
@@ -196,12 +214,37 @@ function statusPayloadFromTab(extracted) {
     }
   }
   const unresolved = unresolvedText == null ? null : Number(String(unresolvedText).replace(/[^\d.-]/g, ""));
+  const text = [];
+  for (const section of (extracted && extracted.sections) || []) {
+    if (!section || section.type !== "text_block") continue;
+    if (section.title) text.push(section.title);
+    for (const seg of section.segments || []) text.push((seg && (seg.value || seg.text)) || "");
+  }
+  if (extracted && extracted.meta && extracted.meta.bodySnippet) text.push(extracted.meta.bodySnippet);
+  const step = waitingStep(text.join(" "));
+  const sub = {};
+  if (step && step.name) {
+    sub.SubWorkflow = step.name;
+    if (step.state) sub.StatusName = step.state;
+    const duration = durationValue(step.duration);
+    if (duration) sub.TotalDuration = duration;
+  }
+  const applicant = durationValue(statusPick(map, "Time with Applicant"));
+  const jurisdiction = durationValue(statusPick(map, "Time with Jurisdiction"));
+  if (applicant) sub.ApplicationDuration = applicant;
+  if (jurisdiction) sub.JurisdictionDuration = jurisdiction;
+  if (Number.isFinite(unresolved)) sub.UnresolvedComments = unresolved;
+  const calendarLabel = map.has("days calculated as business days") || /days calculated as business days/i.test(text.join(" "));
   return {
     ProjectStatus: statusPick(map, "Status", "Project Status"),
     ReviewType: statusPick(map, "Review Type"),
+    Owner: statusPick(map, "Owner"),
+    CalendarType: statusPick(map, "Calendar Type") || (calendarLabel ? "Business Days" : null),
+    // Display only. statusFields does not copy TimeElapsed, so an hourly tick does not change the section hash.
+    TimeElapsed: durationValue(statusPick(map, "Time Elapsed")),
     TotalNumberOfFiles: statusPick(map, "Total Number of Files"),
     UncompleteTaskCount: statusPick(map, "Current Non-Completed Tasks", "Current Noncompleted Tasks"),
-    SubWorkflows: Number.isFinite(unresolved) ? [{ UnresolvedComments: unresolved }] : [],
+    SubWorkflows: Object.keys(sub).length ? [sub] : [],
   };
 }
 
@@ -212,8 +255,8 @@ function statusPayloadFromTab(extracted) {
 function taskRecordsFromTab(extracted) {
   const rows = Array.isArray(extracted && extracted.tasks) ? extracted.tasks : [];
   const seen = new Map();
-  return rows.map((row) => {
-    const name = str(row && row.taskName) || "task";
+  return rows.filter((row) => str(row && row.taskName)).map((row) => {
+    const name = str(row.taskName);
     const group = str(row && row.assignee) || "";
     const status = str(row && row.state) || "";
     const base = `dom:${name}:${group}:${status}`;

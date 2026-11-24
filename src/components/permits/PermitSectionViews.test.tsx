@@ -97,6 +97,23 @@ describe("permit section views", () => {
     assert.doesNotMatch(html, DIAGNOSTIC);
   });
 
+  it("info uses the portal's own labels when the capture kept them", () => {
+    const html = render(createElement(InfoSectionView, {
+      permit: { permit_number: "15385-2022-0" },
+      state: ok("info", { source_kind: "html" }),
+      snapshots: [snap("info", {
+        description: "MEIGS INVESTMENTS LLC INT. RENOVATION",
+        portalFields: [
+          { label: "Case Name", value: "MEIGS INVESTMENTS LLC INT. RENOVATION" },
+          { label: "Location", value: "15806 ROBERT CRAIN HWY" },
+        ],
+      }, { source_kind: "html" })],
+    }));
+    assert.match(html, /Case Name/);
+    assert.match(html, /15806 ROBERT CRAIN HWY/);
+    assert.doesNotMatch(html, /Job class/);
+  });
+
   it("tasks and workflows render rows and the review steps, without portal ids", () => {
     const tasks = render(createElement(TasksSectionView, { tasks: [{ id: "t", name: "Resubmit plans", group_name: "Applicant", accepted: false, portal_task_id: "777" }], state: ok("tasks") }));
     assert.match(tasks, /Resubmit plans/);

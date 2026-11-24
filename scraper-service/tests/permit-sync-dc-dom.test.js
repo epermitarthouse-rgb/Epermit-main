@@ -141,6 +141,36 @@ describe("DC DOM extractors (Chromium)", () => {
       assert.equal("title" in info.values, false);
     });
 
+    it("reads Prince George's labels and a two-cell row, and Montgomery priority, without emails", async () => {
+      const html = `<div id="projectInfoContainer"><table class="project-fields">
+        <tr><td>Case Name</td><td>MEIGS INVESTMENTS LLC INT. RENOVATION</td></tr>
+        <tr><td>Location</td><td>15806 ROBERT CRAIN HWY BRANDYWINE, Maryland 20613</td></tr>
+        <tr><td>Case Type/Review Type</td><td>CI</td></tr>
+        <tr><td>Contact's Email</td><td><a href="mailto:[EMAIL]">[EMAIL]</a></td></tr>
+        <tr><td>Phone</td><td>[PHONE]</td></tr>
+        <tr><td>Lot and Block</td><td>Lot and Block not found</td></tr>
+        <tr><td>Project Owner</td><td>EPlan Admin</td></tr>
+        <tr><td>Status</td><td>Applicant Re-upload</td></tr>
+        <tr><td>Status info</td><td>Start: 4/26/2022 | End: 10/26/2022</td></tr>
+        <tr><td>Priority</td><td>Normal</td></tr>
+      </table></div>`;
+      const info = await page.evaluate(extractProjectInfoFields, html);
+      assert.equal(info.values.description, "MEIGS INVESTMENTS LLC INT. RENOVATION");
+      assert.equal(info.values.address, "15806 ROBERT CRAIN HWY BRANDYWINE, Maryland 20613");
+      assert.equal(info.values.jobClass, "CI");
+      assert.equal(info.values.reviewCycle, "CI");
+      assert.equal(info.values.ownerOrg, "EPlan Admin");
+      assert.equal(info.values.statusRaw, "Applicant Re-upload");
+      assert.equal(info.values.startDate, "2022-04-26");
+      assert.equal(info.values.endDate, "2022-10-26");
+      assert.equal(info.values.lotAndBlock, "Lot and Block not found");
+      assert.equal(info.values.priority, "Normal");
+      assert.equal(info.values.portalFields.some((row) => row.label === "Case Name"), true);
+      assert.equal(JSON.stringify(info).includes("[EMAIL]"), false);
+      assert.equal(JSON.stringify(info).includes("[PHONE]"), false);
+      assert.equal("projectName" in info.values, false);
+    });
+
     it("returns null when the partial has no project info container", async () => {
       assert.equal(await page.evaluate(extractProjectInfoFields, "<html><body>nothing</body></html>"), null);
     });

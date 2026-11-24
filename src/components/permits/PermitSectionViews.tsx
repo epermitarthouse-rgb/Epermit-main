@@ -297,6 +297,7 @@ export function StatusSectionView({ permit, state, snapshots }: { permit: Row; s
           <FieldList
             fields={[
               ["Project status", dash(payload.ProjectStatus)],
+              ...(payload.Owner ? [["Owner", dash(payload.Owner)] as [string, React.ReactNode]] : []),
               ["Review type", dash(payload.ReviewType)],
               ["Calendar type", dash(payload.CalendarType)],
               ["Time elapsed", formatPortalValue(payload.TimeElapsed)],
@@ -403,19 +404,26 @@ export function WorkflowsSectionView({
 export function InfoSectionView({ permit, state, snapshots }: { permit: Row; state: Row | null; snapshots: Row[] }) {
   const snap = latestSnapshot(snapshots, "info");
   const payload = (snap?.payload ?? null) as Row | null;
-  const known = new Set(INFO_FIELD_LABELS.map(([k]) => k));
+  const portalFields = Array.isArray(payload?.portalFields)
+    ? (payload.portalFields as Row[]).filter((row) => str(row.label) && str(row.value))
+    : [];
+  const known = new Set([...INFO_FIELD_LABELS.map(([k]) => k), "portalFields"]);
   const extra = payload ? Object.keys(payload).filter((k) => !known.has(k)).sort() : [];
+  const fields: Array<[string, React.ReactNode]> = portalFields.length
+    ? [
+        ["Permit number", dash(permit.permit_number)],
+        ...portalFields.map((row) => [str(row.label), formatPortalValue(row.value)] as [string, React.ReactNode]),
+      ]
+    : [
+        ["Permit number", dash(permit.permit_number)],
+        ...INFO_FIELD_LABELS.map(([k, label]) => [label, formatPortalValue(payload?.[k])] as [string, React.ReactNode]),
+        ...extra.map((k) => [k, formatPortalValue(payload?.[k])] as [string, React.ReactNode]),
+      ];
   return (
     <div className="space-y-4">
       <SectionStatusLine state={state} />
       {payload ? (
-        <FieldList
-          fields={[
-            ["Permit number", dash(permit.permit_number)],
-            ...INFO_FIELD_LABELS.map(([k, label]) => [label, formatPortalValue(payload[k])] as [string, React.ReactNode]),
-            ...extra.map((k) => [k, formatPortalValue(payload[k])] as [string, React.ReactNode]),
-          ]}
-        />
+        <FieldList fields={fields} />
       ) : (
         <Muted>{noDataMessage(state, "project info fields")}</Muted>
       )}

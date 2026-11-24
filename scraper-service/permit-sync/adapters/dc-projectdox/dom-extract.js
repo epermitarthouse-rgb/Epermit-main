@@ -149,44 +149,77 @@ function extractProjectInfoFields(html) {
     walk(el);
     return out.replace(/\s+/g, " ").trim();
   };
-  const ALLOWED = {
-    "Description": "description",
-    "Location": "address",
-    "Contact": "contactOrg",
-    "Project Owner": "ownerOrg",
-    "Job Class": "jobClass",
-    "Status": "statusRaw",
-    "Review Cycle": "reviewCycle",
-    "Project Start/End": "startEnd",
-    "Latitude": "latitude",
-    "Longitude": "longitude",
+  const PRIMARY = {
+    "description": "description",
+    "location": "address",
+    "address": "address",
+    "contact": "contactOrg",
+    "project owner": "ownerOrg",
+    "job class": "jobClass",
+    "status": "statusRaw",
+    "review cycle": "reviewCycle",
+    "review type": "reviewCycle",
+    "project start/end": "startEnd",
+    "status info": "statusInfo",
+    "priority": "priority",
+    "latitude": "latitude",
+    "longitude": "longitude",
+  };
+  // Prince George's uses these labels for the same facts. They fill a field only when the primary label did not.
+  const ALIAS = {
+    "case name": "description",
+    "case type": "jobClass",
+    "case type/review type": "jobClass",
+    "lot and block": "lotAndBlock",
+    "revision/permit #": "revision",
+    "revision/permit": "revision",
+  };
+  const SENSITIVE = /e-?mail|\bphone\b|\bmobile\b|\bfax\b/i;
+  const canon = (label) => String(label || "").replace(/:$/, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const isoDate = (value) => {
+    const m = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(value || ""));
+    return m ? `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : null;
+  };
+  const datesFrom = (cell) => {
+    const spans = Array.from(cell.querySelectorAll("span.start-date"));
+    const pick = (word) => {
+      const s = spans.find((x) => new RegExp(word, "i").test(text(x.querySelector(".start-date-label"))));
+      if (s) return isoDate(text(s).replace(new RegExp(`^${word}:?\\s*`, "i"), ""));
+      const m = new RegExp(`${word}:\\s*(\\d{1,2}\\/\\d{1,2}\\/\\d{4})`, "i").exec(text(cell));
+      return m ? isoDate(m[1]) : null;
+    };
+    return { startDate: pick("Start"), endDate: pick("End") };
   };
 
   const values = {};
   const labelsSeen = [];
-  for (const tr of container.querySelectorAll("table.project-fields tr")) {
-    const th = tr.querySelector("th");
-    if (!th) continue;
-    const label = text(th).replace(/:$/, "").trim();
+  const portalFields = [];
+  const rows = container.querySelectorAll("table.project-fields tr").length
+    ? container.querySelectorAll("table.project-fields tr")
+    : container.querySelectorAll("tr");
+  for (const tr of rows) {
+    const cells = Array.from(tr.children).filter((c) => c.tagName === "TH" || c.tagName === "TD");
+    if (cells.length < 2) continue;
+    const label = text(cells[0]).replace(/:$/, "").trim();
+    if (!label) continue;
     labelsSeen.push(label);
-    const key = ALLOWED[label];
-    if (!key) continue;
-    const td = tr.querySelector("td");
-    if (key === "startEnd") {
-      const spans = Array.from(td.querySelectorAll("span.start-date"));
-      const pick = (word) => {
-        const s = spans.find((x) => new RegExp(word, "i").test(text(x.querySelector(".start-date-label"))));
-        if (!s) return null;
-        const v = text(s).replace(new RegExp(`^${word}:?\\s*`, "i"), "").trim();
-        const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v);
-        return m ? `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : null;
-      };
-      values.startDate = pick("Start");
-      values.endDate = pick("End");
+    const valueText = text(cells[1]);
+    if (SENSITIVE.test(label)) continue;
+    if (valueText) portalFields.push({ label, value: valueText });
+    const id = canon(label);
+    const key = PRIMARY[id] || ALIAS[id];
+    if (!key || (ALIAS[id] && values[key])) continue;
+    if (key === "startEnd" || id === "status info") {
+      const dates = datesFrom(cells[1]);
+      if (!values.startDate && dates.startDate) values.startDate = dates.startDate;
+      if (!values.endDate && dates.endDate) values.endDate = dates.endDate;
+      if (id === "status info") values.statusInfo = valueText || null;
       continue;
     }
-    values[key] = text(td) || null;
+    if (id === "case type/review type" && valueText && !values.reviewCycle) values.reviewCycle = valueText;
+    values[key] = valueText || null;
   }
+  if (portalFields.length) values.portalFields = portalFields;
   return { values, labelsSeen };
 }
 

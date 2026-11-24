@@ -193,9 +193,39 @@ test("PGC status tab text and report parameter prompts map without guessing valu
   assert.equal(norm.statusFields(missing).status_raw, null);
   assert.notEqual(norm.statusFields(missing).status_raw, "Open");
   assert.equal(norm.statusFields(norm.statusPayloadFromTab({ keyValues: [{ key: "Status", value: "Open" }] })).status_raw, "Open");
-  const tasks = norm.taskRecordsFromTab({
-    tasks: [{ taskName: "Applicant Re-upload", assignee: null, state: "Accepted", rawText: "Waiting [Accepted]" }],
+  const displayed = norm.statusPayloadFromTab({
+    keyValues: [
+      { key: "Owner", value: "EPlan Admin" },
+      { key: "Status", value: "Applicant Re-upload" },
+      { key: "Time Elapsed", value: "1019 days 20 hrs" },
+      { key: "Time with Applicant", value: "900 days" },
+      { key: "Time with Jurisdiction", value: "119 days" },
+    ],
+    meta: { bodySnippet: "Days Calculated as Business Days Waiting ApplicantReUpload: 1019 days 20 hrs [Accepted]" },
   });
+  assert.equal(displayed.Owner, "EPlan Admin");
+  assert.equal(displayed.CalendarType, "Business Days");
+  assert.equal(displayed.TimeElapsed.FormattedText, "1019 days 20 hrs");
+  assert.equal(displayed.SubWorkflows[0].SubWorkflow, "ApplicantReUpload");
+  assert.equal(displayed.SubWorkflows[0].StatusName, "Accepted");
+  assert.equal(displayed.SubWorkflows[0].UnresolvedComments, undefined);
+  const later = norm.statusPayloadFromTab({
+    keyValues: [
+      { key: "Status", value: "Applicant Re-upload" },
+      { key: "Time Elapsed", value: "1020 days 1 hr" },
+    ],
+  });
+  assert.equal(JSON.stringify(norm.statusFields(displayed)), JSON.stringify(norm.statusFields({ ...displayed, TimeElapsed: later.TimeElapsed })));
+  assert.equal(norm.statusFields(displayed).summary.time_elapsed, undefined);
+  const tasks = norm.taskRecordsFromTab({
+    tasks: [
+      { taskName: "", assignee: null, state: null, rawText: "blank row" },
+      { taskName: "Applicant Re-upload", assignee: "Applicant", state: "Accepted", rawText: "Waiting [Accepted]" },
+    ],
+  });
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].TaskName, "Applicant Re-upload");
+  assert.equal(tasks[0].GroupName, "Applicant");
   assert.equal(tasks[0].Accepted, true);
   assert.match(tasks[0].WFlowTaskID, /^dom:/);
   assert.equal(norm.reportParameterReason({ viewReport: true, fields: [{ label: "APNO", empty: true, disabled: false }] }), "parameters_required:APNO");
@@ -279,6 +309,73 @@ test("PGC deep mode continues only the Brava publish write, and a failed publish
   assert.equal(manual.pgcPublishNetworkRecordUsable({ url: pdf, status: 200 }), true);
   assert.equal(manual.pgcPublishNetworkRecordUsable({ url: pdf, status: 500 }), false);
   assert.equal(manual.pgcPublishNetworkRecordUsable({ url: pdf }), true);
+
+  const viewer = `${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=3124196`;
+  assert.equal(liveTransport.isPgcViewerOpenWrite("POST", viewer), true);
+  assert.equal(liveTransport.isPgcViewerOpenWrite("OPTIONS", viewer), true);
+  assert.equal(liveTransport.isPgcViewerOpenWrite("GET", viewer), false);
+  assert.equal(liveTransport.isPgcViewerOpenWrite("POST", `${HOST}/ProjectDox/ActiveXViewer.aspx/extra`), false);
+  assert.equal(liveTransport.isPgcViewerOpenWrite("POST", `${HOST}/ProjectDoxWebAPI/MetaData/AddUpdateEntityMetadata`), false);
+  assert.equal(liveTransport.liftPgcViewerOpenWrite(dropped, "POST", viewer, "deep", "document").rule, "viewer_open");
+  assert.equal(liveTransport.liftPgcViewerOpenWrite(dropped, "POST", viewer, "deep", "xhr").rule, "method_dropped");
+  assert.equal(liveTransport.liftPgcViewerOpenWrite(dropped, "POST", viewer, "json", "document").rule, "method_dropped");
+  assert.equal(liveTransport.liftPgcDeepWrite(denied, "POST", viewer, "deep", "document").violation, true);
+  assert.equal(liveTransport.liftPgcDeepWrite(dropped, "POST", pdf, "deep", "xhr").rule, "brava_publish");
+});
+
+test("a PGC file viewer failure without a session-ended page does not end the county scrape", async () => {
+  const { createPgcDeepDriver } = require("../permit-sync/deep/pgc-driver");
+  const { createMontgomeryDeepDriver } = require("../permit-sync/deep/montgomery-driver");
+  const { SessionEndedError } = require("../permit-sync/core/errors");
+  const fetched = [];
+  let ended = null;
+  const transport = {
+    async getJson(route) {
+      if (route === "project_folders") return [{ FolderID: 10, Name: "Drawings", FolderPermissions: { DownloadFile: false } }];
+      if (route === "folder_files") return [{ FileID: 1, FileName: "a.pdf" }, { FileID: 2, FileName: "b.pdf" }];
+      return [];
+    },
+    async fetchFile(id) {
+      fetched.push(String(id));
+      if (String(id) === "1") throw new SessionEndedError("file viewer reached a dead session page");
+      return { buf: Buffer.from("%PDF-1.4"), url: `${HOST}/ProjectDox/ActiveXViewer.aspx?FileID=${id}` };
+    },
+    async listReports() { return []; },
+    async exportReport() { return { text: "" }; },
+    diagnostics() { return { sessionEndedAt: ended, trail: [] }; },
+  };
+  const deep = {
+    skipPortalSync: true,
+    fileGate: () => ({ download: true, reason: "test", accessPath: "viewer" }),
+    storeFile: async () => "ref",
+  };
+  const project = { id: "p1", projectId: "96723", projectNum: "2102-2023-0", name: "2102-2023-0" };
+  const driver = createPgcDeepDriver({ transport });
+  const session = { dcReloginDisabled: true, data: {} };
+  const result = await driver.scrapeAll(session, [project], "x", ["files"], null, null, false, null, null, null, deep);
+  assert.equal(result.deep, true);
+  assert.equal(session.dcDeepSessionLost || null, null);
+  assert.deepEqual(fetched, ["1", "2"]);
+  const files = session.data.p1.tabs.files.folders[0].files;
+  assert.equal(files[0].downloadStatus, "failed");
+  assert.equal(files[1].downloadStatus, "success");
+
+  ended = { method: "GET", host: "eplans.princegeorgescountymd.gov", path: "/ProjectDox/SessionEnded.aspx", match: "session_ended_page" };
+  fetched.length = 0;
+  const stoppedSession = { dcReloginDisabled: true, data: {} };
+  const stopped = await driver.scrapeAll(stoppedSession, [project], "x", ["files"], null, null, false, null, null, null, deep);
+  assert.equal(stopped.cancelled, true);
+  assert.equal(stoppedSession.dcDeepSessionLost, "session_ended");
+  assert.deepEqual(fetched, ["1"]);
+
+  ended = null;
+  fetched.length = 0;
+  const montgomery = createMontgomeryDeepDriver({ transport });
+  const montgomerySession = { dcReloginDisabled: true, data: {} };
+  const montgomeryProject = { id: "m1", projectId: "900001", projectNum: "COMBUILD-1000001", name: "COMBUILD-1000001" };
+  const montgomeryResult = await montgomery.scrapeAll(montgomerySession, [montgomeryProject], "x", ["files"], null, null, false, null, null, null, deep);
+  assert.equal(montgomeryResult.cancelled, true);
+  assert.equal(montgomerySession.dcDeepSessionLost, "session_ended");
 });
 
 test("PGC file bytes open the ePlans viewer, and task assignment stays refused", () => {

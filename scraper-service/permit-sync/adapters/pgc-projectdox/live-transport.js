@@ -20,7 +20,10 @@
  *   Files      viewFile opens Brava. Publish to PDF, then Export complete, then OK, opens
  *              GET /BravaServer/publishtoformat/.../pdf on port 8443 (verified on file 2751001).
  *              The publish call that creates that PDF is not a GET. Deep mode continues only
- *              POST and OPTIONS to that path. Every other write stays dropped.
+ *              POST and OPTIONS to that path. The files tab also opens the viewer with a
+ *              document POST to /ProjectDox/ActiveXViewer.aspx. Deep mode continues that POST.
+ *              Dropping it made the viewer leave the file, and the pass then treated the
+ *              portal session as ended. Every other write stays dropped.
  *
  * Auth phase allows the login form and the SSO hop. After that every request goes through the shared
  * read-only guard. No logout is clicked.
@@ -73,6 +76,36 @@ function liftPgcBravaPublishWrite(decision, method, url, mode) {
   if (!decision || decision.action === "continue" || decision.rule !== "method_dropped" || mode !== "deep") return decision;
   if (!isPgcBravaPublishWrite(method, url)) return decision;
   return { action: "continue", violation: false, sessionEnded: false, rule: "brava_publish" };
+}
+
+/**
+ * The files tab opens a file by posting the viewer form. Exact page, document navigation only.
+ * An xhr or fetch POST to the same page stays dropped. A deny-pattern match is never lifted.
+ */
+function isPgcViewerOpenWrite(method, url) {
+  const m = String(method || "").toUpperCase();
+  if (m !== "POST" && m !== "OPTIONS") return false;
+  let u = null;
+  try {
+    u = new URL(String(url));
+  } catch (_) {
+    return false;
+  }
+  if (u.protocol !== "https:" || !isTenantHost(u.hostname)) return false;
+  return /^\/ProjectDox\/ActiveXViewer\.aspx$/i.test(u.pathname);
+}
+
+function liftPgcViewerOpenWrite(decision, method, url, mode, resourceType) {
+  if (!decision || decision.action === "continue" || decision.rule !== "method_dropped" || mode !== "deep") return decision;
+  if (resourceType && resourceType !== "document") return decision;
+  if (!isPgcViewerOpenWrite(method, url)) return decision;
+  return { action: "continue", violation: false, sessionEnded: false, rule: "viewer_open" };
+}
+
+function liftPgcDeepWrite(decision, method, url, mode, resourceType) {
+  const published = liftPgcBravaPublishWrite(decision, method, url, mode);
+  if (published !== decision) return published;
+  return liftPgcViewerOpenWrite(decision, method, url, mode, resourceType);
 }
 const hostOf = (url) => {
   try {
@@ -182,7 +215,7 @@ async function createPgcLiveTransport(opts) {
       }
       return route.continue();
     }
-    const d = liftPgcBravaPublishWrite(dcLive.routeReadRequest(r, guard), r.method, r.url, mode);
+    const d = liftPgcDeepWrite(dcLive.routeReadRequest(r, guard), r.method, r.url, mode, r.resourceType);
     if (d.violation) violation = violation || dcLive.describeViolation(d, r);
     if (d.sessionEnded) markSessionEnded(r.method, r.url, { type: r.resourceType || null, via: "browser" });
     if (d.action !== "continue" && ["document", "xhr", "fetch", "other"].includes(r.resourceType)) {
@@ -767,4 +800,7 @@ module.exports = {
   classifyPgcPage,
   isPgcBravaPublishWrite,
   liftPgcBravaPublishWrite,
+  isPgcViewerOpenWrite,
+  liftPgcViewerOpenWrite,
+  liftPgcDeepWrite,
 };
