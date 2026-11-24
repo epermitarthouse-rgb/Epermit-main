@@ -2499,12 +2499,19 @@ async function gotoPgcProjectTab(page, projectId, tabName, extraParams = "") {
     if (t === "infoTab") {
       selectors = ["table tr", "dt", "dd"];
     } else if (t === "projectStatusTab") {
-      selectors = [
-        "#projectStatusTab table",
-        "#projectStatusTab table tr",
-        "#projectStatusTab dl",
-        "#projectStatusTab .ui-iggrid-table tbody tr",
-      ];
+      // A shell table can exist before the Status label is filled in. Wait for the label
+      // and a value, whatever that value is. An empty panel is not a successful read.
+      try {
+        await page.waitForFunction(() => {
+          const panel = document.querySelector("#projectStatusTab");
+          if (!panel) return false;
+          const text = (panel.innerText || "").replace(/\s+/g, " ");
+          return /(?:^|\s)(?:Project\s+)?Status\s*:?\s+\S/i.test(text);
+        }, { timeout: 20000 });
+        return true;
+      } catch (_) {
+        return false;
+      }
     } else if (t === "tasksTab") {
       selectors = [".ui-iggrid-table tbody tr", "table tbody tr"];
     } else if (t === "filesTab") {

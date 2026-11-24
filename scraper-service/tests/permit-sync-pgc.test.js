@@ -153,7 +153,46 @@ test("PGC status tab text and report parameter prompts map without guessing valu
     ],
   });
   assert.equal(norm.statusFields(status).status_raw, "Applicant Re-upload");
+  assert.equal(norm.statusFields(status).status, "upload");
   assert.equal(norm.statusFields(status).total_files, 10);
+  // The Status tab's first label/value row is stored as the table header. Later rows stay data.
+  const fromGrid = norm.statusPayloadFromTab({
+    tables: [{
+      headers: ["Review Type", "Building"],
+      rows: [
+        { "Review Type": "Status", "Building": "In Review" },
+        { "Review Type": "Current Non-Completed Tasks", "Building": "2" },
+      ],
+    }],
+  });
+  assert.equal(fromGrid.ProjectStatus, "In Review");
+  assert.equal(norm.statusFields(fromGrid).status, "in_review");
+  assert.equal(fromGrid.ReviewType, "Building");
+  assert.equal(fromGrid.UncompleteTaskCount, "2");
+  const fromCells = norm.statusPayloadFromTab({
+    tables: [{
+      headers: ["Column 1", "Column 2"],
+      rowCells: [
+        [{ text: "Status" }, { text: "Approved" }],
+        [{ text: "Prescreen Review Comments (Unresolved)" }, { text: "4" }],
+      ],
+    }],
+  });
+  assert.equal(fromCells.ProjectStatus, "Approved");
+  assert.equal(norm.statusFields(fromCells).status, "approved");
+  assert.equal(fromCells.SubWorkflows[0].UnresolvedComments, 4);
+  // Plain panel text loses the line break before the duration row. Keep the status, not the duration.
+  const fromText = norm.statusPayloadFromTab({
+    meta: { bodySnippet: "Review Type Electrical Status Applicant Re-upload Applicant Re-upload 1019 days 14.5 hrs Current Non-Completed Tasks 1" },
+  });
+  assert.equal(fromText.ProjectStatus, "Applicant Re-upload");
+  assert.equal(fromText.ReviewType, "Electrical");
+  assert.equal(fromText.UncompleteTaskCount, "1");
+  const missing = norm.statusPayloadFromTab({ meta: { bodySnippet: "Review Type Building Total Number of Files 10" } });
+  assert.equal(missing.ProjectStatus, null);
+  assert.equal(norm.statusFields(missing).status_raw, null);
+  assert.notEqual(norm.statusFields(missing).status_raw, "Open");
+  assert.equal(norm.statusFields(norm.statusPayloadFromTab({ keyValues: [{ key: "Status", value: "Open" }] })).status_raw, "Open");
   const tasks = norm.taskRecordsFromTab({
     tasks: [{ taskName: "Applicant Re-upload", assignee: null, state: "Accepted", rawText: "Waiting [Accepted]" }],
   });

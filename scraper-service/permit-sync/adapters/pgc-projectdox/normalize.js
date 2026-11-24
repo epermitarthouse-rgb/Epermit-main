@@ -54,30 +54,153 @@ function statusFields(data) {
   return { ...shared.statusFields(data), status: mapStatus(data && data.ProjectStatus) };
 }
 
-function kvValue(keyValues, ...names) {
-  const wanted = new Set(names.map((n) => n.toLowerCase()));
-  for (const kv of keyValues || []) {
-    const key = String(kv && kv.key || "").replace(/:\s*$/, "").trim().toLowerCase();
-    if (wanted.has(key)) return str(kv.value);
+/** Field labels on the ProjectDox Status tab. Longer labels are matched first so "Status" does not swallow "Project Status". */
+const STATUS_TAB_LABELS = Object.freeze([
+  "prescreen review comments (unresolved)",
+  "current non-completed tasks",
+  "current noncompleted tasks",
+  "total number of files",
+  "time with jurisdiction",
+  "time with applicant",
+  "days calculated as business days",
+  "project status",
+  "review type",
+  "status",
+  "owner",
+]);
+
+function addStatusPair(map, key, value) {
+  const label = String(key || "").replace(/:\s*$/, "").trim();
+  const text = str(value);
+  if (!label || text == null) return;
+  const id = label.toLowerCase();
+  if (!map.has(id)) map.set(id, text);
+}
+
+/**
+ * A status value followed by its own duration row ("Applicant Re-upload 1019 days…")
+ * collapses into one string once the page text loses line breaks. Keep the status phrase.
+ */
+function statusPhrase(value) {
+  const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+  for (let n = 1; n <= Math.floor(words.length / 2); n += 1) {
+    const head = words.slice(0, n).join(" ");
+    const again = words.slice(n, n * 2).join(" ");
+    if (head.toLowerCase() === again.toLowerCase()) return head;
+  }
+  const beforeDuration = String(value || "").split(/\s+\d[\d.]*\s+days\b/i)[0];
+  return beforeDuration.trim();
+}
+
+function pairsFromStatusText(text) {
+  const src = String(text || "").replace(/\s+/g, " ").trim();
+  if (!src) return [];
+  const lower = src.toLowerCase();
+  const labels = [...STATUS_TAB_LABELS].sort((a, b) => b.length - a.length);
+  const hits = [];
+  for (const label of labels) {
+    let from = 0;
+    while (from < lower.length) {
+      const at = lower.indexOf(label, from);
+      if (at < 0) break;
+      const beforeOk = at === 0 || /[\s:(]/.test(lower[at - 1]);
+      const after = at + label.length;
+      const afterOk = after >= lower.length || /[\s:]/.test(lower[after]);
+      if (beforeOk && afterOk) hits.push({ at, label, end: after });
+      from = at + Math.max(label.length, 1);
+    }
+  }
+  hits.sort((a, b) => a.at - b.at || b.label.length - a.label.length);
+  const kept = [];
+  let cursor = 0;
+  for (const hit of hits) {
+    if (hit.at < cursor) continue;
+    kept.push(hit);
+    cursor = hit.end;
+  }
+  const pairs = [];
+  for (let i = 0; i < kept.length; i += 1) {
+    const next = kept[i + 1];
+    let value = src.slice(kept[i].end, next ? next.at : src.length).replace(/^:\s*/, "").trim();
+    if (kept[i].label === "status" || kept[i].label === "project status") value = statusPhrase(value);
+    if (value) pairs.push([kept[i].label, value]);
+  }
+  return pairs;
+}
+
+function pairsFromStatusTable(table) {
+  const headers = Array.isArray(table && table.headers) ? table.headers : [];
+  const rows = Array.isArray(table && table.rows) ? table.rows : [];
+  const cells = Array.isArray(table && table.rowCells) ? table.rowCells : [];
+  const pairs = [];
+  const twoHeaders = headers.length === 2;
+  const synthetic = twoHeaders && headers.every((h) => /^column \d+$/i.test(String(h || "")));
+  if (twoHeaders && !synthetic) pairs.push([headers[0], headers[1]]);
+  if (cells.length) {
+    for (const row of cells) {
+      if (!Array.isArray(row) || row.length < 2) continue;
+      pairs.push([row[0] && row[0].text, row[1] && row[1].text]);
+    }
+    return pairs;
+  }
+  if (!twoHeaders) return pairs;
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    pairs.push([row[headers[0]], row[headers[1]]]);
+  }
+  return pairs;
+}
+
+function statusPairMap(extracted) {
+  const map = new Map();
+  for (const kv of (extracted && extracted.keyValues) || []) addStatusPair(map, kv && kv.key, kv && kv.value);
+  for (const table of (extracted && extracted.tables) || []) {
+    for (const [key, value] of pairsFromStatusTable(table)) addStatusPair(map, key, value);
+  }
+  const textParts = [];
+  for (const section of (extracted && extracted.sections) || []) {
+    if (!section || section.type !== "text_block") continue;
+    if (section.title) textParts.push(section.title);
+    for (const seg of section.segments || []) textParts.push((seg && (seg.value || seg.text)) || "");
+  }
+  if (extracted && extracted.meta && extracted.meta.bodySnippet) textParts.push(extracted.meta.bodySnippet);
+  for (const [key, value] of pairsFromStatusText(textParts.join(" "))) addStatusPair(map, key, value);
+  return map;
+}
+
+function statusPick(map, ...names) {
+  for (const name of names) {
+    const value = map.get(String(name).toLowerCase());
+    if (value) return value;
+  }
+  for (const [key, value] of map) {
+    if (names.some((name) => key === String(name).toLowerCase())) return value;
   }
   return null;
 }
 
 /**
- * Status tab key/value rows from extractStatusTabData → the payload statusFields already understands.
- * Observed on project 80172 (2026-11-24): Status, Review Type, Total Number of Files,
- * Current Non-Completed Tasks, Prescreen Review Comments (Unresolved).
+ * Status tab from extractStatusTabData → the payload statusFields already understands.
+ * The tab is a label/value grid. The first row is often stored as table headers, and a slow
+ * panel can also arrive as plain text. There is no default status when the label is absent.
  */
 function statusPayloadFromTab(extracted) {
-  const keyValues = extracted && extracted.keyValues;
-  const unresolvedText = kvValue(keyValues, "Prescreen Review Comments (Unresolved)")
-    || str((keyValues || []).find((kv) => /unresolved/i.test(String(kv && kv.key || "")))?.value);
+  const map = statusPairMap(extracted || {});
+  let unresolvedText = statusPick(map, "Prescreen Review Comments (Unresolved)");
+  if (!unresolvedText) {
+    for (const [key, value] of map) {
+      if (/unresolved/i.test(key)) {
+        unresolvedText = value;
+        break;
+      }
+    }
+  }
   const unresolved = unresolvedText == null ? null : Number(String(unresolvedText).replace(/[^\d.-]/g, ""));
   return {
-    ProjectStatus: kvValue(keyValues, "Status"),
-    ReviewType: kvValue(keyValues, "Review Type"),
-    TotalNumberOfFiles: kvValue(keyValues, "Total Number of Files"),
-    UncompleteTaskCount: kvValue(keyValues, "Current Non-Completed Tasks"),
+    ProjectStatus: statusPick(map, "Status", "Project Status"),
+    ReviewType: statusPick(map, "Review Type"),
+    TotalNumberOfFiles: statusPick(map, "Total Number of Files"),
+    UncompleteTaskCount: statusPick(map, "Current Non-Completed Tasks", "Current Noncompleted Tasks"),
     SubWorkflows: Number.isFinite(unresolved) ? [{ UnresolvedComments: unresolved }] : [],
   };
 }
