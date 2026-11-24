@@ -139,6 +139,14 @@ function statusUnresolvedTotal(data) {
   return subs.reduce((n, s) => n + (int(s.UnresolvedComments) || 0), 0);
 }
 
+/**
+ * A review comment the portal still counts as open. DC says "Unresolved". Prince George's says "Not Met".
+ * Resolved labels such as Met, Resolved, and Info Only are not counted.
+ */
+function isOpenReviewComment(status) {
+  return /^(unresolved|not met)$/i.test(String(status || "").trim());
+}
+
 /** GetWorkflowInstancesList.Records[] → permit_workflows items. */
 function workflowItems(records) {
   return (records || []).map((r) =>
@@ -458,6 +466,7 @@ module.exports = {
   discoveryRecord,
   statusFields,
   statusUnresolvedTotal,
+  isOpenReviewComment,
   workflowItems,
   taskItems,
   fileItems,

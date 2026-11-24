@@ -82,7 +82,7 @@ test("D-107: elapsed-time and duration counters do not change the status section
 test("reviews: comments keyed by REF #, responses threaded, role labels only", () => {
   const { comments, responses } = dc.reviewItems(corrections.rows);
   assert.deepEqual(comments.map((c) => c.key).sort(), ["ref:3", "ref:4", "ref:5"]);
-  const unresolved = comments.filter((c) => c.fields.status === "Unresolved");
+  const unresolved = comments.filter((c) => dc.isOpenReviewComment(c.fields.status));
   assert.equal(unresolved.length, dc.statusUnresolvedTotal(status), "Reviews rows agree with status JSON");
   assert.equal(comments.find((c) => c.key === "ref:5").fields.response_required, false);
   assert.equal(comments.find((c) => c.key === "ref:3").fields.response_required, true);

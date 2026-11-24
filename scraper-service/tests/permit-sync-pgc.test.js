@@ -337,6 +337,13 @@ test("permit numbers from the live My Projects grid are accepted, and a header i
     assert.equal(rec.fields.jurisdiction, "Prince George's County MD");
   }
   assert.equal(norm.mapStatus("Applicant Re-upload"), "upload");
+  const dc = require("../permit-sync/adapters/dc-projectdox/normalize");
+  assert.equal(dc.isOpenReviewComment("Unresolved"), true);
+  assert.equal(dc.isOpenReviewComment("Not Met"), true);
+  assert.equal(dc.isOpenReviewComment("Met"), false);
+  assert.equal(dc.isOpenReviewComment("Info Only"), false);
+  const open = [{ fields: { status: "Not Met" } }, { fields: { status: "Not Met" } }, { fields: { status: "Not Met" } }];
+  assert.equal(open.filter((c) => dc.isOpenReviewComment(c.fields.status)).length, 3);
   assert.equal(norm.mapStatus("Awaiting Final Fee Payment"), "other");
   assert.equal(norm.mapStatus("Expired"), "other");
   assert.throws(() => norm.discoveryRecord({ permit: "My Projects", projectId: "1" }));

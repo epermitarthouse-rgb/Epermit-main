@@ -265,7 +265,7 @@ function createDcAdapter({ transport, accountDownload = null, normalizer = dc })
         }
         const { comments, responses } = dc.reviewItems(rows, { sourceKind });
         const unresolved = statusData ? dc.statusUnresolvedTotal(statusData) : null;
-        const actualUnresolved = comments.filter((c) => c.fields.status === "Unresolved").length;
+        const actualUnresolved = comments.filter((c) => dc.isOpenReviewComment(c.fields.status)).length;
         const parityError = unresolved !== null && unresolved !== actualUnresolved ? `unresolved_parity:${actualUnresolved}/${unresolved}` : null;
         const fallbackNote = primaryError ? `json_failed:${String(primaryError.code || "error")}` : null;
         const reportFailed = Boolean(emptyNote && emptyNote.includes("report_failed"));
