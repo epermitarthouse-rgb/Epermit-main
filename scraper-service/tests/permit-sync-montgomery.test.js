@@ -206,6 +206,10 @@ test("read policy (shared router) with the Montgomery guard", () => {
   assert.equal(r("GET", `${UI}/WebForms/SessionEnded.aspx`, "document").sessionEnded, true);
   assert.equal(r("GET", `${PORTAL}/Project/ApprovedPlans?ProjectID=1`, "document").violation, true);
   assert.equal(r("GET", "https://session.planreview.dob.dc.gov/Project/Index", "document").rule, "off_host");
+  const logo = r("GET", "https://mcdmsaavolveprod.blob.core.windows.net/oas/Uploads/1/bg_logo_header.png", "image");
+  assert.equal(logo.violation, false);
+  assert.equal(logo.action, "continue");
+  assert.equal(r("GET", `${API}/File/Upload`, "xhr").violation, true);
   const dc = dcLive.routeReadRequest({ method: "GET", url: `${API}/Folder/GetProjectFolders`, resourceType: "xhr" }, safety.createRunGuard());
   assert.equal(dc.rule, "off_host", "a DC guard still treats Montgomery as off-host");
 });

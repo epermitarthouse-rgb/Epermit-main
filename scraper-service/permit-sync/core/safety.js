@@ -47,7 +47,9 @@ const DENY_PATTERNS = Object.freeze([
   /deleteFiles/i,
   /\/File\/(Upload|Delete|Move|Rename|Copy|Save|Update|Insert|Create|Add|Remove|Check)/i,
   /\/Folder\/(Create|Delete|Move|Rename|Update|Save)/i,
-  /Upload/i,
+  // "Upload" as an action. Not the plural folder "Uploads": Montgomery's header logo is a GET of
+  // /oas/Uploads/.../bg_logo_header.png, and that match aborted the whole county during discovery.
+  /Upload(?!s)/i,
   // Comments / responses / reviews
   /(Save|Insert|Update|Create|Delete|Submit|Respond|Reply|Response|Comment)[A-Za-z]*(Correction|Comment|Response|Review|Task)/i,
   /\/Project\/(Save|Update|Create|Delete|Submit)/i,

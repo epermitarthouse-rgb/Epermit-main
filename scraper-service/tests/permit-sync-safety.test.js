@@ -316,7 +316,7 @@ describe("D-079 report pre-check leaves the guard unchanged", () => {
     const json = safety.MODES.json.deny.map(String);
     const deep = safety.MODES.deep.deny.map(String);
     assert.deepEqual(json.filter((p) => !deep.includes(p)).sort(), ["/OpType=Export/i", "/rs:Format=/i", "/viewFile/i"]);
-    assert.ok(deep.includes("/Upload/i"));
+    assert.ok(deep.includes("/Upload(?!s)/i"));
     assert.equal(json.length, safety.DENY_PATTERNS.length);
   });
 
