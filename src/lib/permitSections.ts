@@ -132,3 +132,40 @@ export function formatPortalValue(v: unknown): string {
   }
   return String(v);
 }
+
+/** County info rows kept on the snapshot, whether stored as an array or as that array's JSON text. */
+export function readPortalFields(payload: unknown): Array<{ label: string; value: string }> {
+  if (!payload || typeof payload !== 'object') return [];
+  let raw: unknown = (payload as Row).portalFields;
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    if (!text.startsWith('[')) return [];
+    try {
+      raw = JSON.parse(text) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ label: string; value: string }> = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const label = String((row as Row).label ?? '').replace(/:$/, '').trim();
+    const value = String((row as Row).value ?? '').replace(/\s+/g, ' ').trim();
+    if (!label || !value) continue;
+    out.push({ label, value });
+  }
+  return out;
+}
+
+/**
+ * One portal info value for display. A combined "Start: … | End: …" cell becomes two lines.
+ * A placeholder that repeats the label ("Lot and Block not found") becomes "Not found".
+ */
+export function formatInfoFieldValue(label: string, value: string): string {
+  const dates = /^Start:\s*(.+?)\s*\|\s*End:\s*(.+)$/i.exec(value);
+  if (dates) return `Start ${dates[1].trim()}\nEnd ${dates[2].trim()}`;
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`^${escaped}\\s+not found$`, 'i').test(value) || /^not found$/i.test(value)) return 'Not found';
+  return value;
+}

@@ -47,12 +47,15 @@ describe("permit section views", () => {
 
   it("status shows portal fields and its capture status, but no provenance", () => {
     const html = render(createElement(StatusSectionView, {
-      permit: { status: "resubmit", summary: { unresolved_by_group: [{ group: "Zoning", unresolved: 2 }] } },
+      permit: { status: "resubmit", owner_org: "EPlan Admin", summary: { unresolved_by_group: [{ group: "Zoning", unresolved: 2 }] } },
       state: ok("status"),
-      snapshots: [snap("status", { ProjectStatus: "Resubmit", ReviewType: "Building", TimeElapsed: { Days: 3, Hours: 1, FormattedText: "3 days  1 hrs" }, SubWorkflows: [{ SubWorkflow: "A" }] })],
+      snapshots: [snap("status", { ProjectStatus: "Applicant Re-upload", Owner: "EPlan Admin", ReviewType: "CI", TimeElapsed: { Days: 1139, Hours: 12, FormattedText: "1139 days 12 hrs" }, SubWorkflows: [{ SubWorkflow: "ApplicantReUpload" }] })],
     }));
-    assert.match(html, /Resubmit/);
-    assert.match(html, /3 days 1 hrs/);
+    assert.match(html, /Applicant Re-upload/);
+    assert.match(html, /1139 days 12 hrs/);
+    assert.match(html, />Owner</);
+    assert.match(html, /EPlan Admin/);
+    assert.ok(html.indexOf(">Owner<") < html.indexOf("Project status"));
     assert.match(html, /Zoning/);
     assert.match(html, /Captured/);
     assert.match(html, /Last captured/);
@@ -98,20 +101,40 @@ describe("permit section views", () => {
   });
 
   it("info uses the portal's own labels when the capture kept them", () => {
+    const portalFields = [
+      { label: "Case Number", value: "15385-2022-0" },
+      { label: "Case Name", value: "MEIGS INVESTMENTS LLC INT. RENOVATION" },
+      { label: "Location", value: "15806 ROBERT CRAIN HWY BRANDYWINE, Maryland 20613" },
+      { label: "Case Type/Review Type", value: "CI" },
+      { label: "Lot and Block", value: "Lot and Block not found" },
+      { label: "Revision/Permit #", value: "15385-2022-0" },
+      { label: "Project Owner", value: "EPlan Admin" },
+      { label: "Status", value: "Applicant Re-upload" },
+      { label: "Project Start/End", value: "Start: 4/26/2022 | End: 10/26/2022" },
+    ];
     const html = render(createElement(InfoSectionView, {
       permit: { permit_number: "15385-2022-0" },
       state: ok("info", { source_kind: "html" }),
       snapshots: [snap("info", {
         description: "MEIGS INVESTMENTS LLC INT. RENOVATION",
-        portalFields: [
-          { label: "Case Name", value: "MEIGS INVESTMENTS LLC INT. RENOVATION" },
-          { label: "Location", value: "15806 ROBERT CRAIN HWY" },
-        ],
+        portalFields,
       }, { source_kind: "html" })],
     }));
     assert.match(html, /Case Name/);
-    assert.match(html, /15806 ROBERT CRAIN HWY/);
+    assert.match(html, /15806 ROBERT CRAIN HWY BRANDYWINE, Maryland 20613/);
+    assert.match(html, /Start 4\/26\/2022/);
+    assert.match(html, /End 10\/26\/2022/);
+    assert.match(html, />Not found</);
     assert.doesNotMatch(html, /Job class/);
+    assert.doesNotMatch(html, /portalFields/);
+    assert.doesNotMatch(html, /\[\{"label"/);
+    const asText = render(createElement(InfoSectionView, {
+      permit: { permit_number: "15385-2022-0" },
+      state: ok("info", { source_kind: "html" }),
+      snapshots: [snap("info", { portalFields: JSON.stringify(portalFields) }, { source_kind: "html" })],
+    }));
+    assert.match(asText, /Case Type\/Review Type/);
+    assert.doesNotMatch(asText, /\[\{"label"/);
   });
 
   it("tasks and workflows render rows and the review steps, without portal ids", () => {

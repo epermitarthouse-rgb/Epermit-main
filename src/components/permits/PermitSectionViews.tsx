@@ -12,8 +12,10 @@ import {
   PERMIT_SECTIONS,
   classifySectionState,
   dcProjectPageUrl,
+  formatInfoFieldValue,
   formatPortalValue,
   latestSnapshot,
+  readPortalFields,
   sectionStateMap,
   snapshotsFor,
   statusSubWorkflows,
@@ -70,6 +72,24 @@ function FieldList({ fields }: { fields: Array<[string, React.ReactNode]> }) {
         <div key={k} className="flex justify-between gap-4 border-b border-border/40 py-1">
           <dt className="text-muted-foreground">{k}</dt>
           <dd className="break-words text-right">{v === "" || v === null || v === undefined ? "—" : v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** One county info row per line: label in a column, value wrapping beside it. */
+function InfoFieldList({ fields }: { fields: Array<[string, string]> }) {
+  return (
+    <dl className="divide-y divide-border/40 rounded-lg border border-border/60 text-sm">
+      {fields.map(([label, value]) => (
+        <div key={label} className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(9rem,14rem)_1fr] sm:items-baseline sm:gap-6">
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="min-w-0 break-words">
+            {(value ? value.split("\n") : ["—"]).map((line) => (
+              <span key={line} className="block">{line}</span>
+            ))}
+          </dd>
         </div>
       ))}
     </dl>
@@ -284,23 +304,32 @@ export function FilesSectionView({
 
 // ---- Status (permit status, workflows, review steps) --------------------------
 
+function statusOwner(payload: Row | null, permit: Row, snapshots: Row[]): string {
+  const fromStatus = str(payload?.Owner);
+  if (fromStatus) return fromStatus;
+  const info = (latestSnapshot(snapshots, "info")?.payload ?? null) as Row | null;
+  const portal = readPortalFields(info).find((row) => /^(project )?owner$/i.test(row.label));
+  return str(portal?.value) || str(info?.ownerOrg) || str(permit.owner_org);
+}
+
 export function StatusSectionView({ permit, state, snapshots }: { permit: Row; state: Row | null; snapshots: Row[] }) {
   const snap = latestSnapshot(snapshots, "status");
   const payload = (snap?.payload ?? null) as Row | null;
   const summary = (permit.summary ?? {}) as Row;
   const byGroup = (Array.isArray(summary.unresolved_by_group) ? summary.unresolved_by_group : []) as Row[];
+  const owner = statusOwner(payload, permit, snapshots);
   return (
     <div className="space-y-4">
       <SectionStatusLine state={state} />
       {payload ? (
         <>
-          <FieldList
+          <InfoFieldList
             fields={[
+              ["Owner", owner || "—"],
               ["Project status", dash(payload.ProjectStatus)],
-              ...(payload.Owner ? [["Owner", dash(payload.Owner)] as [string, React.ReactNode]] : []),
               ["Review type", dash(payload.ReviewType)],
               ["Calendar type", dash(payload.CalendarType)],
-              ["Time elapsed", formatPortalValue(payload.TimeElapsed)],
+              ["Time elapsed", formatPortalValue(payload.TimeElapsed) || "—"],
               ["Total number of files", dash(payload.TotalNumberOfFiles)],
               ["Uncompleted tasks", dash(payload.UncompleteTaskCount)],
               ["Prescreen status", Array.isArray(payload.PrescreenStatus) && payload.PrescreenStatus.length ? formatPortalValue(payload.PrescreenStatus) : "—"],
@@ -404,26 +433,21 @@ export function WorkflowsSectionView({
 export function InfoSectionView({ permit, state, snapshots }: { permit: Row; state: Row | null; snapshots: Row[] }) {
   const snap = latestSnapshot(snapshots, "info");
   const payload = (snap?.payload ?? null) as Row | null;
-  const portalFields = Array.isArray(payload?.portalFields)
-    ? (payload.portalFields as Row[]).filter((row) => str(row.label) && str(row.value))
-    : [];
+  const portalFields = readPortalFields(payload);
   const known = new Set([...INFO_FIELD_LABELS.map(([k]) => k), "portalFields"]);
   const extra = payload ? Object.keys(payload).filter((k) => !known.has(k)).sort() : [];
-  const fields: Array<[string, React.ReactNode]> = portalFields.length
-    ? [
-        ["Permit number", dash(permit.permit_number)],
-        ...portalFields.map((row) => [str(row.label), formatPortalValue(row.value)] as [string, React.ReactNode]),
-      ]
+  const fields: Array<[string, string]> = portalFields.length
+    ? portalFields.map((row) => [row.label, formatInfoFieldValue(row.label, row.value)])
     : [
         ["Permit number", dash(permit.permit_number)],
-        ...INFO_FIELD_LABELS.map(([k, label]) => [label, formatPortalValue(payload?.[k])] as [string, React.ReactNode]),
-        ...extra.map((k) => [k, formatPortalValue(payload?.[k])] as [string, React.ReactNode]),
+        ...INFO_FIELD_LABELS.map(([k, label]) => [label, formatPortalValue(payload?.[k])] as [string, string]),
+        ...extra.map((k) => [k, formatPortalValue(payload?.[k])] as [string, string]),
       ];
   return (
     <div className="space-y-4">
       <SectionStatusLine state={state} />
       {payload ? (
-        <FieldList fields={fields} />
+        <InfoFieldList fields={fields} />
       ) : (
         <Muted>{noDataMessage(state, "project info fields")}</Muted>
       )}
