@@ -210,6 +210,8 @@ async function createPgcLiveTransport(opts) {
   let dashboard = null;
   let discovered = null;
   let lastAbort = null;
+  let filesPage = null;
+  let filesFolderKey = "";
   const trail = [];
 
   const remember = (entry) => {
@@ -527,7 +529,13 @@ async function createPgcLiveTransport(opts) {
     }
     await throttle();
     lastAbort = null;
-    const page = await context.newPage();
+    const reuseFiles = Boolean(filesUrl && locate.folderId);
+    const folderKey = `${locate.projectId || ""}:${locate.folderId || ""}`;
+    const filesTabOpen = (p) => {
+      if (!p || (typeof p.isClosed === "function" && p.isClosed())) return false;
+      try { return /filesTab/i.test(String(p.url())); } catch (_) { return false; }
+    };
+    let page = null;
     const responseRecords = [];
     const onResponse = (res) => {
       try {
@@ -542,9 +550,21 @@ async function createPgcLiveTransport(opts) {
     };
     context.on("response", onResponse);
     try {
-      let viewerPage = null;
-      if (filesUrl && locate.folderId) {
+      if (reuseFiles && filesTabOpen(filesPage) && filesFolderKey === folderKey) {
+        page = filesPage;
+      } else if (reuseFiles) {
+        if (!filesTabOpen(filesPage)) {
+          filesPage = await context.newPage();
+          filesFolderKey = "";
+        }
+        page = filesPage;
         await page.goto(filesUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+        filesFolderKey = folderKey;
+      } else {
+        page = await context.newPage();
+      }
+      let viewerPage = null;
+      if (reuseFiles) {
         assertHealthy();
         if (dcLive.isDeadUrl(page.url())) throw new SessionEndedError("files tab reached a dead session page");
         const opened = await withQuietConsole(() => manual.openPgcFileViewerFromFilesTab(page, {
@@ -575,8 +595,13 @@ async function createPgcLiveTransport(opts) {
       return { buf, url: cap.url || url, contentType: cap.contentType || "" };
     } finally {
       context.off("response", onResponse);
+      if (filesPage && !filesTabOpen(filesPage)) {
+        await filesPage.close().catch(() => {});
+        filesPage = null;
+        filesFolderKey = "";
+      }
       for (const p of context.pages()) {
-        if (p === dashboard || p === apiPage) continue;
+        if (p === dashboard || p === apiPage || p === filesPage) continue;
         await p.close().catch(() => {});
       }
     }

@@ -21,7 +21,7 @@ import {
   type PermitSection,
 } from "@/lib/permitSections";
 import {
-  DOCUMENT_VIEW_LABEL,
+  documentCopyLabel,
   reportContentLabel,
   reportParameterNames,
   buildFolderTree,
@@ -148,7 +148,7 @@ export function FileViewAction({ doc, onView, busy }: { doc: Row; onView?: (doc:
       </Button>
     );
   }
-  return <span className="text-xs text-muted-foreground" data-file-state={state}>{DOCUMENT_VIEW_LABEL[state]}</span>;
+  return <span className="text-xs text-muted-foreground" data-file-state={state}>{documentCopyLabel(doc)}</span>;
 }
 
 function versionLabel(v: unknown): string {

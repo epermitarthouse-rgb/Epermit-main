@@ -453,6 +453,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
     for (const folder of (filesTab && filesTab.folders) || []) {
       for (const f of folder.files || []) {
         const id = String(f.fileId);
+        if (f.downloadGate === "deferred_permit_file_budget") ctx.m.files_deferred += 1;
         if (f.downloadGate || ctx.captured.has(id) || ctx.failedRecorded.has(id)) continue;
         const doc = ctx.docsByFileId.get(id);
         const accessPath = policy.captureAccessPath(doc);
@@ -481,7 +482,7 @@ function createDeepPass({ dcDeep, transport, repo, storage, pipeline = null, use
 
   function emptyMetrics() {
     return {
-      deep_passes: 0, deep_skipped: 0, files_downloaded: 0, files_unchanged: 0, files_failed: 0, files_invalid: 0, files_capped: 0, bytes_downloaded: 0,
+      deep_passes: 0, deep_skipped: 0, files_downloaded: 0, files_unchanged: 0, files_failed: 0, files_invalid: 0, files_capped: 0, files_deferred: 0, bytes_downloaded: 0,
       files_via_viewer: 0, files_rendition: 0, files_size_mismatch: 0, files_deferred_oversize_recorded: 0,
       files_pending: 0, files_deferred_oversize: 0, files_failed_open: 0, reports_open: 0,
       reports_captured: 0, reports_unchanged: 0, reports_failed: 0, reports_unmatched: 0, reports_guard_denied: 0,

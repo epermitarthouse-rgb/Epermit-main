@@ -16,6 +16,7 @@ import {
 import {
   PERMIT_QUEUE_TABS,
   buildFolderTree,
+  documentCopyLabel,
   documentViewState,
   filterQueueRows,
   groupFileVersions,
@@ -167,6 +168,13 @@ describe('files: viewer gating, versions and folder tree', () => {
     assert.equal(documentViewState({ download_status: 'not_requested', download_permitted: false }), 'not_downloadable');
     assert.equal(documentViewState({ download_status: 'not_permitted' }), 'not_downloadable');
     assert.equal(documentViewState({ download_status: 'failed', download_permitted: true }), 'not_captured');
+  });
+
+  it('says when the county viewer could not render a file, and when a file was not opened', () => {
+    assert.match(documentCopyLabel({ download_status: 'failed', download_error: 'portal_changed: portal_document_not_rendered', download_permitted: false }), /could not be rendered by the Prince George's County portal/);
+    assert.match(documentCopyLabel({ download_status: 'failed', download_error: 'deferred_after_repeated_portal_render: skipped', download_permitted: true }), /was not opened/);
+    assert.equal(documentCopyLabel({ download_status: 'stored', storage_path: 'p/a.pdf', download_error: 'portal_document_not_rendered' }), 'Stored');
+    assert.equal(documentCopyLabel({ download_status: 'failed', download_permitted: true, download_error: 'portal_changed: publish_menu_not_opened' }), 'Not captured');
   });
 
   it('groups versions of one file, newest first', () => {

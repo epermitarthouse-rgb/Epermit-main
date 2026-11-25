@@ -13711,12 +13711,56 @@ async function capturePgcViewerDocument(viewerPage, fileMeta, opts = {}) {
 
   const responseRecords = opts.responseRecords || [];
   const ctx = viewerPage.context();
+  const pgcFail = require("./permit-sync/deep/pgc-file-failures");
+  const emptyCapture = (error) => ({
+    error,
+    publishFlowError: error,
+    buffer: null,
+    url: null,
+    contentType: "",
+    contentDisposition: "",
+    triedUrl: null,
+  });
+  const readSurface = async () => {
+    const frames = typeof viewerPage.frames === "function" ? viewerPage.frames() : [];
+    const targets = frames.length ? frames : [viewerPage];
+    const bits = [];
+    let canvas = 0;
+    let publish = false;
+    for (const frame of targets) {
+      const part = await frame.evaluate(() => {
+        const raw = String((document.body && document.body.innerText) || "");
+        return {
+          text: raw.replace(/\s+/g, " ").trim().slice(0, 500),
+          canvas: document.querySelectorAll("canvas").length,
+          publish: /\bpublish\b/i.test(raw),
+        };
+      }).catch(() => null);
+      if (!part) continue;
+      if (part.text) bits.push(part.text);
+      canvas += Number(part.canvas) || 0;
+      publish = publish || Boolean(part.publish);
+    }
+    return { text: bits.join(" ").slice(0, 800), canvas, publish };
+  };
 
   await inspectPgcActiveXViewer(viewerPage, fileMeta);
   await viewerPage.waitForLoadState("domcontentloaded").catch(() => {});
-  await viewerPage.waitForTimeout(1200);
-  await viewerPage.waitForLoadState("networkidle", { timeout: 32000 }).catch(() => {});
-  await viewerPage.waitForTimeout(2200);
+  const readyStarted = Date.now();
+  const readyDeadline = readyStarted + pgcFail.VIEWER_READY_MS;
+  let surface = await readSurface();
+  while (pgcFail.viewerDecision(surface) === "waiting" && Date.now() < readyDeadline) {
+    try {
+      if (viewerPage.isClosed()) return emptyCapture("viewer_page_closed");
+    } catch (_) {
+      return emptyCapture("viewer_context_closed");
+    }
+    await viewerPage.waitForTimeout(400);
+    surface = await readSurface();
+  }
+  const readyDecision = pgcFail.viewerDecision(surface);
+  console.log(`[PGC] viewer_ready | ${fileMeta.name || fileMeta.fileId} | ${readyDecision} | ${Date.now() - readyStarted}ms`);
+  if (readyDecision !== "publish") return emptyCapture(pgcFail.outcomeAfterReadyWait(surface));
 
   capturePgcViewerDocumentRequests(fileMeta, responseRecords);
 
@@ -13752,15 +13796,8 @@ async function capturePgcViewerDocument(viewerPage, fileMeta, opts = {}) {
     };
   }
   if (publishFirst && publishFirst.publishFlowError && !publishFirst.buffer) {
-    return {
-      error: publishFirst.publishFlowError,
-      publishFlowError: publishFirst.publishFlowError,
-      buffer: null,
-      url: null,
-      contentType: "",
-      contentDisposition: "",
-      triedUrl: null,
-    };
+    const error = pgcFail.classifyStage(publishFirst.publishFlowError, surface);
+    return emptyCapture(error);
   }
 
   const dom = await extractPgcViewerDocumentSource(viewerPage, fileMeta);
@@ -13788,15 +13825,9 @@ async function capturePgcViewerDocument(viewerPage, fileMeta, opts = {}) {
     };
   }
   if (publishAfterDom && publishAfterDom.publishFlowError && !publishAfterDom.buffer) {
-    return {
-      error: publishAfterDom.publishFlowError,
-      publishFlowError: publishAfterDom.publishFlowError,
-      buffer: null,
-      url: null,
-      contentType: "",
-      contentDisposition: "",
-      triedUrl: null,
-    };
+    surface = await readSurface();
+    const error = pgcFail.classifyStage(publishAfterDom.publishFlowError, surface);
+    return emptyCapture(error);
   }
 
   /** @type {string[]} */

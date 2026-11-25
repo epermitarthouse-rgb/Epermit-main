@@ -101,6 +101,20 @@ export const DOCUMENT_VIEW_LABEL: Record<DocumentViewState, string> = {
   not_captured: 'Not captured',
 };
 
+const PORTAL_RENDER_MESSAGE = "Document could not be rendered by the Prince George's County portal. No downloadable content was available.";
+const DEFERRED_STREAK_MESSAGE = "This file was not opened. Earlier files failed in the county viewer, and this one stays queued.";
+const DEFERRED_BUDGET_MESSAGE = "This file was not opened because the permit's file pass reached its time limit. It stays queued.";
+
+/** The files table copy for a row. A classified county failure replaces the generic captured/downloadable label. */
+export function documentCopyLabel(doc: Row): string {
+  if (documentViewState(doc) === 'viewable') return DOCUMENT_VIEW_LABEL.viewable;
+  const error = str(doc.download_error);
+  if (/portal_document_not_rendered/i.test(error)) return PORTAL_RENDER_MESSAGE;
+  if (/deferred_after_repeated_portal_render/i.test(error)) return DEFERRED_STREAK_MESSAGE;
+  if (/deferred_permit_file_budget/i.test(error)) return DEFERRED_BUDGET_MESSAGE;
+  return DOCUMENT_VIEW_LABEL[documentViewState(doc)];
+}
+
 // ---- Content capture pills (D-086) --------------------------------------------
 
 export interface ContentPill {

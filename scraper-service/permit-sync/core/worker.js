@@ -245,6 +245,17 @@ async function runJob({ job, rpc, openAdapter, workerId, leaseTtlSeconds = 300, 
             continue;
           }
         }
+        const deferredFiles = Number(extra && extra.files_deferred) || 0;
+        const filePasses = (checkpoint.file_passes && checkpoint.file_passes[String(id)]) || 0;
+        if (deferredFiles > 0 && filePasses < 8) {
+          checkpoint.file_passes = checkpoint.file_passes || {};
+          checkpoint.file_passes[String(id)] = filePasses + 1;
+          metrics.permits_ok -= 1;
+          checkpoint.discovered.push(record);
+          await progress.permit(id, { phase: "downloading_files", error_code: null, message: `${deferredFiles} files stay queued for the next pass` });
+          await beat();
+          continue;
+        }
         checkpoint.done.push(id);
         const outcome = permitOutcome(extra, permitWarnings);
         let message = null;

@@ -35,6 +35,7 @@ const deepOptionsLib = require("../../lib/dc-deep-options");
 const policy = require("./policy");
 const { MONTGOMERY } = require("../adapters/projectdox-tenants");
 const { SafetyViolationError, SessionEndedError, ShutdownError, LeaseLostError } = require("../core/errors");
+const pgcFailures = require("./pgc-file-failures");
 
 const REVIEW_COMMENTS = /review comments/i;
 const SUBTYPE = "montgomery-projectdox";
@@ -215,6 +216,10 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
   async function filesTab(session, projectId, deep, tmp) {
     const pgc = tenant.key === "pgc-eplan";
     const folders = [];
+    const budgetMs = pgc ? pgcFailures.permitFileBudgetMs(process.env) : 0;
+    const filePassStarted = Date.now();
+    let budgetReached = false;
+    const downloads = [];
     const list = await transport.getJson("project_folders", { projectID: projectId, folderID: "" });
     const parents = Array.isArray(list) ? list : fileRows(list);
     const selected = [...parents];
@@ -274,34 +279,72 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
           out.files.push(deepOptionsLib.gatedFileEntry(file, out.name, gate));
           continue;
         }
-        const entry = { name: file.name, fileId: file.id, folderName: out.name, status: file.status, uploadedDate: file.uploadedDate, commentCount: 0, comments: [], viewUrl: "" };
-        const localPath = path.join(tmp, `${crypto.randomUUID()}_${policy.safeName(file.name)}`);
-        try {
-          const body = await transport.fetchFile(file.id, {
-            viewerOnly: folderViewOnly || !gate || gate.accessPath !== "download",
-            preferOriginal: deepOptionsLib.prefersOriginal(deep),
-            maxBytes: deepOptionsLib.maxFileBytes(deep, policy.DEFAULT_MAX_FILE_BYTES),
-            projectId,
-            folderId: out.folderId,
-            folderName: out.name,
-            parentFolder: out.parentFolder,
-            fileName: file.name,
+        const queued = {
+          out,
+          file,
+          folderViewOnly,
+          retry: Boolean(pgc && gate && gate.reason === "retry"),
+        };
+        if (pgc) downloads.push(queued);
+        else await takeFile(queued);
+      }
+    }
+    if (pgc) {
+      downloads.sort((a, b) => Number(a.retry) - Number(b.retry));
+      for (const queued of downloads) {
+        if (cancelled(session)) return { folders, cancelled: true };
+        if (!budgetReached && budgetMs > 0 && Date.now() - filePassStarted > budgetMs) budgetReached = true;
+        if (budgetReached) {
+          if (pgcFailures.unattemptedDisposition() !== "leave_queued") continue;
+          queued.out.files.push({
+            name: queued.file.name,
+            fileId: queued.file.id,
+            folderName: queued.out.name,
+            status: queued.file.status,
+            uploadedDate: queued.file.uploadedDate,
+            commentCount: 0,
+            comments: [],
+            viewUrl: "",
+            downloadStatus: "not_downloaded",
+            downloadGate: pgcFailures.DEFERRED_BUDGET,
+            downloadError: pgcFailures.DEFERRED_BUDGET_MESSAGE,
           });
-          fs.writeFileSync(localPath, body.buf);
-          const ref = await deep.storeFile({ localPath, fileId: file.id, fileName: file.name, downloadUrl: body.url });
-          entry.downloadStatus = ref ? "success" : "failed";
-          if (ref) entry.storageRef = ref;
-        } catch (err) {
-          if (endsPass(err)) throw err;
-          entry.downloadStatus = "failed";
-          entry.downloadError = shortError(err);
-        } finally {
-          fs.rmSync(localPath, { force: true });
+          continue;
         }
-        out.files.push(entry);
+        await takeFile(queued);
       }
     }
     return { keyValues: [], tables: [], links: [], folders };
+
+    async function takeFile(queued) {
+      const { out, file, folderViewOnly } = queued;
+      const gate = deepOptionsLib.fileGateDecision(deep, file);
+      const entry = { name: file.name, fileId: file.id, folderName: out.name, status: file.status, uploadedDate: file.uploadedDate, commentCount: 0, comments: [], viewUrl: "" };
+      const localPath = path.join(tmp, `${crypto.randomUUID()}_${policy.safeName(file.name)}`);
+      try {
+        const body = await transport.fetchFile(file.id, {
+          viewerOnly: folderViewOnly || !gate || gate.accessPath !== "download",
+          preferOriginal: deepOptionsLib.prefersOriginal(deep),
+          maxBytes: deepOptionsLib.maxFileBytes(deep, policy.DEFAULT_MAX_FILE_BYTES),
+          projectId,
+          folderId: out.folderId,
+          folderName: out.name,
+          parentFolder: out.parentFolder,
+          fileName: file.name,
+        });
+        fs.writeFileSync(localPath, body.buf);
+        const ref = await deep.storeFile({ localPath, fileId: file.id, fileName: file.name, downloadUrl: body.url });
+        entry.downloadStatus = ref ? "success" : "failed";
+        if (ref) entry.storageRef = ref;
+      } catch (err) {
+        if (endsPass(err)) throw err;
+        entry.downloadStatus = "failed";
+        entry.downloadError = shortError(err);
+      } finally {
+        fs.rmSync(localPath, { force: true });
+      }
+      out.files.push(entry);
+    }
   }
 
   async function reportsTab(session, projectId, deep, tmp) {
