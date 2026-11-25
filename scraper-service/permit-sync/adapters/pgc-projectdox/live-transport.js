@@ -102,10 +102,37 @@ function liftPgcViewerOpenWrite(decision, method, url, mode, resourceType) {
   return { action: "continue", violation: false, sessionEnded: false, rule: "viewer_open" };
 }
 
+/**
+ * The file viewer saves its own metadata before the Publish menu can open.
+ * Aborting that save is what leaves every view-only file at publish_menu_not_opened.
+ * Exact API path, script request only. The adapter never calls this. A deny-pattern match is never lifted.
+ */
+function isPgcViewerMetadataWrite(method, url) {
+  const m = String(method || "").toUpperCase();
+  if (m !== "POST" && m !== "OPTIONS") return false;
+  let u = null;
+  try {
+    u = new URL(String(url));
+  } catch (_) {
+    return false;
+  }
+  if (u.protocol !== "https:" || !isTenantHost(u.hostname)) return false;
+  return /^\/ProjectDoxWebAPI\/MetaData\/AddUpdateEntityMetadata$/i.test(u.pathname);
+}
+
+function liftPgcViewerMetadataWrite(decision, method, url, mode, resourceType) {
+  if (!decision || decision.action === "continue" || decision.rule !== "method_dropped" || mode !== "deep") return decision;
+  if (resourceType && !["xhr", "fetch", "other"].includes(resourceType)) return decision;
+  if (!isPgcViewerMetadataWrite(method, url)) return decision;
+  return { action: "continue", violation: false, sessionEnded: false, rule: "viewer_metadata" };
+}
+
 function liftPgcDeepWrite(decision, method, url, mode, resourceType) {
   const published = liftPgcBravaPublishWrite(decision, method, url, mode);
   if (published !== decision) return published;
-  return liftPgcViewerOpenWrite(decision, method, url, mode, resourceType);
+  const opened = liftPgcViewerOpenWrite(decision, method, url, mode, resourceType);
+  if (opened !== decision) return opened;
+  return liftPgcViewerMetadataWrite(decision, method, url, mode, resourceType);
 }
 const hostOf = (url) => {
   try {
@@ -802,5 +829,7 @@ module.exports = {
   liftPgcBravaPublishWrite,
   isPgcViewerOpenWrite,
   liftPgcViewerOpenWrite,
+  isPgcViewerMetadataWrite,
+  liftPgcViewerMetadataWrite,
   liftPgcDeepWrite,
 };

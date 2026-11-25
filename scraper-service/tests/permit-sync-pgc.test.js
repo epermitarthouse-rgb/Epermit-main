@@ -286,7 +286,7 @@ test("viewer publish builds an export context when the caller did not pass one",
   );
 });
 
-test("PGC deep mode continues only the Brava publish write, and a failed publish response is not the PDF", () => {
+test("PGC deep mode continues the Brava publish write and the viewer metadata save, and a failed publish response is not the PDF", () => {
   const liveTransport = require("../permit-sync/adapters/pgc-projectdox/live-transport");
   const dcLive = require("../permit-sync/adapters/dc-projectdox/live-transport");
   const pdf = `${HOST}:8443/BravaServer/publishtoformat/doc/export1/pdf`;
@@ -321,6 +321,20 @@ test("PGC deep mode continues only the Brava publish write, and a failed publish
   assert.equal(liveTransport.liftPgcViewerOpenWrite(dropped, "POST", viewer, "json", "document").rule, "method_dropped");
   assert.equal(liveTransport.liftPgcDeepWrite(denied, "POST", viewer, "deep", "document").violation, true);
   assert.equal(liveTransport.liftPgcDeepWrite(dropped, "POST", pdf, "deep", "xhr").rule, "brava_publish");
+
+  const meta = `${HOST}/ProjectDoxWebAPI/MetaData/AddUpdateEntityMetadata`;
+  assert.equal(liveTransport.isPgcViewerMetadataWrite("POST", meta), true);
+  assert.equal(liveTransport.isPgcViewerMetadataWrite("OPTIONS", meta), true);
+  assert.equal(liveTransport.isPgcViewerMetadataWrite("GET", meta), false);
+  assert.equal(liveTransport.isPgcViewerMetadataWrite("POST", `${meta}/extra`), false);
+  assert.equal(liveTransport.isPgcViewerMetadataWrite("POST", `${HOST}/ProjectDoxWebAPI/File/Upload`), false);
+  assert.equal(liveTransport.liftPgcViewerMetadataWrite(dropped, "POST", meta, "deep", "xhr").rule, "viewer_metadata");
+  assert.equal(liveTransport.liftPgcViewerMetadataWrite(dropped, "POST", meta, "deep", "fetch").action, "continue");
+  assert.equal(liveTransport.liftPgcViewerMetadataWrite(dropped, "POST", meta, "deep", "document").rule, "method_dropped");
+  assert.equal(liveTransport.liftPgcViewerMetadataWrite(dropped, "POST", meta, "json", "xhr").rule, "method_dropped");
+  assert.equal(liveTransport.liftPgcDeepWrite(dropped, "POST", meta, "deep", "xhr").rule, "viewer_metadata");
+  assert.equal(liveTransport.liftPgcDeepWrite(denied, "POST", meta, "deep", "xhr").violation, true);
+  assert.equal(dcLive.routeReadRequest({ method: "POST", url: `${HOST}/ProjectDoxWebAPI/File/Upload`, resourceType: "xhr" }, guard).violation, true);
 });
 
 test("a PGC file viewer failure without a session-ended page does not end the county scrape", async () => {
