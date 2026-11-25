@@ -97,6 +97,27 @@ function evaluateViewAllClick(el) {
   return { allowed: true, rule: "webui_hop", reason: "portal View All Projects link (WebUI session hop)" };
 }
 
+function pdfBytes(buf) {
+  if (!buf || !buf.length) return false;
+  const head = buf.subarray(0, Math.min(buf.length, 32)).toString("latin1").replace(/^\uFEFF/, "").trimStart();
+  return head.startsWith("%PDF-");
+}
+
+/**
+ * A view-only file is read as the PDF rendition. The county answers 422, an empty body, or a non-PDF
+ * for some of those files. The original RetrieveFile bytes are still a read of the same file.
+ * Downloadable files already try the original first, so this stays false for them.
+ */
+function montgomeryRenditionNeedsOriginal({ viewerOnly = false, preferOriginal = true, fileName = "", error = null, body = null } = {}) {
+  if (!(viewerOnly || preferOriginal === false)) return false;
+  if (error) {
+    if (error instanceof SafetyViolationError || error instanceof SessionEndedError) return false;
+    return /\banswered 422\b/.test(String(error.message || ""));
+  }
+  if (!body || !body.length) return true;
+  return /\.pdf$/i.test(String(fileName || "")) && !pdfBytes(body);
+}
+
 /**
  * Runs inside the WebUI page (page.evaluate): one RetrieveFile GET with the page's session, the body returned as
  * base64. A refused, failed or over-limit response returns no body (b64 null); an over-limit declared size is
@@ -392,20 +413,29 @@ async function createMontgomeryLiveTransport(opts) {
   }
 
   /**
-   * File body for the deep pass. A view-only file (folder DownloadFile false) is fetched as the PDF rendition the
-   * file viewer shows (D-082); a downloadable one as the original first, then the rendition (D-084).
+   * File body for the deep pass. A view-only file is fetched as the PDF rendition the viewer shows,
+   * then the original bytes when that rendition is refused or unusable. A downloadable file is the
+   * original first, then the rendition.
    */
-  async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024 } = {}) {
+  async function fetchFile(fileId, { viewerOnly = false, preferOriginal = true, maxBytes = 200 * 1024 * 1024, fileName = "" } = {}) {
     requireDeep("RetrieveFile");
     assertHealthy();
     await ensureApiSession();
-    if (viewerOnly || !preferOriginal) return retrieve(fileId, true, maxBytes);
-    try {
-      return await retrieve(fileId, false, maxBytes);
-    } catch (err) {
-      if (err instanceof SafetyViolationError || err instanceof SessionEndedError) throw err;
-      return retrieve(fileId, true, maxBytes);
+    if (!(viewerOnly || !preferOriginal)) {
+      try {
+        return await retrieve(fileId, false, maxBytes);
+      } catch (err) {
+        if (err instanceof SafetyViolationError || err instanceof SessionEndedError) throw err;
+        return retrieve(fileId, true, maxBytes);
+      }
     }
+    try {
+      const body = await retrieve(fileId, true, maxBytes);
+      if (!montgomeryRenditionNeedsOriginal({ viewerOnly, preferOriginal, fileName, body: body.buf })) return body;
+    } catch (err) {
+      if (!montgomeryRenditionNeedsOriginal({ viewerOnly, preferOriginal, fileName, error: err })) throw err;
+    }
+    return retrieve(fileId, false, maxBytes);
   }
 
   /**
@@ -631,6 +661,7 @@ module.exports = {
   ENTRY_URL,
   createMontgomeryLiveTransport,
   pageRetrieveFile,
+  montgomeryRenditionNeedsOriginal,
   evaluateMontgomeryAuthRequest,
   classifyMontgomeryPage,
   evaluateViewAllClick,

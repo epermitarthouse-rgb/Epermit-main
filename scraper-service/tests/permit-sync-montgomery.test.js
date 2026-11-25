@@ -214,6 +214,21 @@ test("read policy (shared router) with the Montgomery guard", () => {
   assert.equal(dc.rule, "off_host", "a DC guard still treats Montgomery as off-host");
 });
 
+test("a view-only rendition that the county cannot convert falls back to the original file bytes", () => {
+  const { PortalChangedError, SafetyViolationError, SessionEndedError } = require("../permit-sync/core/errors");
+  const pdf = Buffer.from("%PDF-1.4");
+  const other = Buffer.from("not a pdf");
+  const opts = { viewerOnly: true, fileName: "B1.0 FLOOR PLAN.pdf" };
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, error: new PortalChangedError("portal API answered 422 (RetrieveFile)") }), true);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, body: Buffer.alloc(0) }), true);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, body: other }), true);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, body: pdf }), false);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, error: new PortalChangedError("portal_refused_403 (RetrieveFile)") }), false);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, error: new SafetyViolationError("blocked") }), false);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ ...opts, error: new SessionEndedError("ended") }), false);
+  assert.equal(live.montgomeryRenditionNeedsOriginal({ viewerOnly: false, preferOriginal: true, fileName: "A.docx", error: new PortalChangedError("portal API answered 422") }), false);
+});
+
 test("login page classification and the View All Projects click rule", () => {
   assert.equal(live.classifyMontgomeryPage({ url: `${PORTAL}/Home/Index`, text: "My Projects" }), "authenticated");
   assert.equal(live.classifyMontgomeryPage({ url: `${PORTAL}/Login/Index/MontgomeryDPS-Prod`, text: "Sign in", hasPasswordField: true }), "login_form");
