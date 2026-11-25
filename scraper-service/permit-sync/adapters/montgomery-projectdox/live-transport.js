@@ -266,6 +266,9 @@ async function createMontgomeryLiveTransport(opts) {
     sessionId = null;
     apiPage = null;
     const dash = await getDashboard();
+    // The header logo is a slow off-portal image. Waiting here keeps that load from consuming
+    // the popup timer, which previously expired before View All Projects could open.
+    await settle(dash);
     const link = dash.locator("a", { hasText: "View All Projects" }).first();
     if ((await link.count()) === 0) throw new PortalChangedError("portal dashboard has no View All Projects link");
     const el = await link.evaluate((n) => ({
@@ -277,7 +280,7 @@ async function createMontgomeryLiveTransport(opts) {
     let popup;
     try {
       await throttle();
-      popup = await awaitPopupPage(context, () => link.click(), { timeout: 30000, label: "Montgomery WebUI hop popup" });
+      popup = await awaitPopupPage(context, () => link.click({ timeout: 15000 }), { timeout: 60000, label: "Montgomery WebUI hop popup" });
       const deadline = Date.now() + 60000;
       while (Date.now() < deadline) {
         await popup.waitForLoadState("domcontentloaded").catch(() => {});
