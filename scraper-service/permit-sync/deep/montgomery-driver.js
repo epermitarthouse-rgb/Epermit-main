@@ -283,6 +283,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
           out,
           file,
           folderViewOnly,
+          gate,
           retry: Boolean(pgc && gate && gate.reason === "retry"),
         };
         if (pgc) downloads.push(queued);
@@ -317,8 +318,7 @@ function createMontgomeryDeepDriver({ transport, parseReviewExcel = null, tmpRoo
     return { keyValues: [], tables: [], links: [], folders };
 
     async function takeFile(queued) {
-      const { out, file, folderViewOnly } = queued;
-      const gate = deepOptionsLib.fileGateDecision(deep, file);
+      const { out, file, folderViewOnly, gate } = queued;
       const entry = { name: file.name, fileId: file.id, folderName: out.name, status: file.status, uploadedDate: file.uploadedDate, commentCount: 0, comments: [], viewUrl: "" };
       const localPath = path.join(tmp, `${crypto.randomUUID()}_${policy.safeName(file.name)}`);
       try {
